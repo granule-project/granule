@@ -511,7 +511,7 @@ isIndexedType t = do
       , tfFunTy = \_ (Const x) (Const y) -> return $ Const (x || y)
       , tfTyCon = \c -> do {
           st <- get;
-          return $ Const $ case lookup c (typeConstructors st) of Just (_, _, isIndexed) -> isIndexed; Nothing -> False }
+          return $ Const $ case lookup c (typeConstructors st) of Just (_, _, indices) -> indices /= []; Nothing -> False }
       , tfBox = \_ (Const x) -> return $ Const x
       , tfDiamond = \_ (Const x) -> return $ Const x
       , tfStar = \_ (Const x) -> return $ Const x

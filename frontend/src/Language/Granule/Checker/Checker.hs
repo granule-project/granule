@@ -138,7 +138,7 @@ checkTyCon d@(DataDecl sp name tyVars kindAnn ds)
   = lookup name <$> gets typeConstructors >>= \case
     Just _ -> throw TypeConstructorNameClash{ errLoc = sp, errId = name }
     Nothing -> modify' $ \st ->
-      st{ typeConstructors = (name, (tyConKind, ids, isIndexedDataType d)) : typeConstructors st }
+      st{ typeConstructors = (name, (tyConKind, ids, typeIndicesPositions d)) : typeConstructors st }
   where
     ids = map dataConstrId ds -- the IDs of data constructors
     tyConKind = mkKind (map snd tyVars)
@@ -320,7 +320,7 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
 
     elaboratedEquations :: [Equation () Type] <- runAll elaborateEquation equations
 
-    checkGuardsForImpossibility s defName constraints
+    checkGuardsForImpossibility s defName []
     checkGuardsForExhaustivity s defName ty equations
     let el' = el { equations = elaboratedEquations }
     pure $ Def s defName rf el' tys
@@ -1896,20 +1896,21 @@ checkGuardsForImpossibility s name refinementConstraints = do
   -- Get top of guard predicate stack
   st <- get
   let ps = head $ guardPredicates st
+  debugM "guardPredicatesStack" (pretty $ guardPredicates st)
 
   -- Convert all universal variables to existential
-  tyVars <- return (tyVarContext st)
-              >>= includeOnlyGradeVariables s --  tyVarContextExistential >>= includeOnlyGradeVariables s
+  tyVars <- --return (tyVarContext st)
+            --  >>= includeOnlyGradeVariables s -- 
+              tyVarContextExistential >>= includeOnlyGradeVariables s
 
   -- For each guard predicate
   forM_ ps $ \((ctxt, p), s) -> do
 
     -- Existentially quantify those variables occuring in the pattern in scope
-    constraints' <- mapM (compileTypeConstraintToConstraint nullSpanNoFile) refinementConstraints
-    let thm = 
-          foldr (Impl []) (foldr (uncurry Exists) p ctxt) constraints'
+    --constraints' <- mapM (compileTypeConstraintToConstraint nullSpanNoFile) refinementConstraints
+    let thm = foldr (uncurry Exists) p ctxt
 
-    debugM "impossibility" $ "about to try" <> pretty thm
+    debugM "impossibility" $ "about to try (" <> pretty tyVars <> ") . " <> pretty thm
     -- Try to prove the theorem
     constructors <- allDataConstructorNames
     (_, result) <- liftIO $ provePredicate thm tyVars constructors

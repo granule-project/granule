@@ -31,74 +31,74 @@ typeAliases =
 -- Associates type constuctors names to their:
 --    * kind
 --    * list of (finite) matchable constructor names (but not the actual set of constructor names which could be infinite)
---    * boolean flag on whether they are indexed types or not
-typeConstructors :: [(Id, (Type, [Id], Bool))]
+--    * list of which type parameters are indices (proxy for whether they are indexed types or not)
+typeConstructors :: [(Id, (Type, [Id], [Int]))]
 typeConstructors =
-    [ (mkId "Coeffect",  (Type 2, [], False))
-    , (mkId "Effect",    (Type 2, [], False))
-    , (mkId "Guarantee", (Type 2, [], False))
-    , (mkId "Predicate", (Type 2, [], False))
-    , (mkId "->",     (funTy (Type 0) (funTy (Type 0) (Type 0)), [], False))
-    , (mkId ",,",     (funTy kcoeffect (funTy kcoeffect kcoeffect), [mkId ",,"], False))
-    , (mkId "Int",    (Type 0, [], False))
-    , (mkId "Float",  (Type 0, [], False))
-    , (mkId "DFloat",  (Type 0, [], False)) -- special floats that can be tracked for sensitivty
-    , (mkId "Char",   (Type 0, [], False))
-    , (mkId "String", (Type 0, [], False))
-    , (mkId "Protocol", (Type 0, [], False))
-    , (mkId "Inverse", ((funTy (Type 0) (Type 0)), [], False))
+    [ (mkId "Coeffect",  (Type 2, [], []))
+    , (mkId "Effect",    (Type 2, [], []))
+    , (mkId "Guarantee", (Type 2, [], []))
+    , (mkId "Predicate", (Type 2, [], []))
+    , (mkId "->",     (funTy (Type 0) (funTy (Type 0) (Type 0)), [], []))
+    , (mkId ",,",     (funTy kcoeffect (funTy kcoeffect kcoeffect), [mkId ",,"], []))
+    , (mkId "Int",    (Type 0, [], []))
+    , (mkId "Float",  (Type 0, [], []))
+    , (mkId "DFloat",  (Type 0, [], [])) -- special floats that can be tracked for sensitivty
+    , (mkId "Char",   (Type 0, [], []))
+    , (mkId "String", (Type 0, [], []))
+    , (mkId "Protocol", (Type 0, [], []))
+    , (mkId "Inverse", ((funTy (Type 0) (Type 0)), [], []))
     -- # Coeffect types
-    , (mkId "Nat",      (kcoeffect, [], False))
-    , (mkId "Q",        (kcoeffect, [], False)) -- Rationals
-    , (mkId "OOZ",      (kcoeffect, [], False)) -- 1 + 1 = 0
-    , (mkId "LNL",      (kcoeffect, [], False)) -- Linear vs Non-linear semiring
+    , (mkId "Nat",      (kcoeffect, [], []))
+    , (mkId "Q",        (kcoeffect, [], [])) -- Rationals
+    , (mkId "OOZ",      (kcoeffect, [], [])) -- 1 + 1 = 0
+    , (mkId "LNL",      (kcoeffect, [], [])) -- Linear vs Non-linear semiring
     -- LNL members
-    , (mkId "Zero",     (tyCon "LNL", [], False))
-    , (mkId "One",      (tyCon "LNL", [], False))
-    , (mkId "Many",     (tyCon "LNL", [], False))
+    , (mkId "Zero",     (tyCon "LNL", [], []))
+    , (mkId "One",      (tyCon "LNL", [], []))
+    , (mkId "Many",     (tyCon "LNL", [], []))
     -- Borrowing
-    , (mkId "Borrowing", (kcoeffect, [], False))
-    , (mkId "One",       (tyCon "Borrowing", [], False))
-    , (mkId "Beta",      (tyCon "Borrowing", [], False))
-    , (mkId "Omega",     (tyCon "Borrowing", [], False))
+    , (mkId "Borrowing", (kcoeffect, [], []))
+    , (mkId "One",       (tyCon "Borrowing", [], []))
+    , (mkId "Beta",      (tyCon "Borrowing", [], []))
+    , (mkId "Omega",     (tyCon "Borrowing", [], []))
     -- Security levels
-    , (mkId "Level",    (kcoeffect, [], False)) -- Security level
-    , (mkId "Private",  (tyCon "Level", [], False))
-    , (mkId "Public",   (tyCon "Level", [], False))
-    , (mkId "Unused",   (tyCon "Level", [], False))
-    , (mkId "Dunno",    (tyCon "Level", [], False))
+    , (mkId "Level",    (kcoeffect, [], [])) -- Security level
+    , (mkId "Private",  (tyCon "Level", [], []))
+    , (mkId "Public",   (tyCon "Level", [], []))
+    , (mkId "Unused",   (tyCon "Level", [], []))
+    , (mkId "Dunno",    (tyCon "Level", [], []))
     -- Alternate security levels (a la Gaboardi et al. 2016 and Abel-Bernardy 2020)
-    , (mkId "Sec",  (kcoeffect, [], False))
-    , (mkId "Hi",    (tyCon "Sec", [], False))
-    , (mkId "Lo",    (tyCon "Sec", [], False))
+    , (mkId "Sec",  (kcoeffect, [], []))
+    , (mkId "Hi",    (tyCon "Sec", [], []))
+    , (mkId "Lo",    (tyCon "Sec", [], []))
     -- Uniqueness
-    , (mkId "Uniqueness", (kguarantee, [], False))
-    , (mkId "Unique", (tyCon "Uniqueness", [], False))
+    , (mkId "Uniqueness", (kguarantee, [], []))
+    , (mkId "Unique", (tyCon "Uniqueness", [], []))
     -- Other coeffect constructors
-    , (mkId "Interval", (kcoeffect .-> kcoeffect, [], False))
+    , (mkId "Interval", (kcoeffect .-> kcoeffect, [], []))
     -- Channels and protocol types
-    , (mkId "Send", (funTy (Type 0) (funTy protocol protocol), [], False))
-    , (mkId "Recv", (funTy (Type 0) (funTy protocol protocol), [], False))
-    , (mkId "End" , (protocol, [], False))
-    , (mkId "Chan", (funTy protocol (Type 0), [], True))
-    , (mkId "LChan", (funTy protocol (Type 0), [], True))
-    , (mkId "Dual", (funTy protocol protocol, [], True))
-    , (mkId "->", (funTy (Type 0) (funTy (Type 0) (Type 0)), [], False))
+    , (mkId "Send", (funTy (Type 0) (funTy protocol protocol), [], []))
+    , (mkId "Recv", (funTy (Type 0) (funTy protocol protocol), [], []))
+    , (mkId "End" , (protocol, [], []))
+    , (mkId "Chan", (funTy protocol (Type 0), [], [0]))
+    , (mkId "LChan", (funTy protocol (Type 0), [], [0]))
+    , (mkId "Dual", (funTy protocol protocol, [], [0]))
+    , (mkId "->", (funTy (Type 0) (funTy (Type 0) (Type 0)), [], []))
     -- Top completion on a coeffect, e.g., Ext Nat is extended naturals (with ∞)
-    , (mkId "Ext", (funTy kcoeffect kcoeffect, [], True))
+    , (mkId "Ext", (funTy kcoeffect kcoeffect, [], [1]))
     -- Effect grade types - Sessions
-    , (mkId "Session",  (tyCon "Com", [], True))
-    , (mkId "Com",      (keffect, [], False))
+    , (mkId "Session",  (tyCon "Com", [], []))
+    , (mkId "Com",      (keffect, [], []))
     -- Effect grade types - IO
-    , (mkId "IO",       (keffect, [], False))
+    , (mkId "IO",       (keffect, [], []))
 
     --Effect grade types - Exceptions
-    , (mkId "Exception", (keffect, [], False))
-    , (mkId "Success", (tyCon "Exception", [], False))
-    , (mkId "MayFail", (tyCon "Exception", [], False))
+    , (mkId "Exception", (keffect, [], []))
+    , (mkId "Success", (tyCon "Exception", [], []))
+    , (mkId "MayFail", (tyCon "Exception", [], []))
 
     -- Arrays
-    , (mkId "FloatArray", (Type 0, [], False))
+    , (mkId "FloatArray", (Type 0, [], []))
     ]
 
 -- Various predicates and functions on type operators
