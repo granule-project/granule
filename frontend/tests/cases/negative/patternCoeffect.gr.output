@@ -1,4 +1,4 @@
 Type checking failed: 
 Falsifiable theorem: frontend/tests/cases/negative/patternCoeffect.gr:6:1:
 The following theorem associated with `bar` is falsifiable:
-	∀ a1.0 : Type,t6.0 : Type . (((2 ⨱ 2)) -> (3 = 2))
+	(3 = 2)

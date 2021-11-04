@@ -1,3 +1,6 @@
 Type checking failed: 
+Impossible pattern match: StdLib/Nat.gr:73:1:
+Pattern match in an equation of `div2` is impossible as it implies the unsatisfiable condition ∃ n0.0 : Nat . (n0.0 + 1 = 2 * n)
+
 Impossible pattern match: frontend/tests/cases/negative/impossible-pattern-match.gr:7:1:
-Pattern match in an equation of `subBad` is impossible as it implies the unsatisfiable condition ∃ n0.0 : Nat . (n0.0 + 1 = 0)
+Pattern match in an equation of `subBad` is impossible as it implies the unsatisfiable condition (n0 + 1 = 0)
