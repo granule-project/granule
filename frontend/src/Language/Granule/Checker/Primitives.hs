@@ -107,9 +107,9 @@ typeConstructors =
 
     -- Arrays
     , (mkId "FloatArray", (Type 0, [], []))
-  
+
     -- Capability related things
-    , (mkId "CapabilityType", (funTy (tyCon "Capability") (Type 0), [], [1]))
+    , (mkId "CapabilityType", (funTy (tyCon "Capability") (Type 0), [], [0]))
     ]
 
 -- Various predicates and functions on type operators

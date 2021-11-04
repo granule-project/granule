@@ -321,10 +321,7 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
 
     elaboratedEquations :: [Equation () Type] <- runAll elaborateEquation equations
 
-<<<<<<< HEAD
-=======
     checkGuardsForImpossibility s defName constraints
->>>>>>> dad498de (merge changes from fixSubstIndices)
     checkGuardsForExhaustivity s defName ty equations
     let el' = el { equations = elaboratedEquations }
     pure $ Def s defName rf el' tys
