@@ -194,9 +194,10 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
     Just (tySch, coercions) -> do
 
       case outerBoxTy of
-        Just (coeff, coeffTy) ->
+        -- Hsup if you only have more than one premise (and have an enclosing grade)
+        Just (coeff, coeffTy) | length ps > 1 ->
           addConstraint (Hsup s coeff coeff coeffTy)
-        Nothing -> return ()
+        _ -> return ()
 
       (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, constraints, coercions') <-
           freshPolymorphicInstance BoundQ True tySch coercions

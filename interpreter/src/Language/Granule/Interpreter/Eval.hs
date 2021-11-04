@@ -305,7 +305,7 @@ pmatch ctxt ((PConstr s a b id innerPs, t0):ps) e =
       v <- evalIn ctxt e
       pmatch ctxt ((PConstr s a b id innerPs, t0):ps) (valExpr v)
     else
-      -- In CBV mode this just meands we failed to pattern match
+      -- In CBV mode this just means we failed to pattern match
       pmatch ctxt ps e
 
 pmatch _ ((PVar _ _ _ var, e):_) v =
@@ -316,6 +316,17 @@ pmatch ctxt ((PBox _ _ _ p, e):ps) v@(Val _ _ _ (Promote _ v')) = do
   case match of
     Just e -> return $ Just e
     Nothing -> pmatch ctxt ps v
+
+pmatch ctxt ((PBox s a b p, e):ps) e' = do
+  -- Can only happen in CBN case
+  if CBN `elem` globalsExtensions ?globals
+    then do
+      -- Force evaluation of term
+      v <- evalIn ctxt e'
+      pmatch ctxt ((PBox s a b p, e):ps) (valExpr v)
+    else
+      -- In CBV mode this just meands we failed to pattern match
+      pmatch ctxt ps e
 
 pmatch ctxt ((PInt _ _ _ n, e):ps) (Val _ _ _ (NumInt m)) | n == m = return $ Just e
 
@@ -440,7 +451,7 @@ builtIns =
   , (mkId "lengthFloatArray'",  Ext () $ Primitive lengthFloatArray')
   , (mkId "readFloatArray'",  Ext () $ Primitive readFloatArray')
   , (mkId "writeFloatArray'",  Ext () $ Primitive writeFloatArray')
-
+  , (mkId "deleteFloatArray", Ext () $ Primitive deleteFloatArray) 
   ]
   where
     forkLinear :: (?globals :: Globals) => Ctxt RValue -> RValue -> RValue
@@ -476,11 +487,20 @@ builtIns =
     uniqueReturn v = error $ "Bug in Granule. Can't borrow a non-unique: " <> prettyDebug v
 
     uniqueBind :: (?globals :: Globals) => Ctxt RValue -> RValue -> RValue
-    uniqueBind ctxt f = Ext () $ Primitive $ \(Promote () v) -> 
-      unsafePerformIO $ evalIn ctxt 
-        (App nullSpan () False 
-          (Val nullSpan () False f) 
-          (Val nullSpan () False (Nec () v)))
+    uniqueBind ctxt f = Ext () $ Primitive $ \(Promote () v) ->
+      case v of
+        (Val nullSpan () False (Ext () (FloatArray arr))) -> 
+          unsafePerformIO $ do
+          copy <- MA.mapArray id arr
+          return $ unsafePerformIO $ evalIn ctxt
+              (App nullSpan () False 
+                (Val nullSpan () False f) 
+                (Val nullSpan () False (Nec () (Val nullSpan () False (Ext () (FloatArray copy))))))
+        otherwise ->
+          unsafePerformIO $ evalIn ctxt 
+            (App nullSpan () False 
+             (Val nullSpan () False f) 
+             (Val nullSpan () False (Nec () v)))
 
     uniquePush :: RValue -> RValue
     uniquePush (Nec () (Val nullSpan () False (Constr () (Id "," ",") [x, y])))
@@ -575,7 +595,7 @@ builtIns =
 
     {-# NOINLINE newFloatArray' #-}
     newFloatArray' :: RValue -> RValue
-    newFloatArray' = \(NumInt i) -> Promote () (Val nullSpan () False $ Ext () $ FloatArray (unsafePerformIO (MA.newArray_ (0,i))))
+    newFloatArray' = \(NumInt i) -> Ext () $ FloatArray (unsafePerformIO (MA.newArray_ (0,i)))
 
     {-# NOINLINE readFloatArray #-}
     readFloatArray :: RValue -> RValue
@@ -585,9 +605,9 @@ builtIns =
 
     {-# NOINLINE readFloatArray' #-}
     readFloatArray' :: RValue -> RValue
-    readFloatArray' = \(Promote () (Val _ _ _ (Ext () (FloatArray arr)))) -> Ext () $ Primitive $ \(NumInt i) ->
+    readFloatArray' = \(Ext () (FloatArray arr)) -> Ext () $ Primitive $ \(NumInt i) ->
       unsafePerformIO $ do e <- MA.readArray arr i
-                           return (Constr () (mkId ",") [NumFloat e, Promote () (Val nullSpan () False $ Ext () (FloatArray arr))])
+                           return (Constr () (mkId ",") [NumFloat e, Ext () $ FloatArray arr])
 
     lengthFloatArray :: RValue -> RValue
     lengthFloatArray = \(Nec () (Val _ _ _ (Ext () (FloatArray arr)))) -> Ext () $ Primitive $ \(NumInt i) ->
@@ -595,9 +615,9 @@ builtIns =
                            return (Constr () (mkId ",") [NumInt end, Nec () (Val nullSpan () False $ Ext () $ FloatArray arr)])
 
     lengthFloatArray' :: RValue -> RValue
-    lengthFloatArray' = \(Promote () (Val _ _ _ (Ext () (FloatArray arr)))) -> Ext () $ Primitive $ \(NumInt i) ->
+    lengthFloatArray' = \(Ext () (FloatArray arr)) -> Ext () $ Primitive $ \(NumInt i) ->
       unsafePerformIO $ do (_,end) <- MA.getBounds arr
-                           return (Constr () (mkId ",") [NumInt end, Promote () (Val nullSpan () False $ Ext () $ FloatArray arr)])
+                           return (Constr () (mkId ",") [NumInt end, Ext () $ FloatArray arr])
 
     {-# NOINLINE writeFloatArray #-}
     writeFloatArray :: RValue -> RValue
@@ -610,13 +630,21 @@ builtIns =
 
     {-# NOINLINE writeFloatArray' #-}
     writeFloatArray' :: RValue -> RValue
-    writeFloatArray' = \(Promote _ (Val _ _ _ (Ext _ (FloatArray arr)))) ->
+    writeFloatArray' = \(Ext () (FloatArray arr)) ->
       Ext () $ Primitive $ \(NumInt i) ->
       Ext () $ Primitive $ \(NumFloat v) ->
-      Promote () $ Val nullSpan () False $ Ext () $ FloatArray $ unsafePerformIO $
-        do arr' <- MA.mapArray id arr
-           () <- MA.writeArray arr' i v
-           return arr'
+        Ext () $ FloatArray $ unsafePerformIO $
+           do arr' <- MA.mapArray id arr
+              () <- MA.writeArray arr' i v
+              return arr'
+
+    {-# NOINLINE deleteFloatArray #-}
+    deleteFloatArray :: RValue -> RValue
+    deleteFloatArray = \(Nec _ (Val _ _ _ (Ext _ (FloatArray arr)))) ->
+      case (unsafePerformIO $ do
+              arr' <- MA.mapArray (const undefined) arr
+              return ()) of
+        () -> Constr () (mkId "()") []
 
 evalDefs :: (?globals :: Globals) => Ctxt RValue -> [Def (Runtime ()) ()] -> IO (Ctxt RValue)
 evalDefs ctxt [] = return ctxt
