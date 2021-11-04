@@ -236,8 +236,8 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
         (True, ty, unifiers) -> do
 
           -- Register coercions as equalities
-          mapM_ (\(var, SubstT t) ->
-                        equalTypesRelatedCoeffectsAndUnify s Eq PatternCtxt (TyVar var) t) coercions'
+          --mapM_ (\(var, SubstT t) ->
+          --              equalTypesRelatedCoeffectsAndUnify s Eq PatternCtxt (TyVar var) t) coercions'
 
           dataConstructorIndexRewritten <- substitute unifiers dataConstructorTypeFresh
           dataConstructorIndexRewrittenAndSpecialised <- substitute coercions' dataConstructorIndexRewritten
