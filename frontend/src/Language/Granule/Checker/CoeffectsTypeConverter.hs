@@ -34,5 +34,5 @@ tyVarContextExistential = do
       -- This makes splitting work when the LHS is a pattern, but not sure if it
       -- has adverse effects...
       -- BoundQ -> Nothing
-      BoundQ -> Just (v, (k, InstanceQ))
-      _      -> Just (v, (k, q))
+      _ -> Just (v, (k, InstanceQ))
+      -- _      -> Just (v, (k, q))
