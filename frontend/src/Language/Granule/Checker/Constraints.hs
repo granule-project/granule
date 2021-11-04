@@ -608,7 +608,6 @@ approximatedByOrEqualConstraint :: SGrade -> SGrade -> Symbolic SBool
 approximatedByOrEqualConstraint (SNat n) (SNat m)      = return $ n .== m
 approximatedByOrEqualConstraint (SFloat n) (SFloat m)  = return $ n .<= m
 approximatedByOrEqualConstraint SPoint SPoint          = return $ sTrue
-approximatedByOrEqualConstraint (SExtNat x) (SExtNat y) = return $ x .== y
 approximatedByOrEqualConstraint (SOOZ s) (SOOZ r) = pure $ s .== r
 approximatedByOrEqualConstraint (SSet Normal s) (SSet Normal t) =
   pure $ s `S.isSubsetOf` t
@@ -679,11 +678,15 @@ approximatedByOrEqualConstraint s1@(SInterval _ _) s2 =
 approximatedByOrEqualConstraint u@(SUnknown{}) u'@(SUnknown{}) =
   lazyOrSymbolicM (symGradeEq u u') (symGradeLess u u')
 
+approximatedByOrEqualConstraint (SExtNat x) (SExtNat y) = return $ x .== y
 approximatedByOrEqualConstraint (SExt r isInf) (SExt r' isInf') = do
   approx <- approximatedByOrEqualConstraint r r'
   return $
+    -- ∞ <= ∞
     ite (isInf .&& isInf') sTrue
-      (ite isInf' sTrue approx)
+      -- otherwise we cannot guarantee r <= ∞ or ∞ <= r in general
+      -- otherwise fall back on underlying approximation
+      (ite (isInf .|| isInf') sFalse approx)
 
 approximatedByOrEqualConstraint x y =
   solverError $ "Kind error trying to generate " <> show x <> " <= " <> show y
