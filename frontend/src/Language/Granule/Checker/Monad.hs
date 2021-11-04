@@ -169,8 +169,8 @@ data CheckerState = CS
 
             -- Data type information
             --  map of type constructor names to their the kind,
-            --  data constructors, and whether indexed (True = Indexed, False = Not-indexed)
-            , typeConstructors :: Ctxt (Type, [Id], Bool)
+            --  data constructors, and which (if any) parameters are actually indices
+            , typeConstructors :: Ctxt (Type, [Id], [Int])
             -- map of data constructors and their types and substitutions
             , dataConstructors :: Ctxt (TypeScheme, Substitution, [Int])
 
@@ -185,7 +185,7 @@ data CheckerState = CS
             , defTy :: Maybe Type
             , defName :: Maybe Id
 
-            -- Used by the case splitter 
+            -- Used by the case splitter
             , splittingTy :: Maybe Type
 
             -- Definitions that have been triggered during type checking

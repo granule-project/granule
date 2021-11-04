@@ -343,7 +343,7 @@ equalTypesRelatedCoeffectsInner s rel (Star g1 t1) t2 _ sp mode
     (g, _, u) <- equalTypes s t1 t2
     return (g, u)
 
-equalTypesRelatedCoeffectsInner s rel t1 (Star g2 t2) k sp mode = 
+equalTypesRelatedCoeffectsInner s rel t1 (Star g2 t2) k sp mode =
   equalTypesRelatedCoeffectsInner s rel (Star g2 t2) t1 k (flipIndicator sp) mode
 
 -- Do duality check (left) [special case of TyApp rule]
@@ -644,7 +644,7 @@ isIndexedType t = do
       , tfFunTy = \_ (Const x) (Const y) -> return $ Const (x || y)
       , tfTyCon = \c -> do {
           st <- get;
-          return $ Const $ case lookup c (typeConstructors st) of Just (_,_,ixed) -> ixed; Nothing -> False }
+          return $ Const $ case lookup c (typeConstructors st) of Just (_, _, indices) -> indices /= []; Nothing -> False }
       , tfBox = \_ (Const x) -> return $ Const x
       , tfDiamond = \_ (Const x) -> return $ Const x
       , tfStar = \_ (Const x) -> return $ Const x

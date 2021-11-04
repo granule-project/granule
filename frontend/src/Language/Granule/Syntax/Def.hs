@@ -140,21 +140,12 @@ data DataConstr
 
 -- | Is the data type an indexed data type, or just a plain ADT?
 isIndexedDataType :: DataDecl -> Bool
-isIndexedDataType (DataDecl _ id tyVars _ constrs) =
-    all nonIndexedConstructors constrs
-  where
-    nonIndexedConstructors DataConstrNonIndexed{} = False
-    nonIndexedConstructors (DataConstrIndexed _ _ (Forall _ tyVars' _ ty)) =
-      noMatchOnEndType (reverse tyVars) ty
+isIndexedDataType d = not ((concatMap snd (typeIndices d)) == [])
 
-    noMatchOnEndType ((v, _):tyVars) (TyApp t1 t2) =
-      case t2 of
-        TyVar v' | v == v' -> noMatchOnEndType tyVars t1
-        _                  -> True
-    noMatchOnEndType tyVars (FunTy _ _ t) = noMatchOnEndType tyVars t
-    noMatchOnEndType [] (TyCon _) = False
-    -- Defaults to `true` (acutally an ill-formed case for data types)
-    noMatchOnEndType _ _ = True
+-- | This returns a list of which parameters are actually indices
+-- | If this is not an indexed type this list will be empty.
+typeIndicesPositions :: DataDecl -> [Int]
+typeIndicesPositions d = nub (concatMap snd (typeIndices d))
 
 -- | Given a data decleration, return the type parameters which are type indicies
 typeIndices :: DataDecl -> [(Id, [Int])]
@@ -172,7 +163,7 @@ typeIndices (DataDecl _ _ tyVars _ constrs) =
         _                  -> index : findIndices (index+1) tyVars t1
     findIndices index tyVars (FunTy _ _ t) = findIndices (index+1) tyVars t
     findIndices _ [] (TyCon _) = []
-    -- Defaults to `true` (acutally an ill-formed case for data types)
+    -- Defaults to `empty` (acutally an ill-formed case for data types)
     findIndices _ _ _ = []
 
 {-| discriminateTypeIndicesOfDataType takes a data type definition, which has 0 or more
