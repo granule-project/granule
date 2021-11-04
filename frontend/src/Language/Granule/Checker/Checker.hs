@@ -450,7 +450,7 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
     [] -> do
       localGam <- substitute subst localGam
       -- Check that our consumption context matches the binding
-      if (NoTopLevelApprox `elem` globalsExtensions ?globals)
+      subst0 <- if (NoTopLevelApprox `elem` globalsExtensions ?globals)
         then ctxtEquals s localGam combinedGam
         else ctxtApprox s localGam combinedGam
       -- ctxtApprox s localGam combinedGam
@@ -459,7 +459,7 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
       concludeImplication s localVars
 
       -- Create elaborated equation
-      subst'' <- combineSubstitutions s subst subst'
+      subst'' <- combineManySubstitutions s [subst0, subst, subst']
       let elab = Equation s name ty rf elaborated_pats elaboratedExpr
 
       elab' <- substitute subst'' elab
@@ -641,17 +641,16 @@ checkExpr defs gam pol _ ty@(FunTy _ sig tau) (Val s _ rf (Abs _ p t e)) = do
     -- Check linearity of locally bound variables
     case checkLinearity bindings gam' of
        [] -> do
-          substFinal <- combineManySubstitutions s [subst0, subst1, subst2]
+
 
           -- Locally we should have this property (as we are under a binder)
-          ctxtApprox s (gam' `intersectCtxts` bindings) bindings
+          subst' <- ctxtApprox s (gam' `intersectCtxts` bindings) bindings
 
           concludeImplication s localVars
 
           let elaborated = Val s ty rf (Abs ty elaboratedP t elaboratedE)
 
-          debugM "checkExpr[FunTy] component subst" (pretty [subst0, subst1, subst2])
-          debugM "checkExpr[FunTy] final subst" (pretty substFinal)
+          substFinal <- combineManySubstitutions s [subst', subst0, subst1, subst2]
           return (gam' `subtractCtxt` bindings, substFinal, elaborated)
 
        (p:ps) -> illLinearityMismatch s (p:|ps)
@@ -806,7 +805,7 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
         then ghostVariableContextMeet $ (mkId ".var.ghost", fromJust $ lookup (mkId ".var.ghost") gam) : patternGam
         else return patternGam
       -- Check that the use of locally bound variables matches their bound type
-      ctxtApprox s (localGam `intersectCtxts` (patternGam)) (patternGam')
+      subst'' <- ctxtApprox s (localGam `intersectCtxts` (patternGam)) (patternGam')
 
       -- Conclude the implication
       concludeImplication (getSpan pat_i) eVars
@@ -817,7 +816,7 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
         -- Return the resulting computed context, without any of
         -- the variable bound in the pattern of this branch
         [] -> do
-           substFinal <- combineManySubstitutions s [subst, subst']
+           substFinal <- combineManySubstitutions s [subst, subst', subst'']
            return (localGam `subtractCtxt` patternGam
                  , substFinal
                  , (elaborated_pat_i, elaborated_i))
@@ -1004,7 +1003,7 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
         then ghostVariableContextMeet $ (mkId ".var.ghost", fromJust $ lookup (mkId ".var.ghost") gam) : patternGam
         else return patternGam
       -- Check that the use of locally bound variables matches their bound type
-      ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam'
+      subst'' <- ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam'
 
       -- Conclude
       concludeImplication (getSpan pati) eVars
@@ -1015,7 +1014,7 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
          -- Return the resulting computed context, without any of
          -- the variable bound in the pattern of this branch
          [] -> do
-           substFinal <- combineManySubstitutions s [subst, subst']
+           substFinal <- combineManySubstitutions s [subst, subst', subst'']
            return (tyCase
                     , (localGam `subtractCtxt` patternGam, substFinal)
                     , (elaborated_pat_i, elaborated_i))
@@ -1090,7 +1089,7 @@ synthExpr defs gam pol (LetDiamond s _ rf p optionalTySig e1 e2) = do
 
   -- Check that usage matches the binding grades/linearity
   -- (performs the linearity check)
-  ctxtApprox s (gam2 `intersectCtxts` binders) binders
+  subst0 <- ctxtApprox s (gam2 `intersectCtxts` binders) binders
 
   gamNew <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
 
@@ -1101,7 +1100,7 @@ synthExpr defs gam pol (LetDiamond s _ rf p optionalTySig e1 e2) = do
   ef <- effectMult s efTy ef1 ef2
   let t = Diamond ef ty2
 
-  subst <- combineManySubstitutions s [substP, subst1, subst2, u]
+  subst <- combineManySubstitutions s [substP, subst0, subst1, subst2, u]
   -- Synth subst
   t' <- substitute substP t
 
@@ -1143,7 +1142,7 @@ synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
       t -> throw ExpectedEffectType{ errLoc = s, errTy = t }
 
   --to better match the typing rule both continuation types should be equal
-  (b, ty, _) <- equalTypes s ty2 ty3
+  (b, ty, subst4) <- equalTypes s ty2 ty3
   b <- case b of
       True -> return b
       False -> throw TypeError{ errLoc = s, tyExpected = ty2, tyActual = ty3}
@@ -1151,7 +1150,7 @@ synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
   optionalSigEquality s mty ty1
 
   -- linearity check for e2 and e3
-  ctxtApprox s (gam2 `intersectCtxts` binders) binders
+  subst5 <- ctxtApprox s (gam2 `intersectCtxts` binders) binders
 
   -- compute output contexts
   (gam2u3, _) <- joinCtxts s (gam2 `subtractCtxt` binders) gam3
@@ -1164,7 +1163,7 @@ synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
   ef <- effectMult s efTy f g
   let t = Diamond ef ty
 
-  subst <- combineManySubstitutions s [substP, subst1, subst2, subst3, subst']
+  subst <- combineManySubstitutions s [substP, subst1, subst2, subst3, subst4, subst5, subst']
   -- Synth subst
   t' <- substitute substP t
 
@@ -1418,12 +1417,12 @@ synthExpr defs gam pol (Val s _ rf (Abs _ p (Just sig) e)) = do
      (tau, gam'', subst, elaboratedE) <- synthExpr defs (bindings <> gam) pol e
 
      -- Locally we should have this property (as we are under a binder)
-     ctxtApprox s (gam'' `intersectCtxts` bindings) bindings
+     subst0 <- ctxtApprox s (gam'' `intersectCtxts` bindings) bindings
 
      let finalTy = FunTy Nothing sig tau
      let elaborated = Val s finalTy rf (Abs finalTy elaboratedP (Just sig) elaboratedE)
 
-     substFinal <- combineSubstitutions s substP subst
+     substFinal <- combineManySubstitutions s [subst0, substP, subst]
      finalTy' <- substitute substP finalTy
 
      concludeImplication s localVars
@@ -1451,7 +1450,7 @@ synthExpr defs gam pol (Val s _ rf (Abs _ p Nothing e)) = do
      (tau, gam'', subst, elaboratedE) <- synthExpr defs (bindings <> gam) pol e
 
      -- Locally we should have this property (as we are under a binder)
-     ctxtApprox s (gam'' `intersectCtxts` bindings) bindings
+     subst0 <- ctxtApprox s (gam'' `intersectCtxts` bindings) bindings
 
      let finalTy = FunTy Nothing sig tau
      let elaborated = Val s finalTy rf (Abs finalTy elaboratedP (Just sig) elaboratedE)
@@ -1459,7 +1458,7 @@ synthExpr defs gam pol (Val s _ rf (Abs _ p Nothing e)) = do
 
      concludeImplication s localVars
 
-     substFinal <- combineSubstitutions s substP subst
+     subst <- combineManySubstitutions s [subst0, substP, subst]
 
      return (finalTy', gam'' `subtractCtxt` bindings, substFinal, elaborated)
   else throw RefutablePatternError{ errLoc = s, errPat = p }
@@ -1642,9 +1641,9 @@ prettifyMessage msg =
 --   and the typical pattern is that `ctxt2` represents a specification
 --   (i.e. input to checking) and `ctxt1` represents actually usage
 ctxtApprox :: (?globals :: Globals) =>
-    Span -> Ctxt Assumption -> Ctxt Assumption -> Checker ()
+    Span -> Ctxt Assumption -> Ctxt Assumption -> Checker Substitution
 ctxtApprox s ctxt1 ctxt2 = do
-  -- intersection contains those ids from ctxt1 which appears in ctxt2
+  -- intersection contains those ids (and substitutions) from ctxt1 which appears in ctxt2
   intersection <-
     -- For everything in the right context
     -- (which should come as an input to checking)
@@ -1653,9 +1652,8 @@ ctxtApprox s ctxt1 ctxt2 = do
       case lookup id ctxt1 of
         -- ... if so equate
         Just ass1 -> do
-          -- TODO: deal with the subst here
-          _ <- relateByAssumption s ApproximatedBy (id, ass1) (id, ass2)
-          return id
+          subst <- relateByAssumption s ApproximatedBy (id, ass1) (id, ass2)
+          return (id, subst)
         -- ... if not check to see if the missing variable is linear
         Nothing   ->
            case ass2 of
@@ -1666,29 +1664,34 @@ ctxtApprox s ctxt1 ctxt2 = do
                -- TODO: deal with the subst here
                (kind, subst, _) <- synthKind s c
                -- TODO: deal with the subst here
-               _ <- relateByAssumption s ApproximatedBy (id, Discharged t (TyGrade (Just kind) 0)) (id, ass2)
-               return id
+               subst' <- relateByAssumption s ApproximatedBy (id, Discharged t (TyGrade (Just kind) 0)) (id, ass2)
+               subst'' <- combineSubstitutions s subst subst'
+               return (id, subst'')
              -- TODO: handle new ghost variables
              Ghost c -> do
                -- TODO: deal with the subst here
                (kind, subst, _) <- synthKind s c
                debugM "ctxtApprox ghost" (pretty kind <> ", " <> pretty c)
                -- TODO: deal with the subst here
-               _ <- relateByAssumption s ApproximatedBy (id, Ghost (TyGrade (Just kind) 0)) (id, ass2)
-               return id
+               subst' <- relateByAssumption s ApproximatedBy (id, Ghost (TyGrade (Just kind) 0)) (id, ass2)
+               subst'' <- combineSubstitutions s subst subst'
+               return (id, subst'')
   -- Last we sanity check, if there is anything in ctxt1 that is not in ctxt2
   -- then we have an issue!
+  let justIds = map fst intersection
   forM_ ctxt1 $ \(id, ass1) ->
-    if (id `elem` intersection)
+    if (id `elem` justIds)
       then return ()
       else throw UnboundVariableError{ errLoc = s, errId = id }
 
+  -- combine and return substitutions
+  combineManySubstitutions s (map snd intersection)
 
 -- | `ctxtEquals ctxt1 ctxt2` checks if two contexts are equal
 --   and the typical pattern is that `ctxt2` represents a specification
 --   (i.e. input to checking) and `ctxt1` represents actually usage
 ctxtEquals :: (?globals :: Globals) =>
-    Span -> Ctxt Assumption -> Ctxt Assumption -> Checker ()
+    Span -> Ctxt Assumption -> Ctxt Assumption -> Checker Substitution
 ctxtEquals s ctxt1 ctxt2 = do
   -- intersection contains those ids from ctxt1 which appears in ctxt2
   intersection <-
@@ -1700,8 +1703,8 @@ ctxtEquals s ctxt1 ctxt2 = do
         -- ... if so equate
         Just ass1 -> do
           -- -- TODO: deal with the subst here
-          _ <- relateByAssumption s Eq (id, ass1) (id, ass2)
-          return id
+          subst <- relateByAssumption s Eq (id, ass1) (id, ass2)
+          return (id, subst)
         -- ... if not check to see if the missing variable is linear
         Nothing   ->
            case ass2 of
@@ -1709,24 +1712,28 @@ ctxtEquals s ctxt1 ctxt2 = do
              Linear t -> illLinearityMismatch s . pure $ LinearNotUsed id
              -- Else, this could be due to weakening so see if this is allowed
              Discharged t c -> do
-               -- TODO: deal with the subst here
-               (kind, _, _) <- synthKind s c
-               -- TODO: deal with the subst here
-               _ <- relateByAssumption s Eq (id, Discharged t (TyGrade (Just kind) 0)) (id, ass2)
-               return id
+               (kind, subst, _) <- synthKind s c
+               subst' <- relateByAssumption s Eq (id, Discharged t (TyGrade (Just kind) 0)) (id, ass2)
+               subst'' <- combineSubstitutions s subst subst'
+               return (id, subst'')
              -- TODO: handle new ghost variables
              Ghost c -> do
                -- TODO: deal with the subst here
-               (kind, _, _) <- synthKind s c
+               (kind, subst, _) <- synthKind s c
                -- TODO: deal with the subst here
-               _ <- relateByAssumption s Eq (id, Ghost (TyGrade (Just kind) 0)) (id, ass2)
-               return id
+               subst' <- relateByAssumption s Eq (id, Ghost (TyGrade (Just kind) 0)) (id, ass2)
+               subst'' <- combineSubstitutions s subst subst'
+               return (id, subst'')
   -- Last we sanity check, if there is anything in ctxt1 that is not in ctxt2
   -- then we have an issue!
+  let justIds = map fst intersection
   forM_ ctxt1 $ \(id, ass1) ->
-    if (id `elem` intersection)
+    if (id `elem` justIds)
       then return ()
       else throw UnboundVariableError{ errLoc = s, errId = id }
+
+  -- return substitutions
+  combineManySubstitutions s (map snd intersection)
 
 {- | Take the least-upper bound of two contexts.
      If one context contains a linear variable that is not present in
