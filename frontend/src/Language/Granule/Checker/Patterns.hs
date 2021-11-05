@@ -47,7 +47,7 @@ definiteUnification s pos (Just (coeff, coeffTy)) ty = do
   when isPoly $ -- Used to be: addConstraintToPreviousFrame, but paper showed this was not a good idea
     case pos of
       InCase ->  addConstraintToPreviousFrame $ ApproximatedBy s (TyGrade (Just coeffTy) 1) coeff coeffTy
-      InFunctionEquation -> addConstraint $ ApproximatedBy s (TyGrade (Just coeffTy) 1) coeff coeffTy
+      InFunctionEquation -> addConstraintToNextFrame $ ApproximatedBy s (TyGrade (Just coeffTy) 1) coeff coeffTy
 
 -- | Predicate on whether a type has more than 1 shape (constructor)
 polyShaped :: (?globals :: Globals) => Type -> Checker Bool
@@ -128,7 +128,7 @@ ctxtFromTypedPattern' outerCoeff _ pos t (PWild s _ rf) cons =
           Just (coeff, coeffTy) -> do
               -- Must approximate zero
               case pos of
-                InFunctionEquation -> addConstraint $ ApproximatedBy s (TyGrade (Just coeffTy) 0) coeff coeffTy
+                InFunctionEquation -> addConstraintToNextFrame $ ApproximatedBy s (TyGrade (Just coeffTy) 0) coeff coeffTy
                 InCase -> addConstraintToPreviousFrame $ ApproximatedBy s (TyGrade (Just coeffTy) 0) coeff coeffTy
 
               return ([], [], [], PWild s t rf, NotFull)
@@ -237,8 +237,8 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
         (True, ty, unifiers) -> do
 
           -- Register coercions as equalities
-          --mapM_ (\(var, SubstT t) ->
-          --              equalTypesRelatedCoeffectsAndUnify s Eq PatternCtxt (TyVar var) t) coercions'
+          mapM_ (\(var, SubstT t) ->
+                        equalTypesRelatedCoeffectsAndUnify s Eq PatternCtxt (TyVar var) t) coercions'
 
           dataConstructorIndexRewritten <- substitute unifiers dataConstructorTypeFresh
           dataConstructorIndexRewrittenAndSpecialised <- substitute coercions' dataConstructorIndexRewritten

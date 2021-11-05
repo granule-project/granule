@@ -330,7 +330,9 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
       -- Erase the solver predicate between equations
         modify' $ \st -> st
             { predicateStack = []
+            , guardPredicates = [[]]
             , tyVarContext = []
+            , futureFrame = []
             , uniqueVarIdCounterMap = mempty
             }
         debugM "elaborateEquation" "checkEquation"
