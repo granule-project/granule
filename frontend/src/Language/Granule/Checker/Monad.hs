@@ -148,6 +148,7 @@ data CheckerState = CS
             , uniqueVarIdCounter     :: Int
             -- Local stack of constraints (can be used to build implications)
             , predicateStack :: [Pred]
+            , futureFrame :: [Pred]
 
             -- Stack of a list of additional knowledge from failed patterns/guards
             -- (i.e. from preceding cases) stored as a list of lists ("frames")
@@ -207,6 +208,7 @@ initState :: (?globals :: Globals) => CheckerState
 initState = CS { uniqueVarIdCounterMap = M.empty
                , uniqueVarIdCounter = 0
                , predicateStack = []
+               , futureFrame = []
                , guardPredicates = [[]]
                , tyVarContext = []
                , guardContexts = []
@@ -342,10 +344,11 @@ concludeImplication s localCtxt = do
 
         -- No previous guards in the current frame to provide additional information
         [] : knowledgeStack -> do
-          let impl = Impl localCtxt p p'
+          let impl = Impl localCtxt p (Conj $ p' : futureFrame checkerState)
 
           -- Add the implication to the predicate stack
           modify (\st -> st { predicateStack = pushPred impl stack
+                            , futureFrame = []
           -- And add this case to the knowledge stack
                             , guardPredicates = [((localCtxt, p), s)] : knowledgeStack })
 
@@ -362,9 +365,9 @@ concludeImplication s localCtxt = do
            let impl@(Impl implCtxt implAntecedent _) =
                 -- TODO: turned off this feature for now by putting True in the guard here
                 if True -- isTrivial freshPrevGuardPred
-                  then (Impl localCtxt p p')
+                  then (Impl localCtxt p (Conj $ p' : futureFrame checkerState))
                   else (Impl (localCtxt <> freshPrevGuardCxt)
-                                 (Conj [p, freshPrevGuardPred]) p')
+                                 (Conj [p, freshPrevGuardPred]) (Conj $ p' : futureFrame checkerState))
 
            -- Build the guard theorem to also include all of the 'context' of things
            -- which also need to hold (held in `stack`)
@@ -374,6 +377,7 @@ concludeImplication s localCtxt = do
            -- Store `p` (impliciation antecedent) to use in later cases
            -- on the top of the guardPredicates stack
            modify (\st -> st { predicateStack = pushPred impl stack
+                             , futureFrame = []
            -- And add this case to the knowledge stack
                              , guardPredicates = knowledge : knowledgeStack })
 
@@ -431,6 +435,10 @@ addConstraint c = do
 
 resetAddedConstraintsFlag :: Checker ()
 resetAddedConstraintsFlag = modify (\st -> st { addedConstraints = False })
+
+addConstraintToNextFrame :: Constraint -> Checker ()
+addConstraintToNextFrame c = do
+  modify (\st -> st { futureFrame = Con c : futureFrame st })
 
 -- | A helper for adding a constraint to the previous frame (i.e.)
 -- | if I am in a local context, push it to the global
