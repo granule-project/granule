@@ -326,7 +326,6 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
 
     elaboratedEquations :: [Equation () Type] <- runAll elaborateEquation equations
 
-    checkGuardsForImpossibility s defName constraints
     checkGuardsForExhaustivity s defName ty equations
     let el' = el { equations = elaboratedEquations }
     pure $ Def s defName rf el' tys
@@ -375,6 +374,9 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
                 return (st { guardPredicates = (guardPred' : rest) }))
 
         debugM "elaborateEquation" "solveEq done"
+
+        checkGuardsForImpossibility s defName []
+
         pure elaboratedEq
 
 checkEquation :: (?globals :: Globals) =>
