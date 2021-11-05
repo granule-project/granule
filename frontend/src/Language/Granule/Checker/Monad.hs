@@ -322,6 +322,8 @@ popCaseFrame =
 concludeImplication :: Span -> Ctxt Kind -> Checker ()
 concludeImplication s localCtxt = do
   checkerState <- get
+  -- Filter out any type parameters that have snuck in
+  localCtxt <- return $ filter (\(id, k) -> case k of Type _ -> False; _ -> True) localCtxt
   case predicateStack checkerState of
     (p' : p : stack) -> do
 

@@ -114,11 +114,11 @@ instance Monad m => Freshenable m Constraint where
   freshen (LtEq s c1 c2) = LtEq s <$> freshen c1 <*> freshen c2
   freshen (GtEq s c1 c2) = GtEq s <$> freshen c1 <*> freshen c2
 
-  freshen (Hsup s c1 c2 t) = do 
+  freshen (Hsup s c1 c2 t) = do
     c1 <- freshen c1
     c2 <- freshen c2
     return $ Hsup s c1 c2 t
-   
+
 -- Used to negate constraints
 newtype Neg a = Neg a
   deriving (Eq, Show)
@@ -154,7 +154,7 @@ instance Pretty (Neg Constraint) where
 
     pretty (Neg (GtEq _ c1 c2)) =
       "Trying to prove false statement: (" <> pretty c1 <> " ≥ " <> pretty c2 <> ")"
-      
+
     pretty (Neg (Hsup _ c1 c2 t)) =
       "Trying to prove false statement: (" <> pretty c1 <> " ⨱ " <> pretty c2 <> ")"
 
@@ -350,17 +350,24 @@ instance Pretty [Pred] where
 
 instance Pretty Pred where
   pretty =
-    predFold
+    (predFold
      (intercalate " ∧ ")
      (intercalate " ∨ ")
      (\ctxt p q ->
-         (if null ctxt then "" else "∀ " <> pretty' ctxt <> " . ")
+         (if null ctxt then "" else "∀ {" <> pretty' ctxt <> "} . ")
       <> "((" <> p <> ") -> " <> q <> ")")
       pretty
       (\p -> "¬(" <> p <> ")")
-      (\x t p -> "∃ " <> pretty x <> " : " <> pretty t <> " . " <> p)
-    where pretty' =
-            intercalate "," . map (\(id, k) -> pretty id <> " : " <> pretty k)
+      (\x t p -> "∃ " <> pretty x <> " : " <> pretty t <> " . " <> p))
+    . preFilterImplCtxts
+    where
+      preFilterImplCtxts =
+        predFold Conj Disj
+          (\ctxt p q -> Impl (filter (\(id, k) -> ((id `elem` freeVars p) || (id `elem` freeVars q))) ctxt) p q)
+          Con NegPred Exists
+
+      pretty' xs = intercalate ", " (map prettyBinding xs)
+      prettyBinding (id, k) = pretty id <> " : " <> pretty k
 
 -- | Whether the predicate is empty, i.e. contains no constraints
 isTrivial :: Pred -> Bool
