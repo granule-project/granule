@@ -368,17 +368,24 @@ instance Pretty [Pred] where
 
 instance Pretty Pred where
   pretty =
-    predFold
+    (predFold
      (intercalate " ∧ ")
      (intercalate " ∨ ")
      (\ctxt p q ->
-         (if null ctxt then "" else "∀ " <> pretty' ctxt <> " . ")
+         (if null ctxt then "" else "∀ {" <> pretty' ctxt <> "} . ")
       <> "((" <> p <> ") -> " <> q <> ")")
       pretty
       (\p -> "¬(" <> p <> ")")
-      (\x t p -> "∃ " <> pretty x <> " : " <> pretty t <> " . " <> p)
-    where pretty' =
-            intercalate "," . map (\(id, k) -> pretty id <> " : " <> pretty k)
+      (\x t p -> "∃ " <> pretty x <> " : " <> pretty t <> " . " <> p))
+    . preFilterImplCtxts
+    where
+      preFilterImplCtxts =
+        predFold Conj Disj
+          (\ctxt p q -> Impl (filter (\(id, k) -> ((id `elem` freeVars p) || (id `elem` freeVars q))) ctxt) p q)
+          Con NegPred Exists
+
+      pretty' xs = intercalate ", " (map prettyBinding xs)
+      prettyBinding (id, k) = pretty id <> " : " <> pretty k
 
 -- | Whether the predicate is empty, i.e. contains no constraints
 isTrivial :: Pred -> Bool
