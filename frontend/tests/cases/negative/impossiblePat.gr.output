@@ -1,3 +1,3 @@
 Type checking failed: 
-Impossible pattern match: frontend/tests/cases/negative/impossiblePat.gr:7:1:
-Pattern match in an equation of `last` is impossible as it implies the unsatisfiable condition ((n0 + 1) + 1 = n + 1)
+Impossible pattern match: frontend/tests/cases/negative/impossiblePat.gr:6:1:
+Pattern match in an equation of `last` is impossible as it implies the unsatisfiable condition (0 = n + 1)
