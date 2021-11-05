@@ -1,3 +1,4 @@
 Type checking failed: 
-Impossible pattern match: frontend/tests/cases/negative/noConsumption.gr:4:1:
-Pattern match in an equation of `and` is impossible as it implies the unsatisfiable condition ((0 : Nat) = 1) ∧ ((0 : Nat) = 1)
+Falsifiable theorem: frontend/tests/cases/negative/noConsumption.gr:4:1:
+The following theorem associated with `and` is falsifiable:
+	((0 : Nat) = 1) ∧ ((0 : Nat) = 1)

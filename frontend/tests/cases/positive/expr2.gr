@@ -5,7 +5,5 @@ data Expr a where
   Add : Expr a → Expr a → Expr a
 
 eval : Expr Int → Int
-eval x =
-    case x of
-      (Const n) → n;
-      (Add x y) → eval x + eval y
+eval Const n) = n;
+eval (Add x y) = eval x + eval y
