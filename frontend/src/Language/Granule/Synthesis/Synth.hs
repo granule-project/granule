@@ -693,13 +693,13 @@ constrIntroHelper (True, allowDef) defs gamma mode grade goalTy@(Forall s binder
       let adtConstructors = concatMap snd (filter (\x -> fst x == name) (constructors state))
 
       -- For each relevent data constructor, we must now check that it's type matches the goal
-      adtConstructors' <- foldM (\ a (id, (conTy@(Forall s binders constraints conTy'), subst, ints)) -> do
+      adtConstructors' <- foldM (\ a (id, (conTy@(Forall s binders constraints conTy'), subst)) -> do
          (success, specTy, specSubst) <- checkConstructor conTy subst
          case (success, specTy) of
            (True, Just specTy') -> do
              subst' <- conv $ combineSubstitutions s subst specSubst
              specTy'' <- conv $ substitute subst' specTy'
-             return $ (id, (Forall s binders constraints specTy'', subst', ints)) : a
+             return $ (id, (Forall s binders constraints specTy'', subst')) : a
            _ -> return a ) [] adtConstructors
 
       -- Attempt to synthesise each applicable constructor, in order of ascending arity
@@ -708,14 +708,14 @@ constrIntroHelper (True, allowDef) defs gamma mode grade goalTy@(Forall s binder
   where
 
 
-    compare' con1@(_, (Forall _ _ _ ty1, _, _)) con2@(_, (Forall _ _ _ ty2, _, _)) = compare (arity ty1) (arity ty2)
+    compare' con1@(_, (Forall _ _ _ ty1, _)) con2@(_, (Forall _ _ _ ty2, _)) = compare (arity ty1) (arity ty2)
 
     -- | Given a data constructor and a substition of type indexes, check that the goal type ~ data constructor type
     checkConstructor :: TypeScheme -> Substitution -> Synthesiser (Bool, Maybe Type, Substitution)
     checkConstructor con@(Forall _ binders coercions conTy) subst = do
       (result, local) <- conv $ peekChecker $ do
 
-        (conTyFresh, tyVarsFreshD, substFromFreshening, constraints, coercions') <- freshPolymorphicInstance InstanceQ False con subst []
+        (conTyFresh, tyVarsFreshD, substFromFreshening, constraints, coercions') <- freshPolymorphicInstance InstanceQ False con subst
 
         -- Take the rightmost type of the function type, collecting the arguments along the way 
         let (conTy'', args) = rightMostFunTy conTyFresh
@@ -754,7 +754,7 @@ constrIntroHelper (True, allowDef) defs gamma mode grade goalTy@(Forall s binder
 
     -- Traverse the constructor types and attempt to synthesise a program for each one
     synthesiseConstructors gamma [] mode goalTy = none
-    synthesiseConstructors gamma ((id, (Forall s binders' constraints' ty, subst, _)):cons) mode goalTy =
+    synthesiseConstructors gamma ((id, (Forall s binders' constraints' ty, subst)):cons) mode goalTy =
       case constrArgs ty of
         -- If the constructor type has no arguments, then it is a nullary constructor and we can simply return the introduction form
         Just [] -> do
@@ -829,7 +829,7 @@ constrElimHelper (allowRSync, allowDef) defs left (var@(x, (a, structure)):right
         -- (_, cases) <- conv $ generateCases nullSpanNoFile (constructors state) [(x, Linear (Box grade t))] [x] (Just $ FunTy Nothing (Box grade t) goalTy)
           let adtConstructors = concatMap snd (filter (\x -> fst x == name) (constructors state))
           -- For each relevent data constructor, we must now check that it's type matches the goal
-          cases <- foldM (\ a (id, (conTy@(Forall s binders constraints conTy'), subst, ints)) -> do
+          cases <- foldM (\ a (id, (conTy@(Forall s binders constraints conTy'), subst)) -> do
             (success, (pat, assumptions, subst')) <- checkConstructor id topLevelDefId conTy assumptionTy subst grade
             case (success, pat) of
               (True, Just pat) -> do
@@ -862,7 +862,7 @@ constrElimHelper (allowRSync, allowDef) defs left (var@(x, (a, structure)):right
     checkConstructor name topLevelDef con@(Forall  _ binders constraints conTy) assumptionTy subst grade = do
       (result, local) <- conv $ peekChecker $ do
 
-        (conTyFresh, tyVarsFreshD, substFromFreshening, constraints, coercions') <- freshPolymorphicInstance InstanceQ False con subst []
+        (conTyFresh, tyVarsFreshD, substFromFreshening, constraints, coercions') <- freshPolymorphicInstance InstanceQ False con subst
 
         -- Take the rightmost type of the function type, collecting the arguments along the way 
         let (conTy'', args) = rightMostFunTy conTyFresh
