@@ -544,6 +544,11 @@ lengthFloatArray' = BUILTIN
 
 deleteFloatArray : FloatArray *[Unique] -> ()
 deleteFloatArray = BUILTIN
+
+---------------------
+
+scale : (k : Float) -> DFloat -> DFloat [k]
+scale = BUILTIN
 |]
 
 
