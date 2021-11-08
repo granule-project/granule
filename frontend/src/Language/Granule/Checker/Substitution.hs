@@ -180,7 +180,7 @@ reduceByTransitivity sp ctxt = reduceByTransitivity' [] ctxt
            SubstT (TyVar var') -> do
              st <- get
              case (lookup var (tyVarContext st), lookup var' (tyVarContext st)) of
-               (Just (_, ForallQ), Just (_, ForallQ)) ->
+               (Just (vara, ForallQ), Just (varb, ForallQ)) | vara /= varb ->
                  throw $ UnificationFailGeneric sp (SubstT (TyVar var)) (SubstT (TyVar var'))
                _ -> do
                  subst <- reduceByTransitivity sp ((var', t) : substRest)
