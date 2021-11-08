@@ -768,48 +768,6 @@ mguCoeffectTypes' s (TyVar kvar1) kv2 = do
 mguCoeffectTypes' s kv1 (TyVar kv2) = do
   mguCoeffectTypes' s (TyVar kv2) kv1
 
-{-- TODO: DEL
--- Both are variables
-mguCoeffectTypes' s (TyVar kv1) (TyVar kv2) | kv1 /= kv2 = do
-  st <- get
-  case (lookup kv1 (tyVarContext st), lookup kv2 (tyVarContext st))  of
-    (Nothing, _) -> throw $ UnboundVariableError s kv1
-    (_, Nothing) -> throw $ UnboundVariableError s kv2
-    (Just (TyCon kcon1, _), Just (TyCon kcon2, InstanceQ)) | kcon1 == kcon2 -> do
-      substIntoTyVarContext kv2 (TyVar kv1)
-      return $ Just (TyVar kv1, [(kv2, SubstT $ TyVar kv1)], (id, id))
-
-    (Just (TyCon kcon1, InstanceQ), Just (TyCon kcon2, _)) | kcon1 == kcon2 -> do
-      substIntoTyVarContext kv1 (TyVar kv2)
-      return $ Just (TyVar kv2, [(kv1, SubstT $ TyVar kv2)], (id, id))
-
-    (Just (TyCon kcon1, ForallQ), Just (TyCon kcon2, ForallQ)) | kcon1 == kcon2 ->
-      throw $ UnificationFail s kv2 (TyVar kv1) (TyCon kcon1) False
-
-    (Just (k', _), Just (k, _)) ->
-      throw $ UnificationFail s kv2 (TyVar kv1) k' False
-
--- Left-hand side is a poly variable, but Just is concrete
-mguCoeffectTypes' s (TyVar kv1) coeffTy2 = do
-  st <- get
-
-  case lookup kv1 (tyVarContext st) of
-    Nothing -> throw $ UnboundVariableError s kv1
-
-    -- Cannot unify if the type variable is univrssal
-    Just (k, ForallQ) ->
-      throw $ UnificationFail s kv1 coeffTy2 k True
-
-    -- Can unify if the type variable is a unification var
-    Just (k, _) -> do -- InstanceQ or BoundQ
-      substIntoTyVarContext kv1 coeffTy2
-      return $ Just (coeffTy2, [(kv1, SubstT coeffTy2)], (id, id))
-
--- Right-hand side is a poly variable, but Linear is concrete
-mguCoeffectTypes' s coeffTy1 (TyVar kv2) = do
-  mguCoeffectTypes' s (TyVar kv2) coeffTy1
-  -}
-
 -- Ext cases
 -- unify (Ext t) (Ext t') = Ext (unify t t')
 mguCoeffectTypes' s (isExt -> Just t) (isExt -> Just t') = do
@@ -821,7 +779,6 @@ mguCoeffectTypes' s (isExt -> Just t) (isExt -> Just t') = do
 
 -- unify (Ext t) t' = Ext (unify t t')
 mguCoeffectTypes' s (isExt -> Just t) t' = do
-  -- liftIO $ putStrLn $ "unify (Ext " <> pretty t <> ") with " <> pretty t'
   coeffecTyUpper <- mguCoeffectTypes' s t t'
   case coeffecTyUpper of
     Just (upperTy, subst, (inj1, inj2)) -> do
@@ -830,7 +787,6 @@ mguCoeffectTypes' s (isExt -> Just t) t' = do
 
 -- unify t (Ext t') = Ext (unify t t')
 mguCoeffectTypes' s t (isExt -> Just t') = do
-  -- liftIO $ putStrLn $ "unify " <> pretty t <> " with (Ext " <> pretty t' <> ")"
   coeffecTyUpper <- mguCoeffectTypes' s t t'
   case coeffecTyUpper of
     Just (upperTy, subst, (inj1, inj2)) -> do
@@ -911,7 +867,6 @@ mguCoeffectTypes' s (isInterval -> Just t') t = do
             where inj1' = runIdentity . typeFoldM baseTypeFold { tfTyInfix = \op c1 c2 -> return $ case op of TyOpInterval -> TyInfix op (inj1 c1) (inj1 c2); _ -> TyInfix op c1 c2 }
 
     Nothing -> return Nothing
-
 
 -- No way to unify (outer function will take the product)
 mguCoeffectTypes' s coeffTy1 coeffTy2 = return Nothing
