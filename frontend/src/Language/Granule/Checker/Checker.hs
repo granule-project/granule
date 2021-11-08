@@ -489,39 +489,52 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
   let boundVariables = map fst $ filter (\ (id, _) -> getIdName id `elem` map getIdName vars) ctxt
   let unboundVariables = filter (\ x -> isNothing (lookup x ctxt)) vars
 
+  -- elaborated hole
+  let hexpr = Hole s t False vars
+
+
   case unboundVariables of
     (v:_) -> throw UnboundVariableError{ errLoc = s, errId = v }
     [] -> do
-      let snd3 (a, b, c) = b
-      let pats = map (second snd3) (typeConstructors st)
-      constructors <- mapM (\ (a, b) -> do
-        dc <- mapM (lookupDataConstructor s) b
-        let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
-        return (a, sd)) pats
-      (_, cases) <- generateCases s constructors ctxt boundVariables
 
-      -- If we are in synthesise mode, also try to synthesise a
-      -- term for each case split goal *if* this is also a hole
-      -- of interest
-      let casesWithHoles = zip (map fst cases) (repeat (Hole s t True []))
-      cases' <-
-        case globalsSynthesise ?globals of
-           Just True ->
+      case globalsSynthesise ?globals of
+        Just True -> do
+          synthedExpr <- do
               -- Check to see if this hole is something we are interested in
               case globalsHolePosition ?globals of
                 -- Synth everything mode
-                Nothing -> programSynthesise ctxt vars t cases
+                Nothing -> programSynthesise ctxt vars t
                 Just pos ->
                   if spanContains pos s
                     -- This is a hole we want to synth on
-                    then  programSynthesise ctxt vars t cases
+                    then programSynthesise ctxt vars t
                     -- This is not a hole we want to synth on
-                    else  return casesWithHoles
-           -- Otherwise synthesise empty holes for each case
-           -- (and throw away the binding information)
-           _ -> return casesWithHoles
-      let holeVars = map (\id -> (id, id `elem` boundVariables)) (map fst ctxt)
-      throw $ HoleMessage s t ctxt (tyVarContext st) holeVars cases'
+                    else  return hexpr
+
+          let holeVars = map (\id -> (id, id `elem` boundVariables)) (map fst ctxt)
+          throw $ HoleMessage s t ctxt (tyVarContext st) holeVars [([], synthedExpr)]
+
+        _ -> do
+          case globalsRewriteHoles ?globals of
+            Just True -> do
+              let snd3 (a, b, c) = b
+              let pats = map (second snd3) (typeConstructors st)
+              constructors <- mapM (\ (a, b) -> do
+                  dc <- mapM (lookupDataConstructor s) b
+                  let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
+                  return (a, sd)) pats
+              (_, cases) <- generateCases s constructors ctxt boundVariables 
+
+              -- If we are in synthesise mode, also try to synthesise a
+              -- term for each case split goal *if* this is also a hole
+              -- of interest
+              let casesWithHoles = zip (map fst cases) (repeat (Hole s t True []))
+
+              let holeVars = map (\id -> (id, id `elem` boundVariables)) (map fst ctxt)
+              throw $ HoleMessage s t ctxt (tyVarContext st) holeVars casesWithHoles
+            _ -> do
+              let holeVars = map (\id -> (id, id `elem` boundVariables)) (map fst ctxt)
+              throw $ HoleMessage s t ctxt (tyVarContext st) holeVars [([], hexpr)]
 
 -- Checking of constants
 checkExpr _ _ _ _ ty@(TyCon c) (Val s _ rf (NumInt n))   | internalName c == "Int" = do
@@ -1967,28 +1980,27 @@ freshenTySchemeForVar s rf id tyScheme = do
 
 -- Hook into the synthesis engine.
 programSynthesise :: (?globals :: Globals) =>
-  Ctxt Assumption -> [Id] -> Type -> [([Pattern ()], Ctxt Assumption)] -> Checker [([Pattern ()], Expr () Type)]
-programSynthesise ctxt vars ty patternss = do
+  Ctxt Assumption -> [Id] -> Type -> Checker (Expr () Type)
+programSynthesise ctxt vars ty = do
   currentState <- get
-  forM patternss $ \(pattern, patternCtxt) -> do
-    -- Build a context which has the pattern context
-    let ctxt' = patternCtxt
-          -- ... plus anything from the original context not being cased upon
-            ++ filter (\(id, a) -> not (id `elem` vars)) ctxt
+  debugM "equation Nameeee" (show $ equationName currentState)
+  debugM "equation ctxt" (show $ ctxt)
 
-    -- Run the synthesiser in this context
-    let mode = if alternateSynthesisMode then Syn.Alternative else Syn.Default
-    synRes <-
-       liftIO $ Syn.synthesiseProgram
-                    (if subtractiveSynthesisMode then (Syn.Subtractive mode) else (Syn.Additive mode))
-                    ctxt' [] (Forall nullSpan [] [] ty) currentState
+  let (defs, currentName) = case (equationName currentState, equationTy currentState) of
+        (Just name, Just ty') -> ([(name, ty')], name)
+        _ -> ([], mkId "")
 
-    case synRes of
-      -- Nothing synthed, so create a blank hole instead
-      []    -> do
-        debugM "Synthesiser" $ "No programs synthesised for " <> pretty ty
-        return (pattern, Hole nullSpan ty True [])
-      ((t, _, _):_) -> do
-        debugM "Synthesiser" $ "Synthesised: " <> pretty t
-        return (pattern, t)
+  -- Run the synthesiser in this context
+  let mode = if alternateSynthesisMode then Syn.Alternative else Syn.Default
+  synRes <-
+      liftIO $ Syn.synthesiseProgram defs currentName
+                  (if subtractiveSynthesisMode then (Syn.Subtractive mode) else (Syn.Additive mode))
+                  ctxt [] (Forall nullSpan [] [] ty) currentState
 
+  case synRes of
+    -- Nothing synthed, so create a blank hole instead
+    []    ->
+      return (Hole nullSpan ty True [])
+    ((_, _, _):_) ->
+      case last synRes of
+        (t, _, _) -> return t
