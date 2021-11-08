@@ -764,9 +764,11 @@ mguCoeffectTypes' :: (?globals :: Globals)
 -- Trivial case
 mguCoeffectTypes' s t t' | t == t' = return $ Just (t, [], (id, id))
 
+-- Unifying with variables
+
 mguCoeffectTypes' s (TyVar kvar1) kv2 = do
   subst <- unification s kvar1 kv2 Eq
-  return $ Just (TyVar kvar1, subst, (id, id))
+  return $ Just (kv2, subst, (id, id))
 
 mguCoeffectTypes' s kv1 (TyVar kv2) = do
   mguCoeffectTypes' s (TyVar kv2) kv1
