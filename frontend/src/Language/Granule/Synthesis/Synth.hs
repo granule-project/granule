@@ -462,6 +462,7 @@ appHelper (allowRSync, allowDef) defs left (var@(x, (a, s)) : right) sub@Subtrac
               -- Check that `id` was used by `e1` (and thus is not in `delta1`)
               debugM "synthDebug" ("Inside app, try to synth the argument at type " ++ pretty t1)
               (e2, delta2, sub2, bindings2, sd2) <- synthesiseInner defs False sub delta1 [] grade (Forall nullSpanNoFile binders constraints t1) (False, allowRSync, False)
+              debugM "synthDebug" ("Inside app, made a " ++ (pretty $ Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTy t) id e1 ))
               subst <- conv $ combineSubstitutions nullSpanNoFile sub1 sub2
               return (Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTy t) id e1, delta2, subst, bindings1 ++ bindings2, sd1 || sd2)
             _ -> none
@@ -515,6 +516,7 @@ appHelper (allowRSync, allowDef) defs left (var@(x, (a, s)) : right) add@(Additi
               deltaOut' <- maybeToSynthesiser $ ctxtAdd deltaOut delta2
 
               subst <- conv $ combineSubstitutions nullSpan sub1 sub2
+              debugM "synthDebug" ("Inside app, made a " ++ (pretty $ Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTy tyA) x2 e1 ))
               return (Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTy tyA) x2 e1, deltaOut', subst, bindings1 ++ bindings2, sd1 || sd2)
             _ -> none
         else none
@@ -888,6 +890,7 @@ constrElimHelper (allowRSync, allowDef) defs left (var@(x, (a, structure)):right
 
         case result of
           QED -> do -- If the solver succeeds, return the specialised type
+            debugM "success!" (show name)
             spec <- substitute substFromFreshening spec
 
             -- Construct pattern based on constructor arguments specialised by type equality
