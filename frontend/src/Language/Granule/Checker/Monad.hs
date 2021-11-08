@@ -182,6 +182,7 @@ data CheckerState = CS
 
             -- The type of the current equation.
             , equationTy :: Maybe Type
+            , equationName :: Maybe Id
 
             -- Definitions that have been triggered during type checking
             -- by the auto deriver (so we know we need them in the interpreter)
@@ -209,6 +210,7 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , derivStack = []
                , allHiddenNames = M.empty
                , equationTy = Nothing
+               , equationName = Nothing
                , derivedDefinitions = []
                , addedConstraints = False
                }

@@ -119,7 +119,6 @@ holeRefactorVal :: Expr () Type -> Value () () -> Value () ()
 holeRefactorVal goal (Abs a p mt expr) = Abs a p mt (holeRefactorExpr goal expr)
 holeRefactorVal goal (Promote a expr)  = Promote a (holeRefactorExpr goal expr)
 holeRefactorVal goal (Pure a expr)     = Pure a (holeRefactorExpr goal expr)
-holeRefactorVal goal (Nec a expr)      = Nec a (holeRefactorExpr goal expr)
 holeRefactorVal goal (Constr a v vals) = Constr a v (map (holeRefactorVal goal) vals)
 holeRefactorVal goal v = v
 
