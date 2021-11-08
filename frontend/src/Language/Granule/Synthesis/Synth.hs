@@ -1105,11 +1105,11 @@ defHelper left (def@(x, t):right) gamma  sub@Subtractive{} grade goalTy@(Forall 
       debugM "entered def helper t: " (show t ++ "goal: " <> show goalTy <> "gamma: " <> show gamma)
       id <- freshIdentifier
       let (gamma', omega') = bindToContext (id, (Linear t2, None)) gamma [] (isLAsync t2)
-      (e1, delta1, sub1, bindings1, sd1) <- synthesiseInner (def:left++right) False sub gamma' omega' grade goalTy (False, False, False)
+      (e1, delta1, sub1, bindings1, sd1) <- synthesiseInner (left++right) False sub gamma' omega' grade goalTy (False, False, False)
       debugM "defhelper made a: " (pretty e1)
       case lookup id delta1 of
         Nothing -> do
-          (e2, delta2, sub2, bindings2, sd2) <- synthesiseInner (def:left++right) False sub delta1 [] grade (Forall nullSpanNoFile binders constraints t1) (False, False, False)
+          (e2, delta2, sub2, bindings2, sd2) <- synthesiseInner (left++right) False sub delta1 [] grade (Forall nullSpanNoFile binders constraints t1) (False, False, False)
           if sd2 then do 
             debugM "defhelper also made a: " (pretty e2)
             debugM "giving me a: " (pretty $ Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTy t) id e1)
@@ -1125,7 +1125,7 @@ defHelper left (def@(x, t) : right) gamma add@(Additive mode) grade goalTy@(Fora
       x2 <- freshIdentifier
       debugM "entered def helper t: " (pretty t ++ " \n goal: " <> pretty goalTy <> " \n gamma: " <> show gamma)
       let (gamma', omega') = bindToContext (x2, (Linear tyB, None)) gamma [] (isLAsync tyB)
-      (e1, delta1, sub1, bindings1, sd1) <- synthesiseInner (def:left++right) False add gamma' omega' grade goalTy (False, False, False)
+      (e1, delta1, sub1, bindings1, sd1) <- synthesiseInner (left++right) False add gamma' omega' grade goalTy (False, False, False)
       case lookupAndCutout x2 delta1 of
         Just (delta1', (Linear _, _)) -> do
           gamma2 <-
@@ -1138,7 +1138,7 @@ defHelper left (def@(x, t) : right) gamma add@(Additive mode) grade goalTy@(Fora
 
           debugM "defHelper e1: " (pretty e1)
 
-          (e2, delta2, sub2, bindings2, sd2) <- synthesiseInner (def:left++right) False add gamma2 [] grade (Forall nullSpanNoFile binders constraints tyA) (False, False, False)
+          (e2, delta2, sub2, bindings2, sd2) <- synthesiseInner (left++right) False add gamma2 [] grade (Forall nullSpanNoFile binders constraints tyA) (False, False, False)
           if sd2 then do
 
             debugM "defHelper gamma2: " (show gamma2)
@@ -1201,8 +1201,8 @@ synthesiseInner defs inDereliction resourceScheme gamma omega grade goalTy@(Fora
               boxHelper defs (gamma ++ omega) resourceScheme grade goalTy
               `try`
               constrIntroHelper (allowRSync, allowDef) defs (gamma ++ omega) resourceScheme grade goalTy
-       --       `try`
-       --       if allowDef then defHelper [] defs startTime (gamma ++ omega) resourceScheme goalTy else none
+              `try`
+              defHelper [] defs (gamma ++ omega) resourceScheme grade goalTy 
               )
               `try`
               unboxHelper defs [] omega gamma resourceScheme grade goalTy
@@ -1222,6 +1222,8 @@ synthesiseInner defs inDereliction resourceScheme gamma omega grade goalTy@(Fora
               boxHelper defs (gamma ++ omega) resourceScheme grade goalTy
               `try`
               constrIntroHelper (allowRSync, allowDef) defs (gamma ++ omega) resourceScheme grade goalTy
+              `try`
+              defHelper [] defs (gamma ++ omega) resourceScheme grade goalTy 
 
        --       `try`
        --       if allowDef then defHelper [] defs startTime (gamma ++ omega) resourceScheme goalTy else none
