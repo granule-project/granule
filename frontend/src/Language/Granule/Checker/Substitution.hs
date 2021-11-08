@@ -557,7 +557,15 @@ instance Unifiable Type where
       checkerState <- get
       case lookup v (tyVarContext checkerState) of
         Nothing -> lift $ throw UnboundTypeVariable { errLoc = nullSpan, errId = v }
-        Just (k, ForallQ) -> lift $ throw $ UnificationFail nullSpan v t k False
+        Just (k, ForallQ) ->
+          case t of
+            (TyVar v') ->
+              case lookup v' (tyVarContext checkerState) of
+                Nothing -> lift $ throw UnboundTypeVariable { errLoc = nullSpan, errId = v }
+                Just (k, ForallQ) -> lift $ throw $ UnificationFail nullSpan v t k False
+                Just (k, _) -> return [(v', SubstT (TyVar v))]
+            _ -> lift $ throw $ UnificationFail nullSpan v t k False
+
         _ -> return [(v, SubstT t)]
     unify' t (TyVar v)    = unify' (TyVar v) t
     unify' (FunTy _ t1 t2) (FunTy _ t1' t2') = do
