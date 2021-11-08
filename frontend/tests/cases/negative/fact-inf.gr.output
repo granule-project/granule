@@ -1,6 +1,13 @@
 Type checking failed: 
-Impossible pattern match: StdLib/Nat.gr:73:1:
-Pattern match in an equation of `div2` is impossible as it implies the unsatisfiable condition ∃ n0.0 : Nat . (n0.0 + 1 = 2 * n)
+Counter example: frontend/tests/cases/negative/fact-inf.gr:4:1:
+The following theorem associated with `fact` is falsifiable:
+	((1 : Interval (Ext Nat)) ≤ ((∞ : Ext Nat))..((∞ : Ext Nat)))
 
-Impossible pattern match: frontend/tests/cases/negative/fact-inf.gr:5:1:
-Pattern match in an equation of `fact` is impossible as it implies the unsatisfiable condition ((1 : Interval (Ext Nat)) ≤ ((∞ : Ext Nat))..((∞ : Ext Nat)))
+Counter-example:
+  n = 0 :: Integer
+
+
+Solver timeout: frontend/tests/cases/negative/fact-inf.gr:5:1:
+Solver timed out with limit of 10000ms while checking the grading of definition `fact` with the following theorem:
+∀ {n0.0 : Nat} . (((n0.0 + 1 = n1 + 1) ∧ (n0.0 + 1 = n0.0 + 1)) -> ((1 : Interval (Ext Nat)) + ((((∞ : Ext Nat))..((∞ : Ext Nat))) * (1 : Interval (Ext Nat))) ≤ ((∞ : Ext Nat))..((∞ : Ext Nat))) ∧ (n1 = n1) ∧ (n0.1 + 1 = n1 + 1) ∧ (n1 = n1) ∧ ((1 : Interval (Ext Nat)) ≤ ((∞ : Ext Nat))..((∞ : Ext Nat))))
+You may want to increase the timeout (see --help).
