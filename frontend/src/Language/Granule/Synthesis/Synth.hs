@@ -1,4 +1,5 @@
 {-# LANGUAGE ImplicitParams #-}
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 
 
 {-# options_ghc -fno-warn-incomplete-uni-patterns #-}
