@@ -716,7 +716,7 @@ constrIntroHelper (True, allowDef) defs gamma mode grade goalTy@(Forall s binder
     checkConstructor con@(Forall _ binders coercions conTy) subst = do
       (result, local) <- conv $ peekChecker $ do
 
-        (conTyFresh, tyVarsFreshD, substFromFreshening, constraints, coercions') <- freshPolymorphicInstance InstanceQ False con subst
+        (conTyFresh, tyVarsFreshD, substFromFreshening, constraints, coercions') <- freshPolymorphicInstance InstanceQ False con subst []
 
         -- Take the rightmost type of the function type, collecting the arguments along the way 
         let (conTy'', args) = rightMostFunTy conTyFresh
@@ -735,7 +735,7 @@ constrIntroHelper (True, allowDef) defs gamma mode grade goalTy@(Forall s binder
 
             debugM "pred: " (pretty predicate)
             let ctxtCk  = tyVarContext cs
-            coeffectVars <- justCoeffectTypes s ctxtCk
+            coeffectVars <- includeOnlyGradeVariables s ctxtCk
             coeffectVars <- return (coeffectVars `deleteVars` Language.Granule.Checker.Predicates.boundVars predicate)
             constructors <- allDataConstructorNames
             (_, result) <- liftIO $ provePredicate predicate coeffectVars constructors
@@ -863,7 +863,7 @@ constrElimHelper (allowRSync, allowDef) defs left (var@(x, (a, structure)):right
     checkConstructor name topLevelDef con@(Forall  _ binders constraints conTy) assumptionTy subst grade = do
       (result, local) <- conv $ peekChecker $ do
 
-        (conTyFresh, tyVarsFreshD, substFromFreshening, constraints, coercions') <- freshPolymorphicInstance InstanceQ False con subst
+        (conTyFresh, tyVarsFreshD, substFromFreshening, constraints, coercions') <- freshPolymorphicInstance InstanceQ False con subst []
 
         -- Take the rightmost type of the function type, collecting the arguments along the way 
         let (conTy'', args) = rightMostFunTy conTyFresh
@@ -882,7 +882,7 @@ constrElimHelper (allowRSync, allowDef) defs left (var@(x, (a, structure)):right
 
             debugM "pred: " (pretty predicate)
             let ctxtCk  = tyVarContext cs
-            coeffectVars <- justCoeffectTypes nullSpanNoFile ctxtCk
+            coeffectVars <- includeOnlyGradeVariables nullSpanNoFile ctxtCk
             coeffectVars <- return (coeffectVars `deleteVars` Language.Granule.Checker.Predicates.boundVars predicate)
             constructors <- allDataConstructorNames
             (_, result) <- liftIO $ provePredicate predicate coeffectVars constructors
@@ -1241,12 +1241,13 @@ synthesise defs resourceScheme gamma omega goalTy = do
   let initialGrade = if gradeOnRule then Just (TyGrade Nothing 1)  else Nothing
   relevantConstructors <- do
       let snd3 (a, b, c) = b
+          tripleToTup (a, b, c) = (a, b)
       st <- get
       let pats = map (second snd3) (typeConstructors st)
       mapM (\ (a, b) -> do
           dc <- conv $ mapM (lookupDataConstructor nullSpanNoFile) b
           let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
-          return (a, sd)) pats
+          return (a, ctxtMap tripleToTup sd)) pats
 
   Synthesiser $ lift $ lift $ lift $ modify (\state ->
             state {
