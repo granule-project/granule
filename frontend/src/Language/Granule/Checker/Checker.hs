@@ -347,7 +347,7 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
         -- and run the solver
         let predicate = Conj $ predicateStack checkerState
         debugM "elaborateEquation" ("solveEq with final substitution = " <> pretty subst)
-        predicate <- substitute subst predicate
+        predicate <- substituteInSignatures subst predicate
         solveConstraints predicate (getSpan equation) defName
 
         -- Apply the final substitution to head of the guard predicate stack too

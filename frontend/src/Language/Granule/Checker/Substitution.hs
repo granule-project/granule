@@ -16,7 +16,8 @@ module Language.Granule.Checker.Substitution(
   combineManySubstitutions,
   freshPolymorphicInstance,
   updateTyVar,
-  unify) where
+  unify,
+  substituteInSignatures) where
 
 import Control.Monad
 import Control.Monad.State.Strict
@@ -365,6 +366,23 @@ instance Substitutable Pred where
              return $ Impl idks' p1 p2)
         -- Apply substitution also to the constraint
         (\c -> substitute ctxt c >>= (return . Con))
+        (return . NegPred)
+        -- Apply substitution also to the kinding
+        (\id k p -> (substitute ctxt k) >>= (\k -> return $ Exists id k p))
+
+-- Only applies subsitutions into the kinding signatures
+substituteInSignatures :: (?globals :: Globals)
+             => Substitution ->  Pred -> Checker Pred
+substituteInSignatures ctxt =
+      predFoldM
+        (return . Conj)
+        (return . Disj)
+        (\idks p1 p2 -> do
+             -- Apply substitution to id-kind pairs
+             idks' <- mapM (\(id, k) -> substitute ctxt k >>= (\k -> return (id, k))) idks
+             return $ Impl idks' p1 p2)
+        -- Apply substitution also to the constraint
+        (return . Con)
         (return . NegPred)
         -- Apply substitution also to the kinding
         (\id k p -> (substitute ctxt k) >>= (\k -> return $ Exists id k p))
