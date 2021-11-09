@@ -421,9 +421,12 @@ builtIns =
     , Ext () $ Primitive $ \(StringLiteral s) ->
         Ext () $ Primitive $ \(CharLiteral c) -> StringLiteral (snoc s c)
     )
-  , ( mkId "moveString" 
+  , ( mkId "moveString"
     , Ext () $ Primitive $ \(StringLiteral s) ->
         Promote () $ valExpr $ (StringLiteral s))
+  , ( mkId "moveChar"
+    , Ext () $ Primitive $ \(CharLiteral s) ->
+        Promote () $ valExpr $ (CharLiteral s))
   , (mkId "isEOF", Ext () $ Primitive $ \(Ext _ (Handle h)) -> Ext () $ PureWrapper $ do
         b <- SIO.isEOF
         let boolflag =
@@ -454,7 +457,7 @@ builtIns =
   , (mkId "lengthFloatArray'",  Ext () $ Primitive lengthFloatArray')
   , (mkId "readFloatArray'",  Ext () $ Primitive readFloatArray')
   , (mkId "writeFloatArray'",  Ext () $ Primitive writeFloatArray')
-  , (mkId "deleteFloatArray", Ext () $ Primitive deleteFloatArray) 
+  , (mkId "deleteFloatArray", Ext () $ Primitive deleteFloatArray)
   ]
   where
     forkLinear :: (?globals :: Globals) => Ctxt RValue -> RValue -> RValue

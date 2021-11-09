@@ -384,6 +384,8 @@ charToInt = BUILTIN
 charFromInt : Int -> Char
 charFromInt = BUILTIN
 
+moveChar : Char -> Char []
+moveChar = BUILTIN
 
 
 --------------------------------------------------------------------------------
