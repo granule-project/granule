@@ -1,4 +1,4 @@
 Type checking failed: 
 Falsifiable theorem: frontend/tests/cases/negative/headAlt2.gr:10:1:
 The following theorem associated with `foo` is falsifiable:
-	(0 = 0) ∧ (0..1 ≤ 0..1) ∧ (0 > 0)
+	(n0 = 0) ∧ (0..1 ≤ 0..1) ∧ (n0 > 0)
