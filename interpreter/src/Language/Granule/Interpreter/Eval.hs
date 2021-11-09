@@ -707,7 +707,7 @@ eval (AST dataDecls defs _ _ _) = do
       Just (Ext _ (PureWrapper e)) -> do
         eExpr <- e
         fmap Just (evalIn bindings eExpr)
-      Just (Promote _ e) -> fmap Just (evalIn bindings e)
+      Just (Promote a e) -> fmap (\x -> Just (Promote a (valExpr x))) (evalIn bindings e)
       Just (Nec _ e) -> fmap Just (evalIn bindings e)
       -- ... or a regular value came out of the interpreter
       Just val           -> return $ Just val

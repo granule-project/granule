@@ -271,7 +271,7 @@ replEval val (AST dataDecls defs _ _ _) = do
     case lookup (mkId (" repl" <> show val)) bindings of
       Nothing -> return Nothing
       Just (Pure _ e)    -> fmap Just (evalIn bindings e)
-      Just (Promote _ e) -> fmap Just (evalIn bindings e)
+      Just (Promote a e) -> fmap (\x -> Just (Promote a (valExpr x))) (evalIn bindings e)
       Just (Nec _ e)     -> fmap Just (evalIn bindings e)
       Just val           -> return $ Just val
 
