@@ -421,6 +421,9 @@ builtIns =
     , Ext () $ Primitive $ \(StringLiteral s) ->
         Ext () $ Primitive $ \(CharLiteral c) -> StringLiteral (snoc s c)
     )
+  , ( mkId "moveString" 
+    , Ext () $ Primitive $ \(StringLiteral s) ->
+        Promote () $ valExpr $ (StringLiteral s))
   , (mkId "isEOF", Ext () $ Primitive $ \(Ext _ (Handle h)) -> Ext () $ PureWrapper $ do
         b <- SIO.isEOF
         let boolflag =

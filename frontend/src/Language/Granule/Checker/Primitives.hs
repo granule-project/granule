@@ -405,6 +405,9 @@ stringUnsnoc = BUILTIN
 stringSnoc : String → Char → String
 stringSnoc = BUILTIN
 
+moveString : String -> String []
+moveString = BUILTIN
+
 --------------------------------------------------------------------------------
 -- Arrays
 --------------------------------------------------------------------------------
