@@ -823,8 +823,9 @@ constrElimHelper (allowRSync, allowDef) defs left (var@(x, (a, structure)):right
           Linear t -> (t, Nothing)
           Discharged t g -> (t, Just g)
     if canUse && isADT assumptionTy then
-      case adtName assumptionTy of
-        Just name -> do
+      case (adtName assumptionTy, structure) of
+        (_, None) -> none
+        (Just name, _) -> do
         -- (_, cases) <- conv $ generateCases nullSpanNoFile constructors [var] [x] (Just $ FunTy Nothing t goalTy)
         -- (_, cases) <- conv $ generateCases nullSpanNoFile (constructors state) [(x, Linear (Box grade t))] [x] (Just $ FunTy Nothing (Box grade t) goalTy)
           let adtConstructors = concatMap snd (filter (\x -> fst x == name) (constructors state))
