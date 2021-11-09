@@ -1500,6 +1500,10 @@ rewriteMessage msg = do
            line'' =
              if line /= line' then
                case k of
+                 (TyCon (internalName -> "Sec")) ->
+                    T.replace (T.pack $ show "0") (T.pack "Hi")
+                      (T.replace (T.pack $ show "1") (T.pack "Lo")
+                          (T.replace (T.pack "Integer") (T.pack "Sec") line'))
                  (TyCon (internalName -> "Level")) ->
                     T.replace (T.pack $ show privateRepresentation) (T.pack "Private")
                       (T.replace (T.pack $ show publicRepresentation) (T.pack "Public")

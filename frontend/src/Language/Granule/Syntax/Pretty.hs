@@ -137,6 +137,7 @@ instance Pretty Type where
     pretty (TySig t k) =
       "(" ++ pretty t ++ " : " ++ pretty k ++ ")"
 
+
     pretty (TyCase t ps) =
      "(case " <> pretty t <> " of "
                     <> intercalate "; " (map (\(p, t') -> pretty p
