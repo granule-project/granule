@@ -1,3 +1,5 @@
+module File where
+
 import Maybe
 
 readMany : Int → Handle R → (Handle R, String) <IO> 
@@ -7,22 +9,21 @@ readMany n h =
       (h, cs) ← readMany (n - 1) h
   in pure (h, stringCons c cs)
 
-readFile : String -> String <{Open,Read,Close,IOExcept}>
-readFile filename =
-  let h      <- openHandle ReadMode filename;
-      (h, cs) <- readUntilEnd h;
-      ()       <- closeHandle h
-  in pure cs
+auxiliaryReadFile : Handle R -> String -> (Handle R, String) <{Read, IOExcept}>
+auxiliaryReadFile h rest = let
+  (h, flag) <- isEOF h
+  in
+    case flag of
+     True -> pure (h, rest);
+     False -> let
+      (h, c) <- readChar h in auxiliaryReadFile h (stringSnoc rest c)
 
-readUntilEnd : Handle R -> (Handle R, String) <{Read,IOExcept}> 
-readUntilEnd h =
-  let (h, eof) <- isEOF h in
-    case eof of
-      True -> pure (h, "");
-      False ->
-        let (h, c)   <- readChar h;
-            (h, str) <- readUntilEnd h
-        in pure (h, stringCons c str)
+readFile : String -> String <{Open, Read, Close, IOExcept}>
+readFile fileName = let
+  h <- openHandle ReadMode fileName;
+  (h, fileData) <- auxiliaryReadFile h "";
+  () <- closeHandle h
+  in pure fileData
 
 auxiliaryWriteFile : Handle W -> String -> (Handle W) <{Write, IOExcept}>
 auxiliaryWriteFile h rest =
