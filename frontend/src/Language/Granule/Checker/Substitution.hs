@@ -258,6 +258,10 @@ freshPolymorphicInstance :: (?globals :: Globals)
        -- a list of the (freshened) constraints for this scheme
        -- a correspondigly freshened version of the parameter substitution
 freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty) ixSubstitution indices = do
+<<<<<<< HEAD
+=======
+
+>>>>>>> 7db1abfa (improve predicate rewrite prior to solving; only substitute into type signatures not type variables used in grades)
 
     let boundTypes = typesFromIndices ty 0 indices
     debugM "freshPoly boundVars: " (show boundTypes)
@@ -343,8 +347,8 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
             conv (v, Right _) = Nothing
 
     typesFromIndices :: Type -> Int -> [Int] -> [Id]
-    typesFromIndices (TyApp t1 (TyVar t2)) index indices = 
-      if index `elem` indices 
+    typesFromIndices (TyApp t1 (TyVar t2)) index indices =
+      if index `elem` indices
         then
           t2 : typesFromIndices t1 (index+1) indices
         else
