@@ -142,33 +142,33 @@ combineSubstitutions sp u1 u2 = do
               return $ concat unifs
 
       -- Check we're not unifying two universals to the same substitutor
-      errs <- checkValid [] $ flipSubstitution $ concat uss1 
-      case errs of 
-        Just (v, v') -> throw $ UnificationDisallowed sp  v v' -- Change error 
-        Nothing -> do
-          -- Any remaining unifiers that are in u2 but not u1
-          uss2 <- forM u2 $ \(v, s) ->
-              case lookup v u1 of
-                  Nothing -> return [(v, s)]
-                  _       -> return []
-          let uss = concat uss1 <> concat uss2
-          return $ reduceByTransitivity uss
+      -- errs <- checkValid [] $ flipSubstitution $ concat uss1
+      -- case errs of
+      -- --  Just (v, v') -> throw $ UnificationDisallowed sp  v v' -- Change error
+      --   _ -> do
+      -- -- Any remaining unifiers that are in u2 but not u1
+      uss2 <- forM u2 $ \(v, s) ->
+          case lookup v u1 of
+              Nothing -> return [(v, s)]
+              _       -> return []
+      let uss = concat uss1 <> concat uss2
+      reduceByTransitivity sp uss
 
-checkValid :: [Id] -> Substitution -> Checker (Maybe (Type, Type))
-checkValid vars (sub1@(v, (SubstT (TyVar v'))):substs) = do
-  st <- get
-  case lookup v' (tyVarContext  st) of
-    Just (_, ForallQ) -> 
-      if v `elem` vars then
-        return $ Just (TyVar v, TyVar v')
-      else 
-         checkValid (v : vars) substs
-    _ -> checkValid vars substs 
-checkValid vars (sub:substs) = checkValid vars substs
-checkValid _ []  = return $ Nothing
+-- checkValid :: [Id] -> Substitution -> Checker (Maybe (Type, Type))
+-- checkValid vars (sub1@(v, (SubstT (TyVar v'))):substs) = do
+--   st <- get
+--   case lookup v' (tyVarContext  st) of
+--     Just (_, ForallQ) ->
+--       if v `elem` vars then
+--         return $ Just (TyVar v, TyVar v')
+--       else
+--          checkValid (v : vars) substs
+--     _ -> checkValid vars substs
+-- checkValid vars (sub:substs) = checkValid vars substs
+-- checkValid _ []  = return $ Nothing
 
-reduceByTransitivity :: Substitution -> Substitution
-reduceByTransitivity ctxt = reduceByTransitivity' [] ctxt
+reduceByTransitivity :: Span -> Substitution -> Checker Substitution
+reduceByTransitivity sp ctxt = reduceByTransitivity' [] ctxt
  where
    reduceByTransitivity' :: Substitution -> Substitution -> Substitution
    reduceByTransitivity' subst [] = subst
@@ -243,10 +243,15 @@ freshPolymorphicInstance :: (?globals :: Globals)
        -- a substitution from the visible instance variable to their originals
        -- a list of the (freshened) constraints for this scheme
        -- a correspondigly freshened version of the parameter substitution
-freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty) ixSubstitution = do
+freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty) ixSubstitution indices = do
+
+
+    let boundTypes = typesFromIndices ty 0 indices
+    debugM "freshPoly boundVars: " (show boundTypes)
+
     -- Universal becomes an existential (via freshCoeffeVar)
     -- since we are instantiating a polymorphic type
-    renameMap <- cumulativeMapM instantiateVariable kinds
+    renameMap <- cumulativeMapM (instantiateVariable boundTypes) kinds
 
     -- Applying the rename map to itself (one part at time), to accommodate dependency here
     renameMap <- selfRename renameMap
@@ -295,8 +300,13 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
 
          else do
 
-           var' <- freshTyVarInContextWithBinding var k quantifier
-           return (var, Left (k, var'))
+           if elem var boundTypes
+             then do
+               var' <- freshTyVarInContextWithBinding var k BoundQ
+               return (var, Left (k, var'))
+             else do
+               var' <- freshTyVarInContextWithBinding var k quantifier
+               return (var, Left (k, var'))
 
     -- Apply `f` but as we go apply the resulting substitution forwards on the rest of the list
     cumulativeMapM f [] = return []
@@ -319,6 +329,16 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
       where conv (v, Left a)  = Just (v,  a)
             conv (v, Right _) = Nothing
 
+    typesFromIndices :: Type -> Int -> [Int] -> [Id]
+    typesFromIndices (TyApp t1 (TyVar t2)) index indices =
+      if index `elem` indices
+        then
+          t2 : typesFromIndices t1 (index+1) indices
+        else
+          typesFromIndices t1 (index+1) indices
+    typesFromIndices (FunTy _ _ t) index indices = typesFromIndices t (index+1) indices
+    typesFromIndices _ _ _ = []
+
 instance Substitutable Pred where
   substitute ctxt =
       predFoldM
@@ -334,50 +354,80 @@ instance Substitutable Pred where
         -- Apply substitution also to the kinding
         (\id k p -> (substitute ctxt k) >>= (\k -> return $ Exists id k p))
 
+-- Only applies subsitutions into the kinding signatures
+substituteInSignatures :: (?globals :: Globals)
+             => Substitution ->  Pred -> Checker Pred
+substituteInSignatures subst =
+      predFoldM
+        (return . Conj)
+        (return . Disj)
+        (\idks p1 p2 -> do
+             -- Apply substitution to id-kind pairs
+             idks' <- mapM (\(id, k) -> substitute subst k >>= (\k -> return (id, k))) idks
+             return $ Impl idks' p1 p2)
+        -- Apply substitution also to the constraint
+        (\c -> substituteConstraintHelper substituteIntoTypeSigs subst c >>= (return . Con))
+        (return . NegPred)
+        -- Apply substitution also to the kinding
+        (\id k p -> (substitute subst k) >>= (\k -> return $ Exists id k p))
+  where
+    substituteIntoTypeSigs subst =
+       typeFoldM (baseTypeFold {
+        tfTyGrade = (\k i -> do
+              k' <- substitute subst k
+              mTyGrade k' i)
+      , tfTySig = \t _ k -> do
+         substitute subst k >>= (\k' -> mTySig t k' k')  })
+
+substituteConstraintHelper :: (?globals::Globals) =>
+  (Substitution -> Type -> Checker Type)
+  -> Substitution -> Constraint -> Checker Constraint
+substituteConstraintHelper substType ctxt (Eq s c1 c2 k) = do
+  c1 <- substType ctxt c1
+  c2 <- substType ctxt c2
+  k <- substType ctxt k
+  return $ Eq s c1 c2 k
+
+substituteConstraintHelper substType ctxt (Neq s c1 c2 k) = do
+  c1 <- substType ctxt c1
+  c2 <- substType ctxt c2
+  k <- substitute ctxt k
+  return $ Neq s c1 c2 k
+
+substituteConstraintHelper substType ctxt (Lub s c1 c2 c3 k) = do
+  c1 <- substType ctxt c1
+  c2 <- substType ctxt c2
+  c3 <- substType ctxt c3
+  k <- substitute ctxt k
+  return $ Lub s c1 c2 c3 k
+
+substituteConstraintHelper substType ctxt (ApproximatedBy s c1 c2 k) = do
+  c1 <- substType ctxt c1
+  c2 <- substType ctxt c2
+  k <- substitute ctxt k
+  return $ ApproximatedBy s c1 c2 k
+
+substituteConstraintHelper substType ctxt (Lt s c1 c2) = do
+  c1 <- substType ctxt c1
+  c2 <- substType ctxt c2
+  return $ Lt s c1 c2
+
+substituteConstraintHelper substType ctxt (Gt s c1 c2) = do
+  c1 <- substType ctxt c1
+  c2 <- substType ctxt c2
+  return $ Gt s c1 c2
+
+substituteConstraintHelper substType ctxt (LtEq s c1 c2) = LtEq s <$> substType ctxt c1 <*> substType ctxt c2
+substituteConstraintHelper substType ctxt (GtEq s c1 c2) = GtEq s <$> substType ctxt c1 <*> substType ctxt c2
+
+substituteConstraintHelper substType ctxt (Hsup s c1 c2 k) = do
+  c1 <- substType ctxt c1
+  c2 <- substType ctxt c2
+  k <- substitute ctxt k
+  return $ Hsup s c1 c2 k
+
 instance Substitutable Constraint where
-  substitute ctxt (Eq s c1 c2 k) = do
-    c1 <- substitute ctxt c1
-    c2 <- substitute ctxt c2
-    k <- substitute ctxt k
-    return $ Eq s c1 c2 k
-
-  substitute ctxt (Neq s c1 c2 k) = do
-    c1 <- substitute ctxt c1
-    c2 <- substitute ctxt c2
-    k <- substitute ctxt k
-    return $ Neq s c1 c2 k
-
-  substitute ctxt (Lub s c1 c2 c3 k) = do
-    c1 <- substitute ctxt c1
-    c2 <- substitute ctxt c2
-    c3 <- substitute ctxt c3
-    k <- substitute ctxt k
-    return $ Lub s c1 c2 c3 k
-
-  substitute ctxt (ApproximatedBy s c1 c2 k) = do
-    c1 <- substitute ctxt c1
-    c2 <- substitute ctxt c2
-    k <- substitute ctxt k
-    return $ ApproximatedBy s c1 c2 k
-
-  substitute ctxt (Lt s c1 c2) = do
-    c1 <- substitute ctxt c1
-    c2 <- substitute ctxt c2
-    return $ Lt s c1 c2
-
-  substitute ctxt (Gt s c1 c2) = do
-    c1 <- substitute ctxt c1
-    c2 <- substitute ctxt c2
-    return $ Gt s c1 c2
-
-  substitute ctxt (LtEq s c1 c2) = LtEq s <$> substitute ctxt c1 <*> substitute ctxt c2
-  substitute ctxt (GtEq s c1 c2) = GtEq s <$> substitute ctxt c1 <*> substitute ctxt c2
-
-  substitute ctxt (Hsup s c1 c2 k) = do
-    c1 <- substitute ctxt c1
-    c2 <- substitute ctxt c2
-    k <- substitute ctxt k
-    return $ Hsup s c1 c2 k
+  substitute = substituteConstraintHelper substitute
 
 instance Substitutable (Equation () Type) where
   substitute ctxt (Equation sp name ty rf patterns expr) =
@@ -401,7 +451,7 @@ substituteValue ctxt (PromoteF ty expr) =
 substituteValue ctxt (PureF ty expr) =
     do  ty' <- substitute ctxt ty
         return $ Pure ty' expr
-substituteValue ctxt (NecF ty expr) = 
+substituteValue ctxt (NecF ty expr) =
     do ty' <- substitute ctxt ty
        return $ Nec ty' expr
 substituteValue ctxt (ConstrF ty ident vs) =
