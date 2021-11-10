@@ -4,8 +4,6 @@
 
 module Language.Granule.Server where
 
-import Debug.Trace
-
 import Control.Exception (try, SomeException)
 import Control.Lens (to, (^.))
 import Control.Monad.IO.Class
@@ -73,7 +71,7 @@ serverParse input = do
           fileLocal <- doesFileExist i
           let path = if fileLocal then i else includePath </> i
           let ?globals = ?globals { globalsSourceFilePath = Just path } in do
-            src <- trace (show path) readFile path
+            src <- readFile path
             output <- return $ parseDefs path src
             case output of
               Left s -> return $ Left s
@@ -130,28 +128,32 @@ parserDiagnostic doc version message = do
   publishDiagnostics 1 doc version (partitionBySource diags)
 
 checkerDiagnostics :: (?globals :: Globals) => NormalizedUri -> TextDocumentVersion -> [CheckerError] -> LspM () ()
-checkerDiagnostics doc version [] = return ()
-checkerDiagnostics doc version (m:ms) = do
-  let span = errLoc m
+checkerDiagnostics doc version l = do
+  let diags = checkerErrorToDiagnostic doc version <$> l
+  case diags of
+    [] -> return ()
+    otherwise -> publishDiagnostics (Prelude.length diags) doc version (partitionBySource diags)
+
+checkerErrorToDiagnostic :: (?globals :: Globals) => NormalizedUri -> TextDocumentVersion -> CheckerError -> Diagnostic
+checkerErrorToDiagnostic doc version e =
+  let span = errLoc e
       (startLine, startCol) = startPos span
       (endLine, endCol) = endPos span
-      message = title m ++ ":\n" ++ msg m
-      diags = 
-        [ Diagnostic
-            (Range (Position (startLine-1) (startCol-1)) (Position (endLine-1) (endCol+1)))
-            (Just DsError)
-            Nothing
-            (Just "grls")
-            (T.pack $ message ++ "\n")
-            Nothing
-            (Just (List []))
-        ]
-  publishDiagnostics 1 doc version (partitionBySource diags)
-  checkerDiagnostics doc version ms
+      message = title e ++ ":\n" ++ msg e
+      in Diagnostic
+          (Range (Position (startLine-1) (startCol-1)) (Position (endLine-1) (endCol+1)))
+          (Just DsError)
+          Nothing
+          (Just "grls")
+          (T.pack $ message ++ "\n")
+          Nothing
+          (Just (List []))
 
 handlers :: (?globals :: Globals) => Handlers (LspM ())
 handlers = mconcat
   [ notificationHandler SInitialized $ \msg -> do
+      return ()
+  , notificationHandler STextDocumentDidClose $ \msg -> do
       return ()
   , notificationHandler STextDocumentDidSave $ \msg -> do
       let doc = msg ^. L.params . L.textDocument . L.uri
