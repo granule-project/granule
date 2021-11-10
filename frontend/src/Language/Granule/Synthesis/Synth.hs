@@ -1210,6 +1210,8 @@ synthesiseInner defs inDereliction resourceScheme gamma omega grade goalTy@(Fora
               `try`
               constrElimHelper (allowRSync, allowDef) defs [] omega gamma resourceScheme grade goalTy
         else 
+          varHelper [] (gamma ++ omega) resourceScheme grade goalTy
+          `try`
           unboxHelper defs [] omega gamma resourceScheme grade goalTy
           `try`
           constrElimHelper (allowRSync, allowDef) defs [] omega gamma resourceScheme grade goalTy
