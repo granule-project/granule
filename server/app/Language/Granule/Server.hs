@@ -4,6 +4,8 @@
 
 module Language.Granule.Server where
 
+import Debug.Trace
+
 import Control.Exception (try, SomeException)
 import Control.Lens (to, (^.))
 import Control.Monad.IO.Class
@@ -71,7 +73,7 @@ serverParse input = do
           fileLocal <- doesFileExist i
           let path = if fileLocal then i else includePath </> i
           let ?globals = ?globals { globalsSourceFilePath = Just path } in do
-            src <- readFile path
+            src <- trace (show path) readFile path
             output <- return $ parseDefs path src
             case output of
               Left s -> return $ Left s
@@ -85,10 +87,18 @@ noRange = Range (Position 0 0) (Position 100000 0)
 
 getParseErrorRange :: String -> Range
 getParseErrorRange s = if isInfixOf "parse error" s then 
-  let _:xs = splitOn ".gr:" s in
-    let line:col:_ = splitOn ":" (concat xs) in
-      let p = Position (read line - 1) (read col - 1) in Range p p
+    let _:xs = splitOn ".gr:" s
+        line:col:_ = numsFromString (concat xs)
+        (l, c) = ((read line - 1), (read col - 1))
+    in Range (Position l c) (Position l (c+1))
+  else if isInfixOf "lexical error" s then
+    let line:col:_ = numsFromString s
+        (l, c) = ((read line - 1), (read col - 1))
+    in Range (Position l c) (Position l (c+1))
   else noRange
+
+numsFromString :: String -> [String]
+numsFromString s = words $ map (\x -> if x `elem` ("0123456789" :: String) then x else ' ') s
 
 validateGranuleCode :: (?globals :: Globals) => NormalizedUri -> TextDocumentVersion -> T.Text -> LspM () ()
 validateGranuleCode doc version content = let ?globals = ?globals {globalsSourceFilePath = Just $ fromUri doc} in do
