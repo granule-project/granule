@@ -1,0 +1,3 @@
+cofmap : forall {a : Type, b : Type, c : Type} .
+         (a -> b) -> (b -> c) -> (a -> c)
+cofmap f g = g . f

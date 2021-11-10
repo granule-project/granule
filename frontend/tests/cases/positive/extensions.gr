@@ -1,0 +1,4 @@
+language Base -- default extension for testing purposes
+
+foo : Int
+foo = 42

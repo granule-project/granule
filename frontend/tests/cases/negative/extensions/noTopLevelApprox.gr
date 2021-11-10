@@ -1,0 +1,4 @@
+language NoTopLevelApprox
+
+copy : forall {a : Type} . a [0..3] -> (a, a)
+copy [x] = (x, x)

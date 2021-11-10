@@ -1,0 +1,11 @@
+language SecurityLevels
+
+-- Flattening takes the meet (∧) of both Levels (see example below).
+flatten : ∀ {k : Level, l : Level} . (Int [k]) [l] → Int [k ∧ l]
+flatten [[x]] = [x]
+
+xbb : (Int [Public]) [Private]
+xbb = [[1337]]
+
+xb : Int [Private]
+xb = flatten [[1337]]

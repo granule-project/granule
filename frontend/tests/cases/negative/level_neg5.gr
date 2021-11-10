@@ -1,0 +1,11 @@
+language SecurityLevels
+
+data Bool where
+  True : Bool;
+  False : Bool
+
+leak : Int [Public] -> Int [Public] -> Bool [Private] -> Int [Public]
+leak [x] [y] b = 
+  case b of
+    [False] -> [x];
+    [True]  -> [y]

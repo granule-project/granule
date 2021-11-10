@@ -4,4 +4,4 @@ Variable `y` is used as graded variable, but it is bound as a linear variable.
 
 Falsifiable theorem: frontend/tests/cases/negative/caseDischargeStyle.gr:13:1:
 The following theorem associated with `fooB` is falsifiable:
-	∀ a0.0 : Type,b0.0 : Type,t0.0 : Type,t1.0 : Type . ((1 ⨱ 1) -> ((0 : Nat) = 1) ∧ (1 = 1))
+	(((1 ⨱ 1)) -> ((0 : Nat) = 1) ∧ (1 = 1))

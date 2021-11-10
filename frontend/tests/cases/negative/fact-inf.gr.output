@@ -1,3 +1,16 @@
 Type checking failed: 
-Impossible pattern match: frontend/tests/cases/negative/fact-inf.gr:5:1:
-Pattern match in an equation of `fact` is impossible as it implies the unsatisfiable condition ((1 : Interval (Ext Nat)) ≤ ∞..∞) ∧ (∞..∞ ⨱ ∞..∞)
+Counter example: frontend/tests/cases/negative/fact-inf.gr:4:1:
+The following theorem associated with `fact` is falsifiable:
+	((1 : Interval (Ext Nat)) ≤ ((∞ : Ext Nat))..((∞ : Ext Nat)))
+
+Counter-example:
+  n   = 0 :: Integer
+  t.6.0 = 0 :: Integer
+
+
+Counter example: frontend/tests/cases/negative/fact-inf.gr:5:1:
+The following theorem associated with `fact` is falsifiable:
+	((1 : Interval (Ext Nat)) + (((∞ : Ext Nat))..((∞ : Ext Nat))) ≤ ((∞ : Ext Nat))..((∞ : Ext Nat))) ∧ (n1 = n0.1) ∧ ((1 : Interval (Ext Nat)) ≤ ((∞ : Ext Nat))..((∞ : Ext Nat)))
+
+Counter-example:
+  n = 1 :: Integer

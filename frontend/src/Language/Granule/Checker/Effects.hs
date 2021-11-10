@@ -170,7 +170,10 @@ effectMult sp effTy t1 t2 = do
             _ -> throw $
                   TypeError { errLoc = sp, tyExpected = TySet Normal [TyVar $ mkId "?"], tyActual = t1 }
         _ -> do
-          throw $ UnknownResourceAlgebra { errLoc = sp, errTy = t1, errK = effTy }
+            -- Unknown operation so just leave this as a syntactic multiplication
+            return $ TyInfix TyOpTimes t1 t2
+          -- Previously we might through an unknown resource algebra error:
+          -- throw $ UnknownResourceAlgebra { errLoc = sp, errTy = t1, errK = effTy }
 
 effectUpperBound :: Span -> Type -> Type -> Type -> Checker Type
 -- Upper bound is always idempotent

@@ -1,0 +1,26 @@
+language SecurityLevels
+
+data Bool where
+  True : Bool;
+  False : Bool
+
+sneaky_bool : (LChan (Send Bool End)) [Public] → Bool → ()
+sneaky_bool [c] x =
+  let c = send c x in
+  let () = close c in
+  ()
+
+sneaky_fun : (LChan (Send Bool End)) [Public] → Bool [Private] → () [Private]
+sneaky_fun [c] x =
+      case x of
+        [True]  →  [sneaky_bool [c] True];
+        [False] →  [sneaky_bool [c] False]
+
+-- Attempt to use this
+-- denied because `forkLinear'` gives you a private channel...
+-- main : Bool [Private] -> Bool
+-- main y =
+--    let c = forkLinear' (\[c] -> let [()] = sneaky_fun [c] y in ()) in
+--    let (x, c) = recv c in
+--    let () = close c in x
+

@@ -1,0 +1,2 @@
+fix : forall {a : Type, s : Semiring, r : s} . (a -> a) [r] -> a
+fix [f] = f (fix [f])

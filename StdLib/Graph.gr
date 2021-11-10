@@ -30,21 +30,6 @@ mapG [f] g = case g of
   Overlay g1 g2 -> Overlay (mapG [f] g1) (mapG [f] g2);
   Connect g1 g2 -> Connect (mapG [f] g1) (mapG [f] g2)
 
-foldG' : forall {a : Type, b : Type}
-      . b [0..∞]
-      -> (a -> b) [0..∞]
-      -> (b -> b -> b) [0..∞]
-      -> (b -> b -> b) [0..∞]
-      -> Graph a
-      -> b
-foldG' [e] [v] [o] [c] g =
-  let [rec] = [foldG' [e] [v] [o] [c]] in
-  case g of
-    EmptyG -> e;
-    Vertex a -> v a;
-    Overlay g1 g2 -> o (rec g1) (rec g2);
-    Connect g1 g2 -> c (rec g1) (rec g2)
-
 foldG : forall {a : Type, b : Type}
       . b [0..∞]
       -> (a -> b) [0..∞]

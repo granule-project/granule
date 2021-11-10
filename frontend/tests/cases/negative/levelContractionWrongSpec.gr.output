@@ -1,3 +1,4 @@
 Type checking failed: 
-Grading error: frontend/tests/cases/negative/levelContractionWrongSpec.gr:4:1:
-Private value cannot be moved to level Public
+Falsifiable theorem: frontend/tests/cases/negative/levelContractionWrongSpec.gr:4:1:
+The following theorem associated with `foo` is falsifiable:
+	(Public * (1 : Level) ≤ Private)

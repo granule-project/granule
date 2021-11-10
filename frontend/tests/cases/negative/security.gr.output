@@ -1,3 +1,12 @@
 Type checking failed: 
-Grading error: frontend/tests/cases/negative/security.gr:17:8:
-Private value cannot be moved to level Public
+Counter example: frontend/tests/cases/negative/security.gr:12:1:
+The following theorem associated with `hash` is falsifiable:
+	(l * ((1 : Level) + (1 : Level)) ≤ l)
+
+Counter-example:
+  l = 0 :: Level
+
+
+Falsifiable theorem: frontend/tests/cases/negative/security.gr:17:1:
+The following theorem associated with `main` is falsifiable:
+	(Public ≤ l0) ∧ (l0 ≤ Private)

@@ -31,72 +31,74 @@ typeAliases =
 -- Associates type constuctors names to their:
 --    * kind
 --    * list of (finite) matchable constructor names (but not the actual set of constructor names which could be infinite)
---    * boolean flag on whether they are indexed types or not
-typeConstructors :: [(Id, (Type, [Id], Bool))]
+--    * list of which type parameters are indices (proxy for whether they are indexed types or not)
+typeConstructors :: [(Id, (Type, [Id], [Int]))]
 typeConstructors =
-    [ (mkId "Coeffect",  (Type 1, [], False))
-    , (mkId "Effect",    (Type 1, [], False))
-    , (mkId "Predicate", (Type 1, [], False))
-    , (mkId "->",     (funTy (Type 0) (funTy (Type 0) (Type 0)), [], False))
-    , (mkId ",,",     (funTy kcoeffect (funTy kcoeffect kcoeffect), [mkId ",,"], False))
-    , (mkId "Int",    (Type 0, [], False))
-    , (mkId "Float",  (Type 0, [], False))
-    , (mkId "Char",   (Type 0, [], False))
-    , (mkId "String", (Type 0, [], False))
-    , (mkId "Protocol", (Type 0, [], False))
-    , (mkId "Inverse", ((funTy (Type 0) (Type 0)), [], False))
+    [ (mkId "Coeffect",  (Type 2, [], []))
+    , (mkId "Effect",    (Type 2, [], []))
+    , (mkId "Guarantee", (Type 2, [], []))
+    , (mkId "Predicate", (Type 2, [], []))
+    , (mkId "->",     (funTy (Type 0) (funTy (Type 0) (Type 0)), [], []))
+    , (mkId ",,",     (funTy kcoeffect (funTy kcoeffect kcoeffect), [mkId ",,"], []))
+    , (mkId "Int",    (Type 0, [], []))
+    , (mkId "Float",  (Type 0, [], []))
+    , (mkId "DFloat",  (Type 0, [], [])) -- special floats that can be tracked for sensitivty
+    , (mkId "Char",   (Type 0, [], []))
+    , (mkId "String", (Type 0, [], []))
+    , (mkId "Protocol", (Type 0, [], []))
+    , (mkId "Inverse", ((funTy (Type 0) (Type 0)), [], []))
     -- # Coeffect types
-    , (mkId "Nat",      (kcoeffect, [], False))
-    , (mkId "Q",        (kcoeffect, [], False)) -- Rationals
-    , (mkId "OOZ",      (kcoeffect, [], False)) -- 1 + 1 = 0
-    , (mkId "LNL",      (kcoeffect, [], False)) -- Linear vs Non-linear semiring
+    , (mkId "Nat",      (kcoeffect, [], []))
+    , (mkId "Q",        (kcoeffect, [], [])) -- Rationals
+    , (mkId "OOZ",      (kcoeffect, [], [])) -- 1 + 1 = 0
+    , (mkId "LNL",      (kcoeffect, [], [])) -- Linear vs Non-linear semiring
     -- LNL members
-    , (mkId "Zero",        (tyCon "LNL", [], False))
-    , (mkId "One",     (tyCon "LNL", [], False))
-    , (mkId "Many",     (tyCon "LNL", [], False))
+    , (mkId "Zero",     (tyCon "LNL", [], []))
+    , (mkId "One",      (tyCon "LNL", [], []))
+    , (mkId "Many",     (tyCon "LNL", [], []))
     -- Borrowing
-    , (mkId "Borrowing", (kcoeffect, [], False))
-    , (mkId "One",       (tyCon "Borrowing", [], False))
-    , (mkId "Beta",      (tyCon "Borrowing", [], False))
-    , (mkId "Omega",     (tyCon "Borrowing", [], False))
+    , (mkId "Borrowing", (kcoeffect, [], []))
+    , (mkId "One",       (tyCon "Borrowing", [], []))
+    , (mkId "Beta",      (tyCon "Borrowing", [], []))
+    , (mkId "Omega",     (tyCon "Borrowing", [], []))
     -- Security levels
-    , (mkId "Level",    (kcoeffect, [], False)) -- Security level
-    , (mkId "Private",  (tyCon "Level", [], False))
-    , (mkId "Public",   (tyCon "Level", [], False))
-    , (mkId "Unused",   (tyCon "Level", [], False))
+    , (mkId "Level",    (kcoeffect, [], [])) -- Security level
+    , (mkId "Private",  (tyCon "Level", [], []))
+    , (mkId "Public",   (tyCon "Level", [], []))
+    , (mkId "Unused",   (tyCon "Level", [], []))
+    , (mkId "Dunno",    (tyCon "Level", [], []))
     -- Alternate security levels (a la Gaboardi et al. 2016 and Abel-Bernardy 2020)
-    , (mkId "Sec",  (kcoeffect, [], False))
-    , (mkId "Hi",    (tyCon "Sec", [], False))
-    , (mkId "Lo",    (tyCon "Sec", [], False))
+    , (mkId "Sec",  (kcoeffect, [], []))
+    , (mkId "Hi",    (tyCon "Sec", [], []))
+    , (mkId "Lo",    (tyCon "Sec", [], []))
     -- Uniqueness
-    , (mkId "Uniqueness", (kcoeffect, [], False))
-    , (mkId "Unique", (tyCon "Uniqueness", [], False))
+    , (mkId "Uniqueness", (kguarantee, [], []))
+    , (mkId "Unique", (tyCon "Uniqueness", [], []))
     -- Other coeffect constructors
-    , (mkId "Infinity", ((tyCon "Ext") .@ (tyCon "Nat"), [], False))
-    , (mkId "Interval", (kcoeffect .-> kcoeffect, [], False))
+    , (mkId "Interval", (kcoeffect .-> kcoeffect, [], []))
     -- Channels and protocol types
-    , (mkId "Send", (funTy (Type 0) (funTy protocol protocol), [], False))
-    , (mkId "Recv", (funTy (Type 0) (funTy protocol protocol), [], False))
-    , (mkId "End" , (protocol, [], False))
-    , (mkId "Chan", (funTy protocol (Type 0), [], True))
-    , (mkId "LChan", (funTy protocol (Type 0), [], True))
-    , (mkId "Dual", (funTy protocol protocol, [], True))
-    , (mkId "->", (funTy (Type 0) (funTy (Type 0) (Type 0)), [], False))
+    , (mkId "Send", (funTy (Type 0) (funTy protocol protocol), [], []))
+    , (mkId "Recv", (funTy (Type 0) (funTy protocol protocol), [], []))
+    , (mkId "End" , (protocol, [], []))
+    , (mkId "Chan", (funTy protocol (Type 0), [], [0]))
+    , (mkId "LChan", (funTy protocol (Type 0), [], [0]))
+    , (mkId "Dual", (funTy protocol protocol, [], [0]))
+    , (mkId "->", (funTy (Type 0) (funTy (Type 0) (Type 0)), [], []))
     -- Top completion on a coeffect, e.g., Ext Nat is extended naturals (with ∞)
-    , (mkId "Ext", (funTy kcoeffect kcoeffect, [], True))
+    , (mkId "Ext", (funTy kcoeffect kcoeffect, [], [1]))
     -- Effect grade types - Sessions
-    , (mkId "Session",  (tyCon "Com", [], True))
-    , (mkId "Com",      (keffect, [], False))
+    , (mkId "Session",  (tyCon "Com", [], []))
+    , (mkId "Com",      (keffect, [], []))
     -- Effect grade types - IO
-    , (mkId "IO",       (keffect, [], False))
+    , (mkId "IO",       (keffect, [], []))
 
     --Effect grade types - Exceptions
-    , (mkId "Exception", (keffect, [], False))
-    , (mkId "Success", (tyCon "Exception", [], False))
-    , (mkId "MayFail", (tyCon "Exception", [], False))
+    , (mkId "Exception", (keffect, [], []))
+    , (mkId "Success", (tyCon "Exception", [], []))
+    , (mkId "MayFail", (tyCon "Exception", [], []))
 
     -- Arrays
-    , (mkId "FloatArray", (Type 0, [], False))
+    , (mkId "FloatArray", (Type 0, [], []))
     ]
 
 -- Various predicates and functions on type operators
@@ -110,6 +112,7 @@ closedOperation =
     TyOpMeet -> True
     TyOpJoin -> True
     TyOpInterval -> True
+    TyOpConverge -> True
     _        -> False
 
 coeffectResourceAlgebraOps :: TypeOperator -> Bool
@@ -139,6 +142,7 @@ tyOps = \case
     TyOpMeet -> (kNat, kNat, kNat)
     TyOpJoin -> (kNat, kNat, kNat)
     TyOpInterval -> (tyVar "k", tyVar "k", tyVar "k")
+    TyOpConverge -> (kNat, kNat, kNat)
 
 dataTypes :: [DataDecl]
 dataTypes =
@@ -210,16 +214,8 @@ use = BUILTIN
 
 compose : forall {a : Type, b : Type, c : Type}
   . (b -> c) -> (a -> b) -> (a -> c)
-compose g f = \x -> g (f x)
-
-dropInt : Int -> ()
-dropInt = BUILTIN
-
-dropChar : Char -> ()
-dropChar = BUILTIN
-
-dropString : String -> ()
-dropString = BUILTIN
+compose = BUILTIN
+-- Defined in the interpreter as \g -> \f -> \x -> g (f x)
 
 --------------------------------------------------------------------------------
 -- Arithmetic
@@ -388,6 +384,8 @@ charToInt = BUILTIN
 charFromInt : Int -> Char
 charFromInt = BUILTIN
 
+moveChar : Char -> Char []
+moveChar = BUILTIN
 
 
 --------------------------------------------------------------------------------
@@ -408,6 +406,9 @@ stringUnsnoc = BUILTIN
 
 stringSnoc : String → Char → String
 stringSnoc = BUILTIN
+
+moveString : String -> String []
+moveString = BUILTIN
 
 --------------------------------------------------------------------------------
 -- Arrays
@@ -450,11 +451,11 @@ swap
   → a × ArrayStack cap (maxIndex + 1) a
 swap = BUILTIN
 
-copy
+copyArray
   : ∀ {a : Type, cap : Nat, maxIndex : Nat}
   . ArrayStack cap maxIndex (a [2])
   → ArrayStack cap maxIndex a × ArrayStack cap maxIndex a
-copy = BUILTIN
+copyArray = BUILTIN
 
 --------------------------------------------------------------------------------
 -- Cost
@@ -500,29 +501,59 @@ tick = BUILTIN
 
 uniqueReturn
   : forall {a : Type}
-  . a [Unique] -> a []
+  . a *[Unique] -> a [Many]
 uniqueReturn = BUILTIN
 
 uniqueBind
-  : forall {a b : Type, k : Coeffect, c : k}
-  . (a [Unique] -> b [c]) -> a [c] -> b [c]
+  : forall {a b : Type}
+  . (a *[Unique] -> b [Many]) -> a [Many] -> b [Many]
 uniqueBind = BUILTIN
+
+uniquePush 
+  : forall {a b : Type} 
+  . (a, b) *[Unique] -> (a *[Unique], b *[Unique])
+uniquePush = BUILTIN
+
+uniquePull 
+  : forall {a b : Type} 
+  . (a *[Unique], b *[Unique]) -> (a, b) *[Unique]
+uniquePull = BUILTIN
 
 --------------------------------------------------------------------------------
 -- Mutable arrays
 --------------------------------------------------------------------------------
 
-newFloatArray : Int -> FloatArray [Unique]
+newFloatArray : Int -> FloatArray *[Unique]
 newFloatArray = BUILTIN
 
-readFloatArray : FloatArray [Unique] -> Int -> (Float, FloatArray [Unique])
+newFloatArray' : Int -> FloatArray
+newFloatArray' = BUILTIN
+
+readFloatArray : FloatArray *[Unique] -> Int -> (Float, FloatArray *[Unique])
 readFloatArray = BUILTIN
 
-writeFloatArray : FloatArray [Unique] -> Int -> Float -> FloatArray [Unique]
+readFloatArray' : FloatArray -> Int -> (Float, FloatArray)
+readFloatArray' = BUILTIN
+
+writeFloatArray : FloatArray *[Unique] -> Int -> Float -> FloatArray *[Unique]
 writeFloatArray = BUILTIN
 
-lengthFloatArray : FloatArray [Unique] -> (Int, FloatArray [Unique])
+writeFloatArray' : FloatArray -> Int -> Float -> FloatArray
+writeFloatArray' = BUILTIN
+
+lengthFloatArray : FloatArray *[Unique] -> (Int, FloatArray *[Unique])
 lengthFloatArray = BUILTIN
+
+lengthFloatArray' : FloatArray -> (Int, FloatArray)
+lengthFloatArray' = BUILTIN
+
+deleteFloatArray : FloatArray *[Unique] -> ()
+deleteFloatArray = BUILTIN
+
+---------------------
+
+scale : (k : Float) -> DFloat -> DFloat [k]
+scale = BUILTIN
 |]
 
 

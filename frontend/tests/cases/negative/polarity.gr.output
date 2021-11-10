@@ -1,6 +1,6 @@
 Type checking failed: 
 Unification failed: frontend/tests/cases/negative/polarity.gr:3:40:
-Type variable `a` cannot be unified with type `a [0]` (occurs check failure; implies infinite type).
+Cannot unify universally quantified type variable `a` of kind `Type` with `a [0]`
 
 Falsifiable theorem: frontend/tests/cases/negative/polarity.gr:7:1:
 The following theorem associated with `secondOrderAlt` is falsifiable:

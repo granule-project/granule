@@ -171,11 +171,11 @@ validateCase span ty pats = do
   -- Get local vars for the patterns and generate the relevant predicate
   -- (stored in the stack).
   (binders, _, localVars, _, _, _) <-
-    ctxtFromTypedPatterns span (expandGrades ty) pats (map (const NotFull) pats)
+    ctxtFromTypedPatterns span InCase (expandGrades ty) pats (map (const NotFull) pats)
   pred <- popFromPredicateStack
 
   -- Build the type variable environment for proving the predicate
-  tyVars <- tyVarContextExistential >>= justCoeffectTypes span
+  tyVars <- tyVarContextExistential >>= includeOnlyGradeVariables span
 
   -- Quantify the predicate by the existence of all local variables.
   let thm = foldr (uncurry Exists) pred localVars
@@ -224,6 +224,7 @@ getAssumConstr a =
   case a of
     (Discharged t _) -> getTypeConstr t
     (Linear t) -> getTypeConstr t
+    (Ghost _) -> getTypeConstr ghostType
   where
     getTypeConstr :: Type -> Maybe Id
     getTypeConstr (Type _) = Nothing
@@ -231,6 +232,7 @@ getAssumConstr a =
     getTypeConstr (TyCon id) = Just id
     getTypeConstr (Box _ t) = getTypeConstr t
     getTypeConstr (Diamond t1 _) = getTypeConstr t1
+    getTypeConstr (Star _ t) = getTypeConstr t
     getTypeConstr (TyApp t1 t2) = getTypeConstr t1
     getTypeConstr (TySig t _) = getTypeConstr t
     getTypeConstr (TyVar _) = Nothing

@@ -65,4 +65,4 @@ foo [c] [f] [g] xs =
 
 useFoo : forall {a b c : Type, n : Nat} . (a -> b) [n] -> (b -> c) [n] -> Vec n a -> Vec n c
 useFoo f g xs =
-  let c = [forkLinear (\c -> let (s, c) = recv c in let () = close c in dropString s)] in foo c f g xs
+  let c = [forkLinear (\c -> let (s, c) = recv c in let () = close c in drop @String s)] in foo c f g xs

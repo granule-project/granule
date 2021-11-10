@@ -1,4 +1,5 @@
 {-# LANGUAGE ImplicitParams #-}
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 
 
 {-# options_ghc -fno-warn-incomplete-uni-patterns #-}
@@ -59,7 +60,7 @@ solve = do
   cs <- conv State.get
   let pred = Conj $ predicateStack cs
   debugM "synthDebug" ("SMT on pred = " ++ pretty pred)
-  tyVars <- conv $ justCoeffectTypes nullSpanNoFile (tyVarContext cs)
+  tyVars <- conv $ includeOnlyGradeVariables nullSpanNoFile (tyVarContext cs)
   -- Prove the predicate
   start  <- liftIO $ Clock.getTime Clock.Monotonic
   constructors <- conv allDataConstructorNames
@@ -693,13 +694,13 @@ constrIntroHelper (True, allowDef) defs gamma mode grade goalTy@(Forall s binder
       let adtConstructors = concatMap snd (filter (\x -> fst x == name) (constructors state))
 
       -- For each relevent data constructor, we must now check that it's type matches the goal
-      adtConstructors' <- foldM (\ a (id, (conTy@(Forall s binders constraints conTy'), subst, ints)) -> do
+      adtConstructors' <- foldM (\ a (id, (conTy@(Forall s binders constraints conTy'), subst)) -> do
          (success, specTy, specSubst) <- checkConstructor conTy subst
          case (success, specTy) of
            (True, Just specTy') -> do
              subst' <- conv $ combineSubstitutions s subst specSubst
              specTy'' <- conv $ substitute subst' specTy'
-             return $ (id, (Forall s binders constraints specTy'', subst', ints)) : a
+             return $ (id, (Forall s binders constraints specTy'', subst')) : a
            _ -> return a ) [] adtConstructors
 
       -- Attempt to synthesise each applicable constructor, in order of ascending arity
@@ -708,7 +709,7 @@ constrIntroHelper (True, allowDef) defs gamma mode grade goalTy@(Forall s binder
   where
 
 
-    compare' con1@(_, (Forall _ _ _ ty1, _, _)) con2@(_, (Forall _ _ _ ty2, _, _)) = compare (arity ty1) (arity ty2)
+    compare' con1@(_, (Forall _ _ _ ty1, _)) con2@(_, (Forall _ _ _ ty2, _)) = compare (arity ty1) (arity ty2)
 
     -- | Given a data constructor and a substition of type indexes, check that the goal type ~ data constructor type
     checkConstructor :: TypeScheme -> Substitution -> Synthesiser (Bool, Maybe Type, Substitution)
@@ -734,7 +735,7 @@ constrIntroHelper (True, allowDef) defs gamma mode grade goalTy@(Forall s binder
 
             debugM "pred: " (pretty predicate)
             let ctxtCk  = tyVarContext cs
-            coeffectVars <- justCoeffectTypes s ctxtCk
+            coeffectVars <- includeOnlyGradeVariables s ctxtCk
             coeffectVars <- return (coeffectVars `deleteVars` Language.Granule.Checker.Predicates.boundVars predicate)
             constructors <- allDataConstructorNames
             (_, result) <- liftIO $ provePredicate predicate coeffectVars constructors
@@ -754,7 +755,7 @@ constrIntroHelper (True, allowDef) defs gamma mode grade goalTy@(Forall s binder
 
     -- Traverse the constructor types and attempt to synthesise a program for each one
     synthesiseConstructors gamma [] mode goalTy = none
-    synthesiseConstructors gamma ((id, (Forall s binders' constraints' ty, subst, _)):cons) mode goalTy =
+    synthesiseConstructors gamma ((id, (Forall s binders' constraints' ty, subst)):cons) mode goalTy =
       case constrArgs ty of
         -- If the constructor type has no arguments, then it is a nullary constructor and we can simply return the introduction form
         Just [] -> do
@@ -823,14 +824,13 @@ constrElimHelper (allowRSync, allowDef) defs left (var@(x, (a, structure)):right
           Linear t -> (t, Nothing)
           Discharged t g -> (t, Just g)
     if canUse && isADT assumptionTy then
-      case (adtName assumptionTy, structure) of
-        (_, None) -> none
-        (Just name, _) -> do
+      case adtName assumptionTy of
+        Just name -> do
         -- (_, cases) <- conv $ generateCases nullSpanNoFile constructors [var] [x] (Just $ FunTy Nothing t goalTy)
         -- (_, cases) <- conv $ generateCases nullSpanNoFile (constructors state) [(x, Linear (Box grade t))] [x] (Just $ FunTy Nothing (Box grade t) goalTy)
           let adtConstructors = concatMap snd (filter (\x -> fst x == name) (constructors state))
           -- For each relevent data constructor, we must now check that it's type matches the goal
-          cases <- foldM (\ a (id, (conTy@(Forall s binders constraints conTy'), subst, ints)) -> do
+          cases <- foldM (\ a (id, (conTy@(Forall s binders constraints conTy'), subst)) -> do
             (success, (pat, assumptions, subst')) <- checkConstructor id topLevelDefId conTy assumptionTy subst grade
             case (success, pat) of
               (True, Just pat) -> do
@@ -882,7 +882,7 @@ constrElimHelper (allowRSync, allowDef) defs left (var@(x, (a, structure)):right
 
             debugM "pred: " (pretty predicate)
             let ctxtCk  = tyVarContext cs
-            coeffectVars <- justCoeffectTypes nullSpanNoFile ctxtCk
+            coeffectVars <- includeOnlyGradeVariables nullSpanNoFile ctxtCk
             coeffectVars <- return (coeffectVars `deleteVars` Language.Granule.Checker.Predicates.boundVars predicate)
             constructors <- allDataConstructorNames
             (_, result) <- liftIO $ provePredicate predicate coeffectVars constructors
@@ -1241,12 +1241,13 @@ synthesise defs resourceScheme gamma omega goalTy = do
   let initialGrade = if gradeOnRule then Just (TyGrade Nothing 1)  else Nothing
   relevantConstructors <- do
       let snd3 (a, b, c) = b
+          tripleToTup (a, b, c) = (a, b)
       st <- get
       let pats = map (second snd3) (typeConstructors st)
       mapM (\ (a, b) -> do
           dc <- conv $ mapM (lookupDataConstructor nullSpanNoFile) b
           let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
-          return (a, sd)) pats
+          return (a, ctxtMap tripleToTup sd)) pats
 
   Synthesiser $ lift $ lift $ lift $ modify (\state ->
             state {

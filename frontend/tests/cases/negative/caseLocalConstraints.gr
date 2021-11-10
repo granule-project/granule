@@ -1,0 +1,4 @@
+data Bool = True | False
+
+foo : Bool [0] -> Bool
+foo [x] = case [x] of [True] -> True; [False] -> False

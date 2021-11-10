@@ -1,6 +1,15 @@
 Type checking failed: 
-Kind mismatch: frontend/tests/cases/negative/polyShaped.gr:6:30:
-Expected kind `Coeffect` for type `n` but actual kind is `↑Nat`
+Counter example: frontend/tests/cases/negative/polyShaped.gr:6:1:
+The following theorem associated with `pushEither` is falsifiable:
+	(prom_[6:29]0 = n) ∧ (n = prom_[6:29]0) ∧ ((1 : Nat) = n)
 
-Kind mismatch: frontend/tests/cases/negative/polyShaped.gr:7:31:
-Expected kind `Coeffect` for type `n` but actual kind is `↑Nat`
+Counter-example:
+  n = 0 :: Integer
+
+
+Counter example: frontend/tests/cases/negative/polyShaped.gr:7:1:
+The following theorem associated with `pushEither` is falsifiable:
+	(prom_[7:30]0 = n) ∧ (n = prom_[7:30]0) ∧ ((1 : Nat) = n)
+
+Counter-example:
+  n = 0 :: Integer

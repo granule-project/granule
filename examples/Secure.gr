@@ -1,27 +1,17 @@
 -- The following is not typeable:
--- leak : Int [Private] → Int [Public]
+-- leak : Int [Hi] → Int [Lo]
 -- leak [x] = [x]
 
-notALeak : (Int [Private]) [0] → Int [Public]
+notALeak : (Int [Hi]) [0] → Int [Lo]
 notALeak [x] = [0]
 
-secret : Int [Private]
+secret : Int [Hi]
 secret = [1234]
 
-hash : ∀ {l : Level} . Int [l] → Int [l]
+hash : ∀ {l : Sec} . Int [l] → Int [l]
 hash [x] = [x + x]
 
 -- If `main` was of type `Int [Public]`, this wouldn't type check, i.e. the secret
 -- can't be used in a Public security environment.
-main : Int [Private]
+main : Int [Hi]
 main = hash secret
-
--- Flattening takes the meet (∧) of both Levels (see example below).
-flatten : ∀ {k : Level, l : Level} . (Int [k]) [l] → Int [k ∧ l]
-flatten [[x]] = [x]
-
-xbb : (Int [Public]) [Private]
-xbb = [[1337]]
-
-xb : Int [Private]
-xb = flatten xbb

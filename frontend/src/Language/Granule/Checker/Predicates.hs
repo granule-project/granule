@@ -27,7 +27,7 @@ data Quantifier =
     -- | Universally quantification, e.g. polymorphic
     ForallQ
 
-    -- | Instantiations of universally quantified variables
+    -- | Unification variables
     | InstanceQ
 
     -- | Univeral, but bound in a dependent pattern match
@@ -36,7 +36,7 @@ data Quantifier =
 
 instance Pretty Quantifier where
   pretty ForallQ   = "∀"
-  pretty InstanceQ = "∃"
+  pretty InstanceQ = "u"
   pretty BoundQ    = "pi"
 
 stripQuantifiers :: Ctxt (a, Quantifier) -> Ctxt a
@@ -61,6 +61,10 @@ data Constraint =
   | Hsup Span Type Type Type
 
   deriving (Show, Eq, Generic)
+
+isEq :: Constraint -> Bool
+isEq (Eq _ _ _ _) = True
+isEq _ = False
 
 instance FirstParameter Constraint Span
 
@@ -110,11 +114,11 @@ instance Monad m => Freshenable m Constraint where
   freshen (LtEq s c1 c2) = LtEq s <$> freshen c1 <*> freshen c2
   freshen (GtEq s c1 c2) = GtEq s <$> freshen c1 <*> freshen c2
 
-  freshen (Hsup s c1 c2 t) = do 
+  freshen (Hsup s c1 c2 t) = do
     c1 <- freshen c1
     c2 <- freshen c2
     return $ Hsup s c1 c2 t
-   
+
 -- Used to negate constraints
 newtype Neg a = Neg a
   deriving (Eq, Show)
@@ -346,17 +350,24 @@ instance Pretty [Pred] where
 
 instance Pretty Pred where
   pretty =
-    predFold
+    (predFold
      (intercalate " ∧ ")
      (intercalate " ∨ ")
      (\ctxt p q ->
-         (if null ctxt then "" else "∀ " <> pretty' ctxt <> " . ")
-      <> "(" <> p <> " -> " <> q <> ")")
+         (if null ctxt then "" else "∀ {" <> pretty' ctxt <> "} . ")
+      <> "((" <> p <> ") -> " <> q <> ")")
       pretty
       (\p -> "¬(" <> p <> ")")
-      (\x t p -> "∃ " <> pretty x <> " : " <> pretty t <> " . " <> p)
-    where pretty' =
-            intercalate "," . map (\(id, k) -> pretty id <> " : " <> pretty k)
+      (\x t p -> "∃ " <> pretty x <> " : " <> pretty t <> " . " <> p))
+    . preFilterImplCtxts
+    where
+      preFilterImplCtxts =
+        predFold Conj Disj
+          (\ctxt p q -> Impl (filter (\(id, k) -> ((id `elem` freeVars p) || (id `elem` freeVars q))) ctxt) p q)
+          Con NegPred Exists
+
+      pretty' xs = intercalate ", " (map prettyBinding xs)
+      prettyBinding (id, k) = pretty id <> " : " <> pretty k
 
 -- | Whether the predicate is empty, i.e. contains no constraints
 isTrivial :: Pred -> Bool

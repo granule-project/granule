@@ -1,0 +1,4 @@
+Type checking failed: 
+Falsifiable theorem: frontend/tests/cases/negative/level_neg7.gr:4:1:
+The following theorem associated with `fooa` is falsifiable:
+	(Public * (1 : Level) ≤ Dunno) ∧ ((0 : Level) ≤ Private)

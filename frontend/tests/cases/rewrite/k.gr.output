@@ -1,2 +1,2 @@
 k' : ∀ {a : Type, b : Type} . a → b [] → a
-k' x [y] = ?
+k' x [y] = x

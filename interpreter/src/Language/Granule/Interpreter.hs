@@ -422,6 +422,24 @@ parseGrConfig = info (go <**> helper) $ briefDesc
            $ long "gradeonrule"
             <> help "Use alternate grade-on-rule mode for synthesis"
 
+        globalsSynthTimeoutMillis <-
+          (optional . option (auto @Integer))
+            $ long "synth-timeout"
+            <> (help . unwords)
+            [ "Synthesis timeout in milliseconds (negative for unlimited)"
+            , "Defaults to"
+            , show solverTimeoutMillis <> "ms."
+            ]
+
+        globalsSynthIndex <-
+          (optional . option (auto @Integer))
+            $ long "synth-index"
+            <> (help . unwords)
+            [ "Index of synthesised programs"
+            , "Defaults to"
+            , show synthIndex 
+            ]
+
         grRewriter
           <- flag'
             (Just asciiToUnicode)

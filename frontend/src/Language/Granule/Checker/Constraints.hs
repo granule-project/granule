@@ -241,6 +241,13 @@ freshSolverVarScoped quant name t q k | t == extendedNat = do
     k (SNatX.representationConstraint solverVar
      , SExtNat (SNatX.SNatX solverVar)))
 
+-- Ext
+freshSolverVarScoped quant name (isExt -> Just t) q k =
+  freshSolverVarScoped quant (name <> ".grade") t q
+    (\(predGrade, solverVarGrade) ->
+       quant q name (\solverVarInf ->
+          k (predGrade, SExt solverVarGrade solverVarInf)))
+
 freshSolverVarScoped quant name (TyVar v) q k =
   quant q name (\solverVar -> k (sTrue, SUnknown $ SynLeaf $ Just solverVar))
 
@@ -357,6 +364,7 @@ compileCoeffect (TyCon name) (TyCon (internalName -> "Level")) _ = do
             "Unused"  -> unusedRepresentation
             "Private" -> privateRepresentation
             "Public"  -> publicRepresentation
+            "Dunno"   -> dunnoRepresentation
             c         -> error $ "Cannot compile " <> show c
 
   return (SLevel . fromInteger . toInteger $ n, sTrue)
@@ -367,7 +375,6 @@ compileCoeffect (TyCon name) (TyCon (internalName -> "LNL")) _ = do
             "One"     -> oneRep
             "Many"    -> manyRep
             c         -> error $ "Cannot compile " <> show c <> " as an LNL semiring"
-          
   return (SLNL . fromInteger . toInteger $ n, sTrue)
 
 compileCoeffect (TyCon name) (TyCon (internalName -> "Borrowing")) _ = do
@@ -401,7 +408,13 @@ compileCoeffect (TyCon (internalName -> "Infinity")) t _ | t == extendedNat =
   return (SExtNat SNatX.inf, sTrue)
 -- Any polymorphic `Inf` gets compiled to the `Inf : [0..inf]` coeffect
 -- TODO: see if we can erase this, does it actually happen anymore?
-compileCoeffect (TyCon (internalName -> "Infinity")) _ _ = return (zeroToInfinity, sTrue)
+-- compileCoeffect (TyCon (internalName -> "Infinity")) _ _ = return (zeroToInfinity, sTrue)
+
+compileCoeffect (TyCon (internalName -> "Infinity")) (isExt -> Just t) vars = do
+  -- Represent Inf, but we still need to put something for the grade
+  -- component (which is going to get ignored so just put 1 for now)
+  (r, pred) <- compileCoeffect (TyGrade (Just t) 1) t vars
+  return (SExt r sTrue, sTrue)
 
 -- Effect 0 : Nat
 compileCoeffect (TyCon (internalName -> "Pure")) (TyCon (internalName -> "Nat")) _ =
@@ -448,6 +461,9 @@ compileCoeffect c@(TyInfix TyOpTimes n m) k vars =
 compileCoeffect c@(TyInfix TyOpMinus n m) k vars =
   bindM2And symGradeMinus (compileCoeffect n k vars) (compileCoeffect m k vars)
 
+compileCoeffect c@(TyInfix TyOpConverge n m) k vars =
+  bindM2And symGradeConverge (compileCoeffect n k vars) (compileCoeffect m k vars)
+
 compileCoeffect c@(TyInfix TyOpExpon n m) k vars = do
   (g1, p1) <- compileCoeffect n k vars
   (g2, p2) <- compileCoeffect m k vars
@@ -482,6 +498,10 @@ compileCoeffect (TyGrade k' 0) k vars = do
         _           -> solverError $ "I don't know how to compile a 0 for " <> pretty k
     otherK | otherK == extendedNat ->
       return (SExtNat 0, sTrue)
+
+    (isExt -> Just t) -> do
+      (r, pred) <- compileCoeffect (TyGrade (Just t) 0) t vars
+      return (SExt r sFalse, pred)
 
     (isProduct -> Just (t1, t2)) ->
       liftM2And SProduct
@@ -518,6 +538,10 @@ compileCoeffect (TyGrade k' 1) k vars = do
 
     otherK | otherK == extendedNat ->
       return (SExtNat 1, sTrue)
+
+    (isExt -> Just t) -> do
+      (r, pred) <- compileCoeffect (TyGrade (Just t) 1) t vars
+      return (SExt r sFalse, pred)
 
     (isProduct -> Just (t1, t2)) ->
       liftM2And SProduct
@@ -583,7 +607,6 @@ approximatedByOrEqualConstraint :: SGrade -> SGrade -> Symbolic SBool
 approximatedByOrEqualConstraint (SNat n) (SNat m)      = return $ n .== m
 approximatedByOrEqualConstraint (SFloat n) (SFloat m)  = return $ n .<= m
 approximatedByOrEqualConstraint SPoint SPoint          = return $ sTrue
-approximatedByOrEqualConstraint (SExtNat x) (SExtNat y) = return $ x .== y
 approximatedByOrEqualConstraint (SOOZ s) (SOOZ r) = pure $ s .== r
 approximatedByOrEqualConstraint (SSet Normal s) (SSet Normal t) =
   pure $ s `S.isSubsetOf` t
@@ -593,11 +616,25 @@ approximatedByOrEqualConstraint (SSet Opposite s) (SSet Opposite t) =
 
 
 approximatedByOrEqualConstraint (SLevel l) (SLevel k) =
+  -- Using the ordering from the Agda code (by cases)
+  return $ ltCase dunnoRepresentation   publicRepresentation  -- DunnoPub
+         $ ltCase privateRepresentation dunnoRepresentation   -- PrivDunno
+         $ ltCase unusedRepresentation  dunnoRepresentation   -- 0Dunno
+         $ ltCase unusedRepresentation  publicRepresentation  -- 0Pub
+         $ ltCase unusedRepresentation  privateRepresentation -- 0Priv
+         $ ltCase privateRepresentation publicRepresentation  -- PrivPub
+         $ ite (l .== k) sTrue                               -- Refl
+         sFalse
+  where ltCase a b = ite ((l .== literal a) .&& (k .== literal b)) sTrue
+
     -- Private <= Public
-  return
-    $ ite (l .== literal unusedRepresentation) sTrue
-      $ ite (l .== literal privateRepresentation) sTrue
-        $ ite (k .== literal publicRepresentation) sTrue sFalse
+  -- return $ ite (l .== literal unusedRepresentation) sTrue
+  --        $ ite ((l .== literal privateRepresentation) .&& (k .== literal dunnoRepresentation)) sTrue
+  --        $ ite ((l .== literal dunnoRepresentation) .&& (k .== literal dunnoRepresentation)) sTrue
+  --        $ ite ((l .== literal dunnoRepresentation) .&& (k .== literal publicRepresentation)) sTrue
+  --        $ ite ((l .== literal dunnoRepresentation) .|| (k .== literal dunnoRepresentation)) sFalse
+  --        $ ite (l .== literal privateRepresentation) sTrue
+  --        $ ite (k .== literal publicRepresentation) sTrue sFalse
 
 approximatedByOrEqualConstraint (SSec a) (SSec b) =
   -- Lo <= Lo   (False <= False)
@@ -640,9 +677,18 @@ approximatedByOrEqualConstraint s1@(SInterval _ _) s2 =
 approximatedByOrEqualConstraint u@(SUnknown{}) u'@(SUnknown{}) =
   lazyOrSymbolicM (symGradeEq u u') (symGradeLess u u')
 
+approximatedByOrEqualConstraint (SExtNat x) (SExtNat y) = return $ x .== y
+approximatedByOrEqualConstraint (SExt r isInf) (SExt r' isInf') = do
+  approx <- approximatedByOrEqualConstraint r r'
+  return $
+    -- ∞ <= ∞
+    ite (isInf .&& isInf') sTrue
+      -- otherwise we cannot guarantee r <= ∞ or ∞ <= r in general
+      -- otherwise fall back on underlying approximation
+      (ite (isInf .|| isInf') sFalse approx)
+
 approximatedByOrEqualConstraint x y =
   solverError $ "Kind error trying to generate " <> show x <> " <= " <> show y
-
 
 trivialUnsatisfiableConstraints :: Pred -> [Constraint]
 trivialUnsatisfiableConstraints
@@ -735,10 +781,10 @@ bindM2And' k ma mb = do
 liftM2And :: Monad m => (t1 -> t2 -> b) -> m (t1, SBool) -> m (t2, SBool) -> m (b, SBool)
 liftM2And k = bindM2And (\a b -> return (k a b))
 
-matchTypes :: MonadIO m => Type -> Maybe Type -> m Type
+matchTypes :: (?globals :: Globals, MonadIO m) => Type -> Maybe Type -> m Type
 matchTypes t Nothing = return t
 matchTypes t (Just t') | t == t' = return t
-matchTypes t (Just t') | otherwise = solverError $ "I have conflicting kinds of " ++ show t ++ " and " ++ show t'
+matchTypes t (Just t') | otherwise = solverError $ "I have conflicting kinds of " ++ pretty t ++ " and " ++ pretty t'
 
 -- Get universe set for the parameter ttpe
 setUniverse :: (?globals :: Globals, ?constructors :: Ctxt [Id])

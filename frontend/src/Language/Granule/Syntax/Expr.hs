@@ -52,6 +52,7 @@ data ValueF ev a value expr =
       AbsF a (Pattern a) (Maybe Type) expr
     | PromoteF a expr
     | PureF a expr
+    | NecF a expr
     | ConstrF a Id [value]
     | VarF a Id
     | NumIntF Int
@@ -75,6 +76,7 @@ type UnfixedValue ev a = UnExprFix2 ValueF ExprF ev a
 pattern Abs a arg mty ex = (ExprFix2 (AbsF a arg mty ex))
 pattern Promote a ex = (ExprFix2 (PromoteF a ex))
 pattern Pure a ex = (ExprFix2 (PureF a ex))
+pattern Nec a ex = (ExprFix2 (NecF a ex))
 pattern Constr a ident vals = (ExprFix2 (ConstrF a ident vals))
 pattern Var a ident = (ExprFix2 (VarF a ident))
 pattern NumInt n = (ExprFix2 (NumIntF n))
@@ -141,6 +143,7 @@ instance Functor (Value ev) where
   fmap f (Abs a pats mt e) = Abs (f a) (fmap f pats) mt (fmap f e)
   fmap f (Promote a e)     = Promote (f a) (fmap f e)
   fmap f (Pure a e)        = Pure (f a) (fmap f e)
+  fmap f (Nec a e)         = Nec (f a) (fmap f e)
   fmap f (Constr a idv vals) = Constr (f a) idv (map (fmap f) vals)
   fmap f (Var a idv)       = Var (f a) idv
   fmap f (Ext a ev)        = Ext (f a) ev
@@ -236,6 +239,7 @@ instance Term (Value ev a) where
     freeVars (Var _ x)     = [x]
     freeVars (Pure _ e)    = freeVars e
     freeVars (Promote _ e) = freeVars e
+    freeVars (Nec _ e)    = freeVars e
     freeVars NumInt{}        = []
     freeVars NumFloat{}      = []
     freeVars Constr{}        = []
@@ -246,6 +250,7 @@ instance Term (Value ev a) where
     hasHole (Abs _ _ _ e) = hasHole e
     hasHole (Pure _ e)    = hasHole e
     hasHole (Promote _ e) = hasHole e
+    hasHole (Nec _ e)    = hasHole e
     hasHole _             = False
 
     isLexicallyAtomic Abs{} = False
@@ -257,6 +262,7 @@ instance Substitutable Value where
     subst es v (Abs a w t e)      = Val (nullSpanInFile $ getSpan es) a False $ Abs a w t (subst es v e)
     subst es v (Pure a e)         = Val (nullSpanInFile $ getSpan es) a False $ Pure a (subst es v e)
     subst es v (Promote a e)      = Val (nullSpanInFile $ getSpan es) a False $ Promote a (subst es v e)
+    subst es v (Nec a e)          = Val (nullSpanInFile $ getSpan es) a False $ Nec a (subst es v e)
     subst es v (Var a w) | v == w = es
     subst es _ v@NumInt{}        = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) False v
     subst es _ v@NumFloat{}      = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) False v
@@ -283,6 +289,10 @@ instance Monad m => Freshenable m (Value v a) where
     freshen (Promote a e) = do
       e' <- freshen e
       return $ Promote a e'
+
+    freshen (Nec a e) = do
+      e' <- freshen e
+      return $ Nec a e'
 
     freshen (Var a v) = do
       v' <- lookupVar ValueL v

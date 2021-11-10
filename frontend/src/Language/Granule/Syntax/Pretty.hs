@@ -99,11 +99,18 @@ instance Pretty Type where
       let pt1 = case t1 of FunTy{} -> "(" <> pretty t1 <> ")"; _ -> pretty t1
       in  "(" <> pretty id <> " : " <> pt1 <> ") -> " <> pretty t2
 
-    pretty (Box c t)      =
-      prettyNested t <> " [" <> pretty c <> "]"
+    pretty (Box c t) =
+      case c of
+        (TyCon (Id "Many" "Many")) -> "!" <> prettyNested t
+        otherwise -> prettyNested t <> " [" <> pretty c <> "]"
 
     pretty (Diamond e t) =
       prettyNested t <> " <" <> pretty e <> ">"
+
+    pretty (Star g t) =
+      case g of
+        (TyCon (Id "Unique" "Unique")) -> "*" <> prettyNested t
+        otherwise -> prettyNested t <> " *" <> pretty g
 
     pretty (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "," =
       "(" <> pretty t1 <> ", " <> pretty t2 <> ")"
@@ -130,6 +137,7 @@ instance Pretty Type where
     pretty (TySig t k) =
       "(" ++ pretty t ++ " : " ++ pretty k ++ ")"
 
+
     pretty (TyCase t ps) =
      "(case " <> pretty t <> " of "
                     <> intercalate "; " (map (\(p, t') -> pretty p
@@ -153,6 +161,7 @@ instance Pretty TypeOperator where
    TyOpMeet            -> "∧"
    TyOpJoin            -> "∨"
    TyOpInterval        -> ".."
+   TyOpConverge        -> "#"
 
 instance Pretty v => Pretty (AST v a) where
   pretty (AST dataDecls defs imprts hidden name) =
@@ -220,6 +229,7 @@ instance Pretty v => Pretty (Value v a) where
                                  <> ") -> " <> pretty e
     pretty (Promote _ e) = "[" <> pretty e <> "]"
     pretty (Pure _ e)    = "<" <> pretty e <> ">"
+    pretty (Nec _ e)     = "*" <> pretty e
     pretty (Var _ x)     = pretty x
     pretty (NumInt n)    = show n
     pretty (NumFloat n)  = show n

@@ -84,19 +84,26 @@ runAll f xs = do
 data Assumption
   = Linear     Type
   | Discharged Type Coeffect
+  | Ghost      Coeffect
     deriving (Eq, Show)
+
+ghostType :: Type
+ghostType = tyCon ".ghost"
 
 getAssumptionType :: Assumption -> Type
 getAssumptionType (Linear t) = t
 getAssumptionType (Discharged t _) = t
+getAssumptionType (Ghost c) = ghostType
 
 instance Term Assumption where
   freeVars (Linear t) = freeVars t
   freeVars (Discharged t c) = freeVars t ++ freeVars c
+  freeVars (Ghost c) = freeVars c
 
 instance Pretty Assumption where
     pretty (Linear ty) = pretty ty
     pretty (Discharged t c) = ".[" <> pretty t <> "]. " <> prettyNested c
+    pretty (Ghost c) = "ghost(" <> pretty c <> ")"
 
 instance {-# OVERLAPS #-} Pretty (Id, Assumption) where
    pretty (a, b) = pretty a <> " : " <> pretty b
@@ -140,6 +147,7 @@ data CheckerState = CS
             , uniqueVarIdCounter     :: Int
             -- Local stack of constraints (can be used to build implications)
             , predicateStack :: [Pred]
+            , futureFrame :: [Pred]
 
             -- Stack of a list of additional knowledge from failed patterns/guards
             -- (i.e. from preceding cases) stored as a list of lists ("frames")
@@ -161,8 +169,8 @@ data CheckerState = CS
 
             -- Data type information
             --  map of type constructor names to their the kind,
-            --  data constructors, and whether ßindexed (True = Indexed, False = Not-indexed)
-            , typeConstructors :: Ctxt (Type, [Id], Bool)
+            --  data constructors, and which (if any) parameters are actually indices
+            , typeConstructors :: Ctxt (Type, [Id], [Int])
             -- map of data constructors and their types and substitutions
             , dataConstructors :: Ctxt (TypeScheme, Substitution, [Int])
 
@@ -175,7 +183,6 @@ data CheckerState = CS
 
             -- The type of the current equation.
             , equationTy :: Maybe Type
-            -- The Id of the current equation.
             , equationName :: Maybe Id
 
             -- Definitions that have been triggered during type checking
@@ -194,6 +201,7 @@ initState :: CheckerState
 initState = CS { uniqueVarIdCounterMap = M.empty
                , uniqueVarIdCounter = 0
                , predicateStack = []
+               , futureFrame = []
                , guardPredicates = [[]]
                , tyVarContext = []
                , guardContexts = []
@@ -318,6 +326,8 @@ popCaseFrame =
 concludeImplication :: Span -> Ctxt Kind -> Checker ()
 concludeImplication s localCtxt = do
   checkerState <- get
+  -- Filter out any type parameters that have snuck in
+  localCtxt <- return $ filter (\(id, k) -> case k of Type _ -> False; _ -> True) localCtxt
   case predicateStack checkerState of
     (p' : p : stack) -> do
 
@@ -327,10 +337,11 @@ concludeImplication s localCtxt = do
 
         -- No previous guards in the current frame to provide additional information
         [] : knowledgeStack -> do
-          let impl = Impl localCtxt p p'
+          let impl = Impl localCtxt p (Conj $ p' : futureFrame checkerState)
 
           -- Add the implication to the predicate stack
           modify (\st -> st { predicateStack = pushPred impl stack
+                            , futureFrame = []
           -- And add this case to the knowledge stack
                             , guardPredicates = [((localCtxt, p), s)] : knowledgeStack })
 
@@ -347,9 +358,9 @@ concludeImplication s localCtxt = do
            let impl@(Impl implCtxt implAntecedent _) =
                 -- TODO: turned off this feature for now by putting True in the guard here
                 if True -- isTrivial freshPrevGuardPred
-                  then (Impl localCtxt p p')
+                  then (Impl localCtxt p (Conj $ p' : futureFrame checkerState))
                   else (Impl (localCtxt <> freshPrevGuardCxt)
-                                 (Conj [p, freshPrevGuardPred]) p')
+                                 (Conj [p, freshPrevGuardPred]) (Conj $ p' : futureFrame checkerState))
 
            -- Build the guard theorem to also include all of the 'context' of things
            -- which also need to hold (held in `stack`)
@@ -359,6 +370,7 @@ concludeImplication s localCtxt = do
            -- Store `p` (impliciation antecedent) to use in later cases
            -- on the top of the guardPredicates stack
            modify (\st -> st { predicateStack = pushPred impl stack
+                             , futureFrame = []
            -- And add this case to the knowledge stack
                              , guardPredicates = knowledge : knowledgeStack })
 
@@ -417,6 +429,10 @@ addConstraint c = do
 resetAddedConstraintsFlag :: Checker ()
 resetAddedConstraintsFlag = modify (\st -> st { addedConstraints = False })
 
+addConstraintToNextFrame :: Constraint -> Checker ()
+addConstraintToNextFrame c = do
+  modify (\st -> st { futureFrame = Con c : futureFrame st })
+
 -- | A helper for adding a constraint to the previous frame (i.e.)
 -- | if I am in a local context, push it to the global
 addConstraintToPreviousFrame :: Constraint -> Checker ()
@@ -432,8 +448,8 @@ addConstraintToPreviousFrame c = do
 
 -- Given a coeffect type variable and a coeffect kind,
 -- replace any occurence of that variable in a context
-updateCoeffectType :: Id -> Type -> Checker ()
-updateCoeffectType tyVar k = do
+substIntoTyVarContext :: Id -> Type -> Checker ()
+substIntoTyVarContext tyVar k = do
    modify (\checkerState ->
     checkerState
      { tyVarContext = rewriteCtxt (tyVarContext checkerState) })
@@ -482,6 +498,8 @@ data CheckerError
     { errLoc :: Span, errTy1 :: Type, errTy2 :: Type }
   | LinearityError
     { errLoc :: Span, linearityMismatch :: LinearityMismatch }
+  | UniquenessError
+    { errLoc :: Span, uniquenessMismatch :: UniquenessMismatch }
   | PatternTypingError
     { errLoc :: Span, errPat :: Pattern (), tyExpected :: Type }
   | PatternTypingMismatch
@@ -549,7 +567,7 @@ data CheckerError
   | NeedTypeSignature
     { errLoc :: Span, errExpr :: Expr () () }
   | SolverErrorCounterExample
-    { errLoc :: Span, errDefId :: Id, errPred :: Pred }
+    { errLoc :: Span, errDefId :: Id, errPred :: Pred, message :: String }
   | SolverErrorFalsifiableTheorem
     { errLoc :: Span, errDefId :: Id, errPred :: Pred }
   | SolverError
@@ -586,6 +604,8 @@ data CheckerError
     { errLoc :: Span, errTy :: Type }
   | NaturalNumberAtWrongKind
     { errLoc :: Span, errTy :: Type, errK :: Kind }
+  | InvalidPromotionError
+    { errLoc :: Span, errTy :: Type }
   deriving (Show)
 
 instance UserMsg CheckerError where
@@ -602,6 +622,7 @@ instance UserMsg CheckerError where
   title KindsNotEqual{} = "Kind error"
   title IntervalGradeKindError{} = "Interval kind error"
   title LinearityError{} = "Linearity error"
+  title UniquenessError{} = "Uniqueness error"
   title PatternTypingError{} = "Pattern typing error"
   title PatternTypingMismatch{} = "Pattern typing mismatch"
   title PatternArityError{} = "Pattern arity error"
@@ -654,6 +675,7 @@ instance UserMsg CheckerError where
   title WrongLevel{} = "Type error"
   title ImpossibleKindSynthesis{} = "Kind error"
   title NaturalNumberAtWrongKind{} = "Kind error"
+  title InvalidPromotionError{} = "Type error"
 
   msg HoleMessage{..} =
     "\n   Expected type is: `" <> pretty holeTy <> "`"
@@ -723,7 +745,7 @@ instance UserMsg CheckerError where
     = "Types of kind `" <> pretty errK <> "` cannot be used in a type-level set."
 
   msg KindsNotEqual{..}
-    = "Kind `" <> pretty errK1 <> "` is not equal to `" <> pretty errK2 <> "`"
+    = "Kind `" <> pretty errK1 <> "` is not equal or compatible with `" <> pretty errK2 <> "`"
 
   msg IntervalGradeKindError{..}
    = "Interval grade mismatch `" <> pretty errTy1 <> "` and `" <> pretty errTy2 <> "`"
@@ -740,6 +762,12 @@ instance UserMsg CheckerError where
       "Wildcard pattern `_` allowing a value to be discarded"
     HandlerLinearityMismatch ->
       "Linearity of Handler clauses does not match"
+
+  msg UniquenessError{..} = case uniquenessMismatch of
+    NonUniqueUsedUniquely t ->
+      "Cannot guarantee uniqueness of references for non-unique type `" <> pretty t <> "`."
+    UniquePromotion t ->
+      "Cannot promote non-unique value of type `" <> pretty t <> "` to unique, since uniqueness is not a coeffect."
 
   msg PatternTypingError{..}
     = "Pattern match `"
@@ -891,6 +919,7 @@ instance UserMsg CheckerError where
     =  "The following theorem associated with `" <> pretty errDefId
     <> "` is falsifiable:\n\t"
     <> pretty errPred
+    <> (if null message then "" else "\n\n" <> message)
 
   msg SolverErrorFalsifiableTheorem{..}
     =  "The following theorem associated with `" <> pretty errDefId
@@ -960,6 +989,9 @@ instance UserMsg CheckerError where
   msg NaturalNumberAtWrongKind{ errTy, errK }
     = "Natural number `" <> pretty errTy <> "` is not a member of `" <> pretty errK <> "`"
 
+  msg InvalidPromotionError{ errTy }
+    = "Invalid promotion of closed term to `" <> pretty errTy <> "`"
+
   color HoleMessage{} = Blue
   color _ = Red
 
@@ -971,6 +1003,11 @@ data LinearityMismatch
   | LinearUsedMoreThanOnce Id
   | HandlerLinearityMismatch
   deriving (Eq, Show) -- for debugging
+
+data UniquenessMismatch
+  = NonUniqueUsedUniquely Type
+  | UniquePromotion Type
+  deriving (Eq, Show)
 
 freshenPred :: Pred -> Checker Pred
 freshenPred pred = do

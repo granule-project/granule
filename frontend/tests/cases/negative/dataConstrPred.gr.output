@@ -1,4 +1,4 @@
 Type checking failed: 
 Falsifiable theorem: frontend/tests/cases/negative/dataConstrPred.gr:10:1:
 The following theorem associated with `atLeastThree` is falsifiable:
-	(3 < 2)
+	(n1.0 = 2) ∧ (m0.0 = 3) ∧ (m0.0 < n1.0)

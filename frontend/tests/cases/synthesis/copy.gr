@@ -1,2 +1,2 @@
-copy : forall {a : Type} . a [2] -> (a, a)
-copy = ?
+copyTest : forall {a : Type} . a [2] -> (a, a)
+copyTest = ?

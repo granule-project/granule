@@ -37,6 +37,7 @@ import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Lexer
 import Language.Granule.Syntax.Span
 import Language.Granule.Checker.Checker
+import Language.Granule.Checker.TypeAliases
 import Language.Granule.Interpreter.Eval
 import qualified Language.Granule.Interpreter as Interpreter
 
@@ -209,14 +210,14 @@ handleCMD s =
       expr <- parseExpression exprString
       ty <- synthTypeFromInputExpr expr
       let exprString' = if elem ' ' exprString && head exprString /= '(' && last exprString /= ')' then "(" <> exprString <> ")" else exprString
-      liftIO $ putStrLn $ "  \ESC[1m" <> exprString' <> "\ESC[0m : " <> (either pretty pretty ty)
+      liftIO $ putStrLn $ "  \ESC[1m" <> exprString' <> "\ESC[0m : " <> (either (pretty . fst) pretty ty)
 
     handleLine (Eval exprString) = do
       expr <- parseExpression exprString
       ty <- synthTypeFromInputExpr expr
       case ty of
         -- Well-typed, with `tyScheme`
-        Left tyScheme -> do
+        Left (tyScheme, derivedDefs) -> do
           st <- get
           let ndef = buildDef (freeVarCounter st) tyScheme expr
           -- Update the free var counter
@@ -225,7 +226,7 @@ handleCMD s =
           let fv = freeVars expr
           let ast = buildRelevantASTdefinitions fv (defns st)
           let astNew = AST (currentADTs st) (ast <> [ndef]) mempty mempty Nothing
-          result <- liftIO' $ try $ replEval (freeVarCounter st) astNew
+          result <- liftIO' $ try $ replEval (freeVarCounter st) (extendASTWith derivedDefs astNew)
           case result of
               Left e -> Ex.throwError (EvalError e)
               Right Nothing -> liftIO $ print "if here fix"
@@ -241,12 +242,12 @@ parseExpression exprString = do
     Left err -> Ex.throwError (ParseError' err)
     Right exprAst -> return exprAst
 
-synthTypeFromInputExpr :: (?globals::Globals) => Expr () () -> REPLStateIO (Either TypeScheme Type)
+synthTypeFromInputExpr :: (?globals::Globals) => Expr () () -> REPLStateIO (Either (TypeScheme, [Def () ()]) Type)
 synthTypeFromInputExpr exprAst = do
   st <- get
   -- Build the AST and then try to synth the type
   let ast = buildRelevantASTdefinitions (freeVars exprAst) (defns st)
-  let astRest = AST (currentADTs st) ast mempty mempty Nothing
+  let astRest = replaceTypeAliases $ AST (currentADTs st) ast mempty mempty Nothing
 
   checkerResult <- liftIO' $ synthExprInIsolation astRest exprAst
   case checkerResult of
@@ -270,7 +271,8 @@ replEval val (AST dataDecls defs _ _ _) = do
     case lookup (mkId (" repl" <> show val)) bindings of
       Nothing -> return Nothing
       Just (Pure _ e)    -> fmap Just (evalIn bindings e)
-      Just (Promote _ e) -> fmap Just (evalIn bindings e)
+      Just (Promote a e) -> fmap (\x -> Just (Promote a (valExpr x))) (evalIn bindings e)
+      Just (Nec _ e)     -> fmap Just (evalIn bindings e)
       Just val           -> return $ Just val
 
 liftIO' :: IO a -> REPLStateIO a

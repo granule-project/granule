@@ -1,5 +1,5 @@
 name: granule-frontend
-version: '0.8.1.0'
+version: '0.8.2.0'
 synopsis: The Granule abstract-syntax-tree, parser and type checker libraries
 author: Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Jack Hughes, Preston Keel
 copyright: 2018-20 authors
@@ -46,6 +46,7 @@ library:
   - Language.Granule.Checker.Constraints
   - Language.Granule.Checker.Constraints.SNatX
   - Language.Granule.Checker.Flatten
+  - Language.Granule.Checker.Ghost
   - Language.Granule.Checker.LaTeX
   - Language.Granule.Checker.Monad
   - Language.Granule.Checker.Patterns

@@ -42,7 +42,7 @@ monus (S m') (S n') = monus m' n'
 
 sub
   : forall {m n : Nat}
-  . {n ≥ m} => N n -> N m -> N (n - m)
+  . {n .≥ m} => N n -> N m -> N (n - m)
 sub m Z = m;
 sub (S m') (S n') = sub m' n'
 

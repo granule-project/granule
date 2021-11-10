@@ -2,3 +2,7 @@ Type checking failed:
 Counter example: frontend/tests/cases/negative/flatten/flattenByLet.gr:2:1:
 The following theorem associated with `flatten` is falsifiable:
 	((1 : Nat) = n) ∧ (m * n = m)
+
+Counter-example:
+  n = 0 :: Integer
+  m = 0 :: Integer

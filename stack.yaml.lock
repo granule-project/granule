@@ -12,12 +12,12 @@ packages:
   original:
     hackage: ConfigFile-1.1.4
 - completed:
-    hackage: text-replace-0.0.0.4@sha256:88800aba160dfb512cf43b24063170d34900e1646ad21f28715a22679f42ae15,1738
+    hackage: text-replace-0.0.0.6@sha256:1da9fd389da635594e65671499c045b48bc3fdd985e18a5c69cc9c9a02ad5fac,2209
     pantry-tree:
       size: 293
-      sha256: a7d17c85a9637ef9cc6762ea4e9b932191ede485655b5d18d41292cc9475b105
+      sha256: 7f7c3a17cb3a926eabdca7581e705974046137c1147c5196b72681e9477b5593
   original:
-    hackage: text-replace-0.0.0.4
+    hackage: text-replace-0.0.0.6
 - completed:
     hackage: sbv-8.5@sha256:62217ddd7a29e14e75286cba4b406187f37df63fd48f356a6639e3f9c82a18c0,19781
     pantry-tree:

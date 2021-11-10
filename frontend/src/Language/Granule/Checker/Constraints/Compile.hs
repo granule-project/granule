@@ -20,6 +20,8 @@ import Language.Granule.Utils
 
 compileTypeConstraintToConstraint ::
     (?globals :: Globals) => Span -> Type -> Checker Pred
+-- compileTypeConstraintToConstraint s (TyApp (TCon (internalName -> "Pushable") t)) = do
+
 compileTypeConstraintToConstraint s (TyInfix op t1 t2) = do
   (k, _, _) <- synthKind s t1
   (result, putChecker) <- peekChecker (checkKind s t2 k)

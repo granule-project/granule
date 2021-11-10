@@ -1,0 +1,4 @@
+Type checking failed: 
+Falsifiable theorem: frontend/tests/cases/negative/caseLocalConstraints.gr:4:1:
+The following theorem associated with `foo` is falsifiable:
+	(prom_[4:16]0 = 0) ∧ ((1 : Nat) = prom_[4:16]0) ∧ ((1 : Nat) = prom_[4:16]0)

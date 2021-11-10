@@ -22,7 +22,7 @@ flip f x y = f y x
 
 --- Constant combinator
 --- NB: Throws away its second argument and returns the first
-const : forall {a : Type, b : Type} . a -> b [0] -> a
+const : forall {a : Type, b : Type, s : Semiring} . a -> b [0 : s] -> a
 const x [y] = x
 
 --- linear function composition (the composition operator `g ∘ f` resolves
@@ -67,11 +67,11 @@ e = 2.718281828459045
 --- # Combinators involving products (pairs)
 
 --- Extract the left part of a pair
-fst : forall {a : Type, b : Type} . a × b [0] -> a
+fst : forall {a : Type, b : Type, s : Semiring} . a × b [0 : s] -> a
 fst (x, [_]) = x
 
 --- Extract the right part of a pair
-snd : forall {a : Type, b : Type} . a [0] × b -> b
+snd : forall {a : Type, b : Type, s : Semiring} . a [0 : s] × b -> b
 snd ([_], y) = y
 
 --- curry converts an uncurried function to a curried function
@@ -100,13 +100,19 @@ unbox [x] = x
 disject : forall {a : Type, k : Semiring, n : k, m : k} . a [m * n] -> (a [n]) [m]
 disject [x] = [[x]]
 
+extract : forall {a : Type, s : Semiring, r : s} . {(1 : s) <= r} => a [r] -> a
+extract [x] = x
+
 --- Push coeffects on a pair into the left and right elements
-push : forall {a : Type, b : Type, k : Coeffect, c : k} . (a × b) [c] -> a [c] × b [c]
-push [(x, y)] = ([x], [y])
+-- pushPair : forall {a : Type, b : Type, k : Coeffect, c : k} . {(Hsup c c) == c} => (a × b) [c] -> a [c] × b [c]
+-- pushPair [(x, y)] = ([x], [y])
 
 --- Pull coeffects of pair elements up to the pair
-pull : ∀ {a : Type, b : Type, k : Coeffect, n : k, m : k} . (a [n], b [m]) → (a, b) [n ∧ m]
-pull ([x], [y]) = [(x, y)]
+pullPair : ∀ {a : Type, b : Type, k : Coeffect, n : k, m : k} . (a [n], b [m]) → (a, b) [n ∧ m]
+pullPair = pull @(,)
+
+copy : forall {a : Type, s : Semiring} . a [(1 + 1):s] -> (a, a)
+copy [x] = (x, x)
 
 --- # Coeffect-specifc combinators
 

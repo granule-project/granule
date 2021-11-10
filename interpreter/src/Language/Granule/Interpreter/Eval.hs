@@ -2,7 +2,7 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE TypeSynonymInstances #-}
+
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ViewPatterns #-}
 
@@ -38,6 +38,7 @@ import System.IO (hFlush, stdout, stderr)
 import qualified System.IO as SIO
 
 import System.IO.Error (mkIOError)
+import Data.Bifunctor
 
 type RValue = Value (Runtime ()) ()
 type RExpr = Expr (Runtime ()) ()
@@ -45,10 +46,10 @@ type RExpr = Expr (Runtime ()) ()
 -- | Runtime values only used in the interpreter
 data Runtime a =
   -- | Primitive functions (builtins)
-    Primitive ((Value (Runtime a) a) -> Value (Runtime a) a)
+    Primitive (Value (Runtime a) a -> Value (Runtime a) a)
 
   -- | Primitive operations that also close over the context
-  | PrimitiveClosure (Ctxt (Value (Runtime a) a) -> (Value (Runtime a) a) -> (Value (Runtime a) a))
+  | PrimitiveClosure (Ctxt (Value (Runtime a) a) -> Value (Runtime a) a -> Value (Runtime a) a)
 
   -- | File handler
   | Handle SIO.Handle
@@ -100,28 +101,28 @@ evalBinOp op v1 v2 = case op of
       (NumFloat n1, NumFloat n2) -> NumFloat (n1 - n2)
       _ -> evalFail
     OpEq -> case (v1, v2) of
-      (NumInt n1, NumInt n2) -> Constr () (mkId . show $ (n1 == n2)) []
-      (NumFloat n1, NumFloat n2) -> Constr () (mkId . show $ (n1 == n2)) []
+      (NumInt n1, NumInt n2) -> Constr () (mkId . show $ n1 == n2) []
+      (NumFloat n1, NumFloat n2) -> Constr () (mkId . show $ n1 == n2) []
       _ -> evalFail
     OpNotEq -> case (v1, v2) of
-      (NumInt n1, NumInt n2) -> Constr () (mkId . show $ (n1 /= n2)) []
-      (NumFloat n1, NumFloat n2) -> Constr () (mkId . show $ (n1 /= n2)) []
+      (NumInt n1, NumInt n2) -> Constr () (mkId . show $ n1 /= n2) []
+      (NumFloat n1, NumFloat n2) -> Constr () (mkId . show $ n1 /= n2) []
       _ -> evalFail
     OpLesserEq -> case (v1, v2) of
-      (NumInt n1, NumInt n2) -> Constr () (mkId . show $ (n1 <= n2)) []
-      (NumFloat n1, NumFloat n2) -> Constr () (mkId . show $ (n1 <= n2)) []
+      (NumInt n1, NumInt n2) -> Constr () (mkId . show $ n1 <= n2) []
+      (NumFloat n1, NumFloat n2) -> Constr () (mkId . show $ n1 <= n2) []
       _ -> evalFail
     OpLesser -> case (v1, v2) of
-      (NumInt n1, NumInt n2) -> Constr () (mkId . show $ (n1 < n2)) []
-      (NumFloat n1, NumFloat n2) -> Constr () (mkId . show $ (n1 < n2)) []
+      (NumInt n1, NumInt n2) -> Constr () (mkId . show $ n1 < n2) []
+      (NumFloat n1, NumFloat n2) -> Constr () (mkId . show $ n1 < n2) []
       _ -> evalFail
     OpGreaterEq -> case (v1, v2) of
-      (NumInt n1, NumInt n2) -> Constr () (mkId . show $ (n1 >= n2)) []
-      (NumFloat n1, NumFloat n2) -> Constr () (mkId . show $ (n1 >= n2)) []
+      (NumInt n1, NumInt n2) -> Constr () (mkId . show $ n1 >= n2) []
+      (NumFloat n1, NumFloat n2) -> Constr () (mkId . show $ n1 >= n2) []
       _ -> evalFail
     OpGreater -> case (v1, v2) of
-      (NumInt n1, NumInt n2) -> Constr () (mkId . show $ (n1 > n2)) []
-      (NumFloat n1, NumFloat n2) -> Constr () (mkId . show $ (n1 > n2)) []
+      (NumInt n1, NumInt n2) -> Constr () (mkId . show $ n1 > n2) []
+      (NumFloat n1, NumFloat n2) -> Constr () (mkId . show $ n1 > n2) []
       _ -> evalFail
   where
     evalFail = error $ show [show op, show v1, show v2]
@@ -138,13 +139,24 @@ evalIn ctxt (App s _ _ e1 e2) = do
         return $ k v2
 
       Abs _ p _ e3 -> do
-        -- (cf. APP_R)
-        v2 <- evalIn ctxt e2
-        -- (cf. P_BETA)
-        pResult <- pmatch ctxt [(p, e3)] v2
-        case pResult of
-          Just e3' -> evalIn ctxt e3'
-          _ -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in application at " <> pretty s
+        -- CallByName extension
+        if CBN `elem` globalsExtensions ?globals
+          then do
+            -- (cf. P_BETA CBN)
+            pResult <- pmatch ctxt [(p, e3)] e2
+            case pResult of
+              Just e3' -> evalIn ctxt e3'
+              _ -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in application at " <> pretty s
+
+          -- CallByValue default
+          else do
+            -- (cf. APP_R)
+            v2 <- evalIn ctxt e2
+            -- (cf. P_BETA)
+            pResult <- pmatch ctxt [(p, e3)] (valExpr v2)
+            case pResult of
+              Just e3' -> evalIn ctxt e3'
+              _ -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in application at " <> pretty s
 
       Constr _ c vs -> do
         -- (cf. APP_R)
@@ -155,12 +167,11 @@ evalIn ctxt (App s _ _ e1 e2) = do
       -- _ -> error "Cannot apply value"
 
 -- Deriving applications get resolved to their names
-evalIn ctxt (AppTy _ _ _ (Val s a rf (Var a' n)) t) | internalName n `elem` ["push", "pull", "copyShape", "drop"] = do
-  -- Replace with a deriving variable
+evalIn ctxt (AppTy _ _ _ (Val s a rf (Var a' n)) t) | internalName n `elem` ["push", "pull", "copyShape", "drop"] =
   evalIn ctxt (Val s a rf (Var a' (mkId $ pretty n <> "@" <> pretty t)))
 
 -- Other type applications have no run time component (currently)
-evalIn ctxt (AppTy s _ _ e t) = do
+evalIn ctxt (AppTy s _ _ e t) =
   evalIn ctxt e
 
 evalIn ctxt (Binop _ _ _ op e1 e2) = do
@@ -178,9 +189,9 @@ evalIn ctxt (LetDiamond s _ _ p _ e1 e2) = do
         -- (cf. LET_2)
         v1' <- evalIn ctxt eInner
         -- (cf. LET_BETA)
-        pResult  <- pmatch ctxt [(p, e2)] v1'
+        pResult  <- pmatch ctxt [(p, e2)] (valExpr v1')
         case pResult of
-          Just e2' -> do
+          Just e2' ->
               evalIn ctxt e2'
           Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in let at " <> pretty s
 
@@ -190,20 +201,19 @@ evalIn ctxt (LetDiamond s _ _ p _ e1 e2) = do
 evalIn ctxt (TryCatch s _ _ e1 p _ e2 e3) = do
   v1 <- evalIn ctxt e1
   case v1 of
-    (isDiaConstr -> Just e) -> do
-        -- (cf. TRY_BETA_1)
+    (isDiaConstr -> Just e) ->
       catch ( do
-          eInner <- e
-          e1' <- evalIn ctxt eInner
-          pmatch ctxt [(PBox s () False p, e2)] e1' >>=
-            \v ->
-              case v of
-                Just e2' -> evalIn ctxt e2'
-                Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in try at " <> pretty s
-        )
-         -- (cf. TRY_BETA_2)
-        (\(e :: IOException) -> evalIn ctxt e3)
-    other -> fail $ "Runtime exception: Expecting a diamonad value but got: " <> prettyDebug other 
+        eInner <- e
+        e1' <- evalIn ctxt eInner
+        pmatch ctxt [(PBox s () False p, e2)] (valExpr e1') >>=
+          \v ->
+            case v of
+              Just e2' -> evalIn ctxt e2'
+              Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in try at " <> pretty s
+      )
+       -- (cf. TRY_BETA_2)
+      (\(e :: IOException) -> evalIn ctxt e3)
+    other -> fail $ "Runtime exception: Expecting a diamond value but got: " <> prettyDebug other
 
 {-
 -- Hard-coded 'scale', removed for now
@@ -216,29 +226,41 @@ evalIn _ (Val _ _ _ (Var _ v)) | internalName v == "scale" = return
            OpTimes (Val nullSpan () False (Var () (mkId " x"))) (Val nullSpan () False (Var () (mkId " ye"))))))))
 -}
 
-evalIn ctxt (Val _ _ _ (Var _ x)) = do
+evalIn ctxt (Val _ _ _ (Var _ x)) =
     case lookup x ctxt of
       Just val@(Ext _ (PrimitiveClosure f)) -> return $ Ext () $ Primitive (f ctxt)
       Just val -> return val
       Nothing  -> fail $ "Variable '" <> sourceName x <> "' is undefined in context."
 
-evalIn ctxt (Val s _ _ (Promote _ e)) = do
-  -- (cf. Box)
-  v <- evalIn ctxt e
-  return $ Promote () (Val s () False v)
+evalIn ctxt (Val s _ _ (Promote _ e)) =
+  if CBN `elem` (globalsExtensions ?globals)
+    then do
+      return $ Promote () e
+    else do
+      -- (cf. Box)
+      v <- evalIn ctxt e
+      return $ Promote () (Val s () False v)
+
+evalIn ctxt (Val s _ _ (Nec _ e)) =
+  if CBN `elem` (globalsExtensions ?globals)
+    then do
+      return $ Nec () e
+    else do
+      v <- evalIn ctxt e
+      return $ Nec () (Val s () False v)
 
 evalIn _ (Val _ _ _ v) = return v
 
-evalIn ctxt (Case _ _ _ guardExpr cases) = do
+evalIn ctxt (Case s a b guardExpr cases) = do
     v <- evalIn ctxt guardExpr
-    p <- pmatch ctxt cases v
+    p <- pmatch ctxt cases (Val s a b v)
     case p of
       Just ei -> evalIn ctxt ei
       Nothing             ->
         error $ "Incomplete pattern match:\n  cases: "
              <> pretty cases <> "\n  expr: " <> pretty v
 
-evalIn ctxt (Hole _ _ _ _) = do
+evalIn ctxt (Hole {}) =
   error "Trying to evaluate a hole, which should not have passed the type checker."
 
 applyBindings :: Ctxt RExpr -> RExpr -> RExpr
@@ -253,39 +275,62 @@ pmatch ::
   (?globals :: Globals)
   => Ctxt RValue
   -> [(Pattern (), RExpr)]
-  -> RValue
+  -> RExpr
   -> IO (Maybe RExpr)
 pmatch _ [] _ =
   return Nothing
 
-pmatch _ ((PWild _ _ _, e):_)  _ =
+pmatch _ ((PWild {}, e):_)  _ =
   return $ Just e
 
-pmatch ctxt ((PConstr _ _ _ id innerPs, t0):ps) v@(Constr _ id' vs)
+pmatch ctxt ((PConstr _ _ _ id innerPs, t0):ps) v@(Val s a b (Constr _ id' vs))
  | id == id' && length innerPs == length vs = do
 
   -- Fold over the inner patterns
+  let vs' = map valExpr vs
   tLastM <- foldM (\tiM (pi, vi) -> case tiM of
                                       Nothing -> return Nothing
-                                      Just ti -> pmatch ctxt [(pi, ti)] vi) (Just t0) (zip innerPs vs)
+                                      Just ti -> pmatch ctxt [(pi, ti)] vi) (Just t0) (zip innerPs vs')
 
   case tLastM of
     Just tLast -> return $ Just tLast
     -- There was a failure somewhere
     Nothing  -> pmatch ctxt ps v
 
-pmatch _ ((PVar _ _ _ var, e):_) v =
-  return $ Just $ subst (Val nullSpan () False v) var e
+pmatch ctxt ((PConstr s a b id innerPs, t0):ps) e =
+  -- Can only happen in CBN case
+  if CBN `elem` globalsExtensions ?globals
+    then do
+      -- Force evaluation of term
+      v <- evalIn ctxt e
+      pmatch ctxt ((PConstr s a b id innerPs, t0):ps) (valExpr v)
+    else
+      -- In CBV mode this just means we failed to pattern match
+      pmatch ctxt ps e
 
-pmatch ctxt ((PBox _ _ _ p, e):ps) v@(Promote _ (Val _ _ _ v')) = do
+pmatch _ ((PVar _ _ _ var, e):_) v =
+  return $ Just $ subst v var e
+
+pmatch ctxt ((PBox _ _ _ p, e):ps) v@(Val _ _ _ (Promote _ v')) = do
   match <- pmatch ctxt [(p, e)] v'
   case match of
     Just e -> return $ Just e
     Nothing -> pmatch ctxt ps v
 
-pmatch ctxt ((PInt _ _ _ n, e):ps) (NumInt m) | n == m = return $ Just e
+pmatch ctxt ((PBox s a b p, e):ps) e' = do
+  -- Can only happen in CBN case
+  if CBN `elem` globalsExtensions ?globals
+    then do
+      -- Force evaluation of term
+      v <- evalIn ctxt e'
+      pmatch ctxt ((PBox s a b p, e):ps) (valExpr v)
+    else
+      -- In CBV mode this just meands we failed to pattern match
+      pmatch ctxt ps e
 
-pmatch ctxt ((PFloat _ _ _ n, e):ps) (NumFloat m )| n == m = return $ Just e
+pmatch ctxt ((PInt _ _ _ n, e):ps) (Val _ _ _ (NumInt m)) | n == m = return $ Just e
+
+pmatch ctxt ((PFloat _ _ _ n, e):ps) (Val _ _ _ (NumFloat m)) | n == m = return $ Just e
 
 pmatch ctxt (_:ps) v = pmatch ctxt ps v
 
@@ -293,19 +338,26 @@ valExpr :: ExprFix2 g ExprF ev () -> ExprFix2 ExprF g ev ()
 valExpr = Val nullSpanNoFile () False
 
 builtIns :: (?globals :: Globals) => Ctxt RValue
+{-# NOINLINE builtIns #-}
 builtIns =
   [
     (mkId "div", Ext () $ Primitive $ \(NumInt n1)
           -> Ext () $ Primitive $ \(NumInt n2) -> NumInt (n1 `div` n2))
   , (mkId "use", Ext () $ Primitive $ \v -> Promote () (Val nullSpan () False v))
+  , (mkId "compose", Ext () $ Primitive $ \g ->
+                                Ext () $ Primitive $ \f ->
+                                  Abs () (PVar nullSpan () False (mkId "xc")) Nothing
+                                    (App nullSpan () False (Val nullSpan () False g) (App nullSpan () False (Val nullSpan () False f)
+                                        (Val nullSpan () False (Var () (mkId "xc"))))))
+
+  -- differental privacy/sensitivty tracking version of scaling
+  , (mkId "scale", Ext () $ Primitive $ \(NumFloat n)
+           -> Ext () $ Primitive $ \(Promote () (Val nullSpan () _ (NumFloat m))) ->
+               NumFloat (n * m))
   , (mkId "drop@Int", Ext () $ Primitive $ \v -> (Constr () (mkId "()") []))
   , (mkId "drop@Char", Ext () $ Primitive $ \v -> (Constr () (mkId "()") []))
   , (mkId "drop@Float", Ext () $ Primitive $ \v -> (Constr () (mkId "()") []))
   , (mkId "drop@String", Ext () $ Primitive $ \v -> (Constr () (mkId "()") []))
-  , (mkId "copyShape@Int", Ext () $ Primitive $ \v -> Constr () (mkId ",") [v, v])
-  , (mkId "copyShape@Char", Ext () $ Primitive $ \v -> Constr () (mkId ",") [v, v])
-  , (mkId "copyShape@Float", Ext () $ Primitive $ \v -> Constr () (mkId ",") [v, v])
-  , (mkId "copyShape@String", Ext () $ Primitive $ \v -> Constr () (mkId ",") [v, v])
   , (mkId "pure",       Ext () $ Primitive $ \v -> Pure () (Val nullSpan () False v))
   , (mkId "fromPure",   Ext () $ Primitive $ \(Pure () (Val nullSpan () False v)) ->  v)
   , (mkId "tick",       Pure () (Val nullSpan () False (Constr () (mkId "()") [])))
@@ -369,12 +421,16 @@ builtIns =
     , Ext () $ Primitive $ \(StringLiteral s) ->
         Ext () $ Primitive $ \(CharLiteral c) -> StringLiteral (snoc s c)
     )
+  , ( mkId "moveString"
+    , Ext () $ Primitive $ \(StringLiteral s) ->
+        Promote () $ valExpr $ (StringLiteral s))
+  , ( mkId "moveChar"
+    , Ext () $ Primitive $ \(CharLiteral s) ->
+        Promote () $ valExpr $ (CharLiteral s))
   , (mkId "isEOF", Ext () $ Primitive $ \(Ext _ (Handle h)) -> Ext () $ PureWrapper $ do
         b <- SIO.isEOF
         let boolflag =
-             case b of
-               True -> Constr () (mkId "True") []
-               False -> Constr () (mkId "False") []
+             if b then Constr () (mkId "True") [] else Constr () (mkId "False") []
         return . Val nullSpan () False $ Constr () (mkId ",") [Ext () $ Handle h, boolflag])
   , (mkId "forkLinear", Ext () $ PrimitiveClosure forkLinear)
   , (mkId "forkLinear'", Ext () $ PrimitiveClosure forkLinear')
@@ -389,12 +445,19 @@ builtIns =
   -- , (mkId "newPtr", malloc)
   -- , (mkId "swapPtr", peek poke castPtr) -- hmm probably don't need to cast the Ptr
   -- , (mkId "freePtr", free)
-  , (mkId "uniqueReturn",  Ext () $ Primitive $ \(Promote () (Val nullSpan () False v)) -> Promote () (Val nullSpan () False v))
-  , (mkId "uniqueBind",    Ext () $ Primitive $ \(Promote () (Val nullSpan () False f)) -> Ext () $ Primitive $ \(Promote () (Val nullSpan () False v)) -> Promote () (App nullSpan () False (Val nullSpan () False f) (Val nullSpan () False v)))
+  , (mkId "uniqueReturn",  Ext () $ Primitive uniqueReturn)
+  , (mkId "uniqueBind",    Ext () $ PrimitiveClosure uniqueBind)
+  , (mkId "uniquePush",    Ext () $ Primitive uniquePush)
+  , (mkId "uniquePull",    Ext () $ Primitive uniquePull)
   , (mkId "newFloatArray",  Ext () $ Primitive newFloatArray)
   , (mkId "lengthFloatArray",  Ext () $ Primitive lengthFloatArray)
   , (mkId "readFloatArray",  Ext () $ Primitive readFloatArray)
   , (mkId "writeFloatArray",  Ext () $ Primitive writeFloatArray)
+  , (mkId "newFloatArray'",  Ext () $ Primitive newFloatArray')
+  , (mkId "lengthFloatArray'",  Ext () $ Primitive lengthFloatArray')
+  , (mkId "readFloatArray'",  Ext () $ Primitive readFloatArray')
+  , (mkId "writeFloatArray'",  Ext () $ Primitive writeFloatArray')
+  , (mkId "deleteFloatArray", Ext () $ Primitive deleteFloatArray)
   ]
   where
     forkLinear :: (?globals :: Globals) => Ctxt RValue -> RValue -> RValue
@@ -425,11 +488,41 @@ builtIns =
       return $ valExpr $ Promote () $ valExpr $ Ext () $ Chan c
     forkRep ctxt e = error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
+    uniqueReturn :: RValue -> RValue
+    uniqueReturn (Nec () v) = (Promote () v)
+    uniqueReturn v = error $ "Bug in Granule. Can't borrow a non-unique: " <> prettyDebug v
+
+    uniqueBind :: (?globals :: Globals) => Ctxt RValue -> RValue -> RValue
+    uniqueBind ctxt f = Ext () $ Primitive $ \(Promote () v) ->
+      case v of
+        (Val nullSpan () False (Ext () (FloatArray arr))) -> 
+          unsafePerformIO $ do
+          copy <- MA.mapArray id arr
+          return $ unsafePerformIO $ evalIn ctxt
+              (App nullSpan () False 
+                (Val nullSpan () False f) 
+                (Val nullSpan () False (Nec () (Val nullSpan () False (Ext () (FloatArray copy))))))
+        otherwise ->
+          unsafePerformIO $ evalIn ctxt 
+            (App nullSpan () False 
+             (Val nullSpan () False f) 
+             (Val nullSpan () False (Nec () v)))
+
+    uniquePush :: RValue -> RValue
+    uniquePush (Nec () (Val nullSpan () False (Constr () (Id "," ",") [x, y])))
+     = (Constr () (mkId ",") [(Nec () (Val nullSpan () False x)), (Nec () (Val nullSpan () False y))])
+    uniquePush v = error $ "Bug in Granule. Can't push through a non-unique: " <> prettyDebug v
+
+    uniquePull :: RValue -> RValue
+    uniquePull (Constr () (Id "," ",") [(Nec () (Val nullSpan () False x)), (Nec () (Val _ () False y))])
+      = (Nec () (Val nullSpan () False (Constr () (mkId ",") [x, y])))
+    uniquePull v = error $ "Bug in Granule. Can't pull through a non-unique: " <> prettyDebug v
+
     recv :: (?globals :: Globals) => RValue -> RValue
     recv (Ext _ (Chan c)) = unsafePerformIO $ do
       x <- CC.readChan c
       return $ Constr () (mkId ",") [x, Ext () $ Chan c]
-    recv e = error $ "Bug in Granule. Trying to recevie from: " <> prettyDebug e
+    recv e = error $ "Bug in Granule. Trying to receive from: " <> prettyDebug e
 
     send :: (?globals :: Globals) => RValue -> RValue
     send (Ext _ (Chan c)) = Ext () $ Primitive
@@ -446,7 +539,7 @@ builtIns =
     grecv (Ext _ (Chan c)) = diamondConstr $ do
       x <- CC.readChan c
       return $ valExpr $ Constr () (mkId ",") [x, Ext () $ Chan c]
-    grecv e = error $ "Bug in Granule. Trying to recevie from: " <> prettyDebug e
+    grecv e = error $ "Bug in Granule. Trying to receive from: " <> prettyDebug e
 
     gsend :: (?globals :: Globals) => RValue -> RValue
     gsend (Ext _ (Chan c)) = Ext () $ Primitive
@@ -504,25 +597,60 @@ builtIns =
 
     {-# NOINLINE newFloatArray #-}
     newFloatArray :: RValue -> RValue
-    newFloatArray = \(NumInt i) -> Promote () (Val nullSpan () False $ Ext () $ FloatArray (unsafePerformIO (MA.newArray_ (0,i))))
+    newFloatArray = \(NumInt i) -> Nec () (Val nullSpan () False $ Ext () $ FloatArray (unsafePerformIO (MA.newArray_ (0,i))))
+
+    {-# NOINLINE newFloatArray' #-}
+    newFloatArray' :: RValue -> RValue
+    newFloatArray' = \(NumInt i) -> Ext () $ FloatArray (unsafePerformIO (MA.newArray_ (0,i)))
 
     {-# NOINLINE readFloatArray #-}
     readFloatArray :: RValue -> RValue
-    readFloatArray = \(Promote () (Val _ _ _ (Ext () (FloatArray arr)))) -> Ext () $ Primitive $ \(NumInt i) ->
+    readFloatArray = \(Nec () (Val _ _ _ (Ext () (FloatArray arr)))) -> Ext () $ Primitive $ \(NumInt i) ->
       unsafePerformIO $ do e <- MA.readArray arr i
-                           return (Constr () (mkId ",") [NumFloat e, Promote () (Val nullSpan () False $ Ext () (FloatArray arr))])
+                           return (Constr () (mkId ",") [NumFloat e, Nec () (Val nullSpan () False $ Ext () (FloatArray arr))])
+
+    {-# NOINLINE readFloatArray' #-}
+    readFloatArray' :: RValue -> RValue
+    readFloatArray' = \(Ext () (FloatArray arr)) -> Ext () $ Primitive $ \(NumInt i) ->
+      unsafePerformIO $ do e <- MA.readArray arr i
+                           return (Constr () (mkId ",") [NumFloat e, Ext () $ FloatArray arr])
 
     lengthFloatArray :: RValue -> RValue
-    lengthFloatArray = \(Promote () (Val _ _ _ (Ext () (FloatArray arr)))) -> Ext () $ Primitive $ \(NumInt i) ->
+    lengthFloatArray = \(Nec () (Val _ _ _ (Ext () (FloatArray arr)))) -> Ext () $ Primitive $ \(NumInt i) ->
       unsafePerformIO $ do (_,end) <- MA.getBounds arr
-                           return (Constr () (mkId ",") [NumInt end, Promote () (Val nullSpan () False $ Ext () $ FloatArray arr)])
+                           return (Constr () (mkId ",") [NumInt end, Nec () (Val nullSpan () False $ Ext () $ FloatArray arr)])
+
+    lengthFloatArray' :: RValue -> RValue
+    lengthFloatArray' = \(Ext () (FloatArray arr)) -> Ext () $ Primitive $ \(NumInt i) ->
+      unsafePerformIO $ do (_,end) <- MA.getBounds arr
+                           return (Constr () (mkId ",") [NumInt end, Ext () $ FloatArray arr])
 
     {-# NOINLINE writeFloatArray #-}
     writeFloatArray :: RValue -> RValue
-    writeFloatArray = \(Promote _ (Val _ _ _ (Ext _ (FloatArray arr)))) ->
+    writeFloatArray = \(Nec _ (Val _ _ _ (Ext _ (FloatArray arr)))) ->
       Ext () $ Primitive $ \(NumInt i) ->
       Ext () $ Primitive $ \(NumFloat v) ->
-      Promote () (Val nullSpan () False $ Ext () $ FloatArray $ unsafePerformIO (do _ <- MA.writeArray arr i v; return arr))
+      Nec () $ Val nullSpan () False $ Ext () $ FloatArray $ unsafePerformIO $
+        do () <- MA.writeArray arr i v
+           return arr
+
+    {-# NOINLINE writeFloatArray' #-}
+    writeFloatArray' :: RValue -> RValue
+    writeFloatArray' = \(Ext () (FloatArray arr)) ->
+      Ext () $ Primitive $ \(NumInt i) ->
+      Ext () $ Primitive $ \(NumFloat v) ->
+        Ext () $ FloatArray $ unsafePerformIO $
+           do arr' <- MA.mapArray id arr
+              () <- MA.writeArray arr' i v
+              return arr'
+
+    {-# NOINLINE deleteFloatArray #-}
+    deleteFloatArray :: RValue -> RValue
+    deleteFloatArray = \(Nec _ (Val _ _ _ (Ext _ (FloatArray arr)))) ->
+      case (unsafePerformIO $ do
+              arr' <- MA.mapArray (const undefined) arr
+              return ()) of
+        () -> Constr () (mkId "()") []
 
 evalDefs :: (?globals :: Globals) => Ctxt RValue -> [Def (Runtime ()) ()] -> IO (Ctxt RValue)
 evalDefs ctxt [] = return ctxt
@@ -555,7 +683,7 @@ instance RuntimeRep Expr where
   toRuntimeRep (Binop s a rf o e1 e2) = Binop s a rf o (toRuntimeRep e1) (toRuntimeRep e2)
   toRuntimeRep (LetDiamond s a rf p t e1 e2) = LetDiamond s a rf p t (toRuntimeRep e1) (toRuntimeRep e2)
   toRuntimeRep (TryCatch s a rf e1 p t e2 e3) = TryCatch s a rf (toRuntimeRep e1) p t (toRuntimeRep e2) (toRuntimeRep e3)
-  toRuntimeRep (Case s a rf e ps) = Case s a rf (toRuntimeRep e) (map (\(p, e) -> (p, toRuntimeRep e)) ps)
+  toRuntimeRep (Case s a rf e ps) = Case s a rf (toRuntimeRep e) (map (second toRuntimeRep) ps)
   toRuntimeRep (Hole s a rf vs) = Hole s a rf vs
 
 instance RuntimeRep Value where
@@ -563,6 +691,7 @@ instance RuntimeRep Value where
   toRuntimeRep (Abs a p t e) = Abs a p t (toRuntimeRep e)
   toRuntimeRep (Promote a e) = Promote a (toRuntimeRep e)
   toRuntimeRep (Pure a e) = Pure a (toRuntimeRep e)
+  toRuntimeRep (Nec a e) = Nec a (toRuntimeRep e)
   toRuntimeRep (Constr a i vs) = Constr a i (map toRuntimeRep vs)
   -- identity cases
   toRuntimeRep (CharLiteral c) = CharLiteral c
@@ -581,6 +710,7 @@ eval (AST dataDecls defs _ _ _) = do
       Just (Ext _ (PureWrapper e)) -> do
         eExpr <- e
         fmap Just (evalIn bindings eExpr)
-      Just (Promote _ e) -> fmap Just (evalIn bindings e)
+      Just (Promote a e) -> fmap (\x -> Just (Promote a (valExpr x))) (evalIn bindings e)
+      Just (Nec _ e) -> fmap Just (evalIn bindings e)
       -- ... or a regular value came out of the interpreter
       Just val           -> return $ Just val

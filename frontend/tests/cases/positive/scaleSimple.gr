@@ -1,0 +1,2 @@
+g : DFloat [3.0] → DFloat
+g [x] = scale 3.0 [x]

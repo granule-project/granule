@@ -13,17 +13,17 @@ flatten [[x]] = [x]
 twice : ∀ {n : Nat} . (Int [n] → Int) [2] → Int [2 * n] → Int
 twice [f] [x] = f [x] + f [x]
 
-secret : Int [Private]
+secret : Int [Hi]
 secret = [0309]
 
-hash : ∀ {l : Level} . Int [l] → Int [l]
+hash : ∀ {l : Sec} . Int [l] → Int [l]
 hash [x] = [x + x]
 
 hello : () <{Stdin, Stdout}>
 hello = let x ← fromStdin
         in toStdout x
 
-main : Int [Private]
+main : Int [Hi]
 main =
    let [pin] = hash secret
    in [twice [dub] [42] + twice [trip] [52] + pin]
