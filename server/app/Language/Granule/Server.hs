@@ -10,31 +10,31 @@ import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
 import Data.Foldable (toList)
 import Data.List (isInfixOf)
-import qualified Data.List.NonEmpty as N (toList)
+import Data.List.NonEmpty (NonEmpty)
 import Data.List.Split
-import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
 import Data.Set (Set, (\\), fromList, insert, empty)
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
 import System.Directory (doesFileExist)
 import System.FilePath ((</>), takeBaseName)
 import System.IO (stderr)
+import qualified Data.Map as M
+import qualified Data.Text as T
+import qualified Data.Text.IO as T
 
 import Language.LSP.Diagnostics
 import Language.LSP.Server
 import Language.LSP.Types
-import qualified Language.LSP.Types.Lens as L
 import Language.LSP.VFS
+import qualified Language.LSP.Types.Lens as L
 
-import Language.Granule.Checker.Checker
 import Language.Granule.Checker.Monad
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Identifiers
-import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Span
 import Language.Granule.Utils
+import qualified Language.Granule.Checker.Checker as Checker
 import qualified Language.Granule.Interpreter as Interpreter
+import qualified Language.Granule.Syntax.Parser as Parser
 
 fromUri :: NormalizedUri -> FilePath
 fromUri = fromNormalizedFilePath . fromMaybe "<unknown>" . uriToNormalizedFilePath
@@ -52,7 +52,7 @@ serverParseFreshen input = do
 
 serverParse :: (?globals :: Globals) => String -> IO (Either String (AST () (), [Extension]))
 serverParse input = do
-    let output = parseDefs sourceFilePath input
+    let output = Parser.parseDefs sourceFilePath input
     case output of
       Left s -> return $ Left s
       Right (ast, extensions) -> case moduleName ast of
@@ -72,7 +72,7 @@ serverParse input = do
           let path = if fileLocal then i else includePath </> i
           let ?globals = ?globals { globalsSourceFilePath = Just path } in do
             src <- readFile path
-            output <- return $ parseDefs path src
+            output <- return $ Parser.parseDefs path src
             case output of
               Left s -> return $ Left s
               Right (AST dds' defs' imports' hidden' _, extensions') ->
@@ -106,11 +106,11 @@ validateGranuleCode doc version content = let ?globals = ?globals {globalsSource
   case pf of
     Right (ast, extensions) -> let ?globals = ?globals {globalsExtensions = extensions} in do
       -- debugS $ T.pack (show ast)
-      checked <- lift $ check ast
+      checked <- lift $ Checker.check ast
       case checked of
           Right _ -> do
             return ()
-          Left errs -> checkerDiagnostics doc version $ N.toList errs
+          Left errs -> checkerDiagnostics doc version errs
     Left e -> parserDiagnostic doc version e
 
 parserDiagnostic :: NormalizedUri -> TextDocumentVersion -> String -> LspM () ()
@@ -127,12 +127,10 @@ parserDiagnostic doc version message = do
         ]
   publishDiagnostics 1 doc version (partitionBySource diags)
 
-checkerDiagnostics :: (?globals :: Globals) => NormalizedUri -> TextDocumentVersion -> [CheckerError] -> LspM () ()
+checkerDiagnostics :: (?globals :: Globals) => NormalizedUri -> TextDocumentVersion -> NonEmpty CheckerError -> LspM () ()
 checkerDiagnostics doc version l = do
-  let diags = checkerErrorToDiagnostic doc version <$> l
-  case diags of
-    [] -> return ()
-    otherwise -> publishDiagnostics (Prelude.length diags) doc version (partitionBySource diags)
+  let diags = toList $ checkerErrorToDiagnostic doc version <$> l
+  publishDiagnostics (Prelude.length diags) doc version (partitionBySource diags)
 
 checkerErrorToDiagnostic :: (?globals :: Globals) => NormalizedUri -> TextDocumentVersion -> CheckerError -> Diagnostic
 checkerErrorToDiagnostic doc version e =
