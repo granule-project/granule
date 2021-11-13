@@ -15,6 +15,7 @@ executables:
     dependencies:
     - base
     - containers
+    - data-default
     - granule-interpreter
     - granule-frontend
     - Glob
