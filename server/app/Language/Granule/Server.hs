@@ -1,13 +1,20 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 module Language.Granule.Server where
 
+import Control.Concurrent.MVar (MVar, newMVar, readMVar, putMVar, modifyMVar)
 import Control.Exception (try, SomeException)
 import Control.Lens (to, (^.))
 import Control.Monad.IO.Class
+import Control.Monad.Reader (ReaderT, ask, runReaderT)
+import Control.Monad.State.Class (MonadState(..))
 import Control.Monad.Trans.Class
+import Data.Default (Default(..))
 import Data.Foldable (toList)
 import Data.List (isInfixOf)
 import Data.List.NonEmpty (NonEmpty)
@@ -35,6 +42,44 @@ import Language.Granule.Utils
 import qualified Language.Granule.Checker.Checker as Checker
 import qualified Language.Granule.Interpreter as Interpreter
 import qualified Language.Granule.Syntax.Parser as Parser
+
+data LsState = LsState { currentAst :: Maybe (AST () ()) }
+
+instance Default LsState where 
+  def = LsState { currentAst = Nothing }
+
+newLsStateVar :: IO (MVar LsState)
+newLsStateVar = newMVar def
+
+type LspS = LspT () (ReaderT (MVar LsState) IO)
+
+instance MonadState (Maybe (AST () ())) LspS where
+  get = getAst
+  put = putAst
+
+getLsState :: LspS LsState
+getLsState = do
+  state <- lift ask
+  liftIO $ readMVar state
+
+getAst :: LspS (Maybe (AST () ()))
+getAst = currentAst <$> getLsState
+
+putLsState :: LsState -> LspS ()
+putLsState s = do
+  state <- lift ask
+  liftIO $ putMVar state s
+
+putAst :: Maybe (AST () ()) -> LspS ()
+putAst a = modifyLsState $ \s -> s { currentAst = a }
+
+modifyLsState :: (LsState -> LsState) -> LspS ()
+modifyLsState m = do
+  state <- lift ask
+  liftIO $ modifyMVar state $ \s -> return (m s, ())
+
+runLspS :: LspS a -> MVar LsState -> LanguageContextEnv () -> IO a
+runLspS lsps state cfg = runReaderT (runLspT cfg lsps) state
 
 fromUri :: NormalizedUri -> FilePath
 fromUri = fromNormalizedFilePath . fromMaybe "<unknown>" . uriToNormalizedFilePath
@@ -98,22 +143,23 @@ getParseErrorRange s = if isInfixOf "parse error" s then
 numsFromString :: String -> [String]
 numsFromString s = words $ map (\x -> if x `elem` ("0123456789" :: String) then x else ' ') s
 
-validateGranuleCode :: (?globals :: Globals) => NormalizedUri -> TextDocumentVersion -> T.Text -> LspM () ()
+validateGranuleCode :: (?globals :: Globals) => NormalizedUri -> TextDocumentVersion -> T.Text -> LspS ()
 validateGranuleCode doc version content = let ?globals = ?globals {globalsSourceFilePath = Just $ fromUri doc} in do
   -- debugS $ "Validating: " <> T.pack (show doc) <> " ( " <> content <> ")"
+  put Nothing
   flushDiagnosticsBySource 0 (Just "grls")
-  pf <- lift $ serverParseFreshen (T.unpack content)
+  pf <- lift $ lift $ serverParseFreshen (T.unpack content)
   case pf of
     Right (ast, extensions) -> let ?globals = ?globals {globalsExtensions = extensions} in do
       -- debugS $ T.pack (show ast)
-      checked <- lift $ Checker.check ast
+      checked <- lift $ lift $ Checker.check ast
       case checked of
           Right _ -> do
-            return ()
+            put (Just ast)
           Left errs -> checkerDiagnostics doc version errs
     Left e -> parserDiagnostic doc version e
 
-parserDiagnostic :: NormalizedUri -> TextDocumentVersion -> String -> LspM () ()
+parserDiagnostic :: NormalizedUri -> TextDocumentVersion -> String -> LspS ()
 parserDiagnostic doc version message = do
   let diags = 
         [ Diagnostic
@@ -127,7 +173,7 @@ parserDiagnostic doc version message = do
         ]
   publishDiagnostics 1 doc version (partitionBySource diags)
 
-checkerDiagnostics :: (?globals :: Globals) => NormalizedUri -> TextDocumentVersion -> NonEmpty CheckerError -> LspM () ()
+checkerDiagnostics :: (?globals :: Globals) => NormalizedUri -> TextDocumentVersion -> NonEmpty CheckerError -> LspS ()
 checkerDiagnostics doc version l = do
   let diags = toList $ checkerErrorToDiagnostic doc version <$> l
   publishDiagnostics (Prelude.length diags) doc version (partitionBySource diags)
@@ -147,7 +193,7 @@ checkerErrorToDiagnostic doc version e =
           Nothing
           (Just (List []))
 
-handlers :: (?globals :: Globals) => Handlers (LspM ())
+handlers :: (?globals :: Globals) => Handlers LspS
 handlers = mconcat
   [ notificationHandler SInitialized $ \msg -> do
       return ()
@@ -173,12 +219,13 @@ handlers = mconcat
 main :: IO Int
 main = do
   globals <- Interpreter.getGrConfig >>= (return . Interpreter.grGlobals . snd)
+  state <- newLsStateVar
   runServer $ ServerDefinition
     { onConfigurationChange = const $ const $ Right ()
     , defaultConfig = ()
-    , doInitialize = \env _req -> pure $ Right env
+    , doInitialize = const . pure . Right
     , staticHandlers = (let ?globals = globals in handlers)
-    , interpretHandler = \env -> Iso (runLspT env) liftIO
+    , interpretHandler = \env -> Iso (\lsps -> runLspS lsps state env) liftIO
     , options = 
       defaultOptions
         {
