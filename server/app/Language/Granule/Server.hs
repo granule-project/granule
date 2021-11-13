@@ -152,10 +152,11 @@ validateGranuleCode doc version content = let ?globals = ?globals {globalsSource
   case pf of
     Right (ast, extensions) -> let ?globals = ?globals {globalsExtensions = extensions} in do
       -- debugS $ T.pack (show ast)
+      put (Just ast)
       checked <- lift $ lift $ Checker.check ast
       case checked of
           Right _ -> do
-            put (Just ast)
+            return ()
           Left errs -> checkerDiagnostics doc version errs
     Left e -> parserDiagnostic doc version e
 
