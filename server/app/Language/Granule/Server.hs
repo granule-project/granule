@@ -7,8 +7,6 @@
 
 module Language.Granule.Server where
 
-import Debug.Trace
-
 import Control.Concurrent.MVar (MVar, newMVar, readMVar, putMVar, modifyMVar)
 import Control.Exception (try, SomeException)
 import Control.Lens (to, (^.))
@@ -237,7 +235,7 @@ handlers = mconcat
       let query = req ^. L.params . L.query
       defns <- get
       let possible = M.lookup (T.unpack query) defns
-      case trace (show possible) possible of
+      case possible of
         Nothing -> responder $ Right $ List []
         Just d -> responder $ Right $ List [defToSymbol d]
   ]
