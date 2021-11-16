@@ -7,6 +7,8 @@
 
 module Language.Granule.Server where
 
+import Debug.Trace
+
 import Control.Concurrent.MVar (MVar, newMVar, readMVar, putMVar, modifyMVar)
 import Control.Exception (try, SomeException)
 import Control.Lens (to, (^.))
@@ -37,41 +39,42 @@ import qualified Language.LSP.Types.Lens as L
 import Language.Granule.Checker.Monad
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Utils
 import qualified Language.Granule.Checker.Checker as Checker
 import qualified Language.Granule.Interpreter as Interpreter
 import qualified Language.Granule.Syntax.Parser as Parser
 
-data LsState = LsState { currentAst :: Maybe (AST () ()) }
+data LsState = LsState { currentDefns :: M.Map String (Def () ()) }
 
 instance Default LsState where 
-  def = LsState { currentAst = Nothing }
+  def = LsState { currentDefns = M.empty }
 
 newLsStateVar :: IO (MVar LsState)
 newLsStateVar = newMVar def
 
 type LspS = LspT () (ReaderT (MVar LsState) IO)
 
-instance MonadState (Maybe (AST () ())) LspS where
-  get = getAst
-  put = putAst
+instance MonadState (M.Map String (Def () ())) LspS where
+  get = getDefns
+  put = putDefns
 
 getLsState :: LspS LsState
 getLsState = do
   state <- lift ask
   liftIO $ readMVar state
 
-getAst :: LspS (Maybe (AST () ()))
-getAst = currentAst <$> getLsState
+getDefns :: LspS (M.Map String (Def () ()))
+getDefns = currentDefns <$> getLsState
 
 putLsState :: LsState -> LspS ()
 putLsState s = do
   state <- lift ask
   liftIO $ putMVar state s
 
-putAst :: Maybe (AST () ()) -> LspS ()
-putAst a = modifyLsState $ \s -> s { currentAst = a }
+putDefns :: M.Map String (Def () ()) -> LspS ()
+putDefns d = modifyLsState $ \s -> s { currentDefns = d }
 
 modifyLsState :: (LsState -> LsState) -> LspS ()
 modifyLsState m = do
@@ -146,13 +149,15 @@ numsFromString s = words $ map (\x -> if x `elem` ("0123456789" :: String) then 
 validateGranuleCode :: (?globals :: Globals) => NormalizedUri -> TextDocumentVersion -> T.Text -> LspS ()
 validateGranuleCode doc version content = let ?globals = ?globals {globalsSourceFilePath = Just $ fromUri doc} in do
   -- debugS $ "Validating: " <> T.pack (show doc) <> " ( " <> content <> ")"
-  put Nothing
+  put M.empty
   flushDiagnosticsBySource 0 (Just "grls")
   pf <- lift $ lift $ serverParseFreshen (T.unpack content)
   case pf of
     Right (ast, extensions) -> let ?globals = ?globals {globalsExtensions = extensions} in do
       -- debugS $ T.pack (show ast)
-      put (Just ast)
+      let (AST _ defns _ _ _) = ast
+          defnIds = map (\x -> (pretty $ defId x, x)) defns
+      put (M.fromList defnIds)
       checked <- lift $ lift $ Checker.check ast
       case checked of
           Right _ -> do
@@ -194,6 +199,19 @@ checkerErrorToDiagnostic doc version e =
           Nothing
           (Just (List []))
 
+defToSymbol :: (?globals :: Globals) => Def () () -> SymbolInformation
+defToSymbol def = let loc = defSpan def in SymbolInformation
+  (T.pack $ pretty $ defId def)
+  (SkUnknown 0)
+  (Nothing)
+  (Nothing)
+  (Location 
+      (filePathToUri $ filename loc)
+      (Range
+        (let (x, y) = startPos loc in Position (x-1) (y-1))
+        (let (x, y) = endPos loc in Position (x-1) (y+1))))
+  (Nothing)
+
 handlers :: (?globals :: Globals) => Handlers LspS
 handlers = mconcat
   [ notificationHandler SInitialized $ \msg -> do
@@ -215,6 +233,13 @@ handlers = mconcat
         Just vf@(VirtualFile _ version _rope) -> do
           validateGranuleCode doc (Just version) (virtualFileText vf)
         _ -> debugS $ "No virtual file found for: " <> (T.pack (show msg))
+  , requestHandler SWorkspaceSymbol $ \req responder -> do
+      let query = req ^. L.params . L.query
+      defns <- get
+      let possible = M.lookup (T.unpack query) defns
+      case trace (show possible) possible of
+        Nothing -> responder $ Right $ List []
+        Just d -> responder $ Right $ List [defToSymbol d]
   ]
 
 main :: IO Int
