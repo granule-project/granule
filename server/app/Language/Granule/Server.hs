@@ -7,12 +7,13 @@
 
 module Language.Granule.Server where
 
-import Control.Concurrent.MVar (MVar, newMVar, readMVar, putMVar, modifyMVar)
+import Debug.Trace
+
+import Control.Concurrent.MVar (MVar, newMVar, readMVar, modifyMVar)
 import Control.Exception (try, SomeException)
 import Control.Lens (to, (^.))
 import Control.Monad.IO.Class
 import Control.Monad.Reader (ReaderT, ask, runReaderT)
-import Control.Monad.State.Class (MonadState(..))
 import Control.Monad.Trans.Class
 import Data.Default (Default(..))
 import Data.Foldable (toList)
@@ -44,19 +45,17 @@ import qualified Language.Granule.Checker.Checker as Checker
 import qualified Language.Granule.Interpreter as Interpreter
 import qualified Language.Granule.Syntax.Parser as Parser
 
-data LsState = LsState { currentDefns :: M.Map String (Def () ()) }
+data LsState = LsState { currentDefns :: M.Map String (Def () ()),
+                         currentADTs :: M.Map String DataDecl }
 
 instance Default LsState where 
-  def = LsState { currentDefns = M.empty }
+  def = LsState { currentDefns = M.empty,
+                  currentADTs = M.empty }
 
 newLsStateVar :: IO (MVar LsState)
 newLsStateVar = newMVar def
 
 type LspS = LspT () (ReaderT (MVar LsState) IO)
-
-instance MonadState (M.Map String (Def () ())) LspS where
-  get = getDefns
-  put = putDefns
 
 getLsState :: LspS LsState
 getLsState = do
@@ -66,13 +65,14 @@ getLsState = do
 getDefns :: LspS (M.Map String (Def () ()))
 getDefns = currentDefns <$> getLsState
 
-putLsState :: LsState -> LspS ()
-putLsState s = do
-  state <- lift ask
-  liftIO $ putMVar state s
+getADTs :: LspS (M.Map String DataDecl)
+getADTs = currentADTs <$> getLsState
 
 putDefns :: M.Map String (Def () ()) -> LspS ()
 putDefns d = modifyLsState $ \s -> s { currentDefns = d }
+
+putADTs :: M.Map String DataDecl -> LspS ()
+putADTs d = modifyLsState $ \s -> s { currentADTs = d }
 
 modifyLsState :: (LsState -> LsState) -> LspS ()
 modifyLsState m = do
@@ -147,7 +147,7 @@ numsFromString s = words $ map (\x -> if x `elem` ("0123456789" :: String) then 
 validateGranuleCode :: (?globals :: Globals) => NormalizedUri -> TextDocumentVersion -> T.Text -> LspS ()
 validateGranuleCode doc version content = let ?globals = ?globals {globalsSourceFilePath = Just $ fromUri doc} in do
   -- debugS $ "Validating: " <> T.pack (show doc) <> " ( " <> content <> ")"
-  put M.empty
+  modifyLsState (\x -> def)
   flushDiagnosticsBySource 0 (Just "grls")
   pf <- lift $ lift $ serverParseFreshen (T.unpack content)
   case pf of
@@ -155,11 +155,13 @@ validateGranuleCode doc version content = let ?globals = ?globals {globalsSource
       -- debugS $ T.pack (show ast)
       let (AST _ defns _ _ _) = ast
           defnIds = map (\x -> (pretty $ defId x, x)) defns
-      put (M.fromList defnIds)
+      putDefns (M.fromList defnIds)
       checked <- lift $ lift $ Checker.check ast
       case checked of
           Right _ -> do
-            return ()
+            let (AST dd _ _ _ _) = ast
+                declIds = map (\x -> (pretty $ dataDeclId x, x)) dd
+            putADTs (M.fromList declIds)
           Left errs -> checkerDiagnostics doc version errs
     Left e -> parserDiagnostic doc version e
 
@@ -197,9 +199,9 @@ checkerErrorToDiagnostic doc version e =
           Nothing
           (Just (List []))
 
-defToSymbol :: (?globals :: Globals) => Def () () -> SymbolInformation
-defToSymbol def = let loc = defSpan def in SymbolInformation
-  (T.pack $ pretty $ defId def)
+objectToSymbol :: (?globals :: Globals) => (a -> Span) -> (a -> Id) -> a -> SymbolInformation
+objectToSymbol objSpan objId obj = let loc = objSpan obj in SymbolInformation
+  (T.pack $ pretty $ objId obj)
   (SkUnknown 0)
   (Nothing)
   (Nothing)
@@ -215,6 +217,8 @@ handlers = mconcat
   [ notificationHandler SInitialized $ \msg -> do
       return ()
   , notificationHandler STextDocumentDidClose $ \msg -> do
+      return ()
+  , notificationHandler SCancelRequest $ \msg -> do
       return ()
   , notificationHandler STextDocumentDidSave $ \msg -> do
       let doc = msg ^. L.params . L.textDocument . L.uri
@@ -232,12 +236,27 @@ handlers = mconcat
           validateGranuleCode doc (Just version) (virtualFileText vf)
         _ -> debugS $ "No virtual file found for: " <> (T.pack (show msg))
   , requestHandler SWorkspaceSymbol $ \req responder -> do
-      let query = req ^. L.params . L.query
-      defns <- get
-      let possible = M.lookup (T.unpack query) defns
-      case possible of
-        Nothing -> responder $ Right $ List []
-        Just d -> responder $ Right $ List [defToSymbol d]
+      let query = T.unpack $ req ^. L.params . L.query
+      defns <- getDefns
+      let possibleDefn = M.lookup query defns
+      case possibleDefn of
+        Nothing -> do
+          decls <- getADTs
+          let possibleDecl = M.lookup query decls
+          case possibleDecl of
+            Nothing -> do
+              let constrs = concatMap (\x -> dataDeclDataConstrs x) decls
+                  constrIds = M.fromList $ map (\x -> (pretty $ dataConstrId x, x)) constrs
+                  possibleConstr = M.lookup query constrIds
+              case possibleConstr of
+                Nothing -> responder $ Right $ List []
+                Just c -> responder $ Right $ List [objectToSymbol dataConstrSpan dataConstrId c]
+            Just d -> responder $ Right $ List [objectToSymbol dataDeclSpan dataDeclId d]
+        Just d -> responder $ Right $ List [objectToSymbol defSpan defId d]
+  , requestHandler STextDocumentDefinition $ \req responder -> do
+      let DefinitionParams doc _ _ _ = req ^. L.params
+          uri = doc  ^. L.uri
+      trace (show uri) return ()
   ]
 
 main :: IO Int
