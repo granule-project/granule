@@ -7,8 +7,6 @@
 
 module Language.Granule.Server where
 
-import Debug.Trace
-
 import Control.Concurrent.MVar (MVar, newMVar, readMVar, modifyMVar)
 import Control.Exception (try, SomeException)
 import Control.Lens (to, (^.))
@@ -212,6 +210,23 @@ objectToSymbol objSpan objId obj = let loc = objSpan obj in SymbolInformation
         (let (x, y) = endPos loc in Position (x-1) (y+1))))
   (Nothing)
 
+posInSpan :: Position -> Span -> Bool
+posInSpan (Position l c) s = let
+  (testLine, testColumn) = (l+1, c+1)
+  (startLine, startColumn) = startPos s
+  (endLine, endColumn) = endPos s
+  in (startLine < testLine && testLine < endLine) || (startLine == testLine && startColumn <= testColumn) || (testLine == endLine && testColumn <= endColumn)
+
+spanToLocationLink :: Span -> LocationLink
+spanToLocationLink s = let range = Range
+                            (let (x, y) = startPos s in Position (x-1) (y-1))
+                            (let (x, y) = endPos s in Position (x-1) (y+1))
+  in LocationLink
+    (Nothing)
+    (filePathToUri $ filename s)
+    (range)
+    (range)
+    
 handlers :: (?globals :: Globals) => Handlers LspS
 handlers = mconcat
   [ notificationHandler SInitialized $ \msg -> do
@@ -254,9 +269,13 @@ handlers = mconcat
             Just d -> responder $ Right $ List [objectToSymbol dataDeclSpan dataDeclId d]
         Just d -> responder $ Right $ List [objectToSymbol defSpan defId d]
   , requestHandler STextDocumentDefinition $ \req responder -> do
-      let DefinitionParams doc _ _ _ = req ^. L.params
-          uri = doc  ^. L.uri
-      trace (show uri) return ()
+      let DefinitionParams _ pos _ _ = req ^. L.params
+      defns <- getDefns
+      let spans = map (\x -> defSpan x) $ M.elems defns
+          possibleSpan = filter (\s -> posInSpan pos s) spans
+      case possibleSpan of
+        [] -> responder $ Right $ InR $ InR $ List []
+        s:_ -> responder $ Right $ InR $ InR $ List [spanToLocationLink s]
   ]
 
 main :: IO Int
