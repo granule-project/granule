@@ -189,7 +189,7 @@ checkerErrorToDiagnostic doc version e =
       (endLine, endCol) = endPos span
       message = title e ++ ":\n" ++ msg e
       in Diagnostic
-          (Range (Position (startLine-1) (startCol-1)) (Position (endLine-1) (endCol+1)))
+          (Range (Position (startLine-1) (startCol-1)) (Position (endLine-1) endCol))
           (Just DsError)
           Nothing
           (Just "grls")
@@ -207,7 +207,7 @@ objectToSymbol objSpan objId obj = let loc = objSpan obj in SymbolInformation
       (filePathToUri $ filename loc)
       (Range
         (let (x, y) = startPos loc in Position (x-1) (y-1))
-        (let (x, y) = endPos loc in Position (x-1) (y+1))))
+        (let (x, y) = endPos loc in Position (x-1) (y-1))))
   (Nothing)
 
 posInSpan :: Position -> Span -> Bool
@@ -217,15 +217,24 @@ posInSpan (Position l c) s = let
   (endLine, endColumn) = endPos s
   in (startLine < testLine && testLine < endLine) || (startLine == testLine && startColumn <= testColumn) || (testLine == endLine && testColumn <= endColumn)
 
-spanToLocationLink :: Span -> LocationLink
-spanToLocationLink s = let range = Range
-                            (let (x, y) = startPos s in Position (x-1) (y-1))
-                            (let (x, y) = endPos s in Position (x-1) (y+1))
-  in LocationLink
-    (Nothing)
+spanToLocation :: Span -> Location
+spanToLocation s = Location
     (filePathToUri $ filename s)
-    (range)
-    (range)
+    (Range
+      (let (x, y) = startPos s in Position (x-1) (y-1))
+      (let (x, y) = endPos s in Position (x-1) (y-1)))
+
+getWordAtPosition :: T.Text -> Position -> Maybe String
+getWordAtPosition t (Position l c) = let ls = lines (T.unpack t) in
+  if Prelude.length ls < l then Nothing else let
+    targetLine = ls!!l in
+      if Prelude.length targetLine < c then Nothing else
+        Just $ getWordFromString targetLine c ""
+
+getWordFromString :: String -> Int -> String -> String
+getWordFromString [] _ acc = acc
+getWordFromString (x:xs) 0 acc = if x == ' ' then acc else getWordFromString xs 0 (acc ++ [x])
+getWordFromString (x:xs) n acc = if x == ' ' then getWordFromString xs (n-1) [] else getWordFromString xs (n-1) (acc ++ [x])
     
 handlers :: (?globals :: Globals) => Handlers LspS
 handlers = mconcat
@@ -269,13 +278,24 @@ handlers = mconcat
             Just d -> responder $ Right $ List [objectToSymbol dataDeclSpan dataDeclId d]
         Just d -> responder $ Right $ List [objectToSymbol defSpan defId d]
   , requestHandler STextDocumentDefinition $ \req responder -> do
-      let DefinitionParams _ pos _ _ = req ^. L.params
-      defns <- getDefns
-      let spans = map (\x -> defSpan x) $ M.elems defns
-          possibleSpan = filter (\s -> posInSpan pos s) spans
-      case possibleSpan of
-        [] -> responder $ Right $ InR $ InR $ List []
-        s:_ -> responder $ Right $ InR $ InR $ List [spanToLocationLink s]
+      let params = req ^. L.params
+          pos = params ^. L.position
+          doc = params ^. L.textDocument . L.uri . to toNormalizedUri
+      mdoc <- getVirtualFile doc
+      case mdoc of
+        Just vf@(VirtualFile _ version _rope) -> do
+          let t = virtualFileText vf
+              query = getWordAtPosition t pos
+          validateGranuleCode doc (Just version) t
+          case query of
+            Nothing -> debugS $ "This should be impossible!"
+            Just q -> do
+              defns <- getDefns
+              let possibleDefn = M.lookup q defns
+              case possibleDefn of
+                Nothing -> responder $ Right $ InR $ InL $ List []
+                Just d -> responder $ Right $ InR $ InL $ List [spanToLocation $ defSpan d]
+        _ -> debugS $ "No virtual file found for: " <> (T.pack (show doc))
   ]
 
 main :: IO Int
