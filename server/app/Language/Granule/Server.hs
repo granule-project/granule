@@ -293,7 +293,18 @@ handlers = mconcat
               defns <- getDefns
               let possibleDefn = M.lookup q defns
               case possibleDefn of
-                Nothing -> responder $ Right $ InR $ InL $ List []
+                Nothing -> do
+                  decls <- getADTs
+                  let possibleDecl = M.lookup q decls
+                  case possibleDecl of
+                    Nothing -> do
+                      let constrs = concatMap (\x -> dataDeclDataConstrs x) decls
+                          constrIds = M.fromList $ map (\x -> (pretty $ dataConstrId x, x)) constrs
+                          possibleConstr = M.lookup q constrIds
+                      case possibleConstr of
+                        Nothing -> responder $ Right $ InR $ InL $ List []
+                        Just c -> responder $ Right $ InR $ InL $ List [spanToLocation $ dataConstrSpan c]
+                    Just d -> responder $ Right $ InR $ InL $ List [spanToLocation $ dataDeclSpan d]
                 Just d -> responder $ Right $ InR $ InL $ List [spanToLocation $ defSpan d]
         _ -> debugS $ "No virtual file found for: " <> (T.pack (show doc))
   ]
