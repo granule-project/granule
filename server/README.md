@@ -3,7 +3,9 @@
 The Granule language server allows for information from the Granule compiler to be accessed and worked with 'live', during development. It implements (a subset of!) the [Language Server Protocol](https://microsoft.github.io/language-server-protocol).
 
 Currently, the following features are implemented:
-* Live error feedback from the lexer, parser and typechecker
+* Live error feedback and highlighting from the lexer, parser and typechecker
+* Search for symbols (definitions, types, constructors) in the current/imported modules by name
+* Jump to function definitions and data type declarations in the current/imported modules
 * More to come!
 
 ### Supported editors
