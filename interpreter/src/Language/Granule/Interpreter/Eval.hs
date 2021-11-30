@@ -37,6 +37,11 @@ import qualified Data.Array.IO as MA
 import System.IO (hFlush, stdout, stderr)
 import qualified System.IO as SIO
 
+import Foreign.Marshal.Array
+import Foreign.Ptr
+import Foreign.Storable
+import Foreign.Marshal.Alloc
+
 import System.IO.Error (mkIOError)
 import Data.Bifunctor
 
@@ -61,7 +66,7 @@ data Runtime a =
   | PureWrapper (IO (Expr (Runtime a) ()))
 
   -- | Mutable arrays
-  | FloatArray (MA.IOArray Int Double)
+  | FloatArray { grLength :: Int, grPtr :: Ptr Double, grArr :: Maybe (MA.IOArray Int Double) }
 
 
 diamondConstr :: IO (Expr (Runtime ()) ()) -> RValue
@@ -78,7 +83,7 @@ instance Show (Runtime a) where
   show (PrimitiveClosure _) = "Some primitive closure"
   show (Handle _) = "Some handle"
   show (PureWrapper _) = "<suspended IO>"
-  show (FloatArray arr) = "<array>"
+  show (FloatArray _ _ _) = "<array>"
 
 instance Pretty (Runtime a) where
   pretty = show
@@ -365,6 +370,9 @@ builtIns =
   , (mkId "showInt",    Ext () $ Primitive $ \n -> case n of
                               NumInt n -> StringLiteral . pack . show $ n
                               n        -> error $ show n)
+  , (mkId "showFloat",    Ext () $ Primitive $ \n -> case n of
+                              NumFloat n -> StringLiteral . pack . show $ n
+                              n        -> error $ show n)
   , (mkId "fromStdin", diamondConstr $ do
       when testing (error "trying to read stdin while testing")
       putStr "> "
@@ -383,7 +391,7 @@ builtIns =
                                 diamondConstr (do
                                   when testing (error "trying to write `toStdout` while testing")
                                   Text.putStr s
-                                  return $ (Val nullSpan () False (Constr () (mkId "()") []))))
+                                  return $ Val nullSpan () False (Constr () (mkId "()") [])))
   , (mkId "toStderr", Ext () $ Primitive $ \(StringLiteral s) ->
                                 diamondConstr (do
                                   when testing (error "trying to write `toStderr` while testing")
@@ -559,7 +567,8 @@ builtIns =
           rval -> error $ "Runtime exception: trying to open from a non string filename" <> show rval))
       where
         mode = case internalName m of
-            "ReadMode" -> SIO.ReadMode
+            "ReadMode" -> S
+            IO.ReadMode
             "WriteMode" -> SIO.WriteMode
             "AppendMode" -> SIO.AppendMode
             "ReadWriteMode" -> SIO.ReadWriteMode
