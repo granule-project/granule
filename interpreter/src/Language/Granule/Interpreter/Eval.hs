@@ -30,17 +30,11 @@ import Control.Exception (catch, throwIO, IOException)
 import GHC.IO.Exception (IOErrorType( OtherError ))
 import qualified Control.Concurrent as C (forkIO)
 import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, Chan)
--- import Foreign.Marshal.Alloc (free, malloc)
--- import Foreign.Ptr (castPtr)
--- import Foreign.Storable (peek, poke)
 import qualified Data.Array.IO as MA
 import System.IO (hFlush, stdout, stderr)
 import qualified System.IO as SIO
 
-import Foreign.Marshal.Array
 import Foreign.Ptr
-import Foreign.Storable
-import Foreign.Marshal.Alloc
 
 import System.IO.Error (mkIOError)
 import Data.Bifunctor
@@ -497,13 +491,13 @@ builtIns =
     uniqueBind :: (?globals :: Globals) => Ctxt RValue -> RValue -> RValue
     uniqueBind ctxt f = Ext () $ Primitive $ \(Promote () v) ->
       case v of
-        (Val nullSpan () False (Ext () (FloatArray arr))) -> 
+        (Val nullSpan () False (Ext () (FloatArray len _ptr (Just arr)))) ->
           unsafePerformIO $ do
           copy <- MA.mapArray id arr
           return $ unsafePerformIO $ evalIn ctxt
               (App nullSpan () False 
                 (Val nullSpan () False f) 
-                (Val nullSpan () False (Nec () (Val nullSpan () False (Ext () (FloatArray copy))))))
+                (Val nullSpan () False (Nec () (Val nullSpan () False (Ext () (FloatArray len nullPtr (Just copy)))))))
         otherwise ->
           unsafePerformIO $ evalIn ctxt 
             (App nullSpan () False 
@@ -567,8 +561,7 @@ builtIns =
           rval -> error $ "Runtime exception: trying to open from a non string filename" <> show rval))
       where
         mode = case internalName m of
-            "ReadMode" -> S
-            IO.ReadMode
+            "ReadMode" -> SIO.ReadMode
             "WriteMode" -> SIO.WriteMode
             "AppendMode" -> SIO.AppendMode
             "ReadWriteMode" -> SIO.ReadWriteMode
@@ -600,56 +593,56 @@ builtIns =
 
     {-# NOINLINE newFloatArray #-}
     newFloatArray :: RValue -> RValue
-    newFloatArray = \(NumInt i) -> Nec () (Val nullSpan () False $ Ext () $ FloatArray (unsafePerformIO (MA.newArray_ (0,i))))
+    newFloatArray = \(NumInt i) -> Nec () (Val nullSpan () False $ Ext () $ FloatArray (i+1) nullPtr $ Just (unsafePerformIO (MA.newArray_ (0,i))))
 
     {-# NOINLINE newFloatArray' #-}
     newFloatArray' :: RValue -> RValue
-    newFloatArray' = \(NumInt i) -> Ext () $ FloatArray (unsafePerformIO (MA.newArray_ (0,i)))
+    newFloatArray' = \(NumInt i) -> Ext () $ FloatArray (i+1) nullPtr $ Just $ unsafePerformIO (MA.newArray_ (0,i))
 
     {-# NOINLINE readFloatArray #-}
     readFloatArray :: RValue -> RValue
-    readFloatArray = \(Nec () (Val _ _ _ (Ext () (FloatArray arr)))) -> Ext () $ Primitive $ \(NumInt i) ->
+    readFloatArray = \(Nec () (Val _ _ _ (Ext () (FloatArray len _ptr (Just arr))))) -> Ext () $ Primitive $ \(NumInt i) ->
       unsafePerformIO $ do e <- MA.readArray arr i
-                           return (Constr () (mkId ",") [NumFloat e, Nec () (Val nullSpan () False $ Ext () (FloatArray arr))])
+                           return (Constr () (mkId ",") [NumFloat e, Nec () (Val nullSpan () False $ Ext () (FloatArray len nullPtr (Just arr)))])
 
     {-# NOINLINE readFloatArray' #-}
     readFloatArray' :: RValue -> RValue
-    readFloatArray' = \(Ext () (FloatArray arr)) -> Ext () $ Primitive $ \(NumInt i) ->
+    readFloatArray' = \(Ext () (FloatArray len _ptr (Just arr))) -> Ext () $ Primitive $ \(NumInt i) ->
       unsafePerformIO $ do e <- MA.readArray arr i
-                           return (Constr () (mkId ",") [NumFloat e, Ext () $ FloatArray arr])
+                           return (Constr () (mkId ",") [NumFloat e, Ext () $ FloatArray len nullPtr (Just arr)])
 
     lengthFloatArray :: RValue -> RValue
-    lengthFloatArray = \(Nec () (Val _ _ _ (Ext () (FloatArray arr)))) -> Ext () $ Primitive $ \(NumInt i) ->
+    lengthFloatArray = \(Nec () (Val _ _ _ (Ext () (FloatArray len _ptr (Just arr))))) -> Ext () $ Primitive $ \(NumInt i) ->
       unsafePerformIO $ do (_,end) <- MA.getBounds arr
-                           return (Constr () (mkId ",") [NumInt end, Nec () (Val nullSpan () False $ Ext () $ FloatArray arr)])
+                           return (Constr () (mkId ",") [NumInt end, Nec () (Val nullSpan () False $ Ext () $ FloatArray len nullPtr (Just arr))])
 
     lengthFloatArray' :: RValue -> RValue
-    lengthFloatArray' = \(Ext () (FloatArray arr)) -> Ext () $ Primitive $ \(NumInt i) ->
+    lengthFloatArray' = \(Ext () (FloatArray len _ptr  (Just arr))) -> Ext () $ Primitive $ \(NumInt i) ->
       unsafePerformIO $ do (_,end) <- MA.getBounds arr
-                           return (Constr () (mkId ",") [NumInt end, Ext () $ FloatArray arr])
+                           return (Constr () (mkId ",") [NumInt end, Ext () $ FloatArray len nullPtr (Just arr)])
 
     {-# NOINLINE writeFloatArray #-}
     writeFloatArray :: RValue -> RValue
-    writeFloatArray = \(Nec _ (Val _ _ _ (Ext _ (FloatArray arr)))) ->
+    writeFloatArray = \(Nec _ (Val _ _ _ (Ext _ (FloatArray len _ptr (Just arr))))) ->
       Ext () $ Primitive $ \(NumInt i) ->
       Ext () $ Primitive $ \(NumFloat v) ->
-      Nec () $ Val nullSpan () False $ Ext () $ FloatArray $ unsafePerformIO $
+      Nec () $ Val nullSpan () False $ Ext () $ FloatArray len nullPtr $ Just $ unsafePerformIO $
         do () <- MA.writeArray arr i v
            return arr
 
     {-# NOINLINE writeFloatArray' #-}
     writeFloatArray' :: RValue -> RValue
-    writeFloatArray' = \(Ext () (FloatArray arr)) ->
+    writeFloatArray' = \(Ext () (FloatArray len _ptr (Just arr))) ->
       Ext () $ Primitive $ \(NumInt i) ->
       Ext () $ Primitive $ \(NumFloat v) ->
-        Ext () $ FloatArray $ unsafePerformIO $
+        Ext () $ FloatArray len nullPtr $ Just $ unsafePerformIO $
            do arr' <- MA.mapArray id arr
               () <- MA.writeArray arr' i v
               return arr'
 
     {-# NOINLINE deleteFloatArray #-}
     deleteFloatArray :: RValue -> RValue
-    deleteFloatArray = \(Nec _ (Val _ _ _ (Ext _ (FloatArray arr)))) ->
+    deleteFloatArray = \(Nec _ (Val _ _ _ (Ext _ (FloatArray len _ptr (Just arr))))) ->
       case (unsafePerformIO $ do
               arr' <- MA.mapArray (const undefined) arr
               return ()) of

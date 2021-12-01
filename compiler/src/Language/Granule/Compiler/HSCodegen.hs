@@ -131,6 +131,7 @@ cgType (GrType.TyInfix t1 t2 t3) = return mkUnit
 cgType (GrType.TySet p l_t) = return mkUnit
 cgType (GrType.TyCase t l_p_tt) = unsupported "cgType: tycase not implemented"
 cgType (GrType.TySig t t2) = unsupported "cgType: tysig not implemented"
+cgType (GrType.Star t t2) = unsupported "cgType: star not implemented"
 
 isTupleType :: GrType.Type -> Bool
 isTupleType (GrType.TyApp (GrType.TyCon id) _) = id == Id "," ","
