@@ -20,6 +20,7 @@ import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Context
 import Language.Granule.Utils
+import Language.Granule.Runtime as RT
 
 import Data.Text (cons, pack, uncons, unpack, snoc, unsnoc)
 import qualified Data.Text.IO as Text
@@ -30,11 +31,8 @@ import Control.Exception (catch, throwIO, IOException)
 import GHC.IO.Exception (IOErrorType( OtherError ))
 import qualified Control.Concurrent as C (forkIO)
 import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, Chan)
-import qualified Data.Array.IO as MA
 import System.IO (hFlush, stdout, stderr)
 import qualified System.IO as SIO
-
-import Foreign.Ptr
 
 import System.IO.Error (mkIOError)
 import Data.Bifunctor
@@ -59,8 +57,8 @@ data Runtime a =
   -- | Delayed side effects wrapper
   | PureWrapper (IO (Expr (Runtime a) ()))
 
-  -- | Mutable arrays
-  | FloatArray { grLength :: Int, grPtr :: Ptr Double, grArr :: Maybe (MA.IOArray Int Double) }
+  -- | Data managed by the runtime
+  | Runtime RuntimeData
 
 
 diamondConstr :: IO (Expr (Runtime ()) ()) -> RValue
@@ -77,7 +75,7 @@ instance Show (Runtime a) where
   show (PrimitiveClosure _) = "Some primitive closure"
   show (Handle _) = "Some handle"
   show (PureWrapper _) = "<suspended IO>"
-  show (FloatArray _ _ _) = "<array>"
+  show (Runtime _) = "<array>"
 
 instance Pretty (Runtime a) where
   pretty = show
@@ -491,13 +489,12 @@ builtIns =
     uniqueBind :: (?globals :: Globals) => Ctxt RValue -> RValue -> RValue
     uniqueBind ctxt f = Ext () $ Primitive $ \(Promote () v) ->
       case v of
-        (Val nullSpan () False (Ext () (FloatArray len _ptr (Just arr)))) ->
-          unsafePerformIO $ do
-          copy <- MA.mapArray id arr
-          return $ unsafePerformIO $ evalIn ctxt
+        (Val nullSpan () False (Ext () (Runtime fa))) ->
+          let copy = copyFloatArray' fa in
+          unsafePerformIO $ evalIn ctxt
               (App nullSpan () False 
                 (Val nullSpan () False f) 
-                (Val nullSpan () False (Nec () (Val nullSpan () False (Ext () (FloatArray len nullPtr (Just copy)))))))
+                (Val nullSpan () False (Nec () (Val nullSpan () False (Ext () (Runtime copy))))))
         otherwise ->
           unsafePerformIO $ evalIn ctxt 
             (App nullSpan () False 
@@ -591,61 +588,47 @@ builtIns =
          return $ valExpr (Constr () (mkId "()") [])
     closeHandle _ = error $ "Runtime exception: trying to close a non handle value"
 
-    {-# NOINLINE newFloatArray #-}
     newFloatArray :: RValue -> RValue
-    newFloatArray = \(NumInt i) -> Nec () (Val nullSpan () False $ Ext () $ FloatArray (i+1) nullPtr $ Just (unsafePerformIO (MA.newArray_ (0,i))))
+    newFloatArray = \(NumInt i) -> Nec () (Val nullSpan () False $ Ext () $ Runtime $ RT.newFloatArray i)
 
-    {-# NOINLINE newFloatArray' #-}
     newFloatArray' :: RValue -> RValue
-    newFloatArray' = \(NumInt i) -> Ext () $ FloatArray (i+1) nullPtr $ Just $ unsafePerformIO (MA.newArray_ (0,i))
+    newFloatArray' = \(NumInt i) -> Ext () $ Runtime $ RT.newFloatArray' i
 
-    {-# NOINLINE readFloatArray #-}
     readFloatArray :: RValue -> RValue
-    readFloatArray = \(Nec () (Val _ _ _ (Ext () (FloatArray len _ptr (Just arr))))) -> Ext () $ Primitive $ \(NumInt i) ->
-      unsafePerformIO $ do e <- MA.readArray arr i
-                           return (Constr () (mkId ",") [NumFloat e, Nec () (Val nullSpan () False $ Ext () (FloatArray len nullPtr (Just arr)))])
+    readFloatArray = \(Nec () (Val _ _ _ (Ext () (Runtime fa)))) -> Ext () $ Primitive $ \(NumInt i) ->
+      let (e,fa') = RT.readFloatArray fa i
+      in Constr () (mkId ",") [NumFloat e, Nec () (Val nullSpan () False $ Ext () $ Runtime fa')]
 
-    {-# NOINLINE readFloatArray' #-}
     readFloatArray' :: RValue -> RValue
-    readFloatArray' = \(Ext () (FloatArray len _ptr (Just arr))) -> Ext () $ Primitive $ \(NumInt i) ->
-      unsafePerformIO $ do e <- MA.readArray arr i
-                           return (Constr () (mkId ",") [NumFloat e, Ext () $ FloatArray len nullPtr (Just arr)])
+    readFloatArray' = \(Ext () (Runtime fa)) -> Ext () $ Primitive $ \(NumInt i) ->
+      let (e,fa') = RT.readFloatArray' fa i
+      in Constr () (mkId ",") [NumFloat e, Ext () $ Runtime fa']
 
     lengthFloatArray :: RValue -> RValue
-    lengthFloatArray = \(Nec () (Val _ _ _ (Ext () (FloatArray len _ptr (Just arr))))) -> Ext () $ Primitive $ \(NumInt i) ->
-      unsafePerformIO $ do (_,end) <- MA.getBounds arr
-                           return (Constr () (mkId ",") [NumInt end, Nec () (Val nullSpan () False $ Ext () $ FloatArray len nullPtr (Just arr))])
+    lengthFloatArray = \(Nec () (Val _ _ _ (Ext () (Runtime fa)))) -> Ext () $ Primitive $ \(NumInt i) ->
+      let (e,fa') = RT.lengthFloatArray fa
+      in Constr () (mkId ",") [NumInt e, Nec () (Val nullSpan () False $ Ext () $ Runtime fa')]
 
     lengthFloatArray' :: RValue -> RValue
-    lengthFloatArray' = \(Ext () (FloatArray len _ptr  (Just arr))) -> Ext () $ Primitive $ \(NumInt i) ->
-      unsafePerformIO $ do (_,end) <- MA.getBounds arr
-                           return (Constr () (mkId ",") [NumInt end, Ext () $ FloatArray len nullPtr (Just arr)])
+    lengthFloatArray' = \(Ext () (Runtime fa)) -> Ext () $ Primitive $ \(NumInt i) ->
+      let (e,fa') = RT.lengthFloatArray fa
+      in Constr () (mkId ",") [NumInt e, Ext () $ Runtime fa']
 
-    {-# NOINLINE writeFloatArray #-}
     writeFloatArray :: RValue -> RValue
-    writeFloatArray = \(Nec _ (Val _ _ _ (Ext _ (FloatArray len _ptr (Just arr))))) ->
+    writeFloatArray = \(Nec _ (Val _ _ _ (Ext _ (Runtime fa)))) ->
       Ext () $ Primitive $ \(NumInt i) ->
       Ext () $ Primitive $ \(NumFloat v) ->
-      Nec () $ Val nullSpan () False $ Ext () $ FloatArray len nullPtr $ Just $ unsafePerformIO $
-        do () <- MA.writeArray arr i v
-           return arr
+      Nec () $ Val nullSpan () False $ Ext () $ Runtime $ RT.writeFloatArray fa i v
 
-    {-# NOINLINE writeFloatArray' #-}
     writeFloatArray' :: RValue -> RValue
-    writeFloatArray' = \(Ext () (FloatArray len _ptr (Just arr))) ->
+    writeFloatArray' = \(Ext () (Runtime fa)) ->
       Ext () $ Primitive $ \(NumInt i) ->
       Ext () $ Primitive $ \(NumFloat v) ->
-        Ext () $ FloatArray len nullPtr $ Just $ unsafePerformIO $
-           do arr' <- MA.mapArray id arr
-              () <- MA.writeArray arr' i v
-              return arr'
+      Ext () $ Runtime $ RT.writeFloatArray' fa i v
 
-    {-# NOINLINE deleteFloatArray #-}
     deleteFloatArray :: RValue -> RValue
-    deleteFloatArray = \(Nec _ (Val _ _ _ (Ext _ (FloatArray len _ptr (Just arr))))) ->
-      case (unsafePerformIO $ do
-              arr' <- MA.mapArray (const undefined) arr
-              return ()) of
+    deleteFloatArray = \(Nec _ (Val _ _ _ (Ext _ (Runtime fa)))) ->
+      case (RT.deleteFloatArray fa) of
         () -> Constr () (mkId "()") []
 
 evalDefs :: (?globals :: Globals) => Ctxt RValue -> [Def (Runtime ()) ()] -> IO (Ctxt RValue)

@@ -13,6 +13,7 @@ dependencies:
 - gitrev
 - Glob
 - granule-frontend
+- granule-runtime
 - mtl >=2.2.1
 - optparse-applicative
 - text
