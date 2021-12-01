@@ -5,13 +5,13 @@
 module Language.Granule.Runtime
   (
     -- Granule runtime-specific data structures
-    FloatArray(..), BenchList(..)
+    FloatArray(..), BenchList(..), RuntimeData
 
     -- Granule runtime-specific procedures
   , mkIOBenchMain,fromStdin,toStdout,toStderr,readInt,showChar,intToFloat
   , showInt,showFloat
   , newFloatArray,newFloatArray',writeFloatArray,writeFloatArray'
-  , readFloatArray,readFloatArray',lengthFloatArray,deleteFloatArray
+  , readFloatArray,readFloatArray',lengthFloatArray,deleteFloatArray,copyFloatArray'
   , uniqueReturn,uniqueBind,uniquePush,uniquePull
 
   -- Re-exported from Prelude
@@ -30,8 +30,15 @@ import qualified Data.Array.IO as MA
 import Criterion.Main ( defaultMain, bench, bgroup, nfAppIO )
 import System.IO.Silently ( silence )
 import Prelude
-    ( String, Int, IO, Float, Maybe(..), Show(..), Char, getLine, putStr, read
+    ( String, Int, IO, Double, Maybe(..), Show(..), Char, getLine, putStr, read
     , (<$>), fromIntegral, ($), Monad(..), error, (>), (++), id, Num (..), (.) )
+
+
+-- ^ Eventually this can be expanded with other kinds of runtime-managed data
+type RuntimeData = FloatArray
+
+-- ^ Granule calls doubles floats
+type Float = Double
 
 --------------------------------------------------------------------------------
 -- Benchmarking
@@ -156,6 +163,16 @@ lengthFloatArray a = (grLength a, a)
 deleteFloatArray :: FloatArray -> ()
 deleteFloatArray FloatArray{grPtr} =
   unsafePerformIO $ free grPtr
+
+{-# NOINLINE copyFloatArray' #-}
+copyFloatArray' :: FloatArray -> FloatArray
+copyFloatArray' a =
+  case grArr a of
+    Nothing -> error "expected non-unique array"
+    Just arr -> unsafePerformIO $ do
+      arr' <- MA.mapArray id arr
+      return $ FloatArray (grLength a) nullPtr (Just arr')
+
 
 --------------------------------------------------------------------------------
 -- Uniqueness monadic operations
