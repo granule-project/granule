@@ -12,7 +12,7 @@ module Language.Granule.Runtime
   , showInt,showFloat
   , newFloatArray,newFloatArray',writeFloatArray,writeFloatArray'
   , readFloatArray,readFloatArray',lengthFloatArray,deleteFloatArray,copyFloatArray'
-  , uniqueReturn,uniqueBind,uniquePush,uniquePull
+  , uniqueReturn,uniqueBind,uniquePush,uniquePull,uniquifyFloatArray
 
   -- Re-exported from Prelude
   , String, Int, IO, Float, Maybe(..), Show(..), Char, getLine
@@ -21,7 +21,7 @@ module Language.Granule.Runtime
   ) where
 
 import Foreign.Marshal.Array ( mallocArray )
-import Foreign.Ptr ( Ptr, nullPtr )
+import Foreign.Ptr ( Ptr )
 import Foreign.Storable ( Storable(peekElemOff, pokeElemOff) )
 import System.IO.Unsafe ( unsafePerformIO )
 import Foreign.Marshal.Alloc ( free )
@@ -31,7 +31,10 @@ import Criterion.Main ( defaultMain, bench, bgroup, nfAppIO )
 import System.IO.Silently ( silence )
 import Prelude
     ( String, Int, IO, Double, Maybe(..), Show(..), Char, getLine, putStr, read
-    , (<$>), fromIntegral, ($), Monad(..), error, (>), (++), id, Num (..), (.) )
+    , (<$>), fromIntegral, ($), error, (>), (++), id, Num (..), (.) )
+import Control.Monad
+import GHC.Err (undefined)
+import Data.Function (const)
 
 
 -- ^ Eventually this can be expanded with other kinds of runtime-managed data
@@ -97,62 +100,72 @@ showFloat = show
 -- Mutable arrays
 --------------------------------------------------------------------------------
 
-data FloatArray = FloatArray { grLength :: Int
-                             , grPtr    :: Ptr Float
-                             , grArr    :: Maybe (MA.IOArray Int Float)
-                             }
+data FloatArray =
+  HaskellArray {
+    -- | Length of Haskell array
+    grLength :: Int,
+    -- | An ordinary Haskell IOArray
+    grArr :: MA.IOArray Int Float } |
+  PointerArray {
+    -- | Length of the array in memory
+    grLength :: Int,
+    -- | Pointer to a block of memory
+    grPtr :: Ptr Float }
 
 {-# NOINLINE newFloatArray #-}
 newFloatArray :: Int -> FloatArray
 newFloatArray size = unsafePerformIO $ do
   ptr <- mallocArray (size + 1)
-  return $ FloatArray (size + 1) ptr Nothing
+  return $ PointerArray (size + 1) ptr
 
 {-# NOINLINE newFloatArray' #-}
 newFloatArray' :: Int -> FloatArray
 newFloatArray' size = unsafePerformIO $ do
   arr <- MA.newArray (0,size) 0.0
-  let ptr = nullPtr
-  return $ FloatArray (size + 1) ptr (Just arr)
+  return $ HaskellArray (size + 1) arr
 
 {-# NOINLINE writeFloatArray #-}
 writeFloatArray :: FloatArray -> Int -> Float -> FloatArray
 writeFloatArray a i v =
   if i > grLength a
   then error $ "array index out of bounds: " ++ show i ++ " > " ++ show (grLength a)
-  else unsafePerformIO $ do
-    () <- pokeElemOff (grPtr a) i v
-    return a
+  else case a of
+    HaskellArray{} -> error "expected unique array"
+    PointerArray len ptr -> unsafePerformIO $ do
+      () <- pokeElemOff ptr i v
+      return $ PointerArray len ptr
 
 {-# NOINLINE writeFloatArray' #-}
 writeFloatArray' :: FloatArray -> Int -> Float -> FloatArray
 writeFloatArray' a i v =
   if i > grLength a
   then error $ "array index out of bounds: " ++ show i ++ " > " ++ show (grLength a)
-  else case grArr a of
-    Nothing -> error "expected non-unique array"
-    Just arr -> unsafePerformIO $ do
-      a' <- MA.mapArray id arr
-      () <- MA.writeArray a' i v
-      return $ FloatArray (grLength a) nullPtr (Just a')
+  else case a of
+    PointerArray{} -> error "expected non-unique array"
+    HaskellArray len arr -> unsafePerformIO $ do
+      arr' <- MA.mapArray id arr
+      () <- MA.writeArray arr' i v
+      return $ HaskellArray len arr'
 
 {-# NOINLINE readFloatArray #-}
 readFloatArray :: FloatArray -> Int -> (Float, FloatArray)
 readFloatArray a i =
   if i > grLength a
   then error $ "array index out of bounds: " ++ show i ++ " > " ++ show (grLength a)
-  else unsafePerformIO $ do
-    v <- peekElemOff (grPtr a) i
-    return (v,a)
+  else case a of
+    HaskellArray{} -> error "expected unique array"
+    PointerArray len ptr -> unsafePerformIO $ do
+      v <- peekElemOff ptr i
+      return (v,a)
 
 {-# NOINLINE readFloatArray' #-}
 readFloatArray' :: FloatArray -> Int -> (Float, FloatArray)
 readFloatArray' a i =
   if i > grLength a
   then error $ "array index out of bounds: " ++ show i ++ " > " ++ show (grLength a)
-  else case grArr a of
-    Nothing -> error "expected non-unique array"
-    Just arr -> unsafePerformIO $ do
+  else case a of
+    PointerArray{} -> error "expected non-unique array"
+    HaskellArray _ arr -> unsafePerformIO $ do
       e <- MA.readArray arr i
       return (e,a)
 
@@ -161,18 +174,31 @@ lengthFloatArray a = (grLength a, a)
 
 {-# NOINLINE deleteFloatArray #-}
 deleteFloatArray :: FloatArray -> ()
-deleteFloatArray FloatArray{grPtr} =
+deleteFloatArray PointerArray{grPtr} =
   unsafePerformIO $ free grPtr
+deleteFloatArray HaskellArray{grArr} =
+  unsafePerformIO $ void (MA.mapArray (const undefined) grArr)
 
 {-# NOINLINE copyFloatArray' #-}
 copyFloatArray' :: FloatArray -> FloatArray
 copyFloatArray' a =
-  case grArr a of
-    Nothing -> error "expected non-unique array"
-    Just arr -> unsafePerformIO $ do
+  case a of
+    PointerArray{} -> error "expected non-unique array"
+    HaskellArray len arr -> unsafePerformIO $ do
       arr' <- MA.mapArray id arr
-      return $ FloatArray (grLength a) nullPtr (Just arr')
+      return $ HaskellArray len arr'
 
+
+uniquifyFloatArray :: FloatArray -> FloatArray
+uniquifyFloatArray a =
+  case a of
+    PointerArray{} -> error "expected non-unique array"
+    HaskellArray len arr -> unsafePerformIO $ do
+      let arr' = newFloatArray (len - 1)
+      forM_ [0..len - 1] $ \i -> do
+        v <- MA.readArray arr i
+        pokeElemOff (grPtr arr') i v
+      return arr'
 
 --------------------------------------------------------------------------------
 -- Uniqueness monadic operations
