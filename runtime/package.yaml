@@ -1,4 +1,4 @@
-name: granule-compiler
+name: granule-runtime
 version: '0.1.0.0'
 author: Michael Vollmer
 
@@ -20,7 +20,6 @@ dependencies:
 - containers
 - criterion
 - silently
-- granule-runtime
 
 default-extensions:
 - LambdaCase
@@ -42,17 +41,7 @@ ghc-options:
 - -Wno-name-shadowing
 - -Wno-type-defaults
 
-executables:
-  grc:
-    main: Language/Granule/Compiler.hs
-    source-dirs: app
-    ghc-options: -main-is Language.Granule.Compiler
-    dependencies:
-    - granule-compiler
-
 library:
   source-dirs: src
   exposed-modules:
-  - Language.Granule.Compiler.Error
-  - Language.Granule.Compiler.HSCodegen
-  - Language.Granule.Compiler.Util
+  - Language.Granule.Runtime
