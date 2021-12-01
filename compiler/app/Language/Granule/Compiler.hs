@@ -296,6 +296,34 @@ parseGrConfig = info (go <**> helper) $ briefDesc
            $ long "alternate"
             <> help "Use alternate mode for synthesis (subtractive divisive, additive naive)"
 
+        globalsAltSynthStructuring <-
+          flag Nothing (Just True)
+           $ long "altsynthstructuring"
+            <> help "Use alternate structuring of synthesis rules"
+
+        globalsGradeOnRule <-
+          flag Nothing (Just True)
+           $ long "gradeonrule"
+            <> help "Use alternate grade-on-rule mode for synthesis"
+
+        globalsSynthTimeoutMillis <-
+          (optional . option (auto @Integer))
+            $ long "synth-timeout"
+            <> (help . unwords)
+            [ "Synthesis timeout in milliseconds (negative for unlimited)"
+            , "Defaults to"
+            , show solverTimeoutMillis <> "ms."
+            ]
+
+        globalsSynthIndex <-
+          (optional . option (auto @Integer))
+            $ long "synth-index"
+            <> (help . unwords)
+            [ "Index of synthesised programs"
+            , "Defaults to"
+            , show synthIndex
+            ]
+
         grRewriter
           <- flag'
             (Just asciiToUnicode)
@@ -353,6 +381,10 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsBenchmarkRaw
               , globalsSubtractiveSynthesis
               , globalsAlternateSynthesisMode
+              , globalsAltSynthStructuring
+              , globalsGradeOnRule
+              , globalsSynthTimeoutMillis
+              , globalsSynthIndex
               , globalsExtensions = []
               }
             }

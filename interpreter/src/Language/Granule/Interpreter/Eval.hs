@@ -30,17 +30,11 @@ import Control.Exception (catch, throwIO, IOException)
 import GHC.IO.Exception (IOErrorType( OtherError ))
 import qualified Control.Concurrent as C (forkIO)
 import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, Chan)
--- import Foreign.Marshal.Alloc (free, malloc)
--- import Foreign.Ptr (castPtr)
--- import Foreign.Storable (peek, poke)
 import qualified Data.Array.IO as MA
 import System.IO (hFlush, stdout, stderr)
 import qualified System.IO as SIO
 
-import Foreign.Marshal.Array
 import Foreign.Ptr
-import Foreign.Storable
-import Foreign.Marshal.Alloc
 
 import System.IO.Error (mkIOError)
 import Data.Bifunctor
@@ -503,13 +497,13 @@ builtIns =
     uniqueBind :: (?globals :: Globals) => Ctxt RValue -> RValue -> RValue
     uniqueBind ctxt f = Ext () $ Primitive $ \(Promote () v) ->
       case v of
-        (Val nullSpan () False (Ext () (FloatArray arr))) -> 
+        (Val nullSpan () False (Ext () (FloatArray len _ptr (Just arr)))) ->
           unsafePerformIO $ do
           copy <- MA.mapArray id arr
           return $ unsafePerformIO $ evalIn ctxt
               (App nullSpan () False 
                 (Val nullSpan () False f) 
-                (Val nullSpan () False (Nec () (Val nullSpan () False (Ext () (FloatArray copy))))))
+                (Val nullSpan () False (Nec () (Val nullSpan () False (Ext () (FloatArray len nullPtr (Just copy)))))))
         otherwise ->
           unsafePerformIO $ evalIn ctxt 
             (App nullSpan () False 
