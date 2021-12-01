@@ -57,7 +57,7 @@ data Runtime a =
   -- | Delayed side effects wrapper
   | PureWrapper (IO (Expr (Runtime a) ()))
 
-  -- | Data managed by the runtime
+  -- | Data managed by the runtime module (mutable arrays)
   | Runtime RuntimeData
 
 
