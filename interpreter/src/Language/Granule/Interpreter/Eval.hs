@@ -365,6 +365,8 @@ builtIns =
   , (mkId "showFloat",    Ext () $ Primitive $ \n -> case n of
                               NumFloat n -> StringLiteral . pack . show $ n
                               n        -> error $ show n)
+  , (mkId "readInt",    Ext () $ Primitive $ \(StringLiteral s) ->
+                         (NumInt (read (unpack s))))
   , (mkId "fromStdin", diamondConstr $ do
       when testing (error "trying to read stdin while testing")
       putStr "> "
@@ -372,13 +374,6 @@ builtIns =
       val <- Text.getLine
       return $ Val nullSpan () False (StringLiteral val))
 
-  , (mkId "readInt", diamondConstr $ do
-        when testing (error "trying to read stdin while testing")
-        putStr "> "
-        hFlush stdout
-        val <- Text.getLine
-        return $ Val nullSpan () False (NumInt $ read $ unpack val))
-  , (mkId "throw", diamondConstr (throwIO $ mkIOError OtherError "exc" Nothing Nothing))
   , (mkId "toStdout", Ext () $ Primitive $ \(StringLiteral s) ->
                                 diamondConstr (do
                                   when testing (error "trying to write `toStdout` while testing")
