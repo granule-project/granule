@@ -370,7 +370,9 @@ builtIns =
                               NumFloat n -> StringLiteral . pack . show $ n
                               n        -> error $ show n)
   , (mkId "readInt",    Ext () $ Primitive $ \(StringLiteral s) ->
-                         (NumInt (read (unpack s))))
+                         if null (unpack s)
+                          then NumInt 0
+                          else (NumInt (read (unpack s))))
   , (mkId "fromStdin", diamondConstr $ do
       when testing (error "trying to read stdin while testing")
       putStr "> "
