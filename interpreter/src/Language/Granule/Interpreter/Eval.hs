@@ -429,7 +429,7 @@ builtIns =
     , Ext () $ Primitive $ \(CharLiteral s) ->
         Promote () $ valExpr $ (CharLiteral s))
   , (mkId "isEOF", Ext () $ Primitive $ \(Ext _ (Handle h)) -> Ext () $ PureWrapper $ do
-        b <- SIO.isEOF
+        b <- SIO.hIsEOF h
         let boolflag =
              if b then Constr () (mkId "True") [] else Constr () (mkId "False") []
         return . Val nullSpan () False $ Constr () (mkId ",") [Ext () $ Handle h, boolflag])
