@@ -99,6 +99,7 @@ evalBinOp op v1 v2 = case op of
       _ -> evalFail
     OpEq -> case (v1, v2) of
       (NumInt n1, NumInt n2) -> Constr () (mkId . show $ n1 == n2) []
+      (CharLiteral n1, CharLiteral n2) -> Constr () (mkId . show $ n1 == n2) []
       (NumFloat n1, NumFloat n2) -> Constr () (mkId . show $ n1 == n2) []
       _ -> evalFail
     OpNotEq -> case (v1, v2) of

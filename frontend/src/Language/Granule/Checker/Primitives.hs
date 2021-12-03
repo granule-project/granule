@@ -179,6 +179,7 @@ binaryOperators = \case
     OpEq ->
       funTy (TyCon $ mkId "Int") (funTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
       :| [funTy (TyCon $ mkId "Float") (funTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))
+        , funTy (TyCon $ mkId "Char") (funTy (TyCon $ mkId "Char") (TyCon $ mkId "Bool"))
         , funTy (TyCon $ mkId "DFloat") (funTy (TyCon $ mkId "DFloat") (TyCon $ mkId "DFloat"))]
     OpNotEq ->
       funTy (TyCon $ mkId "Int") (funTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
