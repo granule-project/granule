@@ -880,10 +880,8 @@ deriveDrop' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
                             debugM "recursing " (show gamma <> " " <> show ty <> " " <> show var <> " " <> show defs'')
                             deriveDrop' s False gamma ty (makeVarUntyped var))
                               consParamsTypes consParamsVars
-                    let (_, exprs, _) = unzip3 retTysAndExprs
                     x <- freshIdentifierBase "x" >>= (return . mkId)
-                    let bodyExpr = mkConstructorApplication s dataConsName dataConsType  exprs dataConsType
-                    return (consPattern, bodyExpr))
+                    return (consPattern, makeUnitIntroUntyped))
 
               -- Got all the branches to make the following case now
               return (TyCon $ mkId "()", Case s () True arg exprs, False)
