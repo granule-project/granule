@@ -552,7 +552,7 @@ deleteFloatArray = BUILTIN
 
 ---------------------
 
-scale : (k : Float) -> DFloat -> DFloat [k]
+scale : (k : Float) -> DFloat [k] -> DFloat
 scale = BUILTIN
 |]
 
