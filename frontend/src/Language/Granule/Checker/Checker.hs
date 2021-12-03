@@ -90,7 +90,12 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
       _    <- runAll checkTyCon (Primitives.dataTypes ++ dataDecls)
       _    <- runAll checkDataCons (Primitives.dataTypes ++ dataDecls)
       defs <- runAll kindCheckDef defs
+
       let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
+
+      -- also check the defs
+      defs <- runAll (checkDef defCtxt) defs
+
       -- Since we need to return a type scheme, have a look first
       -- for top-level identifiers with their schemes
       case expr of
