@@ -33,5 +33,8 @@ doTwice [f] =
       b ← f
   in pure (a + b)
 
+readInt' : Int <{Stdin}>
+readInt' = let x <- fromStdin in pure (readInt x)
+
 main : Int <{Stdin}>
-main = doTwice [readInt]
+main = doTwice [readInt']

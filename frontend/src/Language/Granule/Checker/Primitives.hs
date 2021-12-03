@@ -253,9 +253,6 @@ toStdout = BUILTIN
 toStderr : String -> () <{Stderr}>
 toStderr = BUILTIN
 
-readInt : Int <{Stdin}>
-readInt = BUILTIN
-
 --------------------------------------------------------------------------------
 --Exceptions
 --------------------------------------------------------------------------------
@@ -278,6 +275,9 @@ showInt = BUILTIN
 
 showFloat : Float -> String
 showFloat = BUILTIN
+
+readInt : String -> Int
+readInt = BUILTIN
 
 --------------------------------------------------------------------------------
 -- Thread / Sessions
