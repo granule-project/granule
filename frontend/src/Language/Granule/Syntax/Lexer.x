@@ -26,7 +26,7 @@ $fruit = [\127815-\127827] -- 🍇🍈🍉🍊🍋🍌🍍🍎🍏🍐🍑🍒�
 @constr = ($upper ($alphanum | \')* | \(\))
 @float   = \-? $digit+ \. $digit+
 @int    = \-? $digit+
-@charLiteral = \' ([\\.]|[^\']| . ) \'
+@charLiteral = \' (\\.|[^\']| . ) \'
 @stringLiteral = \"(\\.|[^\"]|\n)*\"
 @importFilePath = ($alphanum | \' | \.)*
 
