@@ -27,14 +27,15 @@ import qualified Data.Text.IO as Text
 import Control.Monad (when, foldM)
 
 import System.IO.Unsafe (unsafePerformIO)
-import Control.Exception (catch, throwIO, IOException)
-import GHC.IO.Exception (IOErrorType( OtherError ))
+--import Control.Exception (catch, throwIO, IOException)
+import Control.Exception (catch, IOException)
+--import GHC.IO.Exception (IOErrorType( OtherError ))
 import qualified Control.Concurrent as C (forkIO)
 import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, Chan)
 import System.IO (hFlush, stdout, stderr)
 import qualified System.IO as SIO
 
-import System.IO.Error (mkIOError)
+--import System.IO.Error (mkIOError)
 import Data.Bifunctor
 
 type RValue = Value (Runtime ()) ()
@@ -352,6 +353,8 @@ builtIns =
   , (mkId "scale", Ext () $ Primitive $ \(NumFloat n)
            -> Ext () $ Primitive $ \(Promote () (Val nullSpan () _ (NumFloat m))) ->
                NumFloat (n * m))
+  , (mkId "moveChar", Ext () $ Primitive $ \(CharLiteral c) -> Promote () (Val nullSpan () False (CharLiteral c)))
+  , (mkId "moveInt", Ext () $ Primitive $ \(NumInt c) -> Promote () (Val nullSpan () False (NumInt c)))
   , (mkId "drop@Int", Ext () $ Primitive $ \v -> (Constr () (mkId "()") []))
   , (mkId "drop@Char", Ext () $ Primitive $ \v -> (Constr () (mkId "()") []))
   , (mkId "drop@Float", Ext () $ Primitive $ \v -> (Constr () (mkId "()") []))
