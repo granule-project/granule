@@ -2,9 +2,9 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE UndecidableInstances #-}
-
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE LambdaCase #-}
 
 
 {-# options_ghc -Wno-incomplete-uni-patterns #-}
@@ -37,17 +37,19 @@ import qualified System.IO as SIO
 
 --import System.IO.Error (mkIOError)
 import Data.Bifunctor
+import Control.Monad.Extra (void)
 
 type RValue = Value (Runtime ()) ()
 type RExpr = Expr (Runtime ()) ()
+type PrimFun a = Value (Runtime a) a -> IO (Value (Runtime a) a)
 
 -- | Runtime values only used in the interpreter
 data Runtime a =
   -- | Primitive functions (builtins)
-    Primitive (Value (Runtime a) a -> Value (Runtime a) a)
+    Primitive (PrimFun a)
 
   -- | Primitive operations that also close over the context
-  | PrimitiveClosure (Ctxt (Value (Runtime a) a) -> Value (Runtime a) a -> Value (Runtime a) a)
+  | PrimitiveClosure (Ctxt (Value (Runtime a) a) -> PrimFun a)
 
   -- | File handler
   | Handle SIO.Handle
@@ -135,7 +137,7 @@ evalIn ctxt (App s _ _ e1 e2) = do
       (Ext _ (Primitive k)) -> do
         -- (cf. APP_R)
         v2 <- evalIn ctxt e2
-        return $ k v2
+        k v2
 
       Abs _ p _ e3 -> do
         -- CallByName extension
@@ -205,10 +207,9 @@ evalIn ctxt (TryCatch s _ _ e1 p _ e2 e3) = do
         eInner <- e
         e1' <- evalIn ctxt eInner
         pmatch ctxt [(PBox s () False p, e2)] (valExpr e1') >>=
-          \v ->
-            case v of
-              Just e2' -> evalIn ctxt e2'
-              Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in try at " <> pretty s
+          \case
+            Just e2' -> evalIn ctxt e2'
+            Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in try at " <> pretty s
       )
        -- (cf. TRY_BETA_2)
       (\(e :: IOException) -> evalIn ctxt e3)
@@ -232,7 +233,7 @@ evalIn ctxt (Val _ _ _ (Var _ x)) =
       Nothing  -> fail $ "Variable '" <> sourceName x <> "' is undefined in context."
 
 evalIn ctxt (Val s _ _ (Promote _ e)) =
-  if CBN `elem` (globalsExtensions ?globals)
+  if CBN `elem` globalsExtensions ?globals
     then do
       return $ Promote () e
     else do
@@ -241,7 +242,7 @@ evalIn ctxt (Val s _ _ (Promote _ e)) =
       return $ Promote () (Val s () False v)
 
 evalIn ctxt (Val s _ _ (Nec _ e)) =
-  if CBN `elem` (globalsExtensions ?globals)
+  if CBN `elem` globalsExtensions ?globals
     then do
       return $ Nec () e
     else do
@@ -259,7 +260,7 @@ evalIn ctxt (Case s a b guardExpr cases) = do
         error $ "Incomplete pattern match:\n  cases: "
              <> pretty cases <> "\n  expr: " <> pretty v
 
-evalIn ctxt (Hole {}) =
+evalIn ctxt Hole {} =
   error "Trying to evaluate a hole, which should not have passed the type checker."
 
 applyBindings :: Ctxt RExpr -> RExpr -> RExpr
@@ -341,38 +342,38 @@ builtIns :: (?globals :: Globals) => Ctxt RValue
 builtIns =
   [
     (mkId "div", Ext () $ Primitive $ \(NumInt n1)
-          -> Ext () $ Primitive $ \(NumInt n2) -> NumInt (n1 `div` n2))
-  , (mkId "use", Ext () $ Primitive $ \v -> Promote () (Val nullSpan () False v))
-  , (mkId "compose", Ext () $ Primitive $ \g ->
-                                Ext () $ Primitive $ \f ->
+          -> return $ Ext () $ Primitive $ \(NumInt n2) -> return $ NumInt (n1 `div` n2))
+  , (mkId "use", Ext () $ Primitive $ \v -> return $ Promote () (Val nullSpan () False v))
+  , (mkId "compose", Ext () $ Primitive $ \g -> return $
+                                Ext () $ Primitive $ \f -> return $
                                   Abs () (PVar nullSpan () False (mkId "xc")) Nothing
                                     (App nullSpan () False (Val nullSpan () False g) (App nullSpan () False (Val nullSpan () False f)
                                         (Val nullSpan () False (Var () (mkId "xc"))))))
 
   -- differental privacy/sensitivty tracking version of scaling
-  , (mkId "scale", Ext () $ Primitive $ \(NumFloat n)
-           -> Ext () $ Primitive $ \(Promote () (Val nullSpan () _ (NumFloat m))) ->
-               NumFloat (n * m))
-  , (mkId "moveChar", Ext () $ Primitive $ \(CharLiteral c) -> Promote () (Val nullSpan () False (CharLiteral c)))
-  , (mkId "moveInt", Ext () $ Primitive $ \(NumInt c) -> Promote () (Val nullSpan () False (NumInt c)))
-  , (mkId "drop@Int", Ext () $ Primitive $ \v -> (Constr () (mkId "()") []))
-  , (mkId "drop@Char", Ext () $ Primitive $ \v -> (Constr () (mkId "()") []))
-  , (mkId "drop@Float", Ext () $ Primitive $ \v -> (Constr () (mkId "()") []))
-  , (mkId "drop@String", Ext () $ Primitive $ \v -> (Constr () (mkId "()") []))
-  , (mkId "pure",       Ext () $ Primitive $ \v -> Pure () (Val nullSpan () False v))
-  , (mkId "fromPure",   Ext () $ Primitive $ \(Pure () (Val nullSpan () False v)) ->  v)
+  , (mkId "scale", Ext () $ Primitive $ \(NumFloat n) -> return $
+      Ext () $ Primitive $ \(Promote () (Val nullSpan () _ (NumFloat m))) ->
+        return $ NumFloat (n * m))
+  , (mkId "moveChar", Ext () $ Primitive $ \(CharLiteral c) -> return $ Promote () (Val nullSpan () False (CharLiteral c)))
+  , (mkId "moveInt", Ext () $ Primitive $ \(NumInt c) -> return $ Promote () (Val nullSpan () False (NumInt c)))
+  , (mkId "drop@Int", Ext () $ Primitive $ const $ return $ Constr () (mkId "()") [])
+  , (mkId "drop@Char", Ext () $ Primitive $ const $ return $ Constr () (mkId "()") [])
+  , (mkId "drop@Float", Ext () $ Primitive $ const $ return $ Constr () (mkId "()") [])
+  , (mkId "drop@String", Ext () $ Primitive $ const $ return $ Constr () (mkId "()") [])
+  , (mkId "pure",       Ext () $ Primitive $ \v -> return $ Pure () (Val nullSpan () False v))
+  , (mkId "fromPure",   Ext () $ Primitive $ \(Pure () (Val nullSpan () False v)) -> return v)
   , (mkId "tick",       Pure () (Val nullSpan () False (Constr () (mkId "()") [])))
-  , (mkId "intToFloat", Ext () $ Primitive $ \(NumInt n) -> NumFloat (cast n))
-  , (mkId "showInt",    Ext () $ Primitive $ \n -> case n of
-                              NumInt n -> StringLiteral . pack . show $ n
+  , (mkId "intToFloat", Ext () $ Primitive $ \(NumInt n) -> return $ NumFloat (cast n))
+  , (mkId "showInt",    Ext () $ Primitive $ \case
+                              NumInt n -> return $ StringLiteral . pack . show $ n
                               n        -> error $ show n)
-  , (mkId "showFloat",    Ext () $ Primitive $ \n -> case n of
-                              NumFloat n -> StringLiteral . pack . show $ n
+  , (mkId "showFloat",    Ext () $ Primitive $ \case
+                              NumFloat n -> return $ StringLiteral . pack . show $ n
                               n        -> error $ show n)
-  , (mkId "readInt",    Ext () $ Primitive $ \(StringLiteral s) ->
+  , (mkId "readInt",    Ext () $ Primitive $ \(StringLiteral s) -> return $
                          if null (unpack s)
                           then NumInt 0
-                          else (NumInt (read (unpack s))))
+                          else NumInt (read (unpack s)))
   , (mkId "fromStdin", diamondConstr $ do
       when testing (error "trying to read stdin while testing")
       putStr "> "
@@ -380,12 +381,12 @@ builtIns =
       val <- Text.getLine
       return $ Val nullSpan () False (StringLiteral val))
 
-  , (mkId "toStdout", Ext () $ Primitive $ \(StringLiteral s) ->
+  , (mkId "toStdout", Ext () $ Primitive $ \(StringLiteral s) -> return $
                                 diamondConstr (do
                                   when testing (error "trying to write `toStdout` while testing")
                                   Text.putStr s
                                   return $ Val nullSpan () False (Constr () (mkId "()") [])))
-  , (mkId "toStderr", Ext () $ Primitive $ \(StringLiteral s) ->
+  , (mkId "toStderr", Ext () $ Primitive $ \(StringLiteral s) -> return $
                                 diamondConstr (do
                                   when testing (error "trying to write `toStderr` while testing")
                                   let red x = "\ESC[31;1m" <> x <> "\ESC[0m"
@@ -396,31 +397,31 @@ builtIns =
   , (mkId "writeChar", Ext () $ Primitive writeChar)
   , (mkId "closeHandle",   Ext () $ Primitive closeHandle)
   , (mkId "showChar",
-        Ext () $ Primitive $ \(CharLiteral c) -> StringLiteral $ pack [c])
+        Ext () $ Primitive $ \(CharLiteral c) -> return $ StringLiteral $ pack [c])
   , (mkId "charToInt",
-        Ext () $ Primitive $ \(CharLiteral c) -> NumInt $ fromEnum c)
+        Ext () $ Primitive $ \(CharLiteral c) -> return $ NumInt $ fromEnum c)
   , (mkId "charFromInt",
-        Ext () $ Primitive $ \(NumInt c) -> CharLiteral $ toEnum c)
+        Ext () $ Primitive $ \(NumInt c) -> return $ CharLiteral $ toEnum c)
   , (mkId "stringAppend",
-        Ext () $ Primitive $ \(StringLiteral s) ->
-          Ext () $ Primitive $ \(StringLiteral t) -> StringLiteral $ s <> t)
+        Ext () $ Primitive $ \(StringLiteral s) -> return $
+          Ext () $ Primitive $ \(StringLiteral t) -> return $ StringLiteral $ s <> t)
   , ( mkId "stringUncons"
-    , Ext () $ Primitive $ \(StringLiteral s) -> case uncons s of
+    , Ext () $ Primitive $ \(StringLiteral s) -> return $ case uncons s of
         Just (c, s) -> Constr () (mkId "Some") [Constr () (mkId ",") [CharLiteral c, StringLiteral s]]
         Nothing     -> Constr () (mkId "None") []
     )
   , ( mkId "stringCons"
-    , Ext () $ Primitive $ \(CharLiteral c) ->
-        Ext () $ Primitive $ \(StringLiteral s) -> StringLiteral (cons c s)
+    , Ext () $ Primitive $ \(CharLiteral c) -> return $
+        Ext () $ Primitive $ \(StringLiteral s) -> return $ StringLiteral (cons c s)
     )
   , ( mkId "stringUnsnoc"
-    , Ext () $ Primitive $ \(StringLiteral s) -> case unsnoc s of
+    , Ext () $ Primitive $ \(StringLiteral s) -> return $ case unsnoc s of
         Just (s, c) -> Constr () (mkId "Some") [Constr () (mkId ",") [StringLiteral s, CharLiteral c]]
         Nothing     -> Constr () (mkId "None") []
     )
   , ( mkId "stringSnoc"
-    , Ext () $ Primitive $ \(StringLiteral s) ->
-        Ext () $ Primitive $ \(CharLiteral c) -> StringLiteral (snoc s c)
+    , Ext () $ Primitive $ \(StringLiteral s) -> return $
+        Ext () $ Primitive $ \(CharLiteral c) -> return $ StringLiteral (snoc s c)
     )
   , ( mkId "moveString"
     , Ext () $ Primitive $ \(StringLiteral s) ->
@@ -428,7 +429,7 @@ builtIns =
   , ( mkId "moveChar"
     , Ext () $ Primitive $ \(CharLiteral s) ->
         Promote () $ valExpr $ (CharLiteral s))
-  , (mkId "isEOF", Ext () $ Primitive $ \(Ext _ (Handle h)) -> Ext () $ PureWrapper $ do
+  , (mkId "isEOF", Ext () $ Primitive $ \(Ext _ (Handle h)) -> return $ Ext () $ PureWrapper $ do
         b <- SIO.hIsEOF h
         let boolflag =
              if b then Constr () (mkId "True") [] else Constr () (mkId "False") []
@@ -461,40 +462,39 @@ builtIns =
   , (mkId "deleteFloatArray", Ext () $ Primitive deleteFloatArray)
   ]
   where
-    forkLinear :: (?globals :: Globals) => Ctxt RValue -> RValue -> RValue
-    forkLinear ctxt e@Abs{} = Ext () (unsafePerformIO $ do
-      c <- CC.newChan
-      _ <- C.forkIO $
-         evalIn ctxt (App nullSpan () False (valExpr e) (valExpr $ Ext () $ Chan c)) >> return ()
-      return $ Chan c)
-    forkLinear ctxt e = error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
+    forkLinear :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
+    forkLinear ctxt e = case e of
+      Abs{} -> do c <- CC.newChan
+                  _ <- C.forkIO $ void $ evalIn ctxt (App nullSpan () False (valExpr e)
+                                                       (valExpr $ Ext () $ Chan c))
+                  return $ Ext () $ Chan c
+      _oth -> error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
-    forkLinear' :: (?globals :: Globals) => Ctxt RValue -> RValue -> RValue
-    forkLinear' ctxt e@Abs{} = Ext () (unsafePerformIO $ do
-      c <- CC.newChan
-      _ <- C.forkIO $
-         evalIn ctxt (App nullSpan () False
-                        (valExpr e)
-                        (valExpr $ Promote () $ valExpr $ Ext () $ Chan c)) >> return ()
-      return $ Chan c)
-    forkLinear' ctxt e = error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
+    forkLinear' :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
+    forkLinear' ctxt e = case e of
+      Abs{} -> do c <- CC.newChan
+                  _ <- C.forkIO $ void $ evalIn ctxt (App nullSpan () False
+                                                      (valExpr e)
+                                                      (valExpr $ Promote () $ valExpr $ Ext () $ Chan c))
+                  return $ Ext () $ Chan c
+      _oth -> error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
-    forkRep :: (?globals :: Globals) => Ctxt RValue -> RValue -> RValue
-    forkRep ctxt e@Abs{} = diamondConstr $ do
-      c <- CC.newChan
-      _ <- C.forkIO $
-         evalIn ctxt (App nullSpan () False
-                        (valExpr e)
-                        (valExpr $ Promote () $ valExpr $ Ext () $ Chan c)) >> return ()
-      return $ valExpr $ Promote () $ valExpr $ Ext () $ Chan c
-    forkRep ctxt e = error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
+    forkRep :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
+    forkRep ctxt e = case e of
+      Abs{} -> return $ diamondConstr $ do
+        c <- CC.newChan
+        _ <- C.forkIO $ void $ evalIn ctxt (App nullSpan () False
+                                            (valExpr e)
+                                            (valExpr $ Promote () $ valExpr $ Ext () $ Chan c))
+        return $ valExpr $ Promote () $ valExpr $ Ext () $ Chan c
+      _oth -> error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
-    uniqueReturn :: RValue -> RValue
-    uniqueReturn (Nec () v) = (Promote () v)
+    uniqueReturn :: RValue -> IO RValue
+    uniqueReturn (Nec () v) = return $ Promote () v
     uniqueReturn v = error $ "Bug in Granule. Can't borrow a non-unique: " <> prettyDebug v
 
-    uniqueBind :: (?globals :: Globals) => Ctxt RValue -> RValue -> RValue
-    uniqueBind ctxt f = Ext () $ Primitive $ \(Promote () v) ->
+    uniqueBind :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
+    uniqueBind ctxt f = return $ Ext () $ Primitive $ \(Promote () v) -> return $
       case v of
         (Val nullSpan () False (Ext () (Runtime fa))) ->
           let copy = copyFloatArray' fa in
@@ -502,62 +502,61 @@ builtIns =
               (App nullSpan () False 
                 (Val nullSpan () False f) 
                 (Val nullSpan () False (Nec () (Val nullSpan () False (Ext () (Runtime copy))))))
-        otherwise ->
+        _otherwise ->
           unsafePerformIO $ evalIn ctxt 
             (App nullSpan () False 
              (Val nullSpan () False f) 
              (Val nullSpan () False (Nec () v)))
 
-    uniquePush :: RValue -> RValue
+    uniquePush :: RValue -> IO RValue
     uniquePush (Nec () (Val nullSpan () False (Constr () (Id "," ",") [x, y])))
-     = (Constr () (mkId ",") [(Nec () (Val nullSpan () False x)), (Nec () (Val nullSpan () False y))])
+     = return $ Constr () (mkId ",") [Nec () (Val nullSpan () False x), Nec () (Val nullSpan () False y)]
     uniquePush v = error $ "Bug in Granule. Can't push through a non-unique: " <> prettyDebug v
 
-    uniquePull :: RValue -> RValue
-    uniquePull (Constr () (Id "," ",") [(Nec () (Val nullSpan () False x)), (Nec () (Val _ () False y))])
-      = (Nec () (Val nullSpan () False (Constr () (mkId ",") [x, y])))
+    uniquePull :: RValue -> IO RValue
+    uniquePull (Constr () (Id "," ",") [Nec () (Val nullSpan () False x), Nec () (Val _ () False y)])
+      = return $ Nec () (Val nullSpan () False (Constr () (mkId ",") [x, y]))
     uniquePull v = error $ "Bug in Granule. Can't pull through a non-unique: " <> prettyDebug v
 
-    recv :: (?globals :: Globals) => RValue -> RValue
-    recv (Ext _ (Chan c)) = unsafePerformIO $ do
+    recv :: (?globals :: Globals) => RValue -> IO RValue
+    recv (Ext _ (Chan c)) = do
       x <- CC.readChan c
       return $ Constr () (mkId ",") [x, Ext () $ Chan c]
     recv e = error $ "Bug in Granule. Trying to receive from: " <> prettyDebug e
 
-    send :: (?globals :: Globals) => RValue -> RValue
-    send (Ext _ (Chan c)) = Ext () $ Primitive
-      (\v -> unsafePerformIO $ do
-         CC.writeChan c v
-         return $ Ext () $ Chan c)
+    send :: (?globals :: Globals) => RValue -> IO RValue
+    send (Ext _ (Chan c)) = return $ Ext () $ Primitive
+      (\v -> do CC.writeChan c v
+                return $ Ext () $ Chan c)
     send e = error $ "Bug in Granule. Trying to send from: " <> prettyDebug e
 
-    close :: RValue -> RValue
-    close (Ext _ (Chan c)) = unsafePerformIO $ return $ Constr () (mkId "()") []
-    close rval = error $ "Runtime exception: trying to close a value which is not a channel"
+    close :: RValue -> IO RValue
+    close (Ext _ (Chan c)) = return $ Constr () (mkId "()") []
+    close rval = error "Runtime exception: trying to close a value which is not a channel"
 
-    grecv :: (?globals :: Globals) => RValue -> RValue
-    grecv (Ext _ (Chan c)) = diamondConstr $ do
+    grecv :: (?globals :: Globals) => RValue -> IO RValue
+    grecv (Ext _ (Chan c)) = return $ diamondConstr $ do
       x <- CC.readChan c
       return $ valExpr $ Constr () (mkId ",") [x, Ext () $ Chan c]
     grecv e = error $ "Bug in Granule. Trying to receive from: " <> prettyDebug e
 
-    gsend :: (?globals :: Globals) => RValue -> RValue
-    gsend (Ext _ (Chan c)) = Ext () $ Primitive
-      (\v -> diamondConstr $ do
+    gsend :: (?globals :: Globals) => RValue -> IO RValue
+    gsend (Ext _ (Chan c)) = return $ Ext () $ Primitive
+      (\v -> return $ diamondConstr $ do
          CC.writeChan c v
          return $ valExpr $ Ext () $ Chan c)
     gsend e = error $ "Bug in Granule. Trying to send from: " <> prettyDebug e
 
-    gclose :: RValue -> RValue
-    gclose (Ext _ (Chan c)) = diamondConstr $ return $ valExpr $ Constr () (mkId "()") []
-    gclose rval = error $ "Runtime exception: trying to close a value which is not a channel"
+    gclose :: RValue -> IO RValue
+    gclose (Ext _ (Chan c)) = return $ diamondConstr $ return $ valExpr $ Constr () (mkId "()") []
+    gclose rval = error "Runtime exception: trying to close a value which is not a channel"
 
     cast :: Int -> Double
     cast = fromInteger . toInteger
 
-    openHandle :: RValue -> RValue
-    openHandle (Constr _ m []) =
-      Ext () $ Primitive (\x -> diamondConstr (
+    openHandle :: RValue -> IO RValue
+    openHandle (Constr _ m []) = return $
+      Ext () $ Primitive (\x -> return $ diamondConstr (
         case x of
           (StringLiteral s) -> do
             h <- SIO.openFile (unpack s) mode
@@ -573,9 +572,9 @@ builtIns =
 
     openHandle x = error $ "Runtime exception: trying to open with a non-mode value" <> show x
 
-    writeChar :: RValue -> RValue
-    writeChar (Ext _ (Handle h)) =
-      Ext () $ Primitive (\c -> diamondConstr (
+    writeChar :: RValue -> IO RValue
+    writeChar (Ext _ (Handle h)) = return $
+      Ext () $ Primitive (\c -> return $ diamondConstr (
         case c of
           (CharLiteral c) -> do
             SIO.hPutChar h c
@@ -583,61 +582,66 @@ builtIns =
           _ -> error $ "Runtime exception: trying to put a non character value"))
     writeChar _ = error $ "Runtime exception: trying to put from a non handle value"
 
-    readChar :: RValue -> RValue
-    readChar (Ext _ (Handle h)) = diamondConstr $ do
+    readChar :: RValue -> IO RValue
+    readChar (Ext _ (Handle h)) = return $ diamondConstr $ do
           c <- SIO.hGetChar h
           return $ valExpr (Constr () (mkId ",") [Ext () $ Handle h, CharLiteral c])
     readChar h = error $ "Runtime exception: trying to get from a non handle value" <> prettyDebug h
 
-    closeHandle :: RValue -> RValue
-    closeHandle (Ext _ (Handle h)) = diamondConstr $ do
+    closeHandle :: RValue -> IO RValue
+    closeHandle (Ext _ (Handle h)) = return $ diamondConstr $ do
          SIO.hClose h
          return $ valExpr (Constr () (mkId "()") [])
     closeHandle _ = error $ "Runtime exception: trying to close a non handle value"
 
+<<<<<<< HEAD
     newFloatArray :: RValue -> RValue
     newFloatArray = \(NumInt i) -> Promote () $ Val nullSpan () False $ Ext () $ unsafePerformIO $ do
       ptr <- mallocArray (i + 1)
       return $ FloatArray (i + 1) ptr Nothing
+=======
+    newFloatArray :: RValue -> IO RValue
+    newFloatArray = \(NumInt i) -> return $ Nec () (Val nullSpan () False $ Ext () $ Runtime $ RT.newFloatArray i)
+>>>>>>> 1b0b6d23 (big refactor of interpreter to use IO for primitive operations)
 
-    newFloatArray' :: RValue -> RValue
-    newFloatArray' = \(NumInt i) -> Ext () $ Runtime $ RT.newFloatArray' i
+    newFloatArray' :: RValue -> IO RValue
+    newFloatArray' = \(NumInt i) -> return $ Ext () $ Runtime $ RT.newFloatArray' i
 
-    readFloatArray :: RValue -> RValue
-    readFloatArray = \(Nec () (Val _ _ _ (Ext () (Runtime fa)))) -> Ext () $ Primitive $ \(NumInt i) ->
+    readFloatArray :: RValue -> IO RValue
+    readFloatArray = \(Nec () (Val _ _ _ (Ext () (Runtime fa)))) -> return $ Ext () $ Primitive $ \(NumInt i) ->
       let (e,fa') = RT.readFloatArray fa i
-      in Constr () (mkId ",") [NumFloat e, Nec () (Val nullSpan () False $ Ext () $ Runtime fa')]
+      in return $ Constr () (mkId ",") [NumFloat e, Nec () (Val nullSpan () False $ Ext () $ Runtime fa')]
 
-    readFloatArray' :: RValue -> RValue
-    readFloatArray' = \(Ext () (Runtime fa)) -> Ext () $ Primitive $ \(NumInt i) ->
+    readFloatArray' :: RValue -> IO RValue
+    readFloatArray' = \(Ext () (Runtime fa)) -> return $ Ext () $ Primitive $ \(NumInt i) ->
       let (e,fa') = RT.readFloatArray' fa i
-      in Constr () (mkId ",") [NumFloat e, Ext () $ Runtime fa']
+      in return $ Constr () (mkId ",") [NumFloat e, Ext () $ Runtime fa']
 
-    lengthFloatArray :: RValue -> RValue
-    lengthFloatArray = \(Nec () (Val _ _ _ (Ext () (Runtime fa)))) -> Ext () $ Primitive $ \(NumInt i) ->
+    lengthFloatArray :: RValue -> IO RValue
+    lengthFloatArray = \(Nec () (Val _ _ _ (Ext () (Runtime fa)))) -> return $ Ext () $ Primitive $ \(NumInt i) ->
       let (e,fa') = RT.lengthFloatArray fa
-      in Constr () (mkId ",") [NumInt e, Nec () (Val nullSpan () False $ Ext () $ Runtime fa')]
+      in return $ Constr () (mkId ",") [NumInt e, Nec () (Val nullSpan () False $ Ext () $ Runtime fa')]
 
-    lengthFloatArray' :: RValue -> RValue
-    lengthFloatArray' = \(Ext () (Runtime fa)) -> Ext () $ Primitive $ \(NumInt i) ->
+    lengthFloatArray' :: RValue -> IO RValue
+    lengthFloatArray' = \(Ext () (Runtime fa)) -> return $ Ext () $ Primitive $ \(NumInt i) ->
       let (e,fa') = RT.lengthFloatArray fa
-      in Constr () (mkId ",") [NumInt e, Ext () $ Runtime fa']
+      in return $ Constr () (mkId ",") [NumInt e, Ext () $ Runtime fa']
 
-    writeFloatArray :: RValue -> RValue
-    writeFloatArray = \(Nec _ (Val _ _ _ (Ext _ (Runtime fa)))) ->
-      Ext () $ Primitive $ \(NumInt i) ->
-      Ext () $ Primitive $ \(NumFloat v) ->
+    writeFloatArray :: RValue -> IO RValue
+    writeFloatArray = \(Nec _ (Val _ _ _ (Ext _ (Runtime fa)))) -> return $
+      Ext () $ Primitive $ \(NumInt i) -> return $
+      Ext () $ Primitive $ \(NumFloat v) -> return $
       Nec () $ Val nullSpan () False $ Ext () $ Runtime $ RT.writeFloatArray fa i v
 
-    writeFloatArray' :: RValue -> RValue
-    writeFloatArray' = \(Ext () (Runtime fa)) ->
-      Ext () $ Primitive $ \(NumInt i) ->
-      Ext () $ Primitive $ \(NumFloat v) ->
+    writeFloatArray' :: RValue -> IO RValue
+    writeFloatArray' = \(Ext () (Runtime fa)) -> return $
+      Ext () $ Primitive $ \(NumInt i) -> return $
+      Ext () $ Primitive $ \(NumFloat v) -> return $
       Ext () $ Runtime $ RT.writeFloatArray' fa i v
 
-    deleteFloatArray :: RValue -> RValue
-    deleteFloatArray = \(Nec _ (Val _ _ _ (Ext _ (Runtime fa)))) ->
-      case (RT.deleteFloatArray fa) of
+    deleteFloatArray :: RValue -> IO RValue
+    deleteFloatArray = \(Nec _ (Val _ _ _ (Ext _ (Runtime fa)))) -> return $
+      case RT.deleteFloatArray fa of
         () -> Constr () (mkId "()") []
 
 evalDefs :: (?globals :: Globals) => Ctxt RValue -> [Def (Runtime ()) ()] -> IO (Ctxt RValue)
