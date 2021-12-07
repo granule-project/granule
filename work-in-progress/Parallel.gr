@@ -18,3 +18,14 @@ par f g =  let c = forkLinear (\c' -> close (send c' (f ()))); -- compute f in n
                -- (shared memory, should be constant time to share pointer!)
                _ = close c'
            in (a, b)
+
+foo : () -> Int
+foo () = 5
+
+bar : () -> Int
+bar () = 10
+
+main : () <{Stdout}>
+main =
+  let (v1,v2) = par foo bar
+  in toStdout (showInt (v1+v2))
