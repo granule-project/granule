@@ -9,7 +9,7 @@ module Language.Granule.Runtime
 
     -- Granule runtime-specific procedures
   , mkIOBenchMain,fromStdin,toStdout,toStderr,readInt,showChar,intToFloat
-  , showInt,showFloat
+  , showInt,showFloat, charToInt, charFromInt, stringAppend
   , newFloatArray,newFloatArray',writeFloatArray,writeFloatArray'
   , readFloatArray,readFloatArray',lengthFloatArray,deleteFloatArray,copyFloatArray'
   , uniqueReturn,uniqueBind,uniquePush,uniquePull,uniquifyFloatArray
@@ -25,23 +25,27 @@ import Foreign.Ptr ( Ptr )
 import Foreign.Storable ( Storable(peekElemOff, pokeElemOff) )
 import System.IO.Unsafe ( unsafePerformIO )
 import Foreign.Marshal.Alloc ( free )
-import System.IO ( hFlush, stderr, stdout, hPutStr )
+import System.IO ( hFlush, stderr, stdout )
 import qualified Data.Array.IO as MA
 import Criterion.Main ( defaultMain, bench, bgroup, nfAppIO )
 import System.IO.Silently ( silence )
 import Prelude
-    ( String, Int, IO, Double, Maybe(..), Show(..), Char, getLine, putStr, read
-    , (<$>), fromIntegral, ($), error, (>), (++), id, Num (..), (.) )
+    ( Int, IO, Double, Maybe(..), Show(..), Char, read, fromEnum, toEnum
+    , (<$>), (<>), fromIntegral, ($), error, (>), (++), id, Num (..), (.) )
 import Control.Monad
 import GHC.Err (undefined)
 import Data.Function (const)
-
+import Data.Text
+import Data.Text.IO
 
 -- ^ Eventually this can be expanded with other kinds of runtime-managed data
 type RuntimeData = FloatArray
 
 -- ^ Granule calls doubles floats
 type Float = Double
+
+-- ^ Granule calls Text String
+type String = Text
 
 --------------------------------------------------------------------------------
 -- Benchmarking
@@ -54,8 +58,8 @@ data BenchList =
 
 mkIOBenchMain :: BenchList -> IO ()
 mkIOBenchMain ns = defaultMain (go ns)
-  where go (Bench n s f next) = bench s (nfAppIO (silence . f) n) : go next
-        go (BenchGroup str benchs next) = bgroup str (go benchs) : go next
+  where go (Bench n s f next) = bench (unpack s) (nfAppIO (silence . f) n) : go next
+        go (BenchGroup str benchs next) = bgroup (unpack str) (go benchs) : go next
         go Done = []
 
 --------------------------------------------------------------------------------
@@ -72,29 +76,42 @@ toStdout :: String -> IO ()
 toStdout = putStr
 
 toStderr :: String -> IO ()
-toStderr = hPutStr stderr
-
-readInt :: IO Int
-readInt = do
-  putStr "> "
-  hFlush stdout
-  read <$> getLine
+toStderr = let red x = "\ESC[31;1m" <> x <> "\ESC[0m" in (hPutStr stderr) . red
 
 --------------------------------------------------------------------------------
 -- Conversions
 --------------------------------------------------------------------------------
 
+readInt :: String -> Int
+readInt s =
+  if null s
+  then 0
+  else read $ unpack s
+
 showChar :: Char -> String
-showChar c = [c]
+showChar = singleton
+
+charToInt :: Char -> Int
+charToInt = fromEnum
+
+charFromInt :: Int -> Char
+charFromInt = toEnum
 
 intToFloat :: Int -> Float
 intToFloat = fromIntegral
 
 showInt :: Int -> String
-showInt = show
+showInt = pack . show
 
 showFloat :: Float -> String
-showFloat = show
+showFloat = pack . show
+
+--------------------------------------------------------------------------------
+-- String operations
+--------------------------------------------------------------------------------
+
+stringAppend :: String -> String -> String
+stringAppend = (<>)
 
 --------------------------------------------------------------------------------
 -- Mutable arrays

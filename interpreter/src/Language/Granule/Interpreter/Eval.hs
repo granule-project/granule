@@ -22,9 +22,8 @@ import Language.Granule.Context
 import Language.Granule.Utils
 import Language.Granule.Runtime as RT
 
-import Data.Text (cons, pack, uncons, unpack, snoc, unsnoc)
-import qualified Data.Text.IO as Text
-import Control.Monad (when, foldM)
+import Data.Text (cons, uncons, unpack, snoc, unsnoc)
+import Control.Monad (foldM)
 
 import System.IO.Unsafe (unsafePerformIO)
 --import Control.Exception (catch, throwIO, IOException)
@@ -32,7 +31,6 @@ import Control.Exception (catch, IOException)
 --import GHC.IO.Exception (IOErrorType( OtherError ))
 import qualified Control.Concurrent as C (forkIO)
 import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, Chan)
-import System.IO (hFlush, stdout, stderr)
 import qualified System.IO as SIO
 
 --import System.IO.Error (mkIOError)
@@ -363,48 +361,32 @@ builtIns =
   , (mkId "pure",       Ext () $ Primitive $ \v -> return $ Pure () (Val nullSpan () False v))
   , (mkId "fromPure",   Ext () $ Primitive $ \(Pure () (Val nullSpan () False v)) -> return v)
   , (mkId "tick",       Pure () (Val nullSpan () False (Constr () (mkId "()") [])))
-  , (mkId "intToFloat", Ext () $ Primitive $ \(NumInt n) -> return $ NumFloat (cast n))
+  , (mkId "intToFloat", Ext () $ Primitive $ \(NumInt n) -> return $ NumFloat $ RT.intToFloat n)
   , (mkId "showInt",    Ext () $ Primitive $ \case
-                              NumInt n -> return $ StringLiteral . pack . show $ n
+                              NumInt n -> return $ StringLiteral . RT.showInt $ n
                               n        -> error $ show n)
   , (mkId "showFloat",    Ext () $ Primitive $ \case
-                              NumFloat n -> return $ StringLiteral . pack . show $ n
+                              NumFloat n -> return $ StringLiteral . RT.showFloat $ n
                               n        -> error $ show n)
-  , (mkId "readInt",    Ext () $ Primitive $ \(StringLiteral s) -> return $
-                         if null (unpack s)
-                          then NumInt 0
-                          else NumInt (read (unpack s)))
-  , (mkId "fromStdin", diamondConstr $ do
-      when testing (error "trying to read stdin while testing")
-      putStr "> "
-      hFlush stdout
-      val <- Text.getLine
-      return $ Val nullSpan () False (StringLiteral val))
-
-  , (mkId "toStdout", Ext () $ Primitive $ \(StringLiteral s) -> return $
-                                diamondConstr (do
-                                  when testing (error "trying to write `toStdout` while testing")
-                                  Text.putStr s
-                                  return $ Val nullSpan () False (Constr () (mkId "()") [])))
-  , (mkId "toStderr", Ext () $ Primitive $ \(StringLiteral s) -> return $
-                                diamondConstr (do
-                                  when testing (error "trying to write `toStderr` while testing")
-                                  let red x = "\ESC[31;1m" <> x <> "\ESC[0m"
-                                  Text.hPutStr stderr $ red s
-                                  return $ Val nullSpan () False (Constr () (mkId "()") [])))
+  , (mkId "readInt",    Ext () $ Primitive $ \(StringLiteral s) -> return $ NumInt $ RT.readInt s)
+  , (mkId "fromStdin", diamondConstr $ RT.fromStdin >>= \val -> return $ Val nullSpan () False $ StringLiteral val)
+  , (mkId "toStdout",  Ext () $ Primitive $ \(StringLiteral s) -> return $ diamondConstr $ (toStdout s) >>
+      (return $ Val nullSpan () False (Constr () (mkId "()") [])))
+  , (mkId "toStderr", Ext () $ Primitive $ \(StringLiteral s) -> return $ diamondConstr $ (toStderr s) >>
+      (return $ Val nullSpan () False (Constr () (mkId "()") [])))
   , (mkId "openHandle", Ext () $ Primitive openHandle)
   , (mkId "readChar", Ext () $ Primitive readChar)
   , (mkId "writeChar", Ext () $ Primitive writeChar)
   , (mkId "closeHandle",   Ext () $ Primitive closeHandle)
   , (mkId "showChar",
-        Ext () $ Primitive $ \(CharLiteral c) -> return $ StringLiteral $ pack [c])
+        Ext () $ Primitive $ \(CharLiteral c) -> return $ StringLiteral $ RT.showChar c)
   , (mkId "charToInt",
-        Ext () $ Primitive $ \(CharLiteral c) -> return $ NumInt $ fromEnum c)
+        Ext () $ Primitive $ \(CharLiteral c) -> return $ NumInt $ RT.charToInt c)
   , (mkId "charFromInt",
-        Ext () $ Primitive $ \(NumInt c) -> return $ CharLiteral $ toEnum c)
+        Ext () $ Primitive $ \(NumInt c) -> return $ CharLiteral $ RT.charFromInt c)
   , (mkId "stringAppend",
         Ext () $ Primitive $ \(StringLiteral s) -> return $
-          Ext () $ Primitive $ \(StringLiteral t) -> return $ StringLiteral $ s <> t)
+          Ext () $ Primitive $ \(StringLiteral t) -> return $ StringLiteral $ s `RT.stringAppend` t)
   , ( mkId "stringUncons"
     , Ext () $ Primitive $ \(StringLiteral s) -> return $ case uncons s of
         Just (c, s) -> Constr () (mkId "Some") [Constr () (mkId ",") [CharLiteral c, StringLiteral s]]
@@ -544,9 +526,6 @@ builtIns =
     gclose :: RValue -> IO RValue
     gclose (Ext _ (Chan c)) = return $ diamondConstr $ return $ valExpr $ Constr () (mkId "()") []
     gclose rval = error "Runtime exception: trying to close a value which is not a channel"
-
-    cast :: Int -> Double
-    cast = fromInteger . toInteger
 
     openHandle :: RValue -> IO RValue
     openHandle (Constr _ m []) = return $
