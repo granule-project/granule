@@ -5,7 +5,6 @@
 module Language.Granule.Interpreter.Desugar where
 
 import Language.Granule.Syntax.Def
-import Language.Granule.Syntax.Id
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pattern
@@ -40,7 +39,7 @@ desugar (Def s var rf eqs tys@(Forall _ _ _ ty)) =
 
     typeDirectedDesugar (Equation _ _ _ _ [] e) _ = return e
 
-    typeDirectedDesugar (Equation s name a rf (p : ps) e) (TyApp (TyCon (internalId -> "Inverse")) t) = do
+    typeDirectedDesugar (Equation s name a rf (p : ps) e) (TyApp (TyCon (internalName -> "Inverse")) t) = do
        typeDirectedDesugar (Equation s name a rf (p : ps) e) (FunTy Nothing t (TyCon $ mkId "()"))
 
     typeDirectedDesugar (Equation s name a rf (p : ps) e) (FunTy _ t1 t2) = do
