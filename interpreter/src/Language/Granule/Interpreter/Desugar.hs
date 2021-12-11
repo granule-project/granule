@@ -5,6 +5,7 @@
 module Language.Granule.Interpreter.Desugar where
 
 import Language.Granule.Syntax.Def
+import Language.Granule.Syntax.Id
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pattern
