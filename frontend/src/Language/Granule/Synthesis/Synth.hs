@@ -697,6 +697,35 @@ unboxHelper defs left (var@(x, (a, structure)) : right) gamma add@(Additive mode
                 if res then
                   return (makeUnbox x2 x goalTy t' (Box grade t') e,  delta', subst, (x, (x2, Box grade t')):bindings, sd) else none
           else none
+     (Discharged (Box grade_r tyA) grade_s) -> do
+        debugM "I'm trying a double unboxing with "  (show grade_r)
+        let omega = left ++ right
+        (canUse, omega', _) <- useVar var omega add ruleGrade
+        debugM "in a double unboxing canUse: " (show canUse)
+        if canUse then do
+          y <- freshIdentifier
+          let (gamma', omega'') = bindToContext (y, (Discharged tyA (TyInfix TyOpTimes grade_r grade_s), structure)) gamma omega' (isLAsync tyA)
+          debugM "in a double unboxing binding " (pretty y <> " : " <> pretty (Discharged tyA (TyInfix TyOpTimes grade_r grade_s)))
+          debugM "in a double unboxing trying to synth for " (pretty goalTy <> " with contexts gamma: " <> show gamma' <> " and omega: " <> show omega'')
+          (e, delta, subst, bindings, sd) <- synthesiseInner defs False add gamma' omega'' ruleGrade goalTy (True, True, False)
+          debugM "in a double unboxing making a " (pretty e <> " with output context delta: " <> show delta)
+          delta' <- maybeToSynthesiser $ ctxtAdd omega' delta
+          case lookupAndCutout y delta' of
+            Just (delta', (Discharged _ grade_s', _)) ->  do
+              (kind, _, _) <- conv $ synthKind nullSpan grade_s'
+              r' <- conv $ freshTyVarInContext (mkId "r'") kind
+              conv $ existential r' kind
+              conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyInfix TyOpTimes (TyVar r') grade_s) (TyInfix TyOpTimes grade_r grade_s) kind)
+              conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyInfix TyOpTimes (TyVar r') grade_s) grade_s' kind)
+              res <- solve
+              boolToSynthesiser res (makeUnbox y x goalTy (Box grade_r tyA) tyA e, replace delta' x (Discharged (Box grade_r tyA) (TyVar r'), structure), subst, (x, (y, Box grade_r tyA)):bindings, sd)
+            _ -> do
+                (kind, _, _) <- conv $ synthKind nullSpan grade_r
+                conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyGrade (Just kind) 0) (TyInfix TyOpTimes grade_r grade_s) kind)
+                res <- solve
+                boolToSynthesiser res (makeUnbox y x goalTy (Box grade_r tyA) tyA e, delta', subst, (x, (y, Box grade_r tyA)):bindings, sd)
+        else none
+
      _ -> none)
 
 
