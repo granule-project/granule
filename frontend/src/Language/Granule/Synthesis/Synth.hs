@@ -225,10 +225,15 @@ ctxtAdd ((x, (Linear t1, structure)):xs) ys =
       return $ (x, (Linear t1, structure)) : ctxt
     _ -> Nothing
 
+
+-- * Focusing auxilliary functions
+
+-- | Check if a type is Right Asynchronous (i.e. a function type)
 isRAsync :: Type -> Bool
 isRAsync FunTy {} = True
 isRAsync _ = False
 
+-- | Check if a type is Left Asynchronous (i.e. can it be decomposed)
 isLAsync :: Type -> Bool
 isLAsync ProdTy{} = True
 isLAsync SumTy{} = True
@@ -247,13 +252,12 @@ isADT (TyCon _) = True
 isADT (TyApp t _) = isADT t
 isADT _ = False
 
-
 adtName :: Type -> Maybe Id
 adtName (TyCon id) = Just id
 adtName (TyApp e1 e2) = adtName e1
 adtName _ = Nothing
 
-
+-- | Get the right most of a function type and collect its arguments in a list
 rightMostFunTy :: Type -> (Type, [Type])
 rightMostFunTy (FunTy _ arg t) = let (t', args) = rightMostFunTy t in (t', arg : args)
 rightMostFunTy t = (t, [])
