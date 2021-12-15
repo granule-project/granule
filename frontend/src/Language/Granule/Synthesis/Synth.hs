@@ -497,12 +497,13 @@ appHelper (allowRSync, allowDef) defs left (var@(x, (a, s)) : right) add@(Additi
       (canUse, useContextOut, _) <- useVar var omega add grade
       if canUse
         then do
+          let omega' = ctxtSubtract omega useContextOut 
           x2 <- freshIdentifier
           -- Extend context (focussed) with x2 : B
 
-          let (gamma', omega') = bindToContext (x2, (Linear tyB, None)) omega [] (isLAsync tyB)
+          let (gamma', omega'') = bindToContext (x2, (Linear tyB, None)) omega' [] (isLAsync tyB)
           -- Synthesise new goal binding result `x2`
-          (e1, delta1, sub1, bindings1, sd1) <- synthesiseInner defs False add gamma' omega' grade goalTy (False, allowRSync, False)
+          (e1, delta1, sub1, bindings1, sd1) <- synthesiseInner defs False add gamma' omega'' grade goalTy (False, allowRSync, False)
           -- Make sure that `x2` appears in the result
           case lookupAndCutout x2 delta1 of
             Just (delta1',  (Linear _, _)) -> do
@@ -510,8 +511,8 @@ appHelper (allowRSync, allowDef) defs left (var@(x, (a, s)) : right) add@(Additi
 
               gamma2 <-
                 case mode of
-                  Default     -> return omega
-                  Alternative -> ctxtSubtract (gamma' ++ omega') delta1'
+                  Default     -> return omega'
+                  Alternative -> ctxtSubtract (gamma' ++ omega'') delta1'
 
               -- Synthesise the argument
               (e2, delta2, sub2, bindings2, sd2) <- synthesiseInner defs False add gamma2 [] grade (Forall nullSpanNoFile binders constraints tyA) (False, allowRSync, False)
