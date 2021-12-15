@@ -417,7 +417,7 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
 
   -- Store the equation type in the state in case it is needed when splitting
   -- on a hole.
-  modify (\st -> st { equationTy = Just equationTy'})
+  modify (\st -> st { equationName = Just id, equationTy = Just equationTy'})
 
   patternGam <- substitute subst patternGam
   debugM "context in checkEquation 1" $ (show patternGam)
@@ -481,13 +481,14 @@ checkExpr :: (?globals :: Globals)
           -> Checker (Ctxt Assumption, Substitution, Expr () Type)
 
 -- Hit an unfilled hole
-checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
+checkExpr defs ctxt _ _ t (Hole s _ _ vars) = do
   debugM "checkExpr[Hole]" (pretty s <> " : " <> pretty t)
   st <- get
 
   let getIdName (Id n _) = n
   let boundVariables = map fst $ filter (\ (id, _) -> getIdName id `elem` map getIdName vars) ctxt
   let unboundVariables = filter (\ x -> isNothing (lookup x ctxt)) vars
+  let defTys = map (\(x, Forall _ _ _ ty) -> (x, ty)) defs
 
   -- elaborated hole
   let hexpr = Hole s t False vars
@@ -503,11 +504,11 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
               -- Check to see if this hole is something we are interested in
               case globalsHolePosition ?globals of
                 -- Synth everything mode
-                Nothing -> programSynthesise ctxt vars t
+                Nothing -> programSynthesise defTys ctxt vars t
                 Just pos ->
                   if spanContains pos s
                     -- This is a hole we want to synth on
-                    then programSynthesise ctxt vars t
+                    then programSynthesise defTys ctxt vars t
                     -- This is not a hole we want to synth on
                     else  return hexpr
 
@@ -1984,20 +1985,22 @@ freshenTySchemeForVar s rf id tyScheme = do
 
 -- Hook into the synthesis engine.
 programSynthesise :: (?globals :: Globals) =>
-  Ctxt Assumption -> [Id] -> Type -> Checker (Expr () Type)
-programSynthesise ctxt vars ty = do
+   Ctxt Type -> Ctxt Assumption-> [Id] -> Type -> Checker (Expr () Type)
+programSynthesise defs ctxt vars ty = do
   currentState <- get
-  debugM "equation Nameeee" (show $ equationName currentState)
-  debugM "equation ctxt" (show $ ctxt)
 
-  let (defs, currentName) = case (equationName currentState, equationTy currentState) of
+  let (currentDef, currentName) = case (equationName currentState, equationTy currentState) of
         (Just name, Just ty') -> ([(name, ty')], name)
         _ -> ([], mkId "")
+
+  let defs' = if useAllHints then defs ++ currentDef else currentDef
+  debugM "defs'" (show defs')
+  debugM "currentDef" (show currentDef)
 
   -- Run the synthesiser in this context
   let mode = if alternateSynthesisMode then Syn.Alternative else Syn.Default
   synRes <-
-      liftIO $ Syn.synthesiseProgram defs currentName
+      liftIO $ Syn.synthesiseProgram defs' currentName
                   (if subtractiveSynthesisMode then (Syn.Subtractive mode) else (Syn.Additive mode))
                   ctxt [] (Forall nullSpan [] [] ty) currentState
 

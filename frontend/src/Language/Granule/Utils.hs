@@ -52,6 +52,7 @@ data Globals = Globals
   , globalsGradeOnRule         :: Maybe Bool
   , globalsSynthTimeoutMillis  :: Maybe Integer
   , globalsSynthIndex          :: Maybe Integer
+  , globalsUseAllHints         :: Maybe Bool
   , globalsExtensions           :: [Extension]
   } deriving (Read, Show)
 
@@ -68,7 +69,7 @@ parseExtensions xs =
 
 -- | Accessors for global flags with default values
 debugging, noColors, alternativeColors, noEval, suppressInfos, suppressErrors,
-  timestamp, testing, ignoreHoles, benchmarking, benchmarkingRawData, subtractiveSynthesisMode, alternateSynthesisMode, altSynthStructuring, gradeOnRule :: (?globals :: Globals) => Bool
+  timestamp, testing, ignoreHoles, benchmarking, benchmarkingRawData, subtractiveSynthesisMode, alternateSynthesisMode, altSynthStructuring, gradeOnRule, useAllHints :: (?globals :: Globals) => Bool
 debugging         = fromMaybe False $ globalsDebugging ?globals
 noColors          = fromMaybe False $ globalsNoColors ?globals
 alternativeColors = fromMaybe False $ globalsAlternativeColors ?globals
@@ -84,6 +85,7 @@ subtractiveSynthesisMode = fromMaybe False $ globalsSubtractiveSynthesis ?global
 alternateSynthesisMode = fromMaybe False $ globalsAlternateSynthesisMode ?globals
 altSynthStructuring = fromMaybe False $ globalsAltSynthStructuring ?globals
 gradeOnRule = fromMaybe False $ globalsGradeOnRule ?globals
+useAllHints = fromMaybe False $ globalsUseAllHints ?globals
 
 -- | Accessor for the solver timeout with a default value
 solverTimeoutMillis :: (?globals :: Globals) => Integer
@@ -133,6 +135,7 @@ instance Semigroup Globals where
       , globalsGradeOnRule = globalsGradeOnRule g1 <|> globalsGradeOnRule g2
       , globalsSynthIndex = globalsSynthIndex g1 <|> globalsSynthIndex g2
       , globalsSynthTimeoutMillis = globalsSynthTimeoutMillis g1 <|> globalsSynthTimeoutMillis g2
+      , globalsUseAllHints = globalsUseAllHints g1 <|> globalsUseAllHints g2
       , globalsExtensions = nub (globalsExtensions g1 <> globalsExtensions g2)
       }
 
@@ -162,6 +165,7 @@ instance Monoid Globals where
     , globalsGradeOnRule = Nothing
     , globalsSynthTimeoutMillis  = Nothing
     , globalsSynthIndex  = Nothing
+    , globalsUseAllHints  = Nothing
     , globalsExtensions = [Base]
     }
 

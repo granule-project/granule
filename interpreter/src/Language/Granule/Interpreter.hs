@@ -335,6 +335,11 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             $ long "timestamp"
             <> help "Print timestamp in info and error messages"
 
+        globalsUseAllHints <-
+          flag Nothing (Just True)
+            $ long "use-all-hints"
+            <> help "Use all constants in current module as hints in synthesis"
+
         globalsSolverTimeoutMillis <-
           (optional . option (auto @Integer))
             $ long "solver-timeout"
@@ -501,6 +506,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsGradeOnRule
               , globalsSynthTimeoutMillis
               , globalsSynthIndex
+              , globalsUseAllHints
               , globalsExtensions = []
               }
             }
