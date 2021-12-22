@@ -197,7 +197,8 @@ cgVal (NumFloat n) =
 cgVal (CharLiteral ch) =
   return $ Hs.Lit () $ Char () ch (show ch)
 cgVal (StringLiteral str) =
-  return $ Hs.Lit () $ Hs.String () (unpack str) (unpack str)
+  return $ app (Hs.Var () $ UnQual () $ name "pack")
+               (Hs.Lit () $ Hs.String () (unpack str) (unpack str))
 cgVal (Constr _ i vals) = do
   vals' <- mapM cgVal vals
   let con = Con () (UnQual () $ mkName i)
