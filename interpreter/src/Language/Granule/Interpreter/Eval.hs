@@ -352,6 +352,15 @@ builtIns =
   , (mkId "scale", Ext () $ Primitive $ \(NumFloat n) -> return $
       Ext () $ Primitive $ \(Promote () (Val nullSpan () _ (NumFloat m))) ->
         return $ NumFloat (n * m))
+  -- capabilities
+  , (mkId "cap", Ext () $ Primitive $ \(Constr () name _) -> return $ Ext () $ Primitive $ \_ ->
+       case internalName name of
+         "Console" -> return $ Ext () $ Primitive $ \(StringLiteral s) -> toStdout s >>
+                          (return $ (Constr () (mkId "()") []))
+         "TimeDate" -> return $ Ext () $ Primitive $ \(Constr () (internalName -> "()") []) -> RT.timeDate () >>=
+                          (\s -> return $ (StringLiteral s))
+         _ -> error "Unknown capability")
+  -- substrctural combinators
   , (mkId "moveChar", Ext () $ Primitive $ \(CharLiteral c) -> return $ Promote () (Val nullSpan () False (CharLiteral c)))
   , (mkId "moveInt", Ext () $ Primitive $ \(NumInt c) -> return $ Promote () (Val nullSpan () False (NumInt c)))
   , (mkId "drop@Int", Ext () $ Primitive $ const $ return $ Constr () (mkId "()") [])
@@ -481,13 +490,13 @@ builtIns =
         (Val nullSpan () False (Ext () (Runtime fa))) ->
           let copy = copyFloatArray' fa in
           unsafePerformIO $ evalIn ctxt
-              (App nullSpan () False 
-                (Val nullSpan () False f) 
+              (App nullSpan () False
+                (Val nullSpan () False f)
                 (Val nullSpan () False (Nec () (Val nullSpan () False (Ext () (Runtime copy))))))
         _otherwise ->
-          unsafePerformIO $ evalIn ctxt 
-            (App nullSpan () False 
-             (Val nullSpan () False f) 
+          unsafePerformIO $ evalIn ctxt
+            (App nullSpan () False
+             (Val nullSpan () False f)
              (Val nullSpan () False (Nec () v)))
 
     uniquePush :: RValue -> IO RValue
@@ -573,15 +582,8 @@ builtIns =
          return $ valExpr (Constr () (mkId "()") [])
     closeHandle _ = error $ "Runtime exception: trying to close a non handle value"
 
-<<<<<<< HEAD
-    newFloatArray :: RValue -> RValue
-    newFloatArray = \(NumInt i) -> Promote () $ Val nullSpan () False $ Ext () $ unsafePerformIO $ do
-      ptr <- mallocArray (i + 1)
-      return $ FloatArray (i + 1) ptr Nothing
-=======
     newFloatArray :: RValue -> IO RValue
     newFloatArray = \(NumInt i) -> return $ Nec () (Val nullSpan () False $ Ext () $ Runtime $ RT.newFloatArray i)
->>>>>>> 1b0b6d23 (big refactor of interpreter to use IO for primitive operations)
 
     newFloatArray' :: RValue -> IO RValue
     newFloatArray' = \(NumInt i) -> return $ Ext () $ Runtime $ RT.newFloatArray' i

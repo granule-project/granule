@@ -19,6 +19,7 @@ dependencies:
 - haskell-src-exts
 - containers
 - criterion
+- time
 - silently
 
 default-extensions:

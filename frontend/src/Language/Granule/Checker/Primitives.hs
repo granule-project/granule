@@ -28,6 +28,11 @@ typeAliases =
   where
     ioElems = ["Stdout", "Stdin", "Stderr", "Open", "Read", "Write", "IOExcept", "Close"]
 
+capabilities :: [(Id, Type)]
+capabilities =
+   [(mkId "Console", funTy (tyCon "String") (tyCon "()"))
+  , (mkId "TimeDate", funTy (tyCon "()") (tyCon "String"))]
+
 -- Associates type constuctors names to their:
 --    * kind
 --    * list of (finite) matchable constructor names (but not the actual set of constructor names which could be infinite)
@@ -98,7 +103,14 @@ typeConstructors =
     , (mkId "MayFail", (tyCon "Exception", [], []))
 
     -- Arrays
+<<<<<<< HEAD
     , (mkId "FloatArray", (Type 0, [], []))
+=======
+    , (mkId "FloatArray", (Type 0, [], False))
+
+    -- Capability related things
+    , (mkId "CapabilityType", (funTy (tyCon "Capability") (Type 0), [], True))
+>>>>>>> eb3d002a (new feature, extending set coeffects, providing capability tracking)
     ]
 
 -- Various predicates and functions on type operators
@@ -255,7 +267,7 @@ toStderr : String -> () <{Stderr}>
 toStderr = BUILTIN
 
 --------------------------------------------------------------------------------
---Exceptions
+-- Exceptions
 --------------------------------------------------------------------------------
 
 throw : forall {a : Type, k : Coeffect} . (a [0 : k]) <MayFail>
@@ -571,6 +583,21 @@ data BenchList where BenchGroup String BenchList BenchList ; Bench Int String (I
 
 mkIOBenchMain : BenchList -> () <>
 mkIOBenchMain = BUILTIN
+
+---------------------
+
+scale : (k : Float) -> DFloat [k] -> DFloat
+scale = BUILTIN
+
+
+--------------------------------------------------------------------------------
+-- Capabilities
+--------------------------------------------------------------------------------
+
+data Capability = Console | TimeDate
+
+cap : (c : Capability) -> () [{c}] -> CapabilityType c
+cap = BUILTIN
 
 |]
 
