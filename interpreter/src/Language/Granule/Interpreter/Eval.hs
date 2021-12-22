@@ -352,6 +352,15 @@ builtIns =
   , (mkId "scale", Ext () $ Primitive $ \(NumFloat n) -> return $
       Ext () $ Primitive $ \(Promote () (Val nullSpan () _ (NumFloat m))) ->
         return $ NumFloat (n * m))
+  -- capabilities
+  , (mkId "cap", Ext () $ Primitive $ \(Constr () name _) -> return $ Ext () $ Primitive $ \_ ->
+       case internalName name of
+         "Console" -> return $ Ext () $ Primitive $ \(StringLiteral s) -> toStdout s >>
+                          (return $ (Constr () (mkId "()") []))
+         "TimeDate" -> return $ Ext () $ Primitive $ \(Constr () (internalName -> "()") []) -> RT.timeDate () >>=
+                          (\s -> return $ (StringLiteral s))
+         _ -> error "Unknown capability")
+  -- substrctural combinators
   , (mkId "moveChar", Ext () $ Primitive $ \(CharLiteral c) -> return $ Promote () (Val nullSpan () False (CharLiteral c)))
   , (mkId "moveInt", Ext () $ Primitive $ \(NumInt c) -> return $ Promote () (Val nullSpan () False (NumInt c)))
   , (mkId "drop@Int", Ext () $ Primitive $ const $ return $ Constr () (mkId "()") [])
@@ -435,7 +444,7 @@ builtIns =
   , (mkId "lengthFloatArray'",  Ext () $ Primitive lengthFloatArray')
   , (mkId "readFloatArray'",  Ext () $ Primitive readFloatArray')
   , (mkId "writeFloatArray'",  Ext () $ Primitive writeFloatArray')
-  , (mkId "deleteFloatArray", Ext () $ Primitive deleteFloatArray) 
+  , (mkId "deleteFloatArray", Ext () $ Primitive deleteFloatArray)
   ]
   where
     forkLinear :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
@@ -475,13 +484,13 @@ builtIns =
         (Val nullSpan () False (Ext () (Runtime fa))) ->
           let copy = copyFloatArray' fa in
           unsafePerformIO $ evalIn ctxt
-              (App nullSpan () False 
-                (Val nullSpan () False f) 
+              (App nullSpan () False
+                (Val nullSpan () False f)
                 (Val nullSpan () False (Nec () (Val nullSpan () False (Ext () (Runtime copy))))))
         _otherwise ->
-          unsafePerformIO $ evalIn ctxt 
-            (App nullSpan () False 
-             (Val nullSpan () False f) 
+          unsafePerformIO $ evalIn ctxt
+            (App nullSpan () False
+             (Val nullSpan () False f)
              (Val nullSpan () False (Nec () v)))
 
     uniquePush :: RValue -> IO RValue

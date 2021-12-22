@@ -1,6 +1,7 @@
 -- | Implementations of builtin Granule functions in Haskell
 
-{-# LANGUAGE NamedFieldPuns, Strict, NoImplicitPrelude #-}
+{-# LANGUAGE NamedFieldPuns, Strict, NoImplicitPrelude, TypeFamilies,
+             DataKinds, GADTs #-}
 {-# OPTIONS_GHC -fno-full-laziness #-}
 module Language.Granule.Runtime
   (
@@ -8,16 +9,19 @@ module Language.Granule.Runtime
     FloatArray(..), BenchList(..), RuntimeData
 
     -- Granule runtime-specific procedures
-  , mkIOBenchMain,fromStdin,toStdout,toStderr,readInt,showChar,intToFloat
+  , pure
+  , mkIOBenchMain,fromStdin,toStdout,toStderr,timeDate,readInt,showChar,intToFloat
   , showInt,showFloat, charToInt, charFromInt, stringAppend
   , newFloatArray,newFloatArray',writeFloatArray,writeFloatArray'
   , readFloatArray,readFloatArray',lengthFloatArray,deleteFloatArray,copyFloatArray'
   , uniqueReturn,uniqueBind,uniquePush,uniquePull,uniquifyFloatArray
+  , cap, Cap(..), Capability(..), CapabilityType
 
   -- Re-exported from Prelude
   , String, Int, IO, Float, Maybe(..), Show(..), Char, getLine
   , putStr, read, (<$>) , fromIntegral, Monad(..)
   , ($), error, (>), (++), id, Num(..), (.)
+  , pack, Text
   ) where
 
 import Foreign.Marshal.Array ( mallocArray )
@@ -37,6 +41,7 @@ import GHC.Err (undefined)
 import Data.Function (const)
 import Data.Text
 import Data.Text.IO
+import Data.Time.Clock
 
 -- ^ Eventually this can be expanded with other kinds of runtime-managed data
 type RuntimeData = FloatArray
@@ -46,6 +51,9 @@ type Float = Double
 
 -- ^ Granule calls Text String
 type String = Text
+
+pure :: Monad m => a -> m a
+pure = return
 
 --------------------------------------------------------------------------------
 -- Benchmarking
@@ -77,6 +85,9 @@ toStdout = putStr
 
 toStderr :: String -> IO ()
 toStderr = let red x = "\ESC[31;1m" <> x <> "\ESC[0m" in (hPutStr stderr) . red
+
+timeDate :: () -> IO String
+timeDate () = getCurrentTime >>= (return . pack . show)
 
 --------------------------------------------------------------------------------
 -- Conversions
@@ -232,3 +243,24 @@ uniquePush = id
 
 uniquePull :: (a,b) -> (a,b)
 uniquePull = id
+
+--------------------------------------------------------------------------------
+-- Capabilities
+--------------------------------------------------------------------------------
+
+-- Emulate dependent types
+data Cap = ConsoleTag | TimeDateTag
+
+data Capability (c :: Cap) where
+    Console :: Capability 'ConsoleTag
+    TimeDate :: Capability 'TimeDateTag
+
+type family CapabilityType (c :: Cap)
+type instance CapabilityType 'ConsoleTag = Text -> ()
+type instance CapabilityType 'TimeDateTag = () -> Text
+
+{-# NOINLINE cap #-}
+cap :: Capability cap -> () -> CapabilityType cap
+cap Console ()  = \x -> unsafePerformIO $ toStdout $ x
+cap TimeDate () = \() -> unsafePerformIO $ timeDate ()
+

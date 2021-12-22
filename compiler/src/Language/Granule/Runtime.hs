@@ -1,6 +1,7 @@
 -- | Implementations of builtin Granule functions in Haskell
 
-{-# LANGUAGE NamedFieldPuns, Strict, NoImplicitPrelude #-}
+{-# LANGUAGE NamedFieldPuns, Strict, NoImplicitPrelude, TypeFamilies,
+             DataKinds, GADTs #-}
 {-# OPTIONS_GHC -fno-full-laziness #-}
 module Language.Granule.Runtime
   (
@@ -8,11 +9,13 @@ module Language.Granule.Runtime
     FloatArray(..), BenchList(..)
 
     -- Granule runtime-specific procedures
+  , pure
   , mkIOBenchMain,fromStdin,toStdout,toStderr,readInt,showChar,intToFloat
   , showInt,showFloat
   , newFloatArray,newFloatArray',writeFloatArray,writeFloatArray'
   , readFloatArray,readFloatArray',lengthFloatArray,deleteFloatArray
   , uniqueReturn,uniqueBind,uniquePush,uniquePull
+  , cap, Cap(..), Capability(..), CapabilityType
 
   -- Re-exported from Prelude
   , String, Int, IO, Float, Maybe(..), Show(..), Char, getLine
@@ -32,6 +35,10 @@ import System.IO.Silently ( silence )
 import Prelude
     ( String, Int, IO, Float, Maybe(..), Show(..), Char, getLine, putStr, read
     , (<$>), fromIntegral, ($), Monad(..), error, (>), (++), id, Num (..), (.) )
+import Data.Time.Clock
+
+pure :: Monad m => a -> m a
+pure = return
 
 --------------------------------------------------------------------------------
 -- Benchmarking
@@ -69,6 +76,9 @@ readInt = do
   putStr "> "
   hFlush stdout
   read <$> getLine
+
+timeDate :: () -> IO String
+timeDate () = getCurrentTime >>= (return . show)
 
 --------------------------------------------------------------------------------
 -- Conversions
@@ -172,3 +182,24 @@ uniquePush = id
 
 uniquePull :: (a,b) -> (a,b)
 uniquePull = id
+
+--------------------------------------------------------------------------------
+-- Capabilities
+--------------------------------------------------------------------------------
+
+-- Emulate dependent types
+data Cap = ConsoleTag | TimeDateTag
+
+data Capability (c :: Cap) where
+    Console :: Capability 'ConsoleTag
+    TimeDate :: Capability 'TimeDateTag
+
+type family CapabilityType (c :: Cap)
+type instance CapabilityType 'ConsoleTag = String -> ()
+type instance CapabilityType 'TimeDateTag = () -> String
+
+{-# NOINLINE cap #-}
+cap :: Capability cap -> () -> CapabilityType cap
+cap Console ()  = \x -> unsafePerformIO $ toStdout x
+cap TimeDate () = \() -> unsafePerformIO $ timeDate ()
+

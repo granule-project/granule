@@ -429,6 +429,7 @@ CoeffSetElems :: { [Type] }
 
 CoeffSetElem :: { Type }
   : CONSTR      { TyCon $ mkId $ constrString $1 }
+  | VAR         { TyVar $ mkId $ symString $1 }
 
 
 Effect :: { Type }

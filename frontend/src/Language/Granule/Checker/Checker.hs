@@ -592,6 +592,32 @@ checkExpr defs gam pol _ ty@(FunTy _ sig tau) (Val s _ rf (Abs _ p t e)) = do
        (p:ps) -> illLinearityMismatch s (p:|ps)
   else throw RefutablePatternError{ errLoc = s, errPat = p }
 
+-- Capabilities
+-- matches a pattern: `cap CapName carrier`
+checkExpr defs gam pol topLevel tau
+      (App s _ rf
+        (App _ _ _
+           (Val _ _ _ (Var _ (internalName -> "cap")))
+           (Val _ _ _ (Constr _ capName _)))
+        carrier) = do
+
+  -- Do we have this capabillity?
+  case lookup capName Primitives.capabilities of
+    Nothing -> throw UnboundVariableError{ errLoc = s, errId = capName }
+    Just ty -> do
+      -- Type the capability as a box thing
+      (outContext, subst, _) <- checkExpr defs gam pol False (Box (TySet Normal [TyCon capName]) (TyCon $ mkId "()")) carrier
+      (eq, _, subst') <- equalTypes s ty tau
+      if eq
+        then do
+          -- elaborate just to a variable application
+          let elab = Val s ty rf (Var ty (mkId $ "cap." <> internalName capName))
+          substFinal <- combineSubstitutions s subst subst'
+          return (outContext, substFinal, elab)
+        else
+           throw $ TypeError { errLoc = s, tyExpected = tau, tyActual = ty }
+
+
 -- Application special case for built-in 'scale'
 -- TODO: needs more thought
 checkExpr defs gam pol topLevel tau
@@ -1100,6 +1126,26 @@ synthExpr defs gam _ (Val s _ rf (Var _ x)) = do
 
      -- cannot use a Ghost variable explicitly
      Just (Ghost c) -> throw UnboundVariableError{ errLoc = s, errId = x }
+
+-- Capabilities
+-- matches a pattern: `cap CapName carrier`
+synthExpr defs gam pol
+      (App s _ rf
+        (App _ _ _
+           (Val _ _ _ (Var _ (internalName -> "cap")))
+           (Val _ _ _ (Constr _ capName _)))
+        carrier) = do
+
+  -- Do we have this capabillity?
+  case lookup capName Primitives.capabilities of
+    Nothing -> throw UnboundVariableError{ errLoc = s, errId = capName }
+    Just ty -> do
+      -- Type the capability as a box thing
+      (outContext, subst, _) <- checkExpr defs gam pol False (Box (TySet Normal [TyCon capName]) (TyCon $ mkId "()")) carrier
+
+      -- elaborate just to a variable application
+      let elab = Val s ty rf (Var ty (mkId $ "cap." <> internalName capName))
+      return (ty, outContext, [], elab)
 
 -- Specialised application for scale
 {- TODO: needs thought -}
