@@ -79,6 +79,9 @@ typeConstructors =
     -- Uniqueness
     , (mkId "Uniqueness", (kguarantee, [], False))
     , (mkId "Unique", (tyCon "Uniqueness", [], False))
+    -- Integrity
+    , (mkId "Integrity", (kguarantee, [], False))
+    , (mkId "Trusted", (tyCon "Integrity", [], False))
     -- Other coeffect constructors
     , (mkId "Interval", (kcoeffect .-> kcoeffect, [], False))
     -- Channels and protocol types
@@ -532,6 +535,16 @@ uniquePull
   : forall {a b : Type} 
   . (a *[Unique], b *[Unique]) -> (a, b) *[Unique]
 uniquePull = BUILTIN
+
+trustedReturn
+  : forall {a : Type}
+  . a *[Trusted] -> a [Lo]
+trustedReturn = BUILTIN
+
+trustedBind
+  : forall {a b : Type}
+  . (a *[Trusted] -> b [Lo]) -> a [Lo] -> b [Lo]
+trustedBind = BUILTIN
 
 --------------------------------------------------------------------------------
 -- Mutable arrays
