@@ -1,0 +1,94 @@
+import Bool
+
+-- we're using the Sec semiring here for simplicity - this would probably
+-- all work fine with Levels but I don't know how the theory will change
+-- from using something that isn't strictly a semiring!
+
+private : Int [Hi]
+private = [1337]
+
+-- as usual, we can hash values of any security level as long as they stay
+-- at the same level afterwards
+
+hash : forall {l : Sec} . Int [l] -> Int [l]
+hash [x] = [x * x * x]
+
+safe : Int [Hi]
+safe = hash private
+
+-- but we can't use a high security value in a low security context, so we
+-- can't do the following:
+
+    -- leak : Int [Hi] -> Int [Lo]
+    -- leak [s] = [s]
+
+    -- bad : Int [Lo]
+    -- bad = leak (hash private)
+
+-- this all relates to the information flow security concept of CONFIDENTIALITY.
+-- confidentiality says that the security level of a piece of information must
+-- always only increase: that is, we know that in the *future* our data will never
+-- be used at a lower security level than it is currently at!
+
+-- but in information flow security we also have the dual notion of INTEGRITY.
+-- integrity (or at least, one part of it) is about making sure that we know 
+-- our data has never been modified by someone below a particular security level.
+
+-- it's popular in the literature to say that integrity is confidentiality with
+-- the ordering reversed, but this is only part of the story. it's closer to the
+-- truth to say that integrity tells us that our data has never been used at a
+-- lower security level in the *past* - so this is another instance of the
+-- linearity/uniqueness duality. sounds like a guarantee to me!
+
+--      [c.f. https://www.cis.upenn.edu/~stevez/papers/LMZ03.pdf
+
+--      "We have seen noninterference policies for protecting data confidentiality. 
+--       Such policies constrain: 
+--          (1) Who can read the secret data. 
+--          (2) Where the secret data will flow to (in the future).
+--      Dually, integrity policies constrain: 
+--          (1) Who can write to the data. 
+--          (2) Where the data is derived from (in the past, the history of the data)."]
+
+secret : Int *[Trusted]
+secret = #8675309
+
+-- we can declassify a piece of trusted information at any time, though we can no
+-- longer assure its integrity. this is the 'return' of the relative monad
+
+reveal : Int *[Trusted] -> Int [Lo]
+reveal = trustedReturn
+
+-- so data being 'trusted' doesn't tell us anything about how it may be used in
+-- the future: it can be Lo or Hi later on - it only tells us it has never been
+-- used in a Lo way, like a Unique thing has never been used in a Many way
+
+ok : Int [Lo]
+ok = hash (reveal secret)
+
+alsoOk : Int [Hi]
+alsoOk = hash (reveal secret)
+
+-- say we have a function that takes a piece of secure data and checks if
+-- some property holds on it (this one clearly doesn't need to require that
+-- its input is trusted, but we can use our imagination for now)
+
+compare : Int *[Trusted] -> Bool [Lo]
+compare x = let [y] = reveal x in
+    if y == 8675309 then [True] else [False]
+
+easy : Bool [Lo]
+easy = compare secret
+
+-- but what if we can't verify our data has always been trusted?
+
+public : Int [Lo]
+public = [1234567]
+
+-- much like with uniqueness, we can make a copy of the data which we can
+-- confirm to be trusted for the purpose of applying compare to it - here
+-- the property we know holds is that no one with low security clearance
+-- has modified the data from the time that the copy was created!
+
+dupe : Bool [Lo]
+dupe = trustedBind compare public
