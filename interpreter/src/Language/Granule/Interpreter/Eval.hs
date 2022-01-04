@@ -442,6 +442,8 @@ builtIns =
   , (mkId "uniqueBind",    Ext () $ PrimitiveClosure uniqueBind)
   , (mkId "uniquePush",    Ext () $ Primitive uniquePush)
   , (mkId "uniquePull",    Ext () $ Primitive uniquePull)
+  , (mkId "trustedReturn",  Ext () $ Primitive trustedReturn)
+  , (mkId "trustedBind",    Ext () $ PrimitiveClosure trustedBind)
   , (mkId "newFloatArray",  Ext () $ Primitive newFloatArray)
   , (mkId "lengthFloatArray",  Ext () $ Primitive lengthFloatArray)
   , (mkId "readFloatArray",  Ext () $ Primitive readFloatArray)
@@ -497,6 +499,26 @@ builtIns =
           unsafePerformIO $ evalIn ctxt
             (App nullSpan () False
              (Val nullSpan () False f)
+             (Val nullSpan () False (Nec () v)))
+
+    trustedReturn :: RValue -> IO RValue
+    trustedReturn (Nec () v) = (Promote () v)
+    trustedReturn v = error $ "Bug in Granule. Can't reveal a public: " <> prettyDebug v
+
+    trustedBind :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
+    trustedBind ctxt f = Ext () $ Primitive $ \(Promote () v) ->
+      case v of
+        (Val nullSpan () False (Ext () (FloatArray arr))) -> 
+          unsafePerformIO $ do
+          copy <- MA.mapArray id arr
+          return $ unsafePerformIO $ evalIn ctxt
+              (App nullSpan () False 
+                (Val nullSpan () False f) 
+                (Val nullSpan () False (Nec () (Val nullSpan () False (Ext () (FloatArray copy))))))
+        otherwise ->
+          unsafePerformIO $ evalIn ctxt 
+            (App nullSpan () False 
+             (Val nullSpan () False f) 
              (Val nullSpan () False (Nec () v)))
 
     uniquePush :: RValue -> IO RValue
