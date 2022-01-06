@@ -50,13 +50,13 @@ safe = hash private
 --          (1) Who can write to the data. 
 --          (2) Where the data is derived from (in the past, the history of the data)."]
 
-secret : Int *[Trusted]
+secret : [Trusted] Int
 secret = #8675309
 
 -- we can declassify a piece of trusted information at any time, though we can no
 -- longer assure its integrity. this is the 'return' of the relative monad
 
-reveal : Int *[Trusted] -> Int [Lo]
+reveal : [Trusted] Int -> Int [Lo]
 reveal = trustedReturn
 
 -- so data being 'trusted' doesn't tell us anything about how it may be used in
@@ -73,7 +73,7 @@ alsoOk = hash (reveal secret)
 -- some property holds on it (this one clearly doesn't need to require that
 -- its input is trusted, but we can use our imagination for now)
 
-compare : Int *[Trusted] -> Bool [Lo]
+compare : [Trusted] Int -> Bool [Lo]
 compare x = let [y] = reveal x in
     if y == 8675309 then [True] else [False]
 
