@@ -525,63 +525,63 @@ tick = BUILTIN
 
 uniqueReturn
   : forall {a : Type}
-  . a *[Unique] -> a [Many]
+  . *a -> !a
 uniqueReturn = BUILTIN
 
 uniqueBind
   : forall {a b : Type}
-  . (a *[Unique] -> b [Many]) -> a [Many] -> b [Many]
+  . (*a -> !b) -> !a -> !b
 uniqueBind = BUILTIN
 
 uniquePush 
   : forall {a b : Type} 
-  . (a, b) *[Unique] -> (a *[Unique], b *[Unique])
+  . *(a, b)  -> (*a, *b)
 uniquePush = BUILTIN
 
 uniquePull 
   : forall {a b : Type} 
-  . (a *[Unique], b *[Unique]) -> (a, b) *[Unique]
+  . (*a, *b) -> *(a, b)
 uniquePull = BUILTIN
 
 trustedReturn
   : forall {a : Type}
-  . a *[Trusted] -> a [Lo]
+  . [Trusted] a -> a [Lo]
 trustedReturn = BUILTIN
 
 trustedBind
   : forall {a b : Type}
-  . (a *[Trusted] -> b [Lo]) -> a [Lo] -> b [Lo]
+  . ([Trusted] a -> b [Lo]) -> a [Lo] -> b [Lo]
 trustedBind = BUILTIN
 
 --------------------------------------------------------------------------------
 -- Mutable arrays
 --------------------------------------------------------------------------------
 
-newFloatArray : Int -> FloatArray *[Unique]
+newFloatArray : Int -> *FloatArray
 newFloatArray = BUILTIN
 
 newFloatArray' : Int -> FloatArray
 newFloatArray' = BUILTIN
 
-readFloatArray : FloatArray *[Unique] -> Int -> (Float, FloatArray *[Unique])
+readFloatArray : *FloatArray -> Int -> (Float, *FloatArray)
 readFloatArray = BUILTIN
 
 readFloatArray' : FloatArray -> Int -> (Float, FloatArray)
 readFloatArray' = BUILTIN
 
-writeFloatArray : FloatArray *[Unique] -> Int -> Float -> FloatArray *[Unique]
+writeFloatArray : *FloatArray -> Int -> Float -> *FloatArray
 writeFloatArray = BUILTIN
 
 writeFloatArray' : FloatArray -> Int -> Float -> FloatArray
 writeFloatArray' = BUILTIN
 
-lengthFloatArray : FloatArray *[Unique] -> (Int, FloatArray *[Unique])
+lengthFloatArray : *FloatArray -> (Int, *FloatArray)
 lengthFloatArray = BUILTIN
 
 lengthFloatArray' : FloatArray -> (Int, FloatArray)
 lengthFloatArray' = BUILTIN
 
-deleteFloatArray : FloatArray *[Unique] -> ()
+deleteFloatArray : *FloatArray -> ()
 deleteFloatArray = BUILTIN
 
 ---------------------
