@@ -502,23 +502,22 @@ builtIns =
              (Val nullSpan () False (Nec () v)))
 
     trustedReturn :: RValue -> IO RValue
-    trustedReturn (Nec () v) = (Promote () v)
+    trustedReturn (Nec () v) = return $ Promote () v
     trustedReturn v = error $ "Bug in Granule. Can't reveal a public: " <> prettyDebug v
 
     trustedBind :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
-    trustedBind ctxt f = Ext () $ Primitive $ \(Promote () v) ->
+    trustedBind ctxt f = return $ Ext () $ Primitive $ \(Promote () v) -> return $
       case v of
-        (Val nullSpan () False (Ext () (FloatArray arr))) -> 
-          unsafePerformIO $ do
-          copy <- MA.mapArray id arr
-          return $ unsafePerformIO $ evalIn ctxt
-              (App nullSpan () False 
-                (Val nullSpan () False f) 
-                (Val nullSpan () False (Nec () (Val nullSpan () False (Ext () (FloatArray copy))))))
-        otherwise ->
-          unsafePerformIO $ evalIn ctxt 
-            (App nullSpan () False 
-             (Val nullSpan () False f) 
+        (Val nullSpan () False (Ext () (Runtime fa))) ->
+          let copy = copyFloatArray' fa in
+          unsafePerformIO $ evalIn ctxt
+              (App nullSpan () False
+                (Val nullSpan () False f)
+                (Val nullSpan () False (Nec () (Val nullSpan () False (Ext () (Runtime copy))))))
+        _otherwise ->
+          unsafePerformIO $ evalIn ctxt
+            (App nullSpan () False
+             (Val nullSpan () False f)
              (Val nullSpan () False (Nec () v)))
 
     uniquePush :: RValue -> IO RValue
