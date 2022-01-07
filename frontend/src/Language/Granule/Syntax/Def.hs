@@ -149,7 +149,7 @@ isIndexedDataType (DataDecl _ id tyVars _ constrs) =
       case t2 of
         TyVar v' | v == v' -> noMatchOnEndType tyVars t1
         _                  -> True
-    noMatchOnEndType tyVars (FunTy _ _ t) = noMatchOnEndType tyVars t
+    noMatchOnEndType tyVars (FunTy _ _ _ t) = noMatchOnEndType tyVars t
     noMatchOnEndType [] (TyCon _) = False
     -- Defaults to `true` (acutally an ill-formed case for data types)
     noMatchOnEndType _ _ = True
@@ -161,7 +161,7 @@ nonIndexedToIndexedDataConstr tName tyVars (DataConstrNonIndexed sp dName params
     -- Don't push the parameters into the type scheme yet
     = DataConstrIndexed sp dName (Forall sp [] [] ty)
   where
-    ty = foldr (FunTy Nothing) (returnTy (TyCon tName) tyVars) params
+    ty = foldr (FunTy Nothing Nothing) (returnTy (TyCon tName) tyVars) params
     returnTy t [] = t
     returnTy t (v:vs) = returnTy (TyApp t ((TyVar . fst) v)) vs
 

@@ -81,11 +81,11 @@ checkKind s t k | t == k = do
   throw $ KindError s t k
 
 -- KChk_funk
-checkKind s (FunTy name t1 t2) k = do
+checkKind s (FunTy name mCoeff t1 t2) k = do
   (subst1, t1') <- checkKind s t1 k
   (subst2, t2') <- checkKind s t2 k
   substFinal <- combineSubstitutions s subst1 subst2
-  return (substFinal, FunTy name t1 t2)
+  return (substFinal, FunTy name mCoeff t1 t2)
 
 -- KChk_SetKind
 checkKind s (TyApp (TyCon (internalName -> "Set")) t) (TyCon (internalName -> "Coeffect")) =
@@ -107,7 +107,7 @@ checkKind s (TyApp (TyCon (internalName -> "SetOp")) t) (TyCon (internalName -> 
 -- KChk_app
 checkKind s (TyApp t1 t2) k2 = do
   (k1, subst1, t2') <- synthKind s t2
-  (subst2, t1') <- checkKind s t1 (FunTy Nothing k1 k2)
+  (subst2, t1') <- checkKind s t1 (FunTy Nothing Nothing k1 k2)
   substFinal <- combineSubstitutions s subst1 subst2
   return (substFinal, TyApp t1' t2')
 
@@ -247,11 +247,11 @@ synthKindWithConfiguration s config t@(TyVar x) = do
 --   ----------------------- Fun
 --        t1 -> t2 => k
 
-synthKindWithConfiguration s config (FunTy name t1 t2) = do
+synthKindWithConfiguration s config (FunTy name mCoeff t1 t2) = do
   (k, subst1, t1') <- synthKindWithConfiguration s config t1
   (subst2   , t2') <- checkKind s t2 k
   subst <- combineSubstitutions s subst1 subst2
-  return (k, subst, FunTy name t1' t2')
+  return (k, subst, FunTy name mCoeff t1' t2')
 
 -- KChkS_pair
 synthKindWithConfiguration s config (TyApp (TyApp (TyCon (internalName -> ",,")) t1) t2) = do
@@ -278,7 +278,7 @@ synthKindWithConfiguration s config (TyApp (TyCon (internalName -> "Set")) t) = 
 synthKindWithConfiguration s config (TyApp t1 t2) = do
   (funK, subst1, t1') <- synthKindWithConfiguration s config t1
   case funK of
-    (FunTy _ k1 k2) -> do
+    (FunTy _ _ k1 k2) -> do
       (subst2, t2') <- checkKind s t2 k1
       subst <- combineSubstitutions s subst1 subst2
       return (k2, subst, TyApp t1' t2')
@@ -347,7 +347,7 @@ synthKindWithConfiguration s _ t@(TyCon (internalName -> "Pure")) = do
 
 synthKindWithConfiguration s _ t@(TyCon (internalName -> "Handled")) = do
   var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") keffect
-  return $ ((FunTy Nothing (TyVar var) (TyVar var)), [], t)
+  return $ ((FunTy Nothing Nothing (TyVar var) (TyVar var)), [], t)
 
 -- KChkS_con
 synthKindWithConfiguration s _ t@(TyCon id) = do
@@ -543,11 +543,13 @@ joinTypes'' :: (?globals :: Globals)
           -> MaybeT Checker (Type, Substitution, Maybe Injections)
 joinTypes'' s t t' rel | t == t' = return (t, [], Nothing)
 
-joinTypes'' s (FunTy id t1 t2) (FunTy _ t1' t2') rel = do
+
+-- TODO join types on the coeffects?
+joinTypes'' s (FunTy id mCoeff t1 t2) (FunTy _ _ t1' t2') rel = do
   (t1j, subst1, _) <- joinTypes'' s t1' t1 rel -- contravariance
   (t2j, subst2, _) <- joinTypes'' s t2 t2' rel
   subst <- lift $ combineSubstitutions s subst1 subst2
-  return (FunTy id t1j t2j, subst, Nothing)
+  return (FunTy id mCoeff t1j t2j, subst, Nothing)
 
 joinTypes'' s (Diamond ef1 t1) (Diamond ef2 t2) rel = do
   (tj, subst0, _) <- joinTypes'' s t1 t2 rel

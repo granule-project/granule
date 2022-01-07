@@ -432,7 +432,7 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
     replaceParameters [] ty = ty
     replaceParameters ([]:tss) (FunTy id grade _ ty) = replaceParameters tss ty
     replaceParameters ((t:ts):tss) ty =
-      FunTy Nothing Nothing grade t (replaceParameters (ts:tss) ty)
+      FunTy Nothing Nothing t (replaceParameters (ts:tss) ty)
     replaceParameters _ t = error $ "Expecting function type: " <> pretty t
 
     -- Convert an id+assumption to a type.
@@ -525,11 +525,11 @@ checkExpr _ [] _ _ ty@(TyCon c) (Val s _ rf (NumFloat n)) | internalName c == "D
   let elaborated = Val s ty rf (NumFloat n)
   return ([], [], elaborated)
 
-checkExpr defs gam pol _ ty@(FunTy grade sig tau) (Val s _ rf (Abs _ p t e)) | usingExtension GradedBase = do
+checkExpr defs gam pol _ ty@(FunTy _ grade sig tau) (Val s _ rf (Abs _ p t e)) | usingExtension GradedBase = do
   -- TODO:
   fail "checkExpr FunTy not implemented for graded base"
 
-checkExpr defs gam pol _ ty@(FunTy _ sig tau) (Val s _ rf (Abs _ p t e)) = do
+checkExpr defs gam pol _ ty@(FunTy _ Nothing sig tau) (Val s _ rf (Abs _ p t e)) = do
   debugM "checkExpr[FunTy]" (pretty s <> " : " <> pretty ty)
   -- If an explicit signature on the lambda was given, then check
   -- it confirms with the type being checked here
@@ -1080,10 +1080,12 @@ synthExpr defs gam pol (App s _ rf e e') = do
          return (tau, gamNew, subst, elaborated)
 
       -- 
-      (FunTy _ grade sig tau) | usingExtension GradedBase -> do
+      -- Taking this out for now 
+      -- (FunTy _ grade sig tau) | usingExtension GradedBase -> do
 
-      -- Not a function type
-      t -> throw LhsOfApplicationNotAFunction{ errLoc = s, errTy = t }
+         -- Not a function type
+      t -> throw LhsOfApplicationNotAFunction{ errLoc = s, errTy = fTy }
+
 
 {- Promotion
 
@@ -1205,7 +1207,7 @@ synthExpr defs gam pol (Val s _ rf (Abs _ p Nothing e)) = do
      -- Locally we should have this property (as we are under a binder)
      ctxtApprox s (gam'' `intersectCtxts` bindings) bindings
 
-     let finalTy = FunTy Nothing sig tau
+     let finalTy = FunTy Nothing Nothing sig tau
      let elaborated = Val s finalTy rf (Abs finalTy elaboratedP (Just sig) elaboratedE)
      finalTy' <- substitute substP finalTy
 

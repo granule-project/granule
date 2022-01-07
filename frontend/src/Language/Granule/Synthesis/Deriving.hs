@@ -48,7 +48,7 @@ derivePush s ty = do
   -- definition for this push
   st0 <- get
   modify (\st -> st { derivedDefinitions =
-                        ((mkId "push", ty), (trivialScheme $ FunTy Nothing argTy returnTy', undefined))
+                        ((mkId "push", ty), (trivialScheme $ FunTy Nothing Nothing argTy returnTy', undefined))
                          : derivedDefinitions st
                     , tyVarContext = tyVarContext st ++ [(kVar, (kcoeffect, ForallQ)), (cVar, (TyVar kVar, ForallQ))] ++ localTyVarContext })
 
@@ -65,7 +65,7 @@ derivePush s ty = do
   let tyS = Forall s
               ([(kVar, kcoeffect), (cVar, (TyVar kVar))] ++ tyVars)
               constraints
-              (FunTy Nothing argTy returnTy)
+              (FunTy Nothing Nothing argTy returnTy)
   -- Build the expression
   let expr = Val s () True $ Abs () (PVar s () True z) Nothing bodyExpr
   let name = mkId $ "push@" ++ pretty ty
@@ -141,7 +141,7 @@ derivePush' s topLevel c _sigma gamma argTy@(leftmostOfApplication -> TyCon name
             -- freshen the type
             (pushTy, _, _, _constraints, _) <- freshPolymorphicInstance InstanceQ False tyScheme []
             case pushTy of
-              t@(FunTy _ t1 t2) -> do
+              t@(FunTy _ _ t1 t2) -> do
                   -- Its argument must be unified with argTy here
                   debugM "derive-push" ("eq on argTy = " <> pretty (Box c argTy) <> " t1 = " <> pretty t1)
                   (eq, tRes, subst) <- equalTypesRelatedCoeffectsAndUnify s Eq FstIsSpec (Box c argTy) t1
@@ -239,7 +239,7 @@ mkConstructorApplication :: (?globals :: Globals) => Span -> Id -> Type -> [Expr
 mkConstructorApplication s name consType [] t =
   Val s () True (Constr () name [])
 
-mkConstructorApplication s name consType (expr:exprs) (FunTy _ t1 t2) =
+mkConstructorApplication s name consType (expr:exprs) (FunTy _ _ t1 t2) =
   App s () True (mkConstructorApplication s name consType exprs t2) expr
 
 mkConstructorApplication s name consType  _ _ =
@@ -258,10 +258,10 @@ derivePull s ty = do
   (localTyVarContext, baseTy, argTy) <- fullyApplyType kind (TyVar cVar) ty
   let tyVars = map (\(id, (t, _)) -> (id, t)) localTyVarContext
 
-  debugM "pull : " (pretty (FunTy Nothing argTy (Box (TyVar cVar) baseTy)))
+  debugM "pull : " (pretty (FunTy Nothing Nothing argTy (Box (TyVar cVar) baseTy)))
   st0 <- get
   modify (\st -> st {  derivedDefinitions =
-                        ((mkId "pull", ty), (trivialScheme $ FunTy Nothing argTy (Box (TyVar cVar) baseTy), undefined)) : derivedDefinitions st,
+                        ((mkId "pull", ty), (trivialScheme $ FunTy Nothing Nothing argTy (Box (TyVar cVar) baseTy), undefined)) : derivedDefinitions st,
                     tyVarContext = tyVarContext st ++ [(kVar, (kcoeffect, ForallQ)), (cVar, (TyVar kVar, ForallQ))] ++ localTyVarContext })
 
   z <- freshIdentifierBase "z" >>= (return . mkId)
@@ -280,7 +280,7 @@ derivePull s ty = do
   let tyS = Forall s
           ([(kVar, kcoeffect), (cVar, (TyVar kVar))] ++ tyVars)
           []
-          (FunTy Nothing argTy (Box coeff' baseTy))
+          (FunTy Nothing Nothing argTy (Box coeff' baseTy))
   let expr = Val s () True $ Abs () (PVar s () True z) Nothing bodyExpr
   let name = mkId $ "pull@" ++ pretty ty
 
@@ -346,7 +346,7 @@ derivePull' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
             -- freshen the type
             (pullTy, _, _, _constraints, _) <- freshPolymorphicInstance InstanceQ False tyScheme []
             case pullTy of
-              t@(FunTy _ t1 t2) -> do
+              t@(FunTy _ _ t1 t2) -> do
                   -- Its argument must be unified with argTy here
                   --(eq, tRes, subst) <- equalTypesRelatedCoeffectsAndUnify s Eq FstIsSpec (Box c argTy) t1
                   debugM "derive-pull" ("eq on argTy = " <> pretty argTy <> " t1 = " <> pretty t1)
@@ -462,7 +462,7 @@ derivePull' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
           else
             Box c (reconstructTy returnTys ty)
         reconstructTy returnTys (TyApp t1 t2) = TyApp (reconstructTy returnTys t1) (reconstructTy returnTys t2)
-        reconstructTy returnTys (FunTy s t1 t2) = FunTy s (reconstructTy returnTys t1) (reconstructTy returnTys t2)
+        reconstructTy returnTys (FunTy s mCoeff t1 t2) = FunTy s mCoeff (reconstructTy returnTys t1) (reconstructTy returnTys t2)
         reconstructTy _ ty = ty
 
         coeffectMeet (Just c:[]) = Just c
@@ -492,7 +492,7 @@ fullyApplyType' :: (?globals :: Globals)
 fullyApplyType' (Type _) r baseTy argTy =
   return ([], baseTy, argTy)
 
-fullyApplyType' (FunTy _ t1 t2) r baseTy argTy = do
+fullyApplyType' (FunTy _ _ t1 t2) r baseTy argTy = do
   -- Fresh ty variable
   tyVar <- freshIdentifierBase "a" >>= (return . mkId)
   -- Apply to the base type
@@ -553,7 +553,7 @@ deriveCopyShape s ty = do
   let tyVars = map (\(id, (t, _)) -> (id, t)) localTyVarContext
   st0 <- get
   modify (\st -> st { derivedDefinitions =
-                        ((mkId "copyShape", ty), (trivialScheme $ FunTy Nothing ty returnTy', undefined))
+                        ((mkId "copyShape", ty), (trivialScheme $ FunTy Nothing Nothing ty returnTy', undefined))
                          : derivedDefinitions st,
                     tyVarContext = tyVarContext st ++ localTyVarContext })
 
@@ -570,7 +570,7 @@ deriveCopyShape s ty = do
               --([(kVar, KCoeffect), (cVar, KPromote (TyVar kVar))] ++ tyVars)
               tyVars
               []
-              (FunTy Nothing baseTy (ProdTy shapeTy returnTy))
+              (FunTy Nothing Nothing baseTy (ProdTy shapeTy returnTy))
   let expr = Val s () True $ Abs () (PVar s () True z) Nothing bodyExpr
   let name = mkId $ "copyShape@" ++ pretty ty
   let def = Def s name True (EquationList s name True [Equation s name () True [] expr]) tyS
@@ -635,7 +635,7 @@ deriveCopyShape' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) ar
             -- freshen the type
             (copyShapeTy, _, _, _constraints, _) <- freshPolymorphicInstance InstanceQ False tyScheme []
             case copyShapeTy of
-              t@(FunTy _ t1 (ProdTy t2 t3)) -> do
+              t@(FunTy _ mCoeff t1 (ProdTy t2 t3)) -> do
                   -- Its argument must be unified with argTy here
                   (eq, tRes, subst) <- equalTypesRelatedCoeffectsAndUnify s Eq FstIsSpec argTy t1
                   if eq
@@ -739,7 +739,7 @@ deriveDrop s ty = do
   let tyVars = map (\(id, (t, _)) -> (id, t)) localTyVarContext
   st0 <- get
   modify (\st -> st { derivedDefinitions =
-                        ((mkId "drop", ty), (trivialScheme $ FunTy Nothing ty returnTy', undefined))
+                        ((mkId "drop", ty), (trivialScheme $ FunTy Nothing Nothing ty returnTy', undefined))
                          : derivedDefinitions st,
                     tyVarContext = tyVarContext st ++ localTyVarContext })
 
@@ -748,7 +748,7 @@ deriveDrop s ty = do
   let tyS = Forall s
               tyVars
               []
-              (FunTy Nothing baseTy returnTy)
+              (FunTy Nothing Nothing baseTy returnTy)
   let expr = Val s () True $ Abs () (PVar s () True z) Nothing bodyExpr
   let name = mkId $ "drop@" ++ pretty ty
   let def = Def s name True (EquationList s name True [Equation s name () True [] expr]) tyS
@@ -811,7 +811,7 @@ deriveDrop' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
             -- freshen the type
             (dropTy, _, _, _constraints, _) <- freshPolymorphicInstance InstanceQ False tyScheme []
             case dropTy of
-              t@(FunTy _ t1 t2) -> do
+              t@(FunTy _ mCoeff t1 t2) -> do
                   -- Its argument must be unified with argTy here
                   (eq, tRes, subst) <- equalTypesRelatedCoeffectsAndUnify s Eq FstIsSpec argTy t1
                   if eq
