@@ -157,7 +157,7 @@ tyOps = \case
 
 dataTypes :: [DataDecl]
 dataTypes =
-    -- Special built-in for products (which cannot be parsed)
+    -- Special built-ins for products (which cannot be parsed)
     [ DataDecl
       { dataDeclSpan = nullSpanBuiltin
       , dataDeclId   = mkId ","
@@ -167,6 +167,17 @@ dataTypes =
         DataConstrNonIndexed
           { dataConstrSpan = nullSpanBuiltin
           , dataConstrId = mkId ","
+          , dataConstrParams = [TyVar (mkId "a"), TyVar (mkId "b")]
+         }]}
+    ] ++ [ DataDecl
+      { dataDeclSpan = nullSpanBuiltin
+      , dataDeclId   = mkId "&"
+      , dataDeclTyVarCtxt = [((mkId "a"), Type 0),((mkId "b"), Type 0)]
+      , dataDeclKindAnn = Just (Type 0)
+      , dataDeclDataConstrs = [
+        DataConstrNonIndexed
+          { dataConstrSpan = nullSpanBuiltin
+          , dataConstrId = mkId "&"
           , dataConstrParams = [TyVar (mkId "a"), TyVar (mkId "b")]
          }]}
     ] ++ builtinDataTypesParsed
@@ -600,6 +611,19 @@ data Capability = Console | TimeDate
 
 cap : (c : Capability) -> () [{c}] -> CapabilityType c
 cap = BUILTIN
+
+--------------------------------------------------------------------------------
+-- Additive conjunction (linear logic)
+--------------------------------------------------------------------------------
+
+with : forall {a b : Type} . a [0..1] -> b [0..1] -> a & b
+with = BUILTIN
+
+projL : forall {a b : Type} . a & b -> a
+projL = BUILTIN
+
+projR : forall {a b : Type} . a & b -> b
+projR = BUILTIN
 
 |]
 

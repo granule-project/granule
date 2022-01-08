@@ -119,6 +119,7 @@ import Language.Granule.Utils hiding (mkSpan)
 %left '..'
 %left '+' '-'
 %left '*'
+%left '&'
 %left '^'
 %left '|'
 %left '.'
@@ -334,6 +335,7 @@ Type :: { Type }
   | '*' TyAtom                     { Star (TyCon $ mkId "Unique") $2 }
   | Type '->' Type                 { FunTy Nothing $1 $3 }
   | Type '×' Type                  { TyApp (TyApp (TyCon $ mkId ",") $1) $3 }
+  | Type '&' Type                  { TyApp (TyApp (TyCon $ mkId "&") $1) $3 }
   | TyAtom '[' Coeffect ']'        { Box $3 $1 }
   | TyAtom '*' '[' Guarantee ']'   { Star $4 $1 }
   | '[' Guarantee ']' TyAtom       { Star $2 $4 }

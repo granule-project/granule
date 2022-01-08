@@ -486,6 +486,10 @@ builtIns =
   , (mkId "readFloatArray'",  Ext () $ Primitive readFloatArray')
   , (mkId "writeFloatArray'",  Ext () $ Primitive writeFloatArray')
   , (mkId "deleteFloatArray", Ext () $ Primitive deleteFloatArray)
+  -- Additive conjunction (linear logic)
+  , (mkId "with", Ext () $ Primitive $ \v -> return $ Ext () $ Primitive $ \w -> return $ Constr () (mkId "&") [v, w])
+  , (mkId "projL", Ext () $ Primitive $ \(Constr () (Id "&" "&") [v, w]) -> return $ v)
+  , (mkId "projR", Ext () $ Primitive $ \(Constr () (Id "&" "&") [v, w]) -> return $ w)
   ]
   where
     forkLinear :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
