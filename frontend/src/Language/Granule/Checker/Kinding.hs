@@ -647,7 +647,6 @@ joinTypes'' s (TyApp t1 t2) (TyApp t1' t2') rel = do
   return (TyApp t1'' t2'', subst, Nothing)
 
 joinTypes'' s t1 t2 rel = do
-  st <- get
   (isCoeffect1, putChecker1) <- lift $ attemptChecker (checkKind s t1 kcoeffect)
   (isCoeffect2, putChecker2) <- lift $ attemptChecker (checkKind s t2 kcoeffect)
   -- Case where the two types are actually coeffect types

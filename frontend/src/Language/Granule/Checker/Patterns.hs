@@ -258,11 +258,13 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
           ty <- substitute coercions' ty
 
           -- Unifiers are only those things that include index variables
-          let unifiers' = filter (\(id, subst) -> case lookup id (tyVarContext st) of Just (_, BoundQ) -> True; _ -> False) unifiers 
-          debugM "ctxt" $ "unifiers': " <> show unifiers' 
+          --let unifiers' = filter (\(id, subst) -> case lookup id (tyVarContext st) of Just (_, BoundQ) -> True; _ -> False) unifiers
+          unifiers' <- flipUnifiersOnNonSolverVars s unifiers
+          debugM "ctxt" $ "unifiers': " <> show unifiers'
 
           -- Combine the substitutions
-          subst <- combineSubstitutions s (flipSubstitution unifiers') us
+          --subst <- combineSubstitutions s (flipSubstitution unifiers') us
+          subst <- combineSubstitutions s unifiers' us
           subst <- combineSubstitutions s coercions' subst
           debugM "ctxt" $ "\n\t### outSubst = " <> show subst <> "\n"
 
@@ -377,3 +379,19 @@ duplicateBinderCheck s ps = case duplicateBinders of
       (\_ _ _ _ -> [])
       (\_ _ _ _ -> [])
       (\_ _ _ _ bss -> concat bss)
+
+flipUnifiersOnNonSolverVars :: (?globals :: Globals) => Span -> Substitution -> Checker Substitution
+flipUnifiersOnNonSolverVars s = mapMaybeM flipUnifiersOnNonSolverVars'
+  where
+    flipUnifiersOnNonSolverVars' :: (Id, Substitutors) -> Checker (Maybe (Id, Substitutors))
+    flipUnifiersOnNonSolverVars' (var, SubstT (TyVar var')) = do
+      let tyVar = TyVar var
+      (isGrade, putChecker) <- attemptChecker (checkKind s tyVar kcoeffect <|> checkKind s tyVar keffect)
+      if isGrade
+        then
+          -- don't flip and ignore this substitution
+          return $ Nothing
+        else do
+          putChecker
+          return $ Just (var', SubstT tyVar)
+    flipUnifiersOnNonSolverVars' (var, SubstT _) = return Nothing
