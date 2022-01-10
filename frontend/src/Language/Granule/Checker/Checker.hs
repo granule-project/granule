@@ -138,12 +138,14 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
 
 -- TODO: we are checking for name clashes again here. Where is the best place
 -- to do this check?
-checkTyCon :: DataDecl -> Checker ()
+checkTyCon :: (?globals :: Globals) => DataDecl -> Checker ()
 checkTyCon d@(DataDecl sp name tyVars kindAnn ds)
   = lookup name <$> gets typeConstructors >>= \case
     Just _ -> throw TypeConstructorNameClash{ errLoc = sp, errId = name }
-    Nothing -> modify' $ \st ->
-      st{ typeConstructors = (name, (tyConKind, ids, typeIndicesPositions d)) : typeConstructors st }
+    Nothing -> do
+      debugM "registering type constructor" (pretty name ++ " with indices " ++ show (typeIndicesPositions d))
+      modify' $ \st ->
+          st{ typeConstructors = (name, (tyConKind, ids, typeIndicesPositions d)) : typeConstructors st }
   where
     ids = map dataConstrId ds -- the IDs of data constructors
     tyConKind = mkKind (map snd tyVars)
@@ -416,6 +418,7 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
 
   -- The type of the equation, after substitution.
   equationTy' <- substitute subst ty
+  debugM "equationTy'" (pretty equationTy')
 
   -- Store the equation type in the state in case it is needed when splitting
   -- on a hole.

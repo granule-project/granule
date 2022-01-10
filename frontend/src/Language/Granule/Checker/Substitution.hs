@@ -178,14 +178,22 @@ reduceByTransitivity sp ctxt = reduceByTransitivity' [] ctxt
      case lookupAndCutout var' (substLeft ++ substRight) of
        Just (substRest, t) ->
          case t of
-           SubstT (TyVar var') -> do
-             st <- get
-             case (lookup var (tyVarContext st), lookup var' (tyVarContext st)) of
-               (Just (vara, ForallQ), Just (varb, ForallQ)) | vara /= varb ->
-                 throw $ UnificationFailGeneric sp (SubstT (TyVar var)) (SubstT (TyVar var'))
-               _ -> do
-                 subst <- reduceByTransitivity sp ((var', t) : substRest)
-                 return ((var, t) : subst)
+           SubstT (TyVar var'') -> do
+             -- if we var -> var' and var' -> var  then skip this
+             if var == var''
+              then
+                reduceByTransitivity' (subst : substLeft) substRight
+              else do
+              -- otherwise
+                st <- get
+                -- check we aren't accidentally unifying two univerals
+                case (lookup var (tyVarContext st), lookup var'' (tyVarContext st)) of
+                  (Just (vara, ForallQ), Just (varb, ForallQ)) | vara /= varb ->
+                    throw $ UnificationFailGeneric sp (SubstT (TyVar var)) (SubstT (TyVar var''))
+                  _ -> do
+                    -- Otherwise remove the var -> var' step to go straight from var -> t
+                    subst <- reduceByTransitivity sp ((var', t) : substRest)
+                    return ((var, t) : subst)
            _ -> do
               subst <- reduceByTransitivity sp ((var', t) : substRest)
               return ((var, t) : subst)
