@@ -201,7 +201,7 @@ derivePush' s topLevel c _sigma gamma argTy@(leftmostOfApplication -> TyCon name
                     debugM "deriv-push unifiers" (show unifiers)
 
                     -- Unify and specialise the data constructor type
-                    dataConsType <- substitute (flipSubstitution unifiers) dataConstructorTypeFresh
+                    dataConsType <- substitute unifiers dataConstructorTypeFresh
                     debugM "deriv-push dataConsType" (pretty dataConsType)
 
 
@@ -686,7 +686,7 @@ deriveCopyShape' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) ar
                       error $ "Cannot derive copyShape for data constructor " <> pretty dataConsName
                   (True, _, unifiers) -> do
                     -- Unify and specialise the data constructor type
-                    dataConsType <- substitute (flipSubstitution unifiers) dataConstructorTypeFresh
+                    dataConsType <- substitute unifiers dataConstructorTypeFresh
 
                     debugM "deriveCopyShape dataConsType: " (show dataConsType)
                     -- Create a variable for each parameter
@@ -850,7 +850,7 @@ deriveDrop' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
 
                 -- Instantiate the data constructor
                 (dataConstructorTypeFresh, _, _, _constraint, coercions') <-
-                      freshPolymorphicInstance BoundQ True tySch coercions []
+                      freshPolymorphicInstance InstanceQ True tySch coercions []
                 -- [Note: this does not register the constraints associated with the data constrcutor]
                 dataConstructorTypeFresh <- substitute (flipSubstitution coercions') dataConstructorTypeFresh
                 debugM "deriveDrop dataConstructorTypeFresh: " (show dataConstructorTypeFresh)
