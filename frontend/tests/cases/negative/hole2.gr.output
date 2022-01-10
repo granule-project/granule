@@ -4,9 +4,9 @@ Found a goal: frontend/tests/cases/negative/hole2.gr:11:40:
    Expected type is: `a0 -> b0`
 
    Context:
-     f : .[a -> b]. (n0.0 + 1)
-     x : a
-     xs : Vec n0.0 a
+     f : .[t9.0 -> b]. (n0.0 + 1)
+     x : t9.0
+     xs : Vec n0.0 t9.0
 
    Type context:
      n0 : Nat

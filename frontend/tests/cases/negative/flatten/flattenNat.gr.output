@@ -4,5 +4,5 @@ The following theorem associated with `flattenNat` is falsifiable:
 	(m + n = n * m)
 
 Counter-example:
-  n = 0 :: Integer
-  m = 1 :: Integer
+  n = 14 :: Integer
+  m = 14 :: Integer
