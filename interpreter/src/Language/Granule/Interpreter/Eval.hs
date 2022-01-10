@@ -520,16 +520,16 @@ builtIns =
     uniqueReturn v = error $ "Bug in Granule. Can't borrow a non-unique: " <> prettyDebug v
 
     uniqueBind :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
-    uniqueBind ctxt f = return $ Ext () $ Primitive $ \(Promote () v) -> return $
+    uniqueBind ctxt f = return $ Ext () $ Primitive $ \(Promote () v) ->
       case v of
         (Val nullSpan () False (Ext () (Runtime fa))) ->
           let copy = copyFloatArray' fa in
-          unsafePerformIO $ evalIn ctxt
+          evalIn ctxt
               (App nullSpan () False
                 (Val nullSpan () False f)
                 (Val nullSpan () False (Nec () (Val nullSpan () False (Ext () (Runtime copy))))))
         _otherwise ->
-          unsafePerformIO $ evalIn ctxt
+          evalIn ctxt
             (App nullSpan () False
              (Val nullSpan () False f)
              (Val nullSpan () False (Nec () v)))
