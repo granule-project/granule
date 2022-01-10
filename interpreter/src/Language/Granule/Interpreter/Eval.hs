@@ -415,10 +415,10 @@ builtIns =
         Ext () $ Primitive $ \(CharLiteral c) -> return $ StringLiteral (snoc s c)
     )
   , ( mkId "moveString"
-    , Ext () $ Primitive $ \(StringLiteral s) ->
+    , Ext () $ Primitive $ \(StringLiteral s) -> return $
         Promote () $ valExpr $ (StringLiteral s))
   , ( mkId "moveChar"
-    , Ext () $ Primitive $ \(CharLiteral s) ->
+    , Ext () $ Primitive $ \(CharLiteral s) -> return $
         Promote () $ valExpr $ (CharLiteral s))
   , (mkId "isEOF", Ext () $ Primitive $ \(Ext _ (Handle h)) -> return $ Ext () $ PureWrapper $ do
         b <- SIO.hIsEOF h
