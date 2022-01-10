@@ -385,13 +385,18 @@ flipUnifiersOnNonSolverVars s = mapMaybeM flipUnifiersOnNonSolverVars'
   where
     flipUnifiersOnNonSolverVars' :: (Id, Substitutors) -> Checker (Maybe (Id, Substitutors))
     flipUnifiersOnNonSolverVars' (var, SubstT (TyVar var')) = do
-      let tyVar = TyVar var
-      (isGrade, putChecker) <- attemptChecker (checkKind s tyVar kcoeffect <|> checkKind s tyVar keffect)
-      if isGrade
-        then
-          -- don't flip and ignore this substitution
-          return $ Nothing
-        else do
-          putChecker
-          return $ Just (var', SubstT tyVar)
+      st <- get
+      case lookup var (tyVarContext st) of
+        Just (_, BoundQ) -> do
+          let tyVar = TyVar var
+          (isGrade, putChecker) <- attemptChecker (checkKind s tyVar kcoeffect <|> checkKind s tyVar keffect)
+          if isGrade
+            then
+              -- don't flip and ignore this substitution
+              return $ Nothing
+            else do
+              putChecker
+              return $ Just (var', SubstT tyVar)
+        -- Ignore non index things
+        _ -> return Nothing
     flipUnifiersOnNonSolverVars' (var, SubstT _) = return Nothing
