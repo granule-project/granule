@@ -250,13 +250,22 @@ evalIn ctxt (Val s _ _ (Nec _ e)) =
 evalIn _ (Val _ _ _ v) = return v
 
 evalIn ctxt (Case s a b guardExpr cases) = do
-    v <- evalIn ctxt guardExpr
-    p <- pmatch ctxt cases (Val s a b v)
-    case p of
-      Just ei -> evalIn ctxt ei
-      Nothing             ->
-        error $ "Incomplete pattern match:\n  cases: "
-             <> pretty cases <> "\n  expr: " <> pretty v
+  if CBN `elem` globalsExtensions ?globals
+    then do
+      p <- pmatch ctxt cases guardExpr
+      case p of
+        Just ei -> evalIn ctxt ei
+        Nothing             ->
+          error $ "Incomplete pattern match:\n  cases: "
+              <> pretty cases <> "\n  expr: " <> pretty guardExpr
+    else do
+      v <- evalIn ctxt guardExpr
+      p <- pmatch ctxt cases (Val s a b v)
+      case p of
+        Just ei -> evalIn ctxt ei
+        Nothing             ->
+          error $ "Incomplete pattern match:\n  cases: "
+              <> pretty cases <> "\n  expr: " <> pretty v
 
 evalIn ctxt Hole {} =
   error "Trying to evaluate a hole, which should not have passed the type checker."
@@ -326,9 +335,39 @@ pmatch ctxt ((PBox s a b p, e):ps) e' = do
       -- In CBV mode this just meands we failed to pattern match
       pmatch ctxt ps e
 
-pmatch ctxt ((PInt _ _ _ n, e):ps) (Val _ _ _ (NumInt m)) | n == m = return $ Just e
+pmatch ctxt ((PInt _ _ _ n, e):ps) (Val _ _ _ (NumInt m)) =
+  if n == m
+    then return $ Just e
+    else pmatch ctxt ps e
 
-pmatch ctxt ((PFloat _ _ _ n, e):ps) (Val _ _ _ (NumFloat m)) | n == m = return $ Just e
+pmatch ctxt ((PInt s a b n, e):ps) e' = do
+  putStrLn $ "trying to match " ++ show n ++ " against " ++ show e'
+  -- Can only happen in CBN case
+  if CBN `elem` globalsExtensions ?globals
+    then do
+      -- Force evaluation of term
+      v <- evalIn ctxt e'
+      pmatch ctxt ((PInt s a b n, e):ps) (valExpr v)
+    else
+      -- In CBV mode this just means we failed to pattern match
+      pmatch ctxt ps e
+
+pmatch ctxt ((PFloat _ _ _ n, e):ps) (Val _ _ _ (NumFloat m)) =
+  if n == m
+    then return $ Just e
+    else pmatch ctxt ps e
+
+pmatch ctxt ((PFloat s a b n, e):ps) e' =
+  -- Can only happen in CBN case
+  if CBN `elem` globalsExtensions ?globals
+    then do
+      -- Force evaluation of term
+      v <- evalIn ctxt e'
+      pmatch ctxt ((PFloat s a b n, e):ps) (valExpr v)
+    else
+      -- In CBV mode this just means we failed to pattern match
+      pmatch ctxt ps e
+
 
 pmatch ctxt (_:ps) v = pmatch ctxt ps v
 
