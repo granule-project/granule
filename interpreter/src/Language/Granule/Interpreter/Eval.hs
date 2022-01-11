@@ -17,9 +17,9 @@ import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Pretty
-import Language.Granule.Syntax.Span
+import Language.Granule.Syntax.Span (nullSpanNoFile)
 import Language.Granule.Context
-import Language.Granule.Utils
+import Language.Granule.Utils (nullSpan, Globals, globalsExtensions, entryPoint, Extension(..))
 import Language.Granule.Runtime as RT
 
 import Data.Text (cons, uncons, unpack, snoc, unsnoc)
@@ -126,6 +126,10 @@ evalBinOp op v1 v2 = case op of
   where
     evalFail = error $ show [show op, show v1, show v2]
 
+-- Evaluate an expression to weak head normal form.
+-- evalInWHNF :: (?globals :: Globals) => Ctxt RValue -> RExpr -> IO RExpr
+-- evalInWHNF ctxt (App )
+
 -- Call-by-value big step semantics
 evalIn :: (?globals :: Globals) => Ctxt RValue -> RExpr -> IO RValue
 evalIn ctxt (App s _ _ e1 e2) = do
@@ -174,6 +178,7 @@ evalIn ctxt (AppTy s _ _ e t) =
   evalIn ctxt e
 
 evalIn ctxt (Binop _ _ _ op e1 e2) = do
+     putStrLn $ " op " ++ show op
      v1 <- evalIn ctxt e1
      v2 <- evalIn ctxt e2
      return $ evalBinOp op v1 v2
@@ -250,9 +255,11 @@ evalIn ctxt (Val s _ _ (Nec _ e)) =
 evalIn _ (Val _ _ _ v) = return v
 
 evalIn ctxt (Case s a b guardExpr cases) = do
+  putStrLn $ "In case with guard " ++ pretty guardExpr
   if CBN `elem` globalsExtensions ?globals
     then do
       p <- pmatch ctxt cases guardExpr
+      -- putStrLn $ "Pmatch happened giving " ++ show p
       case p of
         Just ei -> evalIn ctxt ei
         Nothing             ->
@@ -520,7 +527,8 @@ builtIns =
     uniqueReturn v = error $ "Bug in Granule. Can't borrow a non-unique: " <> prettyDebug v
 
     uniqueBind :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
-    uniqueBind ctxt f = return $ Ext () $ Primitive $ \(Promote () v) ->
+    uniqueBind ctxt f = return $ Ext () $ Primitive $ \(Promote () v) -> do
+      putStrLn "uniquebind"
       case v of
         (Val nullSpan () False (Ext () (Runtime fa))) ->
           let copy = copyFloatArray' fa in
@@ -528,7 +536,8 @@ builtIns =
               (App nullSpan () False
                 (Val nullSpan () False f)
                 (Val nullSpan () False (Nec () (Val nullSpan () False (Ext () (Runtime copy))))))
-        _otherwise ->
+        _otherwise -> do
+          putStrLn "HM"
           evalIn ctxt
             (App nullSpan () False
              (Val nullSpan () False f)
@@ -637,7 +646,9 @@ builtIns =
     closeHandle _ = error $ "Runtime exception: trying to close a non handle value"
 
     newFloatArray :: RValue -> IO RValue
-    newFloatArray = \(NumInt i) -> return $ Nec () (Val nullSpan () False $ Ext () $ Runtime $ RT.newFloatArray i)
+    newFloatArray = \(NumInt i) -> do
+      putStrLn "YOYO"
+      return $ Nec () (Val nullSpan () False $ Ext () $ Runtime $ RT.newFloatArray i)
 
     newFloatArray' :: RValue -> IO RValue
     newFloatArray' = \(NumInt i) -> return $ Ext () $ Runtime $ RT.newFloatArray' i
@@ -664,9 +675,11 @@ builtIns =
 
     writeFloatArray :: RValue -> IO RValue
     writeFloatArray = \(Nec _ (Val _ _ _ (Ext _ (Runtime fa)))) -> return $
-      Ext () $ Primitive $ \(NumInt i) -> return $
-      Ext () $ Primitive $ \(NumFloat v) -> return $
-      Nec () $ Val nullSpan () False $ Ext () $ Runtime $ RT.writeFloatArray fa i v
+       Ext () $ Primitive $ \(NumInt i) -> return $
+       Ext () $ Primitive $ \(NumFloat v) -> do
+       putStrLn $ show i ++ " <= " ++ show v
+       return $
+         Nec () $ Val nullSpan () False $ Ext () $ Runtime $ RT.writeFloatArray fa i v
 
     writeFloatArray' :: RValue -> IO RValue
     writeFloatArray' = \(Ext () (Runtime fa)) -> return $
@@ -688,6 +701,7 @@ evalDefs ctxt (Def _ var _ (EquationList _ _ _ [Equation _ _ _ rf [] e]) _ : def
       Nothing -> error $ "Name clash: `" <> sourceName var <> "` was already in the context."
 evalDefs ctxt (d : defs) = do
     let d' = desugar d
+    putStrLn $ pretty d'
     evalDefs ctxt (d' : defs)
 
 -- Maps an AST from the parser into the interpreter version with runtime values

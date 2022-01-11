@@ -8,7 +8,7 @@ fill arr [i] =
   in fill arr' [i - 1]
 
 main : (Float, FloatArray)
-main = 
+main =
   let x = fill (newFloatArray 10) [10] in
   let [y] = &x in
   let [()] = clone [y] as y' in (let () = deleteFloatArray y' in [()])

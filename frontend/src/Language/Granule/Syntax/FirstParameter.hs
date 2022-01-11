@@ -28,8 +28,8 @@ instance {-# OVERLAPPING #-} GFirstParameter (K1 i e) e where
   setFirstParameter' e (K1 _)  = K1 e
 
 instance {-# OVERLAPPABLE #-} GFirstParameter (K1 i a) e where
-  getFirstParameter' _ = undefined
-  setFirstParameter' _ _ = undefined
+  getFirstParameter' _ = error "get"
+  setFirstParameter' _ _ = error "set"
 
 instance GFirstParameter a e => GFirstParameter (M1 i c a) e where
   getFirstParameter' (M1 a) = getFirstParameter' a
