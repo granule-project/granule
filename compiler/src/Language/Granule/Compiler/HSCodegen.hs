@@ -63,17 +63,26 @@ cgDef (Def _ id _ EquationList{equations} typeschemes) = do
 
 cgData :: Compiler m => DataDecl -> m [Decl ()]
 cgData (GrDef.DataDecl _ id tyvars _ constrs) = do
-  conDecls <- mapM (cgDataConstr tyvars) constrs
+  conDecls <- mapM (cgDataConstr id tyvars) constrs
   let dhead = foldr ((\i a -> DHApp () a $ UnkindedVar () i) . (mkName . fst))
                     (DHead () (mkName id)) tyvars
   return [Hs.GDataDecl () (DataType ()) Nothing dhead Nothing conDecls []]
 
-cgDataConstr :: Compiler m => [(Id,GrType.Kind)] -> DataConstr -> m (GadtDecl ())
-cgDataConstr ls (DataConstrIndexed _ i scheme) = do
+cgDataConstr :: Compiler m => Id -> [(Id,GrType.Kind)] -> DataConstr -> m (GadtDecl ())
+cgDataConstr _ ls (DataConstrIndexed _ i scheme) = do
   scheme' <- cgTypeScheme scheme
   return $ GadtDecl () (mkName i) Nothing Nothing Nothing scheme'
-cgDataConstr ls d@(DataConstrNonIndexed s i tys) =
-  cgDataConstr ls $ nonIndexedToIndexedDataConstr i ls d
+cgDataConstr id ls d@(DataConstrNonIndexed s i tys) =
+  cgDataConstr id ls $ nonIndexedToIndexed id i ls d
+
+nonIndexedToIndexed :: Id -> Id -> [(Id, GrType.Kind)] -> DataConstr -> DataConstr
+nonIndexedToIndexed _  _     _      d@DataConstrIndexed{} = d
+nonIndexedToIndexed id tName tyVars (DataConstrNonIndexed sp dName params)
+    = DataConstrIndexed sp dName (Forall sp [] [] ty)
+  where
+    ty = foldr (FunTy Nothing) (returnTy (GrType.TyCon id) tyVars) params
+    returnTy t [] = t
+    returnTy t (v:vs) = returnTy (GrType.TyApp t ((GrType.TyVar . fst) v)) vs
 
 cgTypeScheme :: Compiler m => TypeScheme -> m (Hs.Type ())
 cgTypeScheme (Forall _ binders constraints typ) = do
@@ -124,6 +133,7 @@ cgType (GrType.TyApp t1 t2) =
     t1' <- cgType t1
     t2' <- cgType t2
     return $ Hs.TyApp () t1' t2'
+cgType (GrType.Star _t t2) = cgType t2
 cgType (GrType.TyInt i) = return mkUnit
 cgType (GrType.TyRational ri) = return mkUnit
 cgType (GrType.TyGrade mt i) = return mkUnit
@@ -131,7 +141,7 @@ cgType (GrType.TyInfix t1 t2 t3) = return mkUnit
 cgType (GrType.TySet p l_t) = return mkUnit
 cgType (GrType.TyCase t l_p_tt) = unsupported "cgType: tycase not implemented"
 cgType (GrType.TySig t t2) = unsupported "cgType: tysig not implemented"
-cgType (GrType.Star t t2) = unsupported "cgType: star not implemented"
+
 
 isTupleType :: GrType.Type -> Bool
 isTupleType (GrType.TyApp (GrType.TyCon id) _) = id == Id "," ","
