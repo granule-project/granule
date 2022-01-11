@@ -127,10 +127,10 @@ evalBinOp op v1 v2 = case op of
     evalFail = error $ show [show op, show v1, show v2]
 
 -- Evaluate an expression to weak head normal form.
-evalInWHNF :: (?globals :: Globals) => Ctxt RValue -> RExpr -> IO RExpr
-evalInWHNF ctxt (App s _ _ e1 e2) = do
-  v1 <- evalIn ctxt e1
-  case v1 of
+-- evalInWHNF :: (?globals :: Globals) => Ctxt RValue -> RExpr -> IO RExpr
+-- evalInWHNF ctxt (App s _ _ e1 e2) = do
+--   v1 <- evalIn ctxt e1
+--   case v1 of
 
 
 -- Call-by-value big step semantics
@@ -165,9 +165,9 @@ evalIn ctxt (App s _ _ e1 e2) = do
               _ -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in application at " <> pretty s
 
       Constr _ c vs -> do
-        if CBN `elem` globalsExtensions ?globals
-          then do
-            Constr _ c vs
+        -- if CBN `elem` globalsExtensions ?globals
+        --   then do
+        --     Constr _ c vs
         -- (cf. APP_R)
         v2 <- evalIn ctxt e2
         return $ Constr () c (vs <> [v2])
@@ -287,16 +287,30 @@ applyBindings :: Ctxt RExpr -> RExpr -> RExpr
 applyBindings [] e = e
 applyBindings ((var, e'):bs) e = applyBindings bs (subst e' var e)
 
-matchOrTriggerReduction :: Ctxt RValue -> (Expr a -> Bool) -> (Expr a -> IO b) -> Expr a -> IO (Maybe b)
-matchOrTriggerReduction matcher k e =
-  if matcher e
-    then do
-      e' <- k e
-      return $ Just e'
-    else do
-      e' <- evalIn ctxt e 
-      matchOrTriggerReduction matcher k e'
+-- matchOrTriggerReduction :: Ctxt RValue -> (Expr a -> Maybe (IO b)) -> Expr a -> IO (Maybe b)
+-- matchOrTriggerReduction ctxt matcher e =
+--   case matcher e of
+--     Just k  -> k >>= (return . Just)
+--     Nothing -> do
+--       e' <- evalIn ctxt e
+--       case matcher e' of
+--         Just k  -> k >>= (return . Just)
+--         Nothing -> return Nothing
 
+
+{-| Start pattern matching here passing in a context of values
+    a list of cases (pattern-expression pairs) and the guard expression.
+    If there is a matching pattern p_i then return Just of the branch
+    expression e_i and a list of bindings in scope -}
+pmatch ::
+  (?globals :: Globals)
+  => Ctxt RValue
+  -> [(Pattern (), RExpr)]
+  -> RExpr
+  -> IO (Maybe RExpr)
+pmatch = if CBN `elem` globalsExtensions ?globals then pmatchCBN else pmatchCBV
+
+-- CBN version of pattern matching
 pmatchCBN :: (?globals :: Globals)
   => Ctxt RValue
   -> [(Pattern (), RExpr)]
@@ -311,7 +325,7 @@ pmatchCBN _ ((PWild {}, eb):_) _ =
 pmatchCBN _ ((PVar _ _ _ var, eb):_) eg =
   return $ Just $ subst eg var eb
 
-pmatchCBN ctxt ((PBox _ _ _ p, eb):ps) eg = 
+pmatchCBN ctxt psAll@((PBox _ _ _ p, eb):ps) eg = 
   case eg of
     -- Match
     (Val _ _ _ (Promote _ eg')) -> do
@@ -320,111 +334,123 @@ pmatchCBN ctxt ((PBox _ _ _ p, eb):ps) eg =
         Just e  -> return $ Just e
         -- Try rest
         Nothing -> pmatch ctxt ps eg
+
+    _ -> do
+      if isReducible eg
+        -- Trigger reduction
+        then do
+          eg' <- evalIn ctxt eg
+          pmatchCBN ctxt psAll eg'
+        -- No match
+        else
+          pmatchCBN ctxt ps eg
+
+pmatchCBN ctxt psAll@((PConstr _ _ _ id innerPs, eb):ps) eg =
+  case constructorApplicationSpine eg of
+
     -- Trigger reduction
-    _ -> evalIn ctxt e
+    Nothing -> do
+      eg' <- evalIn ctxt eg
+      -- ... and re-enter pattern match
+      pmatchCBN ctxt psAll eg'
 
-pmatchCBN ctxt ((PConstr _ _ _ id innerPs, eb):ps) eg@(isConstructorApplication -> Just id) =
-  case e of
+    -- Possible match
+    Just (id', valArgs) -> do
+      if id == id' && length innerPs == length valArgs
+        -- Match
+        then do
+          -- Fold over the inner patterns trying to match (and reducing along the way)
+          let vs' = map valExpr vs
+          ebFinal <- foldM (\ebM (pi, vi) -> case ebM of
+                                      Nothing -> return Nothing
+                                      Just eb -> pmatchCBN ctxt [(pi, eb)] vi) (Just eb) (zip innerPs valArgs)
+
+          case ebFinal of
+            -- Success!
+            Just ebFinal' -> return $ Just ebFinal'
+            -- There was a failure somewhere so skip this pattern
+            Nothing  -> pmatchCBN ctxt ps eg
+
+        -- No match
+        else pmatchCBN ctxt ps eg
+
+pmatchCBN ctxt psAll@((PInt _ _ _ n, eb):ps) eg =
+  case eg of
+    -- Match
+    (Val _ _ _ (NumInt m)) | n == m -> return $ Just eb
+    _ ->
+        if isReducible eg
+        -- Trigger reduction
+        then do
+          eg' <- evalIn ctxt eg
+          pmatchCBN ctxt psAll eg'
+        -- No match
+        else
+          pmatchCBN ctxt ps eg
+
+pmatchCBN ctxt psAll@((PFloat _ _ _ n, eb):ps) eg =
+  case eg of
+    -- Match
+    (Val _ _ _ (NumFloat m)) | n == m -> return $ Just eb
+    _ ->
+        if isReducible eg
+        -- Trigger reduction
+        then do
+          eg' <- evalIn ctxt eg
+          pmatchCBN ctxt psAll eg'
+        -- No match
+        else
+          pmatchCBN ctxt ps eg
 
 
-{-| Start pattern matching here passing in a context of values
-    a list of cases (pattern-expression pairs) and the guard expression.
-    If there is a matching pattern p_i then return Just of the branch
-    expression e_i and a list of bindings in scope -}
-pmatch ::
+-- CBV version of pattern matching
+pmatchCBV ::
   (?globals :: Globals)
   => Ctxt RValue
   -> [(Pattern (), RExpr)]
   -> RExpr
   -> IO (Maybe RExpr)
-pmatch _ [] _ =
+
+pmatchCBV _ [] _ =
   return Nothing
 
-pmatch _ ((PWild {}, e):_)  _ =
+pmatchCBV _ ((PWild {}, e):_)  _ =
   return $ Just e
 
-pmatch ctxt ((PConstr _ _ _ id innerPs, t0):ps) v@(Val s a b (Constr _ id' vs))
+pmatchCBV ctxt ((PConstr _ _ _ id innerPs, t0):ps) v@(Val s a b (Constr _ id' vs))
  | id == id' && length innerPs == length vs = do
 
   -- Fold over the inner patterns
   let vs' = map valExpr vs
   tLastM <- foldM (\tiM (pi, vi) -> case tiM of
                                       Nothing -> return Nothing
-                                      Just ti -> pmatch ctxt [(pi, ti)] vi) (Just t0) (zip innerPs vs')
+                                      Just ti -> pmatchCBV ctxt [(pi, ti)] vi) (Just t0) (zip innerPs vs')
 
   case tLastM of
     Just tLast -> return $ Just tLast
     -- There was a failure somewhere
-    Nothing  -> pmatch ctxt ps v
+    Nothing  -> pmatchCBV ctxt ps v
 
-pmatch ctxt ((PConstr s a b id innerPs, t0):ps) e =
-  -- Can only happen in CBN case
-  if CBN `elem` globalsExtensions ?globals
-    case leftMostOfApplication e of
-      (Constr _ id vs) = 
-    then do
-      -- Force evaluation of term
-      v <- evalIn ctxt e
-      pmatch ctxt ((PConstr s a b id innerPs, t0):ps) (valExpr v)
-    else
-      -- In CBV mode this just means we failed to pattern match
-      pmatch ctxt ps e
-
-pmatch _ ((PVar _ _ _ var, e):_) v =
+pmatchCBV _ ((PVar _ _ _ var, e):_) v =
   return $ Just $ subst v var e
 
-pmatch ctxt ((PBox _ _ _ p, e):ps) v@(Val _ _ _ (Promote _ v')) = do
-  match <- pmatch ctxt [(p, e)] v'
+pmatchCBV ctxt ((PBox _ _ _ p, e):ps) v@(Val _ _ _ (Promote _ v')) = do
+  match <- pmatchCBV ctxt [(p, e)] v'
   case match of
     Just e -> return $ Just e
-    Nothing -> pmatch ctxt ps v
+    Nothing -> pmatchCBV ctxt ps v
 
-pmatch ctxt ((PBox s a b p, e):ps) e' = do
-  -- Can only happen in CBN case
-  if CBN `elem` globalsExtensions ?globals
-    then do
-      -- Force evaluation of term
-      v <- evalIn ctxt e'
-      pmatch ctxt ((PBox s a b p, e):ps) (valExpr v)
-    else
-      -- In CBV mode this just meands we failed to pattern match
-      pmatch ctxt ps e
-
-pmatch ctxt ((PInt _ _ _ n, e):ps) (Val _ _ _ (NumInt m)) =
+pmatchCBV ctxt ((PInt _ _ _ n, e):ps) (Val _ _ _ (NumInt m)) =
   if n == m
     then return $ Just e
-    else pmatch ctxt ps e
+    else pmatchCBV ctxt ps e
 
-pmatch ctxt ((PInt s a b n, e):ps) e' = do
-  putStrLn $ "trying to match " ++ show n ++ " against " ++ show e'
-  -- Can only happen in CBN case
-  if CBN `elem` globalsExtensions ?globals
-    then do
-      -- Force evaluation of term
-      v <- evalIn ctxt e'
-      pmatch ctxt ((PInt s a b n, e):ps) (valExpr v)
-    else
-      -- In CBV mode this just means we failed to pattern match
-      pmatch ctxt ps e
-
-pmatch ctxt ((PFloat _ _ _ n, e):ps) (Val _ _ _ (NumFloat m)) =
+pmatchCBV ctxt ((PFloat _ _ _ n, e):ps) (Val _ _ _ (NumFloat m)) =
   if n == m
     then return $ Just e
-    else pmatch ctxt ps e
+    else pmatchCBV ctxt ps e
 
-pmatch ctxt ((PFloat s a b n, e):ps) e' =
-  -- Can only happen in CBN case
-  if CBN `elem` globalsExtensions ?globals
-    then do
-      -- Force evaluation of term
-      v <- evalIn ctxt e'
-      pmatch ctxt ((PFloat s a b n, e):ps) (valExpr v)
-    else
-      -- In CBV mode this just means we failed to pattern match
-      pmatch ctxt ps e
-
-
-pmatch ctxt (_:ps) v = pmatch ctxt ps v
+pmatchCBV ctxt (_:ps) v = pmatchCBV ctxt ps v
 
 valExpr :: ExprFix2 g ExprF ev () -> ExprFix2 ExprF g ev ()
 valExpr = Val nullSpanNoFile () False
@@ -803,3 +829,11 @@ eval (AST dataDecls defs _ _ _) = do
       Just (Nec _ e) -> fmap Just (evalIn bindings e)
       -- ... or a regular value came out of the interpreter
       Just val           -> return $ Just val
+
+-- Predicate on whether a term is going to be reducible under the big
+-- step semantics (either reduction scheme)
+isReducible :: Expr ev a -> Bool
+isReducible (Val _ _ _ (Var _ _)) = True
+isReducible (Val _ _ _ _)    = False
+isReducible (Hole _ _ _ _) = False
+isReducible _              = True

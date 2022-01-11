@@ -420,13 +420,34 @@ instance Monad m => Freshenable m (Expr v a) where
 
 -- If an expression is a right-nested application tree on a contructor then
 -- extract the head constructor and the list of parameters
-constructorApplicationSpine :: Expr a -> Maybe (Id, [Expr a])
+constructorApplicationSpine :: Expr e a -> Maybe (Id, [Expr e a])
+
+constructorApplicationSpine (Val s' a' b' (Constr _ c vs)) =
+  Just (c, map (Val s' a' b') vs)
+
 constructorApplicationSpine (App _ _ _ (Val s' a' b' (Constr _ c vs)) e) =
   -- Left-most constructor application found
   Just (c, map (Val s' a' b') vs ++ [e])
+
 constructorApplicationSpine (App _ _ _ e1 e2) = do
   -- Node
   (cname, args) <- constructorApplicationSpine e1
   Just (cname, args ++ [e2])
+
 constructorApplicationSpine _ =
   Nothing
+
+
+-- constructorApplicationSpine :: Expr a -> Maybe (Id, [Value a], [Expr a])
+-- constructorApplicationSpine (Constr _ c vs) =
+--   Just (c, vs, [])
+
+-- constructorApplicationSpine (App _ _ _ (Val s' a' b' (Constr _ c vs)) e) =
+--   -- Left-most constructor application found
+--   Just (c, vs, [e])
+-- constructorApplicationSpine (App _ _ _ e1 e2) = do
+--   -- Node
+--   (cname, valArgs, args) <- constructorApplicationSpine e1
+--   Just (cname, valArgs, args ++ [e2])
+-- constructorApplicationSpine _ =
+--   Nothing
