@@ -127,8 +127,11 @@ evalBinOp op v1 v2 = case op of
     evalFail = error $ show [show op, show v1, show v2]
 
 -- Evaluate an expression to weak head normal form.
--- evalInWHNF :: (?globals :: Globals) => Ctxt RValue -> RExpr -> IO RExpr
--- evalInWHNF ctxt (App )
+evalInWHNF :: (?globals :: Globals) => Ctxt RValue -> RExpr -> IO RExpr
+evalInWHNF ctxt (App s _ _ e1 e2) = do
+  v1 <- evalIn ctxt e1
+  case v1 of
+
 
 -- Call-by-value big step semantics
 evalIn :: (?globals :: Globals) => Ctxt RValue -> RExpr -> IO RValue
@@ -162,6 +165,9 @@ evalIn ctxt (App s _ _ e1 e2) = do
               _ -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in application at " <> pretty s
 
       Constr _ c vs -> do
+        if CBN `elem` globalsExtensions ?globals
+          then do
+            Constr _ c vs
         -- (cf. APP_R)
         v2 <- evalIn ctxt e2
         return $ Constr () c (vs <> [v2])
@@ -281,6 +287,46 @@ applyBindings :: Ctxt RExpr -> RExpr -> RExpr
 applyBindings [] e = e
 applyBindings ((var, e'):bs) e = applyBindings bs (subst e' var e)
 
+matchOrTriggerReduction :: Ctxt RValue -> (Expr a -> Bool) -> (Expr a -> IO b) -> Expr a -> IO (Maybe b)
+matchOrTriggerReduction matcher k e =
+  if matcher e
+    then do
+      e' <- k e
+      return $ Just e'
+    else do
+      e' <- evalIn ctxt e 
+      matchOrTriggerReduction matcher k e'
+
+pmatchCBN :: (?globals :: Globals)
+  => Ctxt RValue
+  -> [(Pattern (), RExpr)]
+  -> RExpr
+  -> IO (Maybe RExpr)
+pmatchCBN _ [] _ =
+  return Nothing
+
+pmatchCBN _ ((PWild {}, eb):_) _ =
+  return $ Just eb
+
+pmatchCBN _ ((PVar _ _ _ var, eb):_) eg =
+  return $ Just $ subst eg var eb
+
+pmatchCBN ctxt ((PBox _ _ _ p, eb):ps) eg = 
+  case eg of
+    -- Match
+    (Val _ _ _ (Promote _ eg')) -> do
+      match <- pmatch ctxt [(p, eb)] eg'
+      case match of
+        Just e  -> return $ Just e
+        -- Try rest
+        Nothing -> pmatch ctxt ps eg
+    -- Trigger reduction
+    _ -> evalIn ctxt e
+
+pmatchCBN ctxt ((PConstr _ _ _ id innerPs, eb):ps) eg@(isConstructorApplication -> Just id) =
+  case e of
+
+
 {-| Start pattern matching here passing in a context of values
     a list of cases (pattern-expression pairs) and the guard expression.
     If there is a matching pattern p_i then return Just of the branch
@@ -314,6 +360,8 @@ pmatch ctxt ((PConstr _ _ _ id innerPs, t0):ps) v@(Val s a b (Constr _ id' vs))
 pmatch ctxt ((PConstr s a b id innerPs, t0):ps) e =
   -- Can only happen in CBN case
   if CBN `elem` globalsExtensions ?globals
+    case leftMostOfApplication e of
+      (Constr _ id vs) = 
     then do
       -- Force evaluation of term
       v <- evalIn ctxt e
