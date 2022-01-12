@@ -6,7 +6,7 @@
 module Language.Granule.Compiler where
 
 import Control.Exception (SomeException, displayException, try)
-import Control.Monad ((<=<), forM_)
+import Control.Monad ((<=<), forM_, when)
 import Development.GitRev
 import Data.Char (isSpace)
 import Data.List (isPrefixOf, stripPrefix)
@@ -71,6 +71,8 @@ compile config input = let ?globals = maybe mempty grGlobals (getEmbeddedGrFlags
     Right (ast, extensions) ->
       -- update globals with extensions
       let ?globals = ?globals { globalsExtensions = extensions } in do
+      -- reject CBN language pragma
+      when (CBN `elem` globalsExtensions ?globals) $ error "Cannot compile in CBN mode"
       -- Print to terminal when in debugging mode:
       debugM "Pretty-printed AST:" $ pretty ast
       debugM "Raw AST:" $ show ast
