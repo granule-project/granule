@@ -14,7 +14,7 @@ module Language.Granule.Runtime
   , showInt,showFloat, charToInt, charFromInt, stringAppend
   , newFloatArray,newFloatArray',writeFloatArray,writeFloatArray'
   , readFloatArray,readFloatArray',lengthFloatArray,deleteFloatArray,copyFloatArray'
-  , uniqueReturn,uniqueBind,uniquePush,uniquePull,uniquifyFloatArray
+  , uniqueReturn,uniqueBind,uniquePush,uniquePull,uniquifyFloatArray,borrowFloatArray
   , cap, Cap(..), Capability(..), CapabilityType
 
   -- Re-exported from Prelude
@@ -214,7 +214,7 @@ copyFloatArray' a =
     PointerArray{} -> error "expected non-unique array"
     HaskellArray len arr -> unsafePerformIO $ do
       arr' <- MA.mapArray id arr
-      return $ HaskellArray len arr'
+      return $ uniquifyFloatArray $ HaskellArray len arr'
 
 
 uniquifyFloatArray :: FloatArray -> FloatArray
@@ -226,6 +226,17 @@ uniquifyFloatArray a =
       forM_ [0..len - 1] $ \i -> do
         v <- MA.readArray arr i
         pokeElemOff (grPtr arr') i v
+      return arr'
+
+borrowFloatArray :: FloatArray -> FloatArray
+borrowFloatArray a = 
+  case a of
+    HaskellArray{} -> error "expected unique array"
+    PointerArray len ptr -> unsafePerformIO $ do
+      let arr' = newFloatArray' (len - 1)
+      forM_ [0..len - 1] $ \i -> do
+        v <- peekElemOff ptr i
+        MA.writeArray (grArr arr') i v
       return arr'
 
 --------------------------------------------------------------------------------

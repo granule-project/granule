@@ -520,7 +520,12 @@ builtIns =
       _oth -> error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
     uniqueReturn :: RValue -> IO RValue
-    uniqueReturn (Nec () v) = return $ Promote () v
+    uniqueReturn (Nec () v) = return $ 
+      case v of
+        (Val nullSpan () False (Ext () (Runtime fa))) ->
+          let borrowed = borrowFloatArray fa in
+            Promote () (Val nullSpan () False (Ext () (Runtime borrowed)))
+        _otherwise -> Promote () v
     uniqueReturn v = error $ "Bug in Granule. Can't borrow a non-unique: " <> prettyDebug v
 
     uniqueBind :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
