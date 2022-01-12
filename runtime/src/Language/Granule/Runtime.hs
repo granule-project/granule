@@ -143,14 +143,14 @@ data FloatArray =
 {-# NOINLINE newFloatArray #-}
 newFloatArray :: Int -> FloatArray
 newFloatArray size = unsafePerformIO $ do
-  ptr <- mallocArray (size + 1)
-  return $ PointerArray (size + 1) ptr
+  ptr <- mallocArray (size-1)
+  return $ PointerArray (size-1) ptr
 
 {-# NOINLINE newFloatArray' #-}
 newFloatArray' :: Int -> FloatArray
 newFloatArray' size = unsafePerformIO $ do
-  arr <- MA.newArray (0,size) 0.0
-  return $ HaskellArray (size + 1) arr
+  arr <- MA.newArray (0,size-1) 0.0
+  return $ HaskellArray (size-1) arr
 
 {-# NOINLINE writeFloatArray #-}
 writeFloatArray :: FloatArray -> Int -> Float -> FloatArray
