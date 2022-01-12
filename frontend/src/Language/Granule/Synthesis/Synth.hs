@@ -688,8 +688,8 @@ constrIntroHelper :: (?globals :: Globals)
   -> Maybe Type
   -> TypeScheme
   -> Synthesiser (Expr () Type, Ctxt (Assumption, Structure Id), Substitution, Bindings, Bool)
-constrIntroHelper (True, allowDef) defs gamma mode grade goalTy@(Forall s binders constraints t) =
-  case (isADT t, adtName t) of
+constrIntroHelper (True, allowDef) defs gamma mode grade goalTySch@(Forall s binders constraints goalTy) =
+  case (isADT goalTy, adtName goalTy) of
     (True, Just name) -> do
       debugM "Entered constrIntro helper with goal: " (show goalTy)
 
@@ -699,64 +699,23 @@ constrIntroHelper (True, allowDef) defs gamma mode grade goalTy@(Forall s binder
       let adtConstructors = concatMap snd (filter (\x -> fst x == name) (constructors state))
 
       -- For each relevent data constructor, we must now check that it's type matches the goal
-      adtConstructors' <- foldM (\ a (id, (conTy@(Forall s binders constraints conTy'), subst)) -> do
-         (success, specTy, specSubst) <- checkConstructor conTy subst
-         case (success, specTy) of
-           (True, Just specTy') -> do
+      adtConstructors' <- foldM (\ a (id, (conTySch@(Forall s binders constraints conTy), subst)) -> do
+         result <- checkConstructor conTySch goalTy subst
+         case result of
+           (Right (QED, True, specTy, _, specSubst, substFromFreshening), localState) -> do
+             specTy' <- conv $ substitute substFromFreshening specTy
              subst' <- conv $ combineSubstitutions s subst specSubst
              specTy'' <- conv $ substitute subst' specTy'
+             _ <- conv $ localState
              return $ (id, (Forall s binders constraints specTy'', subst')) : a
            _ -> return a ) [] adtConstructors
 
       -- Attempt to synthesise each applicable constructor, in order of ascending arity
-      synthesiseConstructors gamma (sortBy (flip compare') adtConstructors') mode goalTy
+      synthesiseConstructors gamma (sortBy (flip compare') adtConstructors') mode goalTySch
     _ -> none
   where
 
-
     compare' con1@(_, (Forall _ _ _ ty1, _)) con2@(_, (Forall _ _ _ ty2, _)) = compare (arity ty1) (arity ty2)
-
-    -- | Given a data constructor and a substition of type indexes, check that the goal type ~ data constructor type
-    checkConstructor :: TypeScheme -> Substitution -> Synthesiser (Bool, Maybe Type, Substitution)
-    checkConstructor con@(Forall _ binders coercions conTy) subst = do
-      (result, local) <- conv $ peekChecker $ do
-
-        (conTyFresh, tyVarsFreshD, substFromFreshening, constraints, coercions') <- freshPolymorphicInstance InstanceQ False con subst
-
-        -- Take the rightmost type of the function type, collecting the arguments along the way 
-        let (conTy'', args) = rightMostFunTy conTyFresh
-
-        conTy'' <- substitute coercions' conTy''
-
-        (success, spec, subst') <- equalTypes nullSpanNoFile t conTy''
-
-
-        cs <- get
-        -- Run the solver (i.e. to check constraints on type indexes hold)
-        result <-
-          if addedConstraints cs then do
-            let predicate = Conj $ predicateStack cs
-            predicate <- substitute subst' predicate
-
-            debugM "pred: " (pretty predicate)
-            let ctxtCk  = tyVarContext cs
-            coeffectVars <- includeOnlyGradeVariables s ctxtCk
-            coeffectVars <- return (coeffectVars `deleteVars` Language.Granule.Checker.Predicates.boundVars predicate)
-            constructors <- allDataConstructorNames
-            (_, result) <- liftIO $ provePredicate predicate coeffectVars constructors
-            return result
-          else return QED
-
-        case result of
-          QED -> do -- If the solver succeeds, return the specialised type
-            spec <- substitute substFromFreshening spec
-            return (success, Just $ reconstructFunTy spec (reverse args), subst')
-          _ ->
-            return (False, Nothing, [])
-      case result of
-        Right (success, Just spec, subst') -> conv $ local >> return (success, Just spec, subst')
-        _ -> return (False, Nothing, [])
-
 
     -- Traverse the constructor types and attempt to synthesise a program for each one
     synthesiseConstructors gamma [] mode goalTy = none
@@ -1085,12 +1044,38 @@ transformPatterns bindings adt ctxt (p:ps) unboxed = do
   return (pat:res, bindingsFinal)
 
 
+{- 
 
+     Given a data constructor, try to unify a fresh instance of this constructor with the assumption type. If the unification generates 
+     additional constraints then these are solved locally for that type constructor. 
 
-linearVars :: Ctxt (Assumption, Structure Id) -> Ctxt (Assumption, Structure Id)
-linearVars (var@(x, (Linear a, structure)):xs) = var : linearVars xs
-linearVars ((x, (Discharged{}, structure)):xs) = linearVars xs
-linearVars [] = []
+-}
+checkConstructor :: (?globals::Globals)
+      => TypeScheme 
+      -> Type 
+      -> Substitution 
+      -> Synthesiser (CheckerResult (SolverResult, Bool, Type, [Type], Substitution, Substitution), Checker ())
+checkConstructor con@(Forall  _ binders constraints conTy) assumptionTy subst = do
+  conv $ peekChecker $ do
+    (conTyFresh, tyVarsFreshD, substFromFreshening, constraints', coercions) <- freshPolymorphicInstance InstanceQ True con subst []
+    -- Take the rightmost type of the function type, collecting the arguments along the way 
+    let (conTy', args) = rightMostFunTy conTyFresh
+    conTy'' <- substitute coercions conTy'
+
+    (success, specTy, subst') <- equalTypes nullSpanNoFile assumptionTy conTy''
+ 
+    cs <- get
+    -- Run the solver (i.e. to check constraints on type indexes hold)
+    if addedConstraints cs then do
+      let predicate = Conj $ predicateStack cs
+      predicate <- substitute subst' predicate
+      coeffectVars <- tyVarContextExistential >>= includeOnlyGradeVariables nullSpanNoFile
+      coeffectVars <- return (coeffectVars `deleteVars` Language.Granule.Checker.Predicates.boundVars predicate)
+      constructors <- allDataConstructorNames
+      (_, result) <- liftIO $ provePredicate predicate coeffectVars constructors
+      return (result, success, specTy, args, subst', substFromFreshening)
+    else return (QED, success, specTy, args, subst', substFromFreshening)
+
 
 
 
