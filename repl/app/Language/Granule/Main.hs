@@ -94,6 +94,12 @@ main = do
         Nothing -> return ()
         Just [] -> loop st
         Just input
+          | input == ":ext" -> do
+            if null (globalsExtensions ?globals)
+              then liftIO $ putStrLn $ "Extensions loaded: (none)"
+              else liftIO $ putStrLn $ "Extensions loaded: " ++ intercalate ", " (map show $ globalsExtensions ?globals)
+            loop st
+
           | input == ":q" || input == ":quit" ->
             liftIO (putStrLn "Leaving Granule interactive.")
 
@@ -134,6 +140,7 @@ helpMenu = unlines
       ,":holes                    ()    Show goal information"
       ,":module <filepath>        (:m)  Add file/module to the current context"
       ,":reload                   (:r)  Reload last file loaded into REPL"
+      ,":ext                      ()    Show which language extensions are loaded"
       ,"-----------------------------------------------------------------------------------"
       ]
 
@@ -154,6 +161,7 @@ handleCMD s =
       pexp <- liftIO' $ try $ either die return $ runReaderT (evalStateT (expr $ scanTokens str) []) "interactive"
       case pexp of
         Right ast -> liftIO $ print ast
+
         Left e -> do
           liftIO $ putStrLn "Input not an expression, checking for TypeScheme"
           pts <- liftIO' $ try $ either die return $ runReaderT (evalStateT (tscheme $ scanTokens str) []) "interactive"
