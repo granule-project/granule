@@ -143,13 +143,13 @@ data FloatArray =
 {-# NOINLINE newFloatArray #-}
 newFloatArray :: Int -> FloatArray
 newFloatArray size = unsafePerformIO $ do
-  ptr <- mallocArray (size-1)
+  ptr <- mallocArray size
   return $ PointerArray (size-1) ptr
 
 {-# NOINLINE newFloatArray' #-}
 newFloatArray' :: Int -> FloatArray
 newFloatArray' size = unsafePerformIO $ do
-  arr <- MA.newArray (0,size-1) 0.0
+  arr <- MA.newArray (0,size) 0.0
   return $ HaskellArray (size-1) arr
 
 {-# NOINLINE writeFloatArray #-}
@@ -223,7 +223,7 @@ uniquifyFloatArray a =
     PointerArray{} -> error "expected non-unique array"
     HaskellArray len arr -> unsafePerformIO $ do
       let arr' = newFloatArray len
-      forM_ [0..len - 1] $ \i -> do
+      forM_ [0..len] $ \i -> do
         v <- MA.readArray arr i
         pokeElemOff (grPtr arr') i v
       return arr'
@@ -234,7 +234,7 @@ borrowFloatArray a =
     HaskellArray{} -> error "expected unique array"
     PointerArray len ptr -> unsafePerformIO $ do
       let arr' = newFloatArray' len
-      forM_ [0..len - 1] $ \i -> do
+      forM_ [0..len] $ \i -> do
         v <- peekElemOff ptr i
         MA.writeArray (grArr arr') i v
       return arr'
