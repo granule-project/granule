@@ -497,6 +497,7 @@ appHelper (allowRSync, allowDef) defs left (var@(x, (a, s)) : right) add@(Additi
       (canUse, useContextOut, _) <- useVar var omega add grade
       if canUse
         then do
+          omega' <- ctxtSubtract omega useContextOut 
           x2 <- freshIdentifier
           -- Extend context (focussed) with x2 : B
 
