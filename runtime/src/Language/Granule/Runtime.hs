@@ -37,7 +37,7 @@ import Prelude
     ( Int, IO, Double, Maybe(..), Show(..), Char, read, fromEnum, toEnum
     , (<$>), (<>), fromIntegral, ($), error, (>), (++), id, Num (..), (.) )
 import Control.Monad
--- import GHC.Err (undefined)
+import GHC.Err (undefined)
 import Data.Function (const)
 import Data.Text
 import Data.Text.IO
@@ -205,7 +205,7 @@ deleteFloatArray :: FloatArray -> ()
 deleteFloatArray PointerArray{grPtr} =
   unsafePerformIO $ free grPtr
 deleteFloatArray HaskellArray{grArr} =
-  unsafePerformIO $ void (MA.mapArray (const (error "noo")) grArr)
+  unsafePerformIO $ void (MA.mapArray (const undefined) grArr)
 
 {-# NOINLINE copyFloatArray' #-}
 copyFloatArray' :: FloatArray -> FloatArray

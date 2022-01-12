@@ -436,18 +436,3 @@ constructorApplicationSpine (App _ _ _ e1 e2) = do
 
 constructorApplicationSpine _ =
   Nothing
-
-
--- constructorApplicationSpine :: Expr a -> Maybe (Id, [Value a], [Expr a])
--- constructorApplicationSpine (Constr _ c vs) =
---   Just (c, vs, [])
-
--- constructorApplicationSpine (App _ _ _ (Val s' a' b' (Constr _ c vs)) e) =
---   -- Left-most constructor application found
---   Just (c, vs, [e])
--- constructorApplicationSpine (App _ _ _ e1 e2) = do
---   -- Node
---   (cname, valArgs, args) <- constructorApplicationSpine e1
---   Just (cname, valArgs, args ++ [e2])
--- constructorApplicationSpine _ =
---   Nothing
