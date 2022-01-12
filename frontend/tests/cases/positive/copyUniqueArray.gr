@@ -1,5 +1,3 @@
-language CBN
-
 fill : *FloatArray -> !Int -> *FloatArray
 fill arr [0] = arr;
 fill arr [i] =
