@@ -18,6 +18,7 @@ import Control.Monad.State.Strict
 import Control.Monad.Except (throwError)
 import Data.List (isPrefixOf)
 import Data.List.NonEmpty (NonEmpty(..))
+import Data.List (isPrefixOf, sort)
 import Data.List.Split (splitPlaces)
 import qualified Data.List.NonEmpty as NonEmpty (toList)
 import Data.Maybe
@@ -382,11 +383,11 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
 
   -- The type of the equation, after substitution.
   equationTy' <- substitute subst ty
-  let equationTy'' = refineEquationTy patternGam equationTy'
+  let splittingTy = calculateSplittingTy patternGam equationTy'
 
   -- Store the equation type in the state in case it is needed when splitting
   -- on a hole.
-  modify (\st -> st { equationTy = Just equationTy'' })
+  modify (\st -> st { defName = Just id, defTy = Just equationTy', splittingTy = Just splittingTy})
 
   patternGam <- substitute subst patternGam
   debugM "context in checkEquation 1" $ (show patternGam)
@@ -424,14 +425,29 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
     (p:ps) -> illLinearityMismatch s (p:|ps)
 
   where
-    -- Given a context and a function type, refines the type by deconstructing
-    -- patterns into their constituent patterns and replacing parts of the type
-    -- by the corresponding pattern.
+
+
+    -- TODO: Rewrite this function so it's less confusing as to what info is being 
+    --       passed to the splitter here.
+
+    -- Given a context of patterns, and the type of the equation, uses 
+    -- these to calculate a type which represents the arguments which are to
+    -- be split on by deconstructing patterns into their constituent patterns     
+    
     -- e.g. Given a pattern: Cons x xs
     --      and a type:      Vec (n+1) t -> Vec n t
     --      returns:         t -> Vec n t -> Vec n t
-    refineEquationTy :: [(Id, Assumption)] -> Type -> Type
-    refineEquationTy patternGam ty =
+
+    -- i.e. If Vec (n+1) t -> Vec n t is the type of the equation
+    -- and the pattern we're splitting on is (Cons x xs) then we 
+    -- take the types of each sub-pattern of Cons:
+    --      x  : t 
+    --      xs : Vec n t
+    -- and use these to build a function from these sub-patterns to
+    -- the return type of our input type.
+
+    calculateSplittingTy :: [(Id, Assumption)] -> Type -> Type
+    calculateSplittingTy patternGam ty =
       case patternGam of
         [] -> ty
         (_:_) ->
@@ -448,9 +464,9 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
 
     replaceParameters :: [[Type]] -> Type -> Type
     replaceParameters [] ty = ty
-    replaceParameters ([]:tss) (FunTy id grade _ ty) = replaceParameters tss ty
+    replaceParameters ([]:tss) (FunTy id _ ty) = replaceParameters tss ty
     replaceParameters ((t:ts):tss) ty =
-      FunTy Nothing Nothing t (replaceParameters (ts:tss) ty)
+      FunTy Nothing t (replaceParameters (ts:tss) ty)
     replaceParameters _ t = error $ "Expecting function type: " <> pretty t
 
     -- Convert an id+assumption to a type.
@@ -524,7 +540,7 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
                   dc <- mapM (lookupDataConstructor s) b
                   let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
                   return (a, sd)) pats
-              (_, cases) <- generateCases s constructors ctxt boundVariables
+              (_, cases) <- generateCases s constructors ctxt boundVariables 
 
               -- If we are in synthesise mode, also try to synthesise a
               -- term for each case split goal *if* this is also a hole
@@ -2141,7 +2157,7 @@ programSynthesise ctxt vars ty = do
   debugM "equation Nameeee" (show $ equationName currentState)
   debugM "equation ctxt" (show $ ctxt)
 
-  let (defs, currentName) = case (equationName currentState, equationTy currentState) of
+  let (currentDef, currentName) = case (defName currentState, defTy currentState) of
         (Just name, Just ty') -> ([(name, ty')], name)
         _ -> ([], mkId "")
 
