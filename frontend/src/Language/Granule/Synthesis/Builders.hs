@@ -139,14 +139,16 @@ makeEitherRight lTy rTy e  =
   (App s rTy False (Val s (SumTy lTy rTy) False (Constr (SumTy lTy rTy) (mkId "Right") [])) e)
   where s = nullSpanNoFile
 
-makeCase :: Type -> Type -> Id -> Id -> Id -> Expr () Type -> Expr () Type -> Expr () Type
-makeCase t1 t2 sId lId rId lExpr rExpr =
-  Case s (SumTy t1 t2) False (Val s (SumTy t1 t2) False (Var (SumTy t1 t2) sId)) [(PConstr s (SumTy t1 t2) False (mkId "Left") [(PVar s t1 False lId)], lExpr), (PConstr s (SumTy t1 t2) False (mkId "Right") [(PVar s t2 False rId)], rExpr)]
-  where s = nullSpanNoFile
+-- makeCase :: Type -> Type -> Id -> Id -> Id -> Expr () Type -> Expr () Type -> Expr () Type
+-- makeCase t1 t2 sId lId rId lExpr rExpr =
+--    Case s (SumTy t1 t2) False (Val s (SumTy t1 t2) False (Var (SumTy t1 t2) sId)) [(PConstr s (SumTy t1 t2) False (mkId "Left") [(PVar s t1 False lId)], lExpr), (PConstr s (SumTy t1 t2) False (mkId "Right") [(PVar s t2 False rId)], rExpr)]
+--  where s = nullSpanNoFile
 
-makeCase' :: Type -> Id -> [(Pattern Type, Expr () Type)] -> Type -> Expr () Type
-makeCase' ty id exprPats goal = 
-  Case s goal False (Val s ty False (Var ty id)) exprPats
+makeCase :: Type -> Id -> [(Pattern Type, Expr () Type)] -> Type -> Maybe Type -> Expr () Type
+makeCase ty id exprPats goal grade = 
+  case grade of
+    Nothing     -> Case s goal False (Val s ty False (Var ty id)) exprPats
+    Just grade' -> Case s goal False  (Val s (Box ty grade') False (Promote (Box ty grade') (Val s ty False (Var ty id)))) exprPats
   where s = nullSpanNoFile 
 
 makeBoxCase :: Type -> Type -> Id -> [(Pattern Type, Expr () Type)] -> Type -> Expr () Type
