@@ -127,21 +127,108 @@ evalBinOp op v1 v2 = case op of
     evalFail = error $ show [show op, show v1, show v2]
 
 -- Evaluate an expression to weak head normal form.
--- evalInWHNF :: (?globals :: Globals) => Ctxt RValue -> RExpr -> IO RExpr
--- evalInWHNF ctxt (App s _ _ e1 e2) = do
---   v1 <- evalIn ctxt e1
---   case v1 of
+evalInWHNF :: (?globals :: Globals) => Ctxt RValue -> RExpr -> IO RExpr
+evalInWHNF ctxt (App s a b e1 e2) = do
+    -- (cf. APP_L)
+    v1 <- evalInWHNF ctxt e1
+    case v1 of
+      (Val _ _ _ (Ext _ (Primitive k))) -> do
+        -- (cf. APP_R)
+        -- Force eval of the parameter for primitives
+        v2 <- evalIn ctxt e2
+        vRes <- k v2
+        return $ Val s a b vRes
+
+      (Val _ _ _ (Abs _ p _ e3)) -> do
+        -- (cf. P_BETA CBN)
+        pResult <- pmatchCBN ctxt [(p, e3)] e2
+        case pResult of
+          Just e3' -> evalInWHNF ctxt e3'
+          _ -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in application at " <> pretty s
+
+      (Val _ _ _ (Constr _ c vs)) -> do
+        return $ App s a b v1 e2
+
+      _ -> error $ show v1
+      -- _ -> error "Cannot apply value"
+
+-- Deriving applications get resolved to their names
+evalInWHNF ctxt (AppTy _ _ _ (Val s a rf (Var a' n)) t) | internalName n `elem` ["push", "pull", "copyShape", "drop"] =
+  evalInWHNF ctxt (Val s a rf (Var a' (mkId $ pretty n <> "@" <> pretty t)))
+
+-- Other type applications have no run time component (currently)
+evalInWHNF ctxt (AppTy s _ _ e t) =
+  evalInWHNF ctxt e
+
+evalInWHNF ctxt (Binop s a b op e1 e2) = do
+     v1 <- evalInWHNF ctxt e1
+     v2 <- evalInWHNF ctxt e2
+     case (v1, v2) of
+       (Val _ _ _ v1, Val _ _ _ v2) -> return $ Val s a b $ evalBinOp op v1 v2
+       (v1', v2') -> error $ "CBN reduction failed on (" ++ pretty v1 ++ " " ++ pretty op ++ " " ++ pretty v2 ++ ")"
+
+evalInWHNF ctxt (LetDiamond s _ _ p _ e1 e2) = do
+  -- (cf. LET_1)
+  v1 <- evalIn ctxt e1
+  case v1 of
+    (isDiaConstr -> Just e) -> do
+        -- Do the delayed side effect
+        eInner <- e
+        -- (cf. LET_2)
+        v1' <- evalInWHNF ctxt eInner
+        -- (cf. LET_BETA)
+        pResult  <- pmatch ctxt [(p, e2)] v1'
+        case pResult of
+          Just e2' ->
+              evalInWHNF ctxt e2'
+          Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in let at " <> pretty s
+
+    other -> fail $ "Runtime exception: Expecting a diamonad value but got: "
+                      <> prettyDebug other
+
+evalInWHNF ctxt (Val s a b (Var _ x)) =
+    case lookup x ctxt of
+      Just val@(Ext _ (PrimitiveClosure f)) -> return $ Val s a b $ Ext () $ Primitive (f ctxt)
+      Just val -> return $ Val s a b $ val
+      Nothing  -> fail $ "Variable '" <> sourceName x <> "' is undefined in context."
+
+evalInWHNF _ e@(Val _ _ _ v) = return e
+
+evalInWHNF ctxt (Case s a b guardExpr cases) = do
+  p <- pmatchCBN ctxt cases guardExpr
+  case p of
+    Just ei -> evalInWHNF ctxt ei
+    Nothing             ->
+          error $ "Incomplete pattern match:\n  cases: "
+              <> pretty cases <> "\n  expr: " <> pretty guardExpr
+
+evalInWHNF ctxt Hole {} =
+  error "Trying to evaluate a hole, which should not have passed the type checker."
+
+evalInWHNF ctxt TryCatch {} =
+  error "TryCatch is not supported by the CBN extension yet."
 
 
 -- Call-by-value big step semantics
 evalIn :: (?globals :: Globals) => Ctxt RValue -> RExpr -> IO RValue
-evalIn ctxt (App s _ _ e1 e2) = do
+evalIn ctxt e =
+  if CBN `elem` globalsExtensions ?globals
+    then do
+      e' <- evalInWHNF ctxt e
+      -- finally eagerly evaluate
+      evalInCBV ctxt e'
+
+    else evalInCBV ctxt e
+
+
+evalInCBV :: (?globals :: Globals) => Ctxt RValue -> RExpr -> IO RValue
+evalInCBV ctxt (App s _ _ e1 e2) = do
     -- (cf. APP_L)
-    v1 <- evalIn ctxt e1
+    v1 <- evalInCBV ctxt e1
     case v1 of
       (Ext _ (Primitive k)) -> do
         -- (cf. APP_R)
-        v2 <- evalIn ctxt e2
+        v2 <- evalInCBV ctxt e2
         k v2
 
       Abs _ p _ e3 -> do
@@ -151,17 +238,17 @@ evalIn ctxt (App s _ _ e1 e2) = do
             -- (cf. P_BETA CBN)
             pResult <- pmatch ctxt [(p, e3)] e2
             case pResult of
-              Just e3' -> evalIn ctxt e3'
+              Just e3' -> evalInCBV ctxt e3'
               _ -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in application at " <> pretty s
 
           -- CallByValue default
           else do
             -- (cf. APP_R)
-            v2 <- evalIn ctxt e2
+            v2 <- evalInCBV ctxt e2
             -- (cf. P_BETA)
             pResult <- pmatch ctxt [(p, e3)] (valExpr v2)
             case pResult of
-              Just e3' -> evalIn ctxt e3'
+              Just e3' -> evalInCBV ctxt e3'
               _ -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in application at " <> pretty s
 
       Constr _ c vs -> do
@@ -169,64 +256,63 @@ evalIn ctxt (App s _ _ e1 e2) = do
         --   then do
         --     Constr _ c vs
         -- (cf. APP_R)
-        v2 <- evalIn ctxt e2
+        v2 <- evalInCBV ctxt e2
         return $ Constr () c (vs <> [v2])
 
       _ -> error $ show v1
       -- _ -> error "Cannot apply value"
 
 -- Deriving applications get resolved to their names
-evalIn ctxt (AppTy _ _ _ (Val s a rf (Var a' n)) t) | internalName n `elem` ["push", "pull", "copyShape", "drop"] =
-  evalIn ctxt (Val s a rf (Var a' (mkId $ pretty n <> "@" <> pretty t)))
+evalInCBV ctxt (AppTy _ _ _ (Val s a rf (Var a' n)) t) | internalName n `elem` ["push", "pull", "copyShape", "drop"] =
+  evalInCBV ctxt (Val s a rf (Var a' (mkId $ pretty n <> "@" <> pretty t)))
 
 -- Other type applications have no run time component (currently)
-evalIn ctxt (AppTy s _ _ e t) =
-  evalIn ctxt e
+evalInCBV ctxt (AppTy s _ _ e t) =
+  evalInCBV ctxt e
 
-evalIn ctxt (Binop _ _ _ op e1 e2) = do
-     putStrLn $ " op " ++ show op
-     v1 <- evalIn ctxt e1
-     v2 <- evalIn ctxt e2
+evalInCBV ctxt (Binop _ _ _ op e1 e2) = do
+     v1 <- evalInCBV ctxt e1
+     v2 <- evalInCBV ctxt e2
      return $ evalBinOp op v1 v2
 
-evalIn ctxt (LetDiamond s _ _ p _ e1 e2) = do
+evalInCBV ctxt (LetDiamond s _ _ p _ e1 e2) = do
   -- (cf. LET_1)
-  v1 <- evalIn ctxt e1
+  v1 <- evalInCBV ctxt e1
   case v1 of
     (isDiaConstr -> Just e) -> do
         -- Do the delayed side effect
         eInner <- e
         -- (cf. LET_2)
-        v1' <- evalIn ctxt eInner
+        v1' <- evalInCBV ctxt eInner
         -- (cf. LET_BETA)
         pResult  <- pmatch ctxt [(p, e2)] (valExpr v1')
         case pResult of
           Just e2' ->
-              evalIn ctxt e2'
+              evalInCBV ctxt e2'
           Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in let at " <> pretty s
 
     other -> fail $ "Runtime exception: Expecting a diamonad value but got: "
                       <> prettyDebug other
 
-evalIn ctxt (TryCatch s _ _ e1 p _ e2 e3) = do
-  v1 <- evalIn ctxt e1
+evalInCBV ctxt (TryCatch s _ _ e1 p _ e2 e3) = do
+  v1 <- evalInCBV ctxt e1
   case v1 of
     (isDiaConstr -> Just e) ->
       catch ( do
         eInner <- e
-        e1' <- evalIn ctxt eInner
+        e1' <- evalInCBV ctxt eInner
         pmatch ctxt [(PBox s () False p, e2)] (valExpr e1') >>=
           \case
-            Just e2' -> evalIn ctxt e2'
+            Just e2' -> evalInCBV ctxt e2'
             Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in try at " <> pretty s
       )
        -- (cf. TRY_BETA_2)
-      (\(e :: IOException) -> evalIn ctxt e3)
+      (\(e :: IOException) -> evalInCBV ctxt e3)
     other -> fail $ "Runtime exception: Expecting a diamond value but got: " <> prettyDebug other
 
 {-
 -- Hard-coded 'scale', removed for now
-evalIn _ (Val _ _ _ (Var _ v)) | internalName v == "scale" = return
+evalInCBV _ (Val _ _ _ (Var _ v)) | internalName v == "scale" = return
   (Abs () (PVar nullSpan () False $ mkId " x") Nothing (Val nullSpan () False
     (Abs () (PVar nullSpan () False $ mkId " y") Nothing (
       letBox nullSpan (PVar nullSpan () False $ mkId " ye")
@@ -235,52 +321,50 @@ evalIn _ (Val _ _ _ (Var _ v)) | internalName v == "scale" = return
            OpTimes (Val nullSpan () False (Var () (mkId " x"))) (Val nullSpan () False (Var () (mkId " ye"))))))))
 -}
 
-evalIn ctxt (Val _ _ _ (Var _ x)) =
+evalInCBV ctxt (Val _ _ _ (Var _ x)) =
     case lookup x ctxt of
       Just val@(Ext _ (PrimitiveClosure f)) -> return $ Ext () $ Primitive (f ctxt)
       Just val -> return val
       Nothing  -> fail $ "Variable '" <> sourceName x <> "' is undefined in context."
 
-evalIn ctxt (Val s _ _ (Promote _ e)) =
+evalInCBV ctxt (Val s _ _ (Promote _ e)) =
   if CBN `elem` globalsExtensions ?globals
     then do
       return $ Promote () e
     else do
       -- (cf. Box)
-      v <- evalIn ctxt e
+      v <- evalInCBV ctxt e
       return $ Promote () (Val s () False v)
 
-evalIn ctxt (Val s _ _ (Nec _ e)) =
+evalInCBV ctxt (Val s _ _ (Nec _ e)) =
   if CBN `elem` globalsExtensions ?globals
     then do
       return $ Nec () e
     else do
-      v <- evalIn ctxt e
+      v <- evalInCBV ctxt e
       return $ Nec () (Val s () False v)
 
-evalIn _ (Val _ _ _ v) = return v
+evalInCBV _ (Val _ _ _ v) = return v
 
-evalIn ctxt (Case s a b guardExpr cases) = do
-  putStrLn $ "In case with guard " ++ pretty guardExpr
+evalInCBV ctxt (Case s a b guardExpr cases) = do
   if CBN `elem` globalsExtensions ?globals
     then do
       p <- pmatch ctxt cases guardExpr
-      -- putStrLn $ "Pmatch happened giving " ++ show p
       case p of
-        Just ei -> evalIn ctxt ei
+        Just ei -> evalInCBV ctxt ei
         Nothing             ->
           error $ "Incomplete pattern match:\n  cases: "
               <> pretty cases <> "\n  expr: " <> pretty guardExpr
     else do
-      v <- evalIn ctxt guardExpr
+      v <- evalInCBV ctxt guardExpr
       p <- pmatch ctxt cases (Val s a b v)
       case p of
-        Just ei -> evalIn ctxt ei
+        Just ei -> evalInCBV ctxt ei
         Nothing             ->
           error $ "Incomplete pattern match:\n  cases: "
               <> pretty cases <> "\n  expr: " <> pretty v
 
-evalIn ctxt Hole {} =
+evalInCBV ctxt Hole {} =
   error "Trying to evaluate a hole, which should not have passed the type checker."
 
 applyBindings :: Ctxt RExpr -> RExpr -> RExpr
@@ -325,21 +409,21 @@ pmatchCBN _ ((PWild {}, eb):_) _ =
 pmatchCBN _ ((PVar _ _ _ var, eb):_) eg =
   return $ Just $ subst eg var eb
 
-pmatchCBN ctxt psAll@((PBox _ _ _ p, eb):ps) eg = 
+pmatchCBN ctxt psAll@((PBox _ _ _ p, eb):ps) eg =
   case eg of
     -- Match
     (Val _ _ _ (Promote _ eg')) -> do
-      match <- pmatch ctxt [(p, eb)] eg'
+      match <- pmatchCBN ctxt [(p, eb)] eg'
       case match of
         Just e  -> return $ Just e
         -- Try rest
-        Nothing -> pmatch ctxt ps eg
+        Nothing -> pmatchCBN ctxt ps eg
 
     _ -> do
       if isReducible eg
         -- Trigger reduction
         then do
-          eg' <- evalIn ctxt eg
+          eg' <- evalInWHNF ctxt eg
           pmatchCBN ctxt psAll eg'
         -- No match
         else
@@ -350,7 +434,7 @@ pmatchCBN ctxt psAll@((PConstr _ _ _ id innerPs, eb):ps) eg =
 
     -- Trigger reduction
     Nothing -> do
-      eg' <- evalIn ctxt eg
+      eg' <- evalInWHNF ctxt eg
       -- ... and re-enter pattern match
       pmatchCBN ctxt psAll eg'
 
@@ -360,7 +444,6 @@ pmatchCBN ctxt psAll@((PConstr _ _ _ id innerPs, eb):ps) eg =
         -- Match
         then do
           -- Fold over the inner patterns trying to match (and reducing along the way)
-          let vs' = map valExpr vs
           ebFinal <- foldM (\ebM (pi, vi) -> case ebM of
                                       Nothing -> return Nothing
                                       Just eb -> pmatchCBN ctxt [(pi, eb)] vi) (Just eb) (zip innerPs valArgs)
@@ -382,7 +465,7 @@ pmatchCBN ctxt psAll@((PInt _ _ _ n, eb):ps) eg =
         if isReducible eg
         -- Trigger reduction
         then do
-          eg' <- evalIn ctxt eg
+          eg' <- evalInWHNF ctxt eg
           pmatchCBN ctxt psAll eg'
         -- No match
         else
@@ -396,7 +479,7 @@ pmatchCBN ctxt psAll@((PFloat _ _ _ n, eb):ps) eg =
         if isReducible eg
         -- Trigger reduction
         then do
-          eg' <- evalIn ctxt eg
+          eg' <- evalInWHNF ctxt eg
           pmatchCBN ctxt psAll eg'
         -- No match
         else
@@ -602,7 +685,6 @@ builtIns =
 
     uniqueBind :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
     uniqueBind ctxt f = return $ Ext () $ Primitive $ \(Promote () v) -> do
-      putStrLn "uniquebind"
       case v of
         (Val nullSpan () False (Ext () (Runtime fa))) ->
           let copy = copyFloatArray' fa in
@@ -611,7 +693,6 @@ builtIns =
                 (Val nullSpan () False f)
                 (Val nullSpan () False (Nec () (Val nullSpan () False (Ext () (Runtime copy))))))
         _otherwise -> do
-          putStrLn "HM"
           evalIn ctxt
             (App nullSpan () False
              (Val nullSpan () False f)
@@ -721,7 +802,6 @@ builtIns =
 
     newFloatArray :: RValue -> IO RValue
     newFloatArray = \(NumInt i) -> do
-      putStrLn "YOYO"
       return $ Nec () (Val nullSpan () False $ Ext () $ Runtime $ RT.newFloatArray i)
 
     newFloatArray' :: RValue -> IO RValue
@@ -751,7 +831,6 @@ builtIns =
     writeFloatArray = \(Nec _ (Val _ _ _ (Ext _ (Runtime fa)))) -> return $
        Ext () $ Primitive $ \(NumInt i) -> return $
        Ext () $ Primitive $ \(NumFloat v) -> do
-       putStrLn $ show i ++ " <= " ++ show v
        return $
          Nec () $ Val nullSpan () False $ Ext () $ Runtime $ RT.writeFloatArray fa i v
 
@@ -775,7 +854,6 @@ evalDefs ctxt (Def _ var _ (EquationList _ _ _ [Equation _ _ _ rf [] e]) _ : def
       Nothing -> error $ "Name clash: `" <> sourceName var <> "` was already in the context."
 evalDefs ctxt (d : defs) = do
     let d' = desugar d
-    putStrLn $ pretty d'
     evalDefs ctxt (d' : defs)
 
 -- Maps an AST from the parser into the interpreter version with runtime values
