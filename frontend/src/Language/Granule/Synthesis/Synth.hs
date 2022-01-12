@@ -850,7 +850,7 @@ constrElimHelper (allowRSync, allowDef) defs left (var@(x, (a, structure)):right
 
                 let (vars, types, recursiveArgs) = unzip3 taggedAssumptions
                 let assumptions = zip vars types
-                let structDecr = or recursiveArgs
+                -- let structDecr = or recursiveArgs
 
                 -- Synthesiser $ lift $ lift $ lift $ modify (\state ->
                 --   state {
