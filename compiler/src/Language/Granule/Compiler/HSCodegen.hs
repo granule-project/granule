@@ -187,7 +187,7 @@ cgExprTuple _ _ = error "expected tuple"
 
 cgVal :: Compiler m => CVal -> m (Exp ())
 cgVal (Promote _ty ex) = cgExpr ex
-cgVal (Pure ty ex) = error ""
+cgVal (Pure ty ex) = error "cgVal: not implemented"
 cgVal (GrExpr.Var _ty i)  =
   return $ Hs.Var () $ UnQual () $ mkName i
 cgVal (NumInt n) =
