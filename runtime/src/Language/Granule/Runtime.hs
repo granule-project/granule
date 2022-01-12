@@ -179,7 +179,7 @@ writeFloatArray' a i v =
 readFloatArray :: FloatArray -> Int -> (Float, FloatArray)
 readFloatArray a i =
   if i > grLength a
-  then error $ "array index out of bounds: " ++ show i ++ " > " ++ show (grLength a)
+  then error $ "readFloatArray index out of bounds: " ++ show i ++ " > " ++ show (grLength a)
   else case a of
     HaskellArray{} -> error "expected unique array"
     PointerArray len ptr -> unsafePerformIO $ do
@@ -190,7 +190,7 @@ readFloatArray a i =
 readFloatArray' :: FloatArray -> Int -> (Float, FloatArray)
 readFloatArray' a i =
   if i > grLength a
-  then error $ "array index out of bounds: " ++ show i ++ " > " ++ show (grLength a)
+  then error $ "readFloatArray' index out of bounds: " ++ show i ++ " > " ++ show (grLength a)
   else case a of
     PointerArray{} -> error "expected non-unique array"
     HaskellArray _ arr -> unsafePerformIO $ do
@@ -216,24 +216,25 @@ copyFloatArray' a =
       arr' <- MA.mapArray id arr
       return $ uniquifyFloatArray $ HaskellArray len arr'
 
-
+{-# NOINLINE uniquifyFloatArray #-}
 uniquifyFloatArray :: FloatArray -> FloatArray
 uniquifyFloatArray a =
   case a of
     PointerArray{} -> error "expected non-unique array"
     HaskellArray len arr -> unsafePerformIO $ do
-      let arr' = newFloatArray len
+      let arr' = newFloatArray (len+1)
       forM_ [0..len] $ \i -> do
         v <- MA.readArray arr i
         pokeElemOff (grPtr arr') i v
       return arr'
 
+{-# NOINLINE borrowFloatArray #-}
 borrowFloatArray :: FloatArray -> FloatArray
 borrowFloatArray a = 
   case a of
     HaskellArray{} -> error "expected unique array"
     PointerArray len ptr -> unsafePerformIO $ do
-      let arr' = newFloatArray' len
+      let arr' = newFloatArray' (len+1)
       forM_ [0..len] $ \i -> do
         v <- peekElemOff ptr i
         MA.writeArray (grArr arr') i v
