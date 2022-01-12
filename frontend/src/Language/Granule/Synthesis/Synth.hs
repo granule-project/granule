@@ -899,7 +899,7 @@ constrElimHelper (allowRSync, allowDef) defs left (var@(x, (a, structure)):right
 
                   return (var', assumption, success)) conTyArgs
 
-                let (vars, types, recursiveArgs) = unzip3 taggedAssumptions
+                let (vars, types, _) = unzip3 taggedAssumptions
                 let assumptions = zip vars types
                 -- let structDecr = or recursiveArgs
 
