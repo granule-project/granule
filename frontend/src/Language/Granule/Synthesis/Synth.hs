@@ -813,9 +813,7 @@ constrElimHelper :: (?globals :: Globals)
 constrElimHelper (allowRSync, allowDef) defs left [] _ _ _ _ = none
 constrElimHelper (allowRSync, allowDef) defs left (var@(x, (a, structure)):right) gamma mode grade goalTySch@(Forall _ _ _ goalTy) =
   constrElimHelper (allowRSync, allowDef) defs (var:left) right gamma mode grade goalTySch `try` do
-    debugM "in constr elim" ""
-    let omega = left ++ right
-    (canUse, omega', _) <- useVar var omega mode grade
+    (canUse, omega, _) <- useVar var (left ++ right) mode grade
     state <- Synthesiser $ lift $ lift $ lift get
     let topLevelDefId = topLevelDef state
     let (assumptionTy, grade) = case a of
@@ -824,154 +822,96 @@ constrElimHelper (allowRSync, allowDef) defs left (var@(x, (a, structure)):right
     if canUse && isADT assumptionTy then
       case adtName assumptionTy of
         Just name -> do
-        -- (_, cases) <- conv $ generateCases nullSpanNoFile constructors [var] [x] (Just $ FunTy Nothing t goalTy)
-        -- (_, cases) <- conv $ generateCases nullSpanNoFile (constructors state) [(x, Linear (Box grade t))] [x] (Just $ FunTy Nothing (Box grade t) goalTy)
+          -- Retrieve relevant data constructors for this ADT 
           let adtConstructors = concatMap snd (filter (\x -> fst x == name) (constructors state))
-          -- For each relevent data constructor, we must now check that it's type matches the goal
-          cases <- foldM (\ a (id, (conTy@(Forall s binders constraints conTy'), subst)) -> do
-            (success, (pat, assumptions, subst')) <- checkConstructor id topLevelDefId conTy assumptionTy subst grade
-            case (success, pat) of
-              (True, Just pat) -> do
-                subst'' <- conv $ combineSubstitutions s subst subst'
-                return $ (pat, assumptions, subst'') : a
-              _ -> return a) [] adtConstructors
-          debugM "linear cases: " (show cases <> " assumption ty: " <> show assumptionTy)
-          case (mode, grade) of
-            (Subtractive{}, Nothing) -> do
-              (patterns, delta, subst, bindings', sd) <- synthCases assumptionTy mode gamma omega' cases goalTySch
-              return (makeCase' assumptionTy x patterns goalTy, delta, subst, bindings', sd)
-            (Additive{}, Nothing) -> do
-              (patterns, delta, subst, bindings', sd) <- synthCases assumptionTy mode gamma omega cases goalTySch
-              delta2 <- maybeToSynthesiser $ ctxtAdd omega' delta
-              return (makeCase' assumptionTy x patterns goalTy, delta2, subst, bindings', sd)
-            (Subtractive{}, Just grade') -> do
-              let omega'' = deleteVar x omega'
-              (patterns, delta, subst, bindings', sd) <- synthCases assumptionTy mode gamma omega'' cases goalTySch
-              -- return (makeBoxCase assumptionTy grade' x patterns goalTy, omega' ++ delta, subst, bindings')
-              return (makeBoxCase assumptionTy grade' x patterns goalTy, delta, subst, bindings', sd)
-            (Additive{}, Just grade') -> do
-              (patterns, delta, subst, bindings', sd) <- synthCases assumptionTy mode gamma omega cases goalTySch
-              return (makeBoxCase assumptionTy grade' x patterns goalTy, delta, subst, bindings', sd)
-        _ -> none
+
+          (patterns, delta, resSubst, resBindings, structDec) <- foldM (\ (exprs, deltas, substs, bindings, strInfs) (id, (conTySch@(Forall s binders constraints conTy), conSubst)) -> do
+            conv newConjunct 
+            result <- checkConstructor conTySch assumptionTy conSubst
+            conv newConjunct 
+            case result of 
+              (Right (QED, True, _, conTyArgs, conSubst', _), localState) -> do
+                
+                -- Calculate assumptions
+                taggedAssumptions <- mapM (\ arg -> do
+                  var' <- freshIdentifier 
+                  arg' <- conv $ substitute conSubst' arg
+
+                  (structure, local) <- conv $ peekChecker $ do
+                    (success, spec, subst') <- equalTypes nullSpanNoFile arg' assumptionTy
+                    if success then return $ (True, Dec topLevelDefId) else return $ (False, Arg topLevelDefId)
+
+                  let (success, annotation) = case structure of {Right (success, struct) -> (success, struct); Left _ -> (False, Arg topLevelDefId)}
+                  let assumption = case grade of
+                        Nothing -> (Linear arg', annotation)
+                        Just grade' -> (Discharged arg' grade', annotation)
+
+                  return (var', assumption, success)) conTyArgs
+
+                let (vars, types, recursiveArgs) = unzip3 taggedAssumptions
+                let assumptions = zip vars types
+                let structDecr = or recursiveArgs
+
+                -- Synthesiser $ lift $ lift $ lift $ modify (\state ->
+                --   state {
+                --    structurallyDecreasing = structDecr
+                --  })
+
+                let pat = makePattern id vars grade
+
+                _ <- conv localState
+
+                -- Synthesise the term for this branch using the local context  
+                let (gamma', omega', unboxed) = bindAssumptions assumptions gamma omega 
+                (e, del, subst, b, strInf) <- synthesiseInner defs False mode gamma' omega' grade goalTySch (False, True, True)
+                del' <- checkAssumptions (x, assumptionTy) mode del assumptions unboxed
+                case transformPattern b assumptionTy (gamma' ++ omega') pat unboxed of
+                  Just (pat', b') ->
+                    let op = case mode of Additive{} -> TyInfix TyOpJoin ; _ -> TyInfix TyOpMeet
+                    in do
+                      returnDelta <- ctxtMerge op del' deltas
+                      returnSubst <- conv $ combineSubstitutions nullSpanNoFile subst substs
+                      return ((pat', e):exprs, returnDelta, returnSubst, bindings ++ b', strInfs || strInf)
+                  Nothing -> return (exprs, deltas, substs, bindings, strInfs)
+              _ -> return (exprs, deltas, substs, bindings, strInfs)
+            ) ([], [], [], [], False) adtConstructors
+          -- Concluding the implication here ensures that the solving we do for this constructor
+          -- does not pollute the other branches of the case
+          conv $ concludeImplication nullSpanNoFile []
+          case patterns of 
+            (pat:_) -> do 
+              finDelta <- case mode of {Additive{} -> maybeToSynthesiser $ ctxtAdd omega delta; _ -> return delta}
+              return (makeCase assumptionTy x patterns goalTy grade, delta, resSubst, resBindings, structDec)
+            _ -> none
     else none
-
-  where
-
-    checkConstructor :: Id -> Id -> TypeScheme -> Type -> Substitution -> Maybe Type -> Synthesiser (Bool, (Maybe (Pattern ()), Ctxt (Assumption, Structure Id), Substitution))
-    checkConstructor name topLevelDef con@(Forall  _ binders constraints conTy) assumptionTy subst grade = do
-      (result, local) <- conv $ peekChecker $ do
-
-        (conTyFresh, tyVarsFreshD, substFromFreshening, constraints, coercions') <- freshPolymorphicInstance InstanceQ False con subst
-
-        -- Take the rightmost type of the function type, collecting the arguments along the way 
-        let (conTy'', args) = rightMostFunTy conTyFresh
-
-        conTy'' <- substitute coercions' conTy''
-
-        (success, spec, subst') <- equalTypes nullSpanNoFile assumptionTy conTy''
-
-        cs <- get
-
-        -- Run the solver (i.e. to check constraints on type indexes hold)
-        result <-
-          if addedConstraints cs then do
-            let predicate = Conj $ predicateStack cs
-            predicate <- substitute subst' predicate
-
-            debugM "pred: " (pretty predicate)
-            let ctxtCk  = tyVarContext cs
-            coeffectVars <- includeOnlyGradeVariables nullSpanNoFile ctxtCk
-            coeffectVars <- return (coeffectVars `deleteVars` Language.Granule.Checker.Predicates.boundVars predicate)
-            constructors <- allDataConstructorNames
-            (_, result) <- liftIO $ provePredicate predicate coeffectVars constructors
-            return result
-          else return QED
-
-        case result of
-          QED -> do -- If the solver succeeds, return the specialised type
-            debugM "success!" (show name)
-            spec <- substitute substFromFreshening spec
-
-            -- Construct pattern based on constructor arguments specialised by type equality
-            assmps <- mapM (\ arg -> do
-              var <- freshIdentifierBase "x"
-              arg' <- substitute subst' arg
-
         
-              (structure, local) <- peekChecker $ do
-                (success, spec, subst') <- equalTypes nullSpanNoFile arg' assumptionTy
-                if success then return $ Dec topLevelDef else return $ Arg topLevelDef
 
-              let annotation = case structure of 
-                    Right struct -> struct
-                    Left _ -> Arg topLevelDef
-              
-            --  let structure' = case structure of
-            --        (Right struct, _) -> struct
-            --        (Left _, _) -> Arg topLevelDef
-
-              let assumption = case grade of
-                    Nothing -> (Linear arg', annotation)
-                    Just grade' -> (Discharged arg' grade', annotation)
+makePattern :: Id ->  [Id] -> Maybe Type -> Pattern ()
+makePattern conId vars Nothing = PConstr nullSpanNoFile () False conId (map (PVar nullSpanNoFile () False) vars)
+makePattern conId vars (Just grade) = PBox nullSpanNoFile () False (PConstr nullSpanNoFile () False conId (map (PVar nullSpanNoFile () False) vars))
 
 
-              debugM "constrElim assumption: " (show assumption)
-              return (mkId $ removeDots var, assumption, success)) args
-
-            let (vars, assmps', recursiveArgs) = unzip3 assmps
-            let assmps'' = zip vars assmps'
-
-
-            let structDecr = or recursiveArgs
-
-            let pat = makePattern name vars grade
-
-            return (success, structDecr, (Just pat, assmps'', subst'))
-          _ ->
-            return (False, False, (Nothing, [], []))
-      case result of
-        Right (True, structDecr, (pat, assmps, subst)) -> do 
-          
-          Synthesiser $ lift $ lift $ lift $ modify (\state ->
-              state {
-                structurallyDecreasing = structDecr
-                  })
-          conv $ local >> return (True, (pat, assmps, subst))
-        _ -> return (False, (Nothing, [], []))
-
-    removeDots xs =  [ x | x <- xs, x `notElem` "." ]
-
-    makePattern conId vars Nothing = PConstr nullSpanNoFile () False conId (map (PVar nullSpanNoFile () False) vars)
-    makePattern conId vars (Just grade) = PBox nullSpanNoFile () False (PConstr nullSpanNoFile () False conId (map (PVar nullSpanNoFile () False) vars))
-
-    synthCases adt mode g o [(p, assmps, conSubst)] goalTy = do
-      let (g', o', unboxed) = bindAssumptions assmps g o []
-      (e, delta, subst, bindings, sd1) <- synthesiseInner defs False mode g' o' grade goalTy (False, True, True)
-      debugM "in synth next cases - \n goal: " (show goalTy <> " \n e: " <> pretty e <> " \n delta: "  <> show delta ++ "\n g': " ++ show g' ++ "\n o': " ++ show o' ++ "\n p: " ++ show p ++ "\n asmps: " ++ show assmps)
-      del' <- checkAssumptions (x, getAssumptionType a) mode delta assmps unboxed
-      case transformPattern bindings adt (g' ++ o') p unboxed of
-        Just (pat, bindings') -> do
-          return ([(pat, e)], del', subst, bindings', sd1)
-        Nothing -> none
-
-    synthCases adt mode g o ((p, assmps, conSubst):cons) goalTy = do
-      (exprs, delta, subst, bindings, sd) <- synthCases adt mode g o cons goalTy
-      let (g', o', unboxed) = bindAssumptions assmps g o []
-      (e, delta', subst', bindings', sd') <- synthesiseInner defs False mode g' o' grade goalTy (False, True, True)
-      debugM "in synth cases: " (show e <> " " <> show delta' ++ "g': " ++ show g' ++ " o': " ++ show o' ++ "p: " ++ show p ++ " asmps: " ++ show assmps)
-      del' <- checkAssumptions (x, getAssumptionType a) mode delta' assmps unboxed
-      case transformPattern bindings' adt (g' ++ o') p unboxed of
-        Just (pat, bindings'') ->
-          let op = case mode of Additive{} -> TyInfix TyOpJoin ; _ -> TyInfix TyOpMeet
-          in do
-            returnDelta <- ctxtMerge op del' delta
-            returnSubst <- conv $ combineSubstitutions nullSpanNoFile subst subst'
-            return ((pat, e):exprs, returnDelta, returnSubst, bindings ++ bindings'', sd || sd')
-        Nothing -> none
-    synthCases adt mode g o _ goalTy = none
+bindAssumptions ::
+     Ctxt (Assumption, Structure Id)
+  -> Ctxt (Assumption, Structure Id)
+  -> Ctxt (Assumption, Structure Id)
+  -> (Ctxt (Assumption, Structure Id), Ctxt (Assumption, Structure Id), Ctxt (Assumption, Structure Id))
+bindAssumptions = bindAssumptions' []
+  where 
+  bindAssumptions' unboxed [] gamma omega = (gamma, omega, unboxed)
+  bindAssumptions' unboxed (assumption@(id, (Linear t, structure)):assmps) gamma omega =
+    let (gamma', omega') = bindToContext assumption gamma omega (isLAsync t) in
+    bindAssumptions' unboxed assmps gamma' omega' 
+  bindAssumptions' unboxed (assumption@(id, (Discharged (Box grade t) grade', structure)):assmps) gamma omega =
+    let (gamma', omega') = bindToContext (id, (Discharged t (TyInfix TyOpTimes grade grade'), structure)) gamma omega (isLAsync t) in
+    bindAssumptions' ((id, (Discharged t (TyInfix TyOpTimes grade grade'), structure)):unboxed) assmps gamma' omega' 
+  bindAssumptions' unboxed (assumption@(id, (Discharged t _, structure)):assmps) gamma omega =
+    let (gamma', omega') = bindToContext assumption gamma omega (isLAsync t) in
+    bindAssumptions' unboxed assmps gamma' omega' 
 
 
-checkAssumptions :: (?globals::Globals) => (Id, Type)
+checkAssumptions :: (?globals::Globals) 
+  => (Id, Type)
   -> ResourceScheme a
   -> [(Id, (Assumption, Structure Id))]
   -> [(Id, (Assumption, Structure Id))]
@@ -1033,23 +973,6 @@ checkAssumptions (x, t') sub@Additive{} del ((id, (Discharged t g, structure)):a
           res <- solve
           if res then checkAssumptions (x, t') sub del assmps unboxed else none
 
-bindAssumptions ::
-  [(Id, (Assumption, Structure Id))]
-  -> Ctxt (Assumption, Structure Id)
-  -> Ctxt (Assumption, Structure Id)
-  -> Ctxt (Assumption, Structure Id)
-  -> (Ctxt (Assumption, Structure Id), Ctxt (Assumption, Structure Id), Ctxt (Assumption, Structure Id))
-bindAssumptions [] g o unboxed = (g, o, unboxed)
-bindAssumptions (assumption@(id, (Linear t, structure)):assmps) g o unboxed =
-  let (g', o') = bindToContext assumption g o (isLAsync t) in
-  bindAssumptions assmps g' o'  unboxed
-bindAssumptions (assumption@(id, (Discharged (Box grade t) grade', structure)):assmps) g o unboxed =
-  let (g', o') = bindToContext (id, (Discharged t (TyInfix TyOpTimes grade grade'), structure)) g o (isLAsync t) in
-  bindAssumptions assmps g' o' ((id, (Discharged t (TyInfix TyOpTimes grade grade'), structure)):unboxed)
-bindAssumptions (assumption@(id, (Discharged t _, structure)):assmps) g o unboxed =
-  let (g', o') = bindToContext assumption g o (isLAsync t) in
-  bindAssumptions assmps g' o' unboxed
-
 
 -- Construct a typed pattern from an untyped one from the context
 transformPattern :: Ctxt (Id, Type) -> Type -> [(Id, (Assumption, Structure Id))] -> Pattern () -> Ctxt (Assumption, Structure Id) -> Maybe (Pattern Type, Ctxt (Id, Type))
@@ -1069,6 +992,7 @@ transformPattern bindings adt ctxt (PBox s () b p) unboxed = do
   (pat', bindings') <- transformPattern bindings adt ctxt p unboxed
   Just (PBox s adt b pat', bindings')
 transformPattern _ _ _ _ _ = Nothing
+
 
 transformPatterns :: Ctxt (Id, Type) -> Type -> [(Id, (Assumption, Structure Id))] -> [Pattern ()] -> Ctxt (Assumption, Structure Id) -> Maybe ([Pattern Type], Ctxt (Id, Type))
 transformPatterns bindings adt ctxt [] unboxed = Just ([], bindings)
