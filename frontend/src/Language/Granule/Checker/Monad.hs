@@ -181,9 +181,12 @@ data CheckerState = CS
             -- Names from modules which are hidden
             , allHiddenNames :: M.Map Id Id
 
-            -- The type of the current equation.
-            , equationTy :: Maybe Type
-            , equationName :: Maybe Id
+            -- The type of the current definition being checked
+            , defTy :: Maybe Type
+            , defName :: Maybe Id
+
+            -- Used by the case splitter 
+            , splittingTy :: Maybe Type
 
             -- Definitions that have been triggered during type checking
             -- by the auto deriver (so we know we need them in the interpreter)
@@ -212,8 +215,9 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , deriv = Nothing
                , derivStack = []
                , allHiddenNames = M.empty
-               , equationTy = Nothing
-               , equationName = Nothing
+               , defTy = Nothing
+               , defName = Nothing
+               , splittingTy = Nothing
                , derivedDefinitions = []
                , wantedTypeConstraints = []
                , addedConstraints = False

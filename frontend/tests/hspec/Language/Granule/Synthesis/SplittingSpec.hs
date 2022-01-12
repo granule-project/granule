@@ -47,17 +47,17 @@ aId = mkId "a"
 trueId = mkId "True"
 falseId = mkId "False"
 
-boolDataCons :: (?globals :: Globals) => Ctxt (Ctxt (TypeScheme, Substitution))
+boolDataCons :: (?globals :: Globals) => Ctxt (Ctxt (TypeScheme, Substitution, [Int]))
 boolDataCons =
-  [(boolId, [(falseId, (Forall nullSpan [] [] (TyCon boolId), [])), (trueId, (Forall nullSpan [] [] (TyCon boolId), []))])]
+  [(boolId, [(falseId, (Forall nullSpan [] [] (TyCon boolId), [], [])), (trueId, (Forall nullSpan [] [] (TyCon boolId), [], []))])]
 
-boolTyCons :: Ctxt (Type, [Id], Bool)
-boolTyCons = [(boolId, (Type 0, [falseId, trueId], False))]
+boolTyCons :: Ctxt (Type, [Id], [Int])
+boolTyCons = [(boolId, (Type 0, [falseId, trueId], []))]
 
 runSplitter :: (?globals :: Globals)
   => Type
-  -> Ctxt (Ctxt (TypeScheme, Substitution))
-  -> Ctxt (Type, [Id], Bool)
+  -> Ctxt (Ctxt (TypeScheme, Substitution, [Int]))
+  -> Ctxt (Type, [Id], [Int])
   -> Ctxt (Type, Quantifier)
   -> Ctxt Assumption
   -> [Id]
@@ -68,6 +68,6 @@ runSplitter ty dataCons tyCons tyVarCtxt ctxt boundIds = do
   , dataConstructors = concatMap snd dataCons
   , typeConstructors = tyCons
   , tyVarContext     = tyVarCtxt
-  , splittingTy      = Just ty }
+  , equationTy       = Just ty }
   (Right (ids, res), _) <- runChecker st (generateCases nullSpan dataCons ctxt boundIds)
   return (ids, map fst res)
