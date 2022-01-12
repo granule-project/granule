@@ -266,14 +266,7 @@ instance MonadException m => MonadException (Ex.ExceptT e m) where
                   in fmap Ex.runExceptT $ f run'
 
 replEval :: (?globals :: Globals) => Int -> AST () () -> IO (Maybe RValue)
-replEval val (AST dataDecls defs _ _ _) = do
-    bindings <- evalDefs builtIns (map toRuntimeRep defs)
-    case lookup (mkId (" repl" <> show val)) bindings of
-      Nothing -> return Nothing
-      Just (Pure _ e)    -> fmap Just (evalIn bindings e)
-      Just (Promote _ e) -> fmap Just (evalIn bindings e)
-      Just (Nec _ e)     -> fmap Just (evalIn bindings e)
-      Just val           -> return $ Just val
+replEval val = evalAtEntryPoint (mkId (" repl" <> show val))
 
 liftIO' :: IO a -> REPLStateIO a
 liftIO' = lift.lift

@@ -894,17 +894,20 @@ instance RuntimeRep Value where
   toRuntimeRep (NumFloat x) = NumFloat x
 
 eval :: (?globals :: Globals) => AST () () -> IO (Maybe RValue)
-eval (AST dataDecls defs _ _ _) = do
+eval = evalAtEntryPoint (mkId entryPoint)
+
+evalAtEntryPoint :: (?globals :: Globals) => Id -> AST () () -> IO (Maybe RValue)
+evalAtEntryPoint entryPoint (AST dataDecls defs _ _ _) = do
     bindings <- evalDefs builtIns (map toRuntimeRep defs)
-    case lookup (mkId entryPoint) bindings of
-      Nothing -> return Nothing
+    case lookup entryPoint bindings of
+      Nothing             -> return Nothing
       -- Evaluate inside a promotion of pure if its at the top-level
-      Just (Pure _ e)    -> fmap Just (evalIn bindings e)
+      Just (Pure _ e)     -> fmap Just (evalIn bindings e)
       Just (Ext _ (PureWrapper e)) -> do
         eExpr <- e
         fmap Just (evalIn bindings eExpr)
       Just (Promote _ e) -> fmap Just (evalIn bindings e)
-      Just (Nec _ e) -> fmap Just (evalIn bindings e)
+      Just (Nec _ e)     -> fmap Just (evalIn bindings e)
       -- ... or a regular value came out of the interpreter
       Just val           -> return $ Just val
 
