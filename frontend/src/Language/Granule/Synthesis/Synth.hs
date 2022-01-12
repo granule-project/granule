@@ -766,6 +766,40 @@ constrIntroHelper (True, allowDef) defs gamma mode grade goalTySch@(Forall s bin
 
 constrIntroHelper (_, allowDef) defs gamma mode _ goalTy@(Forall s binders constraints t) = none
 
+
+
+{- 
+
+Constructor elimination synthesis
+=================================
+constrElimHelper handles the synthesis of elimination forms for ADTs/GADTs.
+
+This function traverses the assumptions in Ω (the focusing context)
+and tries to synthesise an elimination form for each assumption if its
+type is an ADT or GADT. We then retrieve the relevant constructors from
+the global state and traverse these, applying each to checkConstructor.
+
+
+Assumptions that arise from pattern matching are bound in the contexts 
+for subsequent systems differently depending on the resource scheme and 
+grading style (graded vs. linear base). Each configuration is outlined here:
+
+LINEAR BASE
+  * Additive:
+
+  * Subtractive:
+
+GRADED BASE
+  * Additive:
+
+    C : B₁ʳ¹ → .. Bₙⁿ¹ → KA) ∈ D
+    ----------------------------------------------------------------------------------------------- :: CaseGraded
+    Γ, x : ☐ᵣ KA ⊢ₛ B' ⇒ case x of C yⁱ₁ .. yⁱₙ → t; (Δ\y¹₁ .. \y¹ₙ) ⊔ (Δ\yⁿ₁ .. \yⁿₙ)  + x : ☐ᵣ A
+
+  * Subtractive:
+
+
+-}
 constrElimHelper :: (?globals :: Globals)
   => (Bool, Bool)
   -> Ctxt Type
