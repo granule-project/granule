@@ -24,7 +24,7 @@ module Language.Granule.Runtime
   , pack, Text
   ) where
 
-import Foreign.Marshal.Array ( mallocArray )
+import Foreign.Marshal.Array ( callocArray )
 import Foreign.Ptr ( Ptr )
 import Foreign.Storable ( Storable(peekElemOff, pokeElemOff) )
 import System.IO.Unsafe ( unsafePerformIO )
@@ -143,7 +143,7 @@ data FloatArray =
 {-# NOINLINE newFloatArray #-}
 newFloatArray :: Int -> FloatArray
 newFloatArray size = unsafePerformIO $ do
-  ptr <- mallocArray size
+  ptr <- callocArray size
   return $ PointerArray (size-1) ptr
 
 {-# NOINLINE newFloatArray' #-}
