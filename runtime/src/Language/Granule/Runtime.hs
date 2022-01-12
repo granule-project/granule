@@ -149,7 +149,7 @@ newFloatArray size = unsafePerformIO $ do
 {-# NOINLINE newFloatArray' #-}
 newFloatArray' :: Int -> FloatArray
 newFloatArray' size = unsafePerformIO $ do
-  arr <- MA.newArray (0,size) 0.0
+  arr <- MA.newArray (0,size-1) 0.0
   return $ HaskellArray (size-1) arr
 
 {-# NOINLINE writeFloatArray #-}
