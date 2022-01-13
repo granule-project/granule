@@ -271,29 +271,15 @@ evalInCBV ctxt (App s _ _ e1 e2) = do
         k v2
 
       Abs _ p _ e3 -> do
-        -- CallByName extension
-        if CBN `elem` globalsExtensions ?globals
-          then do
-            -- (cf. P_BETA CBN)
-            pResult <- pmatch ctxt [(p, e3)] e2
-            case pResult of
-              Just e3' -> evalInCBV ctxt e3'
-              _ -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in application at " <> pretty s
-
-          -- CallByValue default
-          else do
-            -- (cf. APP_R)
-            v2 <- evalInCBV ctxt e2
-            -- (cf. P_BETA)
-            pResult <- pmatch ctxt [(p, e3)] (valExpr v2)
-            case pResult of
-              Just e3' -> evalInCBV ctxt e3'
-              _ -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in application at " <> pretty s
+        -- (cf. APP_R)
+        v2 <- evalInCBV ctxt e2
+        -- (cf. P_BETA)
+        pResult <- pmatch ctxt [(p, e3)] (valExpr v2)
+        case pResult of
+          Just e3' -> evalInCBV ctxt e3'
+          _ -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in application at " <> pretty s
 
       Constr _ c vs -> do
-        -- if CBN `elem` globalsExtensions ?globals
-        --   then do
-        --     Constr _ c vs
         -- (cf. APP_R)
         v2 <- evalInCBV ctxt e2
         return $ Constr () c (vs <> [v2])
@@ -386,22 +372,13 @@ evalInCBV ctxt (Val s _ _ (Nec _ e)) =
 evalInCBV _ (Val _ _ _ v) = return v
 
 evalInCBV ctxt (Case s a b guardExpr cases) = do
-  if CBN `elem` globalsExtensions ?globals
-    then do
-      p <- pmatch ctxt cases guardExpr
-      case p of
-        Just ei -> evalInCBV ctxt ei
-        Nothing             ->
-          error $ "Incomplete pattern match:\n  cases: "
-              <> pretty cases <> "\n  expr: " <> pretty guardExpr
-    else do
-      v <- evalInCBV ctxt guardExpr
-      p <- pmatch ctxt cases (Val s a b v)
-      case p of
-        Just ei -> evalInCBV ctxt ei
-        Nothing             ->
-          error $ "Incomplete pattern match:\n  cases: "
-              <> pretty cases <> "\n  expr: " <> pretty v
+  v <- evalInCBV ctxt guardExpr
+  p <- pmatch ctxt cases (Val s a b v)
+  case p of
+    Just ei -> evalInCBV ctxt ei
+    Nothing             ->
+      error $ "Incomplete pattern match:\n  cases: "
+          <> pretty cases <> "\n  expr: " <> pretty v
 
 evalInCBV ctxt Hole {} =
   error "Trying to evaluate a hole, which should not have passed the type checker."
