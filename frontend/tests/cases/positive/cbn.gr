@@ -23,6 +23,8 @@ head : forall {a : Type, n : Nat} . (Vec n a) [] -> Maybe a
 head [Cons x xs] = Some x;
 head [Nil] = None
 
-main : Maybe Int
-main = 
-  head [append (Cons 1 (Cons 2 Nil)) (Cons 3 Nil)]
+main : (Vec 3 Int, Int)
+main = (append (Cons 1 (Cons 2 Nil)) (Cons 3 Nil),
+ fromMaybe [4] (head [
+    append (Cons 1 (Cons 2 Nil)) (Cons 3 Nil)
+    ]))

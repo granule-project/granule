@@ -126,6 +126,45 @@ evalBinOp op v1 v2 = case op of
   where
     evalFail = error $ show [show op, show v1, show v2]
 
+-- Evaluate an expression to normal form, but use CBN reduction throughout
+evalInCBNdeep :: (?globals :: Globals) => Ctxt RValue -> RExpr -> IO RValue
+evalInCBNdeep ctxt (App s a b e1 e2) = do
+    -- (cf. APP_L)
+    v1 <- evalInCBNdeep ctxt e1
+    case v1 of
+      (Ext _ (Primitive k)) -> do
+        -- (cf. APP_R)
+        -- Force eval of the parameter for primitives
+        v2 <- evalInCBNdeep ctxt e2
+        vRes <- k v2
+        return vRes
+
+      (Abs _ p _ e3) -> do
+        -- (cf. P_BETA CBN)
+        pResult <- pmatchCBN ctxt [(p, e3)] e2
+        case pResult of
+          Just e3' -> evalInCBNdeep ctxt e3'
+          _ -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in application at " <> pretty s
+
+      (Constr s' c vs) -> do
+        v2 <- evalInCBNdeep ctxt e2
+        return $ Constr s' c (vs ++ [v2])
+
+      _ -> error $ "CBNdeep: LHS of an application is not a function value " ++ pretty v1
+      -- _ -> error "Cannot apply value"
+
+evalInCBNdeep ctxt (Val s a b (Var _ x)) =
+    case lookup x ctxt of
+      Just val@(Ext _ (PrimitiveClosure f)) -> return $ Ext () $ Primitive (f ctxt)
+      Just val -> return val
+      Nothing  -> fail $ "Variable '" <> sourceName x <> "' is undefined in context."
+
+evalInCBNdeep ctxt (Val _ _ _ v) = return v
+
+evalInCBNdeep ctxt e = do
+  e' <- evalInWHNF ctxt e
+  evalInCBNdeep ctxt e'
+
 -- Evaluate an expression to weak head normal form.
 evalInWHNF :: (?globals :: Globals) => Ctxt RValue -> RExpr -> IO RExpr
 evalInWHNF ctxt (App s a b e1 e2) = do
@@ -143,13 +182,13 @@ evalInWHNF ctxt (App s a b e1 e2) = do
         -- (cf. P_BETA CBN)
         pResult <- pmatchCBN ctxt [(p, e3)] e2
         case pResult of
-          Just e3' -> evalInWHNF ctxt e3'
+          Just e3' -> return e3'
           _ -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in application at " <> pretty s
 
       (Val _ _ _ (Constr _ c vs)) -> do
         return $ App s a b v1 e2
 
-      _ -> error $ show v1
+      _ -> error $ "LHS of an application is not a function value " ++ pretty v1
       -- _ -> error "Cannot apply value"
 
 -- Deriving applications get resolved to their names
@@ -161,17 +200,16 @@ evalInWHNF ctxt (AppTy s _ _ e t) =
   evalInWHNF ctxt e
 
 evalInWHNF ctxt (Binop s a b op e1 e2) = do
-     v1 <- evalInWHNF ctxt e1
-     v2 <- evalInWHNF ctxt e2
-     case (v1, v2) of
-       (Val _ _ _ v1, Val _ _ _ v2) -> return $ Val s a b $ evalBinOp op v1 v2
-       (v1', v2') -> error $ "CBN reduction failed on (" ++ pretty v1 ++ " " ++ pretty op ++ " " ++ pretty v2 ++ ")"
+     v1 <- evalIn ctxt e1
+     v2 <- evalIn ctxt e2
+     return $ Val s a b $ evalBinOp op v1 v2
+     --   (v1', v2') -> error $ "CBN reduction failed on (" ++ pretty v1 ++ " " ++ pretty op ++ " " ++ pretty v2 ++ ")"
 
 evalInWHNF ctxt (LetDiamond s _ _ p _ e1 e2) = do
   -- (cf. LET_1)
-  v1 <- evalIn ctxt e1
+  v1 <- evalInWHNF ctxt e1
   case v1 of
-    (isDiaConstr -> Just e) -> do
+    (Val _ _ _ (isDiaConstr -> Just e)) -> do
         -- Do the delayed side effect
         eInner <- e
         -- (cf. LET_2)
@@ -194,11 +232,11 @@ evalInWHNF ctxt (Val s a b (Var _ x)) =
 
 evalInWHNF _ e@(Val _ _ _ v) = return e
 
-evalInWHNF ctxt (Case s a b guardExpr cases) = do
+evalInWHNF ctxt e@(Case s a b guardExpr cases) = do
   p <- pmatchCBN ctxt cases guardExpr
   case p of
-    Just ei -> evalInWHNF ctxt ei
-    Nothing             ->
+    Just ei -> return ei
+    Nothing ->
           error $ "Incomplete pattern match:\n  cases: "
               <> pretty cases <> "\n  expr: " <> pretty guardExpr
 
@@ -214,9 +252,10 @@ evalIn :: (?globals :: Globals) => Ctxt RValue -> RExpr -> IO RValue
 evalIn ctxt e =
   if CBN `elem` globalsExtensions ?globals
     then do
-      e' <- evalInWHNF ctxt e
+      e' <- evalInCBNdeep ctxt e
       -- finally eagerly evaluate
-      evalInCBV ctxt e'
+      e'' <- evalInCBV ctxt (valExpr e')
+      return e''
 
     else evalInCBV ctxt e
 
@@ -429,7 +468,7 @@ pmatchCBN ctxt psAll@((PBox _ _ _ p, eb):ps) eg =
         else
           pmatchCBN ctxt ps eg
 
-pmatchCBN ctxt psAll@((PConstr _ _ _ id innerPs, eb):ps) eg =
+pmatchCBN ctxt psAll@(p@(PConstr _ _ _ id innerPs, eb):ps) eg = do
   case constructorApplicationSpine eg of
 
     -- Trigger reduction
@@ -447,7 +486,6 @@ pmatchCBN ctxt psAll@((PConstr _ _ _ id innerPs, eb):ps) eg =
           ebFinal <- foldM (\ebM (pi, vi) -> case ebM of
                                       Nothing -> return Nothing
                                       Just eb -> pmatchCBN ctxt [(pi, eb)] vi) (Just eb) (zip innerPs valArgs)
-
           case ebFinal of
             -- Success!
             Just ebFinal' -> return $ Just ebFinal'
