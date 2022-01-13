@@ -418,3 +418,21 @@ instance Monad m => Freshenable m (Expr v a) where
       vars' <- mapM freshenId vars
       return $ Hole s a rf vars'
 
+-- If an expression is a right-nested application tree on a contructor then
+-- extract the head constructor and the list of parameters
+constructorApplicationSpine :: Expr e a -> Maybe (Id, [Expr e a])
+
+constructorApplicationSpine (Val s' a' b' (Constr _ c vs)) =
+  Just (c, map (Val s' a' b') vs)
+
+constructorApplicationSpine (App _ _ _ (Val s' a' b' (Constr _ c vs)) e) =
+  -- Left-most constructor application found
+  Just (c, map (Val s' a' b') vs ++ [e])
+
+constructorApplicationSpine (App _ _ _ e1 e2) = do
+  -- Node
+  (cname, args) <- constructorApplicationSpine e1
+  Just (cname, args ++ [e2])
+
+constructorApplicationSpine _ =
+  Nothing

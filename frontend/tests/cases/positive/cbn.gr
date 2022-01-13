@@ -1,0 +1,30 @@
+-- This is a stripped down version of `intro.md.gr` without all the explanation.
+-- But this is useful for experimenting with in `grepl`, e.g.
+
+language CBN
+
+data Maybe a = None | Some a
+
+-- Interval grades
+fromMaybe : forall {a : Type} . a [0..1] -> Maybe a -> a
+fromMaybe [d] None     = d;
+fromMaybe [_] (Some x) = x
+
+-- Indexed types
+data Vec (n : Nat) (a : Type) where
+  Nil : Vec 0 a;
+  Cons : a -> Vec n a -> Vec (n + 1) a
+
+append : forall {a : Type, m n : Nat} . Vec n a -> Vec m a -> Vec (n + m) a
+append Nil ys = ys;
+append (Cons x xs) ys = Cons x (append xs ys)
+
+head : forall {a : Type, n : Nat} . (Vec n a) [] -> Maybe a
+head [Cons x xs] = Some x;
+head [Nil] = None
+
+main : (Vec 3 Int, Int)
+main = (append (Cons 1 (Cons 2 Nil)) (Cons 3 Nil),
+ fromMaybe [4] (head [
+    append (Cons 1 (Cons 2 Nil)) (Cons 3 Nil)
+    ]))

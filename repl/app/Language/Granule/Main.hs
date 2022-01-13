@@ -13,7 +13,7 @@ import System.Exit (die)
 import System.FilePath
 import System.Directory
 
-import Data.List (nub)
+import Data.List (nub, intercalate)
 
 import qualified Data.Map as M
 import qualified Data.List.NonEmpty as NonEmpty (NonEmpty, filter, fromList)
@@ -59,6 +59,7 @@ data ReplState =
     , files :: [FilePath]
     , defns  :: M.Map String (Def () (), [String])
     , ignoreHolesMode :: Bool
+    , furtherExtensions :: [Extension]
     }
 
 showHolesREPL :: REPLStateIO ()
@@ -68,7 +69,7 @@ ignoreHolesREPL :: REPLStateIO ()
 ignoreHolesREPL = modify (\state -> state {ignoreHolesMode = True})
 
 initialState :: ReplState
-initialState = ReplState 0 [] [] M.empty True
+initialState = ReplState 0 [] [] M.empty True []
 
 type REPLStateIO a = StateT ReplState (Ex.ExceptT ReplError IO) a
 
@@ -93,6 +94,12 @@ main = do
         Nothing -> return ()
         Just [] -> loop st
         Just input
+          | input == ":ext" -> do
+            if null (globalsExtensions ?globals)
+              then liftIO $ putStrLn $ "Extensions loaded: (none)"
+              else liftIO $ putStrLn $ "Extensions loaded: " ++ intercalate ", " (map show $ globalsExtensions ?globals)
+            loop st
+
           | input == ":q" || input == ":quit" ->
             liftIO (putStrLn "Leaving Granule interactive.")
 
@@ -103,7 +110,10 @@ main = do
 
             r <- liftIO $ Ex.runExceptT (runStateT (handleCMD input) st)
             case r of
-              Right (_, st') -> loop st'
+              Right (_, st') ->
+                -- update the extensions if they were changed by the command
+                let ?globals = ?globals <> mempty { globalsExtensions = furtherExtensions st' }
+                in loop st'
               Left err -> do
                 liftIO $ print err
                 -- And leave a space
@@ -130,6 +140,7 @@ helpMenu = unlines
       ,":holes                    ()    Show goal information"
       ,":module <filepath>        (:m)  Add file/module to the current context"
       ,":reload                   (:r)  Reload last file loaded into REPL"
+      ,":ext                      ()    Show which language extensions are loaded"
       ,"-----------------------------------------------------------------------------------"
       ]
 
@@ -150,17 +161,20 @@ handleCMD s =
       pexp <- liftIO' $ try $ either die return $ runReaderT (evalStateT (expr $ scanTokens str) []) "interactive"
       case pexp of
         Right ast -> liftIO $ print ast
+
         Left e -> do
           liftIO $ putStrLn "Input not an expression, checking for TypeScheme"
           pts <- liftIO' $ try $ either die return $ runReaderT (evalStateT (tscheme $ scanTokens str) []) "interactive"
           case pts of
-            Right ts -> liftIO $ print ts
+            Right ts ->
+              liftIO $ print ts
+
             Left err -> do
               st <- get
               Ex.throwError (ParseError err (files st))
               Ex.throwError (ParseError e (files st))
 
-    handleLine (RunLexer str) = do
+    handleLine (RunLexer str) =
       liftIO $ print (scanTokens str)
 
     handleLine (ShowDef term) = do
@@ -266,14 +280,7 @@ instance MonadException m => MonadException (Ex.ExceptT e m) where
                   in fmap Ex.runExceptT $ f run'
 
 replEval :: (?globals :: Globals) => Int -> AST () () -> IO (Maybe RValue)
-replEval val (AST dataDecls defs _ _ _) = do
-    bindings <- evalDefs builtIns (map toRuntimeRep defs)
-    case lookup (mkId (" repl" <> show val)) bindings of
-      Nothing -> return Nothing
-      Just (Pure _ e)    -> fmap Just (evalIn bindings e)
-      Just (Promote _ e) -> fmap Just (evalIn bindings e)
-      Just (Nec _ e)     -> fmap Just (evalIn bindings e)
-      Just val           -> return $ Just val
+replEval val = evalAtEntryPoint (mkId (" repl" <> show val))
 
 liftIO' :: IO a -> REPLStateIO a
 liftIO' = lift.lift
@@ -301,6 +308,7 @@ readToQueue path = let ?globals = ?globals{ globalsSourceFilePath = Just path } 
                   forM_ def $ \idef -> loadInQueue idef
                   modify (\st -> st { currentADTs = dd <> currentADTs st })
                   liftIO $ printInfo $ green $ path <> ", checked."
+                  modify (\st -> st { furtherExtensions = nub $ furtherExtensions st ++ extensions })
 
                 Left errs -> do
                   st <- get
