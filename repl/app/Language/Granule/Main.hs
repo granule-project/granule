@@ -112,7 +112,7 @@ main = do
             case r of
               Right (_, st') ->
                 -- update the extensions if they were changed by the command
-                let ?globals = ?globals <> mempty { globalsExtensions = furtherExtensions st' }
+                let ?globals = ?globals { globalsExtensions = furtherExtensions st' }
                 in loop st'
               Left err -> do
                 liftIO $ print err
@@ -308,7 +308,7 @@ readToQueue path = let ?globals = ?globals{ globalsSourceFilePath = Just path } 
                   forM_ def $ \idef -> loadInQueue idef
                   modify (\st -> st { currentADTs = dd <> currentADTs st })
                   liftIO $ printInfo $ green $ path <> ", checked."
-                  modify (\st -> st { furtherExtensions = nub $ furtherExtensions st ++ extensions })
+                  modify (\st -> st { furtherExtensions = extensions })
 
                 Left errs -> do
                   st <- get
