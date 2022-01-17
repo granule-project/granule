@@ -1251,8 +1251,8 @@ synthesiseInner defs inDereliction resourceScheme gamma omega grade goalTy@(Fora
               boxHelper defs (gamma ++ omega) resourceScheme grade goalTy
               `try`
               constrIntroHelper (allowRSync, allowDef) defs (gamma ++ omega) resourceScheme grade goalTy
-              `try`
-              defHelper [] defs (gamma ++ omega) resourceScheme grade goalTy 
+        --      `try`
+        --      defHelper [] defs (gamma ++ omega) resourceScheme grade goalTy 
               )
               `try`
               unboxHelper defs [] omega gamma resourceScheme grade goalTy
@@ -1272,8 +1272,8 @@ synthesiseInner defs inDereliction resourceScheme gamma omega grade goalTy@(Fora
               boxHelper defs (gamma ++ omega) resourceScheme grade goalTy
               `try`
               constrIntroHelper (allowRSync, allowDef) defs (gamma ++ omega) resourceScheme grade goalTy
-              `try`
-              defHelper [] defs (gamma ++ omega) resourceScheme grade goalTy 
+    --          `try`
+    --          defHelper [] defs (gamma ++ omega) resourceScheme grade goalTy 
 
        --       `try`
        --       if allowDef then defHelper [] defs startTime (gamma ++ omega) resourceScheme goalTy else none
