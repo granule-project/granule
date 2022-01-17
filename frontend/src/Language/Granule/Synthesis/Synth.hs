@@ -683,56 +683,65 @@ constrIntroHelper :: (?globals :: Globals)
   -> Maybe Type
   -> TypeScheme
   -> Synthesiser (Expr () Type, Ctxt (Assumption, Structure Id), Substitution, Bindings, Bool)
-constrIntroHelper (True, allowDef) defs gamma mode grade goalTySch@(Forall s binders constraints goalTy) =
+constrIntroHelper (_, allowDef) defs gamma mode grade goalTySch@(Forall s binders constraints goalTy) =
   case (isADT goalTy, adtName goalTy) of
     (True, Just name) -> do
       debugM "Entered constrIntro helper with goal: " (show goalTy)
 
       state <- Synthesiser $ lift $ lift $ get
 
-      -- Retrieve the data constructors for the goal data type
-      let adtConstructors = concatMap snd (filter (\x -> fst x == name) (constructors state))
+      --- ORDER THESE: non-recursive -> recursive; arity
+      let (recursiveCons, nonRecursiveCons) = relevantConstructors name (constructors state)
+      let sortedCons = sortBy compare' nonRecursiveCons ++ sortBy compare' recursiveCons
+
+      debugM "sortedCons" (show sortedCons)
 
       -- For each relevent data constructor, we must now check that it's type matches the goal
-      adtConstructors' <- foldM (\ a (id, (conTySch@(Forall s binders constraints conTy), subst)) -> do
-         result <- checkConstructor conTySch goalTy subst
-         case result of
-           (Right (QED, True, specTy, _, specSubst, substFromFreshening), localState) -> do
-             specTy' <- conv $ substitute substFromFreshening specTy
-             subst' <- conv $ combineSubstitutions s subst specSubst
-             specTy'' <- conv $ substitute subst' specTy'
-             _ <- conv $ localState
-             return $ (id, (Forall s binders constraints specTy'', subst')) : a
-           _ -> return a ) [] adtConstructors
-
-      -- Attempt to synthesise each applicable constructor, in order of ascending arity
-      synthesiseConstructors gamma (sortBy (flip compare') adtConstructors') mode goalTySch
+      (expr, del, sub, b, sd) <- foldM (\ a (id, (conTySch@(Forall s binders constraints conTy), subst)) -> do
+        case a of 
+          (Nothing, [], [], [], False) -> do
+            result <- checkConstructor conTySch goalTy subst
+            case result of
+              (Right (QED, True, specTy, _, specSubst, substFromFreshening), localState) -> do
+                specTy' <- conv $ substitute substFromFreshening specTy
+                subst' <- conv $ combineSubstitutions s subst specSubst
+                specTy'' <- conv $ substitute subst' specTy'
+                _ <- conv $ localState
+                case constrArgs conTy of 
+                  Just [] -> do 
+                    let delta = case mode of {Additive{} -> []; Subtractive{} -> gamma}
+                    debugM "constrIntro made a nullary constructor: " (pretty $ makeNullaryConstructor id)
+                    debugM "constrIntro gamma: " (show gamma)
+                    debugM "constrIntro delta: " (show delta)
+                    return (Just $ makeNullaryConstructor id, delta, subst, [], False) `try` return a
+                  Just args -> do 
+                    args' <- conv $ mapM (\s -> do 
+                      s' <- substitute substFromFreshening s
+                      s'' <- substitute (specSubst) s'
+                      return s'') args
+                    debugM "constrIntro args: " (show args)
+                    debugM "constrIntro args': " (show args')
+                    debugM "constrIntro substFromFreshening: " (show substFromFreshening)
+                    debugM "constrIntro specSubst: " (show specSubst)
+                    debugM "constrIntro flipped specSubst: " (show $ flipSubstitution specSubst)
+                    debugM "constrIntro gamma: " (show gamma)
+                    (exprs, delta, subst', bindings, sd) <- synthConstructorArgs args' binders constraints gamma mode subst
+                    debugM "constrIntro I made: " (pretty $ makeConstr exprs id conTy)
+                    debugM "constrIntro delta: " (show $ delta )
+                    return (Just $ makeConstr exprs id conTy, delta, subst', bindings, sd) `try` return a
+                  Nothing -> return a
+              _ -> return a
+          res -> return res) (Nothing, [], [], [], False) sortedCons
+      case expr of 
+        Just expr' -> return (expr', del, sub, b, sd)
+        Nothing -> none
     _ -> none
   where
 
-    compare' con1@(_, (Forall _ _ _ ty1, _)) con2@(_, (Forall _ _ _ ty2, _)) = compare (arity ty1) (arity ty2)
-
-    -- Traverse the constructor types and attempt to synthesise a program for each one
-    synthesiseConstructors gamma [] mode goalTy = none
-    synthesiseConstructors gamma ((id, (Forall s binders' constraints' ty, subst)):cons) mode goalTy =
-      case constrArgs ty of
-        -- If the constructor type has no arguments, then it is a nullary constructor and we can simply return the introduction form
-        Just [] -> do
-          let delta = case mode of
-                Additive{} -> []
-                Subtractive{} -> gamma
-          return (makeNullaryConstructor id, delta, subst, [], False)
-          `try` synthesiseConstructors gamma cons mode goalTy
-        -- If the constructor has 1 or more arguments then we must synthesise each argument in turn
-        Just args -> do
-          (exprs, delta, subst', bindings, sd) <- synthConstructorArgs args binders' constraints' gamma mode subst
-          return (makeConstr exprs id ty, delta, subst', bindings, sd)
-          `try` synthesiseConstructors gamma cons mode goalTy
-        Nothing ->
-          none
 
     -- Traverse the argument types to the constructor and synthesise a term for each one
     synthConstructorArgs [t'] bs cs gamma mode constrSubst = do
+      debugM "my goal ty is: " (show t')
       (es, deltas, subst, bindings, sd) <- synthesiseInner defs False mode gamma [] grade (Forall s bs cs t') (True, True, allowDef)
       subst' <- conv $ combineSubstitutions nullSpanNoFile constrSubst subst
       return ([(es, t')], deltas, subst', bindings, sd)
@@ -751,15 +760,8 @@ constrIntroHelper (True, allowDef) defs gamma mode grade goalTySch@(Forall s bin
       return ((e2, t'):es, delta3, subst'', bindings ++ bindings2, sd || sd2)
     synthConstructorArgs _ _ _ _ _ _ = none
 
-    constrArgs (TyCon _) = Just []
-    constrArgs (TyApp _ _) = Just []
-    constrArgs (FunTy _ Nothing e1 e2) = do
-      res <- constrArgs e2
-      return $ e1 : res
-    constrArgs _ = Nothing
+-- constrIntroHelper (_, allowDef) defs gamma mode _ goalTy@(Forall s binders constraints t) = none
 
-
-constrIntroHelper (_, allowDef) defs gamma mode _ goalTy@(Forall s binders constraints t) = none
 
 
 
