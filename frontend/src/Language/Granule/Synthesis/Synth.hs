@@ -511,7 +511,7 @@ appHelper (allowRSync, allowDef) defs left (var@(x, (a, s)) : right) add@(Additi
 
               gamma2 <-
                 case mode of
-                  Default     -> return omega
+                  Default     -> return omega'
                   Alternative -> ctxtSubtract (gamma' ++ omega') delta1'
 
               -- Synthesise the argument
