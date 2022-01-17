@@ -573,13 +573,8 @@ boxHelper defs gamma resourceScheme grade goalTy =
                     delta' <- ctxtMultByCoeffect g used
                     ctxtSubtract gamma delta'
             res <- solve
+            debugM "made a box w delta: " (show deltaOut)
             boolToSynthesiser res (makeBox goalTy e, deltaOut, subst, bindings, sd)
-        Subtractive Alternative -> do
-          gamma' <- ctxtDivByCoeffect g gamma
-          (e, delta, subst, bindings, sd) <- synthesiseInner defs False resourceScheme gamma' [] newGrade (Forall nullSpanNoFile binders constraints t) (False, True, False)
-          delta' <- ctxtMultByCoeffect g delta
-          res <- solve
-          boolToSynthesiser res (makeBox goalTy e, delta', subst, bindings, sd)
     _ -> none
 
 
