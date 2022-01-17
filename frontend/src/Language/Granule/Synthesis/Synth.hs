@@ -810,7 +810,9 @@ constrElimHelper :: (?globals :: Globals)
 constrElimHelper (allowRSync, allowDef) defs left [] _ _ _ _ = none
 constrElimHelper (allowRSync, allowDef) defs left (var@(x, (a, structure)):right) gamma mode grade goalTySch@(Forall _ _ _ goalTy) =
   constrElimHelper (allowRSync, allowDef) defs (var:left) right gamma mode grade goalTySch `try` do
-    (canUse, omega, _) <- useVar var (left ++ right) mode grade
+    debugM "entered constrElim Helper with goal: " (show goalTy)
+    let omega = (left ++ right)
+    (canUse, omega', _) <- useVar var omega mode grade
     state <- Synthesiser $ lift $ lift $ lift get
     let topLevelDefId = topLevelDef state
     let (assumptionTy, grade) = case a of
@@ -820,33 +822,33 @@ constrElimHelper (allowRSync, allowDef) defs left (var@(x, (a, structure)):right
       case adtName assumptionTy of
         Just name -> do
           -- Retrieve relevant data constructors for this ADT 
-          let adtConstructors = concatMap snd (filter (\x -> fst x == name) (constructors state))
+         -- let adtConstructors = concatMap snd (filter (\x -> fst x == name) (constructors state))
+          
+          let (recursiveCons, nonRecursiveCons) = relevantConstructors name (constructors state)
+          let sortedCons = sortBy compare' nonRecursiveCons ++ sortBy compare' recursiveCons
 
-          (patterns, delta, resSubst, resBindings, structDec) <- foldM (\ (exprs, deltas, substs, bindings, strInfs) (id, (conTySch@(Forall s binders constraints conTy), conSubst)) -> do
+          conv $ newCaseFrame
+          (patterns, delta, resSubst, resBindings, structDec, ind) <- foldM (\ (exprs, deltas, substs, bindings, strInfs, ind) (id, (conTySch@(Forall s binders constraints conTy), conSubst)) -> do
             conv newConjunct 
             result <- checkConstructor conTySch assumptionTy conSubst
             conv newConjunct 
+            conv $ concludeImplication nullSpanNoFile []
             case result of 
-              (Right (QED, True, _, conTyArgs, conSubst', _), localState) -> do
+              (Right (QED, True, specTy, conTyArgs, conSubst', _), localState) -> do
                 
+
+                _ <- conv localState
+
                 -- Calculate assumptions
                 taggedAssumptions <- mapM (\ arg -> do
                   var' <- freshIdentifier 
                   arg' <- conv $ substitute conSubst' arg
+                  let assmp = case grade of {Nothing -> Linear arg'; Just grade' -> Discharged arg' grade'}
+                  let assmp' = if isRecursiveCon id (var', (Forall nullSpanNoFile binders constraints arg', [])) then (var', (assmp, Dec topLevelDefId)) else (var', (assmp, Arg topLevelDefId))
+                  return (var', assmp')) conTyArgs
+                
+                let (vars, assumptions) = unzip taggedAssumptions
 
-                  (structure, local) <- conv $ peekChecker $ do
-                    (success, spec, subst') <- equalTypes nullSpanNoFile arg' assumptionTy
-                    if success then return $ (True, Dec topLevelDefId) else return $ (False, Arg topLevelDefId)
-
-                  let (success, annotation) = case structure of {Right (success, struct) -> (success, struct); Left _ -> (False, Arg topLevelDefId)}
-                  let assumption = case grade of
-                        Nothing -> (Linear arg', annotation)
-                        Just grade' -> (Discharged arg' grade', annotation)
-
-                  return (var', assumption, success)) conTyArgs
-
-                let (vars, types, _) = unzip3 taggedAssumptions
-                let assumptions = zip vars types
                 -- let structDecr = or recursiveArgs
 
                 -- Synthesiser $ lift $ lift $ lift $ modify (\state ->
@@ -856,32 +858,74 @@ constrElimHelper (allowRSync, allowDef) defs left (var@(x, (a, structure)):right
 
                 let pat = makePattern id vars grade
 
-                _ <- conv localState
 
                 -- Synthesise the term for this branch using the local context  
-                let (gamma', omega', unboxed) = bindAssumptions assumptions gamma omega 
-                (e, del, subst, b, strInf) <- synthesiseInner defs False mode gamma' omega' grade goalTySch (False, True, True)
-                del' <- checkAssumptions (x, assumptionTy) mode del assumptions unboxed
-                case transformPattern b assumptionTy (gamma' ++ omega') pat unboxed of
-                  Just (pat', b') ->
-                    let op = case mode of Additive{} -> TyInfix TyOpJoin ; _ -> TyInfix TyOpMeet
-                    in do
-                      returnDelta <- ctxtMerge op del' deltas
-                      returnSubst <- conv $ combineSubstitutions nullSpanNoFile subst substs
-                      return ((pat', e):exprs, returnDelta, returnSubst, bindings ++ b', strInfs || strInf)
-                  Nothing -> return (exprs, deltas, substs, bindings, strInfs)
-              _ -> return (exprs, deltas, substs, bindings, strInfs)
-            ) ([], [], [], [], False) adtConstructors
-          -- Concluding the implication here ensures that the solving we do for this constructor
-          -- does not pollute the other branches of the case
-          conv $ concludeImplication nullSpanNoFile []
+                omega'' <- case mode of {Additive{} -> ctxtSubtract (var:omega) omega' ; Subtractive{} -> return omega'}
+                res <- solve 
+                if res then  do
+                  let (gamma', omega''', unboxed) = bindAssumptions assumptions gamma omega''
+               -- debugM "usage" (show usage)
+                  debugM "omega'" (show omega')
+                  debugM "gamma" (show gamma)
+                  debugM "gamma'" (show gamma')
+                  debugM "omega''" (show omega'')
+                  debugM "conSubst'" (show conSubst')
+
+                --conv $ concludeImplication nullSpanNoFile []
+                  (e, del, subst, b, strInf) <- synthesiseInner defs False mode gamma' omega''' grade goalTySch (False, True, True)
+                  debugM "conTyArgs " (show conTyArgs)
+                  debugM "constructor: " (show id)
+                  debugM "gamma'" (show gamma')
+                  debugM "omega''" (show omega'')
+                  debugM "constrElim e: " (pretty e)
+                  debugM "constrElim del: " (show del)
+                  debugM "constrElim assumptions: " (show assumptions)
+           --     del' <- maybeToSynthesiser $ ctxtAdd omega' del
+                  del' <- checkAssumptions (x, assumptionTy) mode del assumptions unboxed
+                  debugM "constrElim del': " (show del')
+
+               -- conv $ concludeImplication nullSpanNoFile []
+
+                  case transformPattern b assumptionTy (gamma' ++ omega''') pat unboxed of
+                    Just (pat', b') ->
+                      let op = case mode of Additive{} -> TyInfix TyOpJoin ; _ -> TyInfix TyOpMeet
+                      in do
+                        debugM "I'm here" ""
+                        debugM "deltas " (show deltas)
+                        returnDelta <- if ind == 0 then return del' else ctxtMerge op del' deltas 
+                        debugM "I'm here2 with returnDelta " (show returnDelta)
+                        returnSubst <- conv $ combineSubstitutions nullSpanNoFile subst substs
+                        debugM "I'm here3 with returnSubst " (show returnSubst)
+                        debugM "I'm here3 with exprs " (show exprs)
+                      -- _ <- error "stop for now"
+
+                        return ((pat', e):exprs, returnDelta, returnSubst, bindings ++ b', strInfs || strInf, ind + 1)
+                    Nothing -> return (exprs, deltas, substs, bindings, strInfs, ind)
+                else 
+                  return (exprs, deltas, substs, bindings, strInfs, ind)
+              _ -> do 
+                debugM "i'm here: " ""
+
+                -- conv $ concludeImplication nullSpanNoFile []
+                return (exprs, deltas, substs, bindings, strInfs, ind)
+            ) ([], [], [], [], False, 0) sortedCons
+
+          conv $ popCaseFrame
+          -- conv $ concludeImplication nullSpanNoFile []
+          debugM "constrElim final " (pretty $ makeCase assumptionTy x patterns goalTy grade)
           case patterns of 
             (pat:_) -> do 
-              finDelta <- case mode of {Additive{} -> maybeToSynthesiser $ ctxtAdd omega delta; _ -> return delta}
-              return (makeCase assumptionTy x patterns goalTy grade, delta, resSubst, resBindings, structDec)
+              debugM "omega: " (show omega)
+              debugM "delta: " (show delta)
+              finDelta <- case mode of {Additive{} -> maybeToSynthesiser $ ctxtAdd omega' delta; _ -> return delta}
+              debugM "finDelta " (show finDelta)
+              return (makeCase assumptionTy x patterns goalTy grade, finDelta, resSubst, resBindings, structDec)
             _ -> none
     else none
-        
+
+
+-- removeDots :: [Char] -> [Char]
+-- removeDots xs =  [ x | x <- xs, x `notElem` "." ]
 
 makePattern :: Id ->  [Id] -> Maybe Type -> Pattern ()
 makePattern conId vars Nothing = PConstr nullSpanNoFile () False conId (map (PVar nullSpanNoFile () False) vars)
