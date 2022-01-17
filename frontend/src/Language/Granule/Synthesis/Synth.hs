@@ -1117,15 +1117,75 @@ checkConstructor con@(Forall  _ binders constraints conTy) assumptionTy subst = 
     cs <- get
     -- Run the solver (i.e. to check constraints on type indexes hold)
     if addedConstraints cs then do
+      debugM "checkConstructor - added constraints!" (show specTy)
       let predicate = Conj $ predicateStack cs
+
+      debugM "checkConstructor - predicate before subst " (pretty predicate)
       predicate <- substitute subst' predicate
+      debugM "checkConstructor - predicate " (pretty predicate)
+      debugM "checkConstructor - subst':  " (show subst')
       coeffectVars <- tyVarContextExistential >>= includeOnlyGradeVariables nullSpanNoFile
-      coeffectVars <- return (coeffectVars `deleteVars` Language.Granule.Checker.Predicates.boundVars predicate)
+      debugM "checkConstructor - coeffectVars1:  " (pretty coeffectVars)
+--      coeffectVars <- return (coeffectVars `deleteVars` Language.Granule.Checker.Predicates.boundVars predicate)
+      debugM "checkConstructor - coeffectVars2:  " (pretty coeffectVars)
       constructors <- allDataConstructorNames
       (_, result) <- liftIO $ provePredicate predicate coeffectVars constructors
-      return (result, success, specTy, args, subst', substFromFreshening)
+      case result of 
+        QED -> do 
+          debugM "QED??" ""
+          return (result, success, specTy, args, subst', substFromFreshening)
+        _ -> do
+          debugM "No QED" ""
+          return (result, success, specTy, args, subst', substFromFreshening)
     else return (QED, success, specTy, args, subst', substFromFreshening)
 
+
+
+compare' :: (Id, (TypeScheme, Substitution)) -> (Id, (TypeScheme, Substitution)) -> Ordering
+compare' con1@(_, (Forall _ _ _ ty1, _)) con2@(_, (Forall _ _ _ ty2, _)) = compare (arity ty1) (arity ty2)
+
+
+relevantConstructors :: Id -> Ctxt (Ctxt (TypeScheme, Substitution)) -> (Ctxt (TypeScheme, Substitution), Ctxt (TypeScheme, Substitution))
+relevantConstructors id [] = ([], [])
+relevantConstructors id ((typeId, dCons):tys) = 
+  if id == typeId then 
+    let (recCons, nonRecCons) = relevantConstructors id tys in
+      let (recCons', nonRecCons') = relevantConstructors' id dCons in
+        (recCons ++ recCons', nonRecCons ++ nonRecCons')
+  else 
+    relevantConstructors id tys
+  where 
+    relevantConstructors' id [] = ([], [])
+    relevantConstructors' id (dCon:dCons) = 
+      let (recCons, nonRecCons) = relevantConstructors' id dCons in
+        if isRecursiveCon id dCon then 
+          (dCon:recCons, nonRecCons)
+        else 
+          (recCons, dCon:nonRecCons)
+
+
+isRecursiveCon :: Id -> (Id, (TypeScheme, Substitution)) -> Bool
+isRecursiveCon id1 (id2, (Forall _ _ _ conTy, subst)) =
+  case constrArgs conTy of 
+    Nothing -> False
+    Just [] -> False
+    Just args -> isRecursiveCon' id1 args
+  where 
+    isRecursiveCon' id1 [] = False 
+    isRecursiveCon' id1 ((TyCon id2):tys) = id1 == id2
+    isRecursiveCon' id1 ((Box _ t):tys)   = isRecursiveCon' id1 (t:tys)
+    isRecursiveCon' id1 ((FunTy _ t1 t2):tys) = isRecursiveCon' id1 (t1:t2:tys) 
+    isRecursiveCon' id1 ((TyApp t1 t2):tys)   = isRecursiveCon' id1 (t1:t2:tys)
+    isRecursiveCon' id1 (x:xs) = isRecursiveCon' id1 xs
+
+
+constrArgs :: Type -> Maybe [Type]
+constrArgs (TyCon _) = Just []
+constrArgs (TyApp _ _) = Just []
+constrArgs (FunTy _ e1 e2) = do
+  res <- constrArgs e2
+  return $ e1 : res
+constrArgs _ = Nothing
 
 
 
