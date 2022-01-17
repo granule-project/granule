@@ -512,7 +512,7 @@ appHelper (allowRSync, allowDef) defs left (var@(x, (a, s)) : right) add@(Additi
               gamma2 <-
                 case mode of
                   Default     -> return omega'
-                  Alternative -> ctxtSubtract (gamma' ++ omega'') delta1'
+                  Alternative -> ctxtSubtract (gamma' ++ omega') delta1'
 
               -- Synthesise the argument
               (e2, delta2, sub2, bindings2, sd2) <- synthesiseInner defs False add gamma2 [] grade (Forall nullSpanNoFile binders constraints tyA) (False, allowRSync, False)
