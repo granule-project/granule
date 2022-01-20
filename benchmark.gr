@@ -4,13 +4,13 @@ fill : *FloatArray -> !Int -> *FloatArray
 fill arr [0] = arr;
 fill arr [i] =
   let f = intToFloat i;
-      arr' = writeFloatArray arr i f
+      arr' = writeFloatArray arr (i - 1) f
   in fill arr' [i - 1]
 
 sumArr : *FloatArray -> !Int -> (*FloatArray,Float)
 sumArr arr [0] = (arr, 0.0);
 sumArr arr [i] =
-  let (v1,arr') = readFloatArray arr i;
+  let (v1,arr') = readFloatArray arr (i - 1);
       (arr'',v2) = sumArr arr' [i - 1]
   in (arr'', v1 + v2)
 
@@ -18,23 +18,23 @@ fill' : FloatArray -> !Int -> FloatArray
 fill' arr [0] = arr;
 fill' arr [i] =
   let [f] = [intToFloat i];
-      arr' = writeFloatArray' arr i f
+      arr' = writeFloatArray' arr (i - 1) f
   in fill' arr' [i - 1]
 
 sumArr' : FloatArray [] -> Int [] -> (FloatArray [],Float)
 sumArr' [arr] [0] = ([arr], 0.0);
 sumArr' [arr] [i] =
-  let [(v1,arr')] = [(readFloatArray' arr i)];
+  let [(v1,arr')] = [(readFloatArray' arr (i - 1))];
       ([arr''],v2) = sumArr' [arr] [i - 1]
   in ([arr''], v1 + v2)
 
 genArrListLoop : !Int -> (List (*FloatArray)) -> (List (*FloatArray))
 genArrListLoop [0] ls = ls;
-genArrListLoop [i] ls = Cons (fill (newFloatArray 1000) [1000]) (genArrListLoop [i - 1] ls)
+genArrListLoop [i] ls = Cons (fill (newFloatArray 10) [10]) (genArrListLoop [i - 1] ls)
 
 genArrListLoop' : !Int -> (List (FloatArray [])) -> (List (FloatArray []))
 genArrListLoop' [0] ls = ls;
-genArrListLoop' [i] ls = Cons [fill' (newFloatArray' 1000) [1000]] (genArrListLoop' [i - 1] ls)
+genArrListLoop' [i] ls = Cons [fill' (newFloatArray' 10) [10]] (genArrListLoop' [i - 1] ls)
 
 genArrList : !Int -> (List (*FloatArray))
 genArrList [i] = genArrListLoop [i] Nil
@@ -45,32 +45,32 @@ genArrList' [i] = genArrListLoop' [i] Nil
 sumArrArrList : (List (*FloatArray)) -> Float
 sumArrArrList Nil = 0.0;
 sumArrArrList (Cons arr rest) =
-  let (arr',v) = sumArr arr [1000];
+  let (arr',v) = sumArr arr [10];
       _ = deleteFloatArray arr'
   in v + (sumArrArrList rest)
 
 sumArrArrList' : (List (FloatArray [])) -> Float
 sumArrArrList' Nil = 0.0;
 sumArrArrList' (Cons [arr] rest) =
-  let ([arr'],v) = sumArr' [arr] [1000]
+  let ([arr'],v) = sumArr' [arr] [10]
   in v + (sumArrArrList' rest)
 
 compute : !Int -> Float
 compute [0] = 0.0;
 compute [n] =
   let v1 = compute [n - 1];
-      v2 = sumArrArrList (genArrList [10])
+      v2 = sumArrArrList (genArrList [1000])
   in v1 + v2
 
 compute' : !Int -> Float
 compute' [0] = 0.0;
 compute' [n] =
   let v1 = compute' [n - 1];
-      v2 = sumArrArrList' (genArrList' [10])
+      v2 = sumArrArrList' (genArrList' [1000])
   in v1 + v2
 
 main : () <{Stdout}>
 main =
-  -- let sumIt = compute' [100]
+  --- let sumIt = compute' [100]
   let sumIt = compute [100]
   in toStdout (showFloat sumIt)
