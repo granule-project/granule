@@ -660,10 +660,10 @@ builtIns =
   , (mkId "lengthFloatArray",  Ext () $ Primitive lengthFloatArray)
   , (mkId "readFloatArray",  Ext () $ Primitive readFloatArray)
   , (mkId "writeFloatArray",  Ext () $ Primitive writeFloatArray)
-  , (mkId "newFloatArray'",  Ext () $ Primitive newFloatArray')
-  , (mkId "lengthFloatArray'",  Ext () $ Primitive lengthFloatArray')
-  , (mkId "readFloatArray'",  Ext () $ Primitive readFloatArray')
-  , (mkId "writeFloatArray'",  Ext () $ Primitive writeFloatArray')
+  , (mkId "newFloatArrayI",  Ext () $ Primitive newFloatArrayI)
+  , (mkId "lengthFloatArrayI",  Ext () $ Primitive lengthFloatArrayI)
+  , (mkId "readFloatArrayI",  Ext () $ Primitive readFloatArrayI)
+  , (mkId "writeFloatArrayI",  Ext () $ Primitive writeFloatArrayI)
   , (mkId "deleteFloatArray", Ext () $ Primitive deleteFloatArray)
   -- Additive conjunction (linear logic)
   , (mkId "with", Ext () $ Primitive $ \v -> return $ Ext () $ Primitive $ \w -> return $ Constr () (mkId "&") [v, w])
@@ -828,16 +828,16 @@ builtIns =
     newFloatArray = \(NumInt i) -> do
       return $ Nec () (Val nullSpan () False $ Ext () $ Runtime $ RT.newFloatArray i)
 
-    newFloatArray' :: RValue -> IO RValue
-    newFloatArray' = \(NumInt i) -> return $ Ext () $ Runtime $ RT.newFloatArray' i
+    newFloatArrayI :: RValue -> IO RValue
+    newFloatArrayI = \(NumInt i) -> return $ Ext () $ Runtime $ RT.newFloatArray' i
 
     readFloatArray :: RValue -> IO RValue
     readFloatArray = \(Nec () (Val _ _ _ (Ext () (Runtime fa)))) -> return $ Ext () $ Primitive $ \(NumInt i) ->
       let (e,fa') = RT.readFloatArray fa i
       in return $ Constr () (mkId ",") [NumFloat e, Nec () (Val nullSpan () False $ Ext () $ Runtime fa')]
 
-    readFloatArray' :: RValue -> IO RValue
-    readFloatArray' = \(Ext () (Runtime fa)) -> return $ Ext () $ Primitive $ \(NumInt i) ->
+    readFloatArrayI :: RValue -> IO RValue
+    readFloatArrayI = \(Ext () (Runtime fa)) -> return $ Ext () $ Primitive $ \(NumInt i) ->
       let (e,fa') = RT.readFloatArray' fa i
       in return $ Constr () (mkId ",") [NumFloat e, Ext () $ Runtime fa']
 
@@ -846,8 +846,8 @@ builtIns =
       let (e,fa') = RT.lengthFloatArray fa
       in return $ Constr () (mkId ",") [NumInt e, Nec () (Val nullSpan () False $ Ext () $ Runtime fa')]
 
-    lengthFloatArray' :: RValue -> IO RValue
-    lengthFloatArray' = \(Ext () (Runtime fa)) -> return $ Ext () $ Primitive $ \(NumInt i) ->
+    lengthFloatArrayI :: RValue -> IO RValue
+    lengthFloatArrayI = \(Ext () (Runtime fa)) -> return $ Ext () $ Primitive $ \(NumInt i) ->
       let (e,fa') = RT.lengthFloatArray fa
       in return $ Constr () (mkId ",") [NumInt e, Ext () $ Runtime fa']
 
@@ -858,8 +858,8 @@ builtIns =
        return $
          Nec () $ Val nullSpan () False $ Ext () $ Runtime $ RT.writeFloatArray fa i v
 
-    writeFloatArray' :: RValue -> IO RValue
-    writeFloatArray' = \(Ext () (Runtime fa)) -> return $
+    writeFloatArrayI :: RValue -> IO RValue
+    writeFloatArrayI = \(Ext () (Runtime fa)) -> return $
       Ext () $ Primitive $ \(NumInt i) -> return $
       Ext () $ Primitive $ \(NumFloat v) -> return $
       Ext () $ Runtime $ RT.writeFloatArray' fa i v

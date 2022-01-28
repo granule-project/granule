@@ -564,26 +564,26 @@ trustedBind = BUILTIN
 newFloatArray : Int -> *FloatArray
 newFloatArray = BUILTIN
 
-newFloatArray' : Int -> FloatArray
-newFloatArray' = BUILTIN
+newFloatArrayI : Int -> FloatArray
+newFloatArrayI = BUILTIN
 
 readFloatArray : *FloatArray -> Int -> (Float, *FloatArray)
 readFloatArray = BUILTIN
 
-readFloatArray' : FloatArray -> Int -> (Float, FloatArray)
-readFloatArray' = BUILTIN
+readFloatArrayI : FloatArray -> Int -> (Float, FloatArray)
+readFloatArrayI = BUILTIN
 
 writeFloatArray : *FloatArray -> Int -> Float -> *FloatArray
 writeFloatArray = BUILTIN
 
-writeFloatArray' : FloatArray -> Int -> Float -> FloatArray
-writeFloatArray' = BUILTIN
+writeFloatArrayI : FloatArray -> Int -> Float -> FloatArray
+writeFloatArrayI = BUILTIN
 
 lengthFloatArray : *FloatArray -> (Int, *FloatArray)
 lengthFloatArray = BUILTIN
 
-lengthFloatArray' : FloatArray -> (Int, FloatArray)
-lengthFloatArray' = BUILTIN
+lengthFloatArrayI : FloatArray -> (Int, FloatArray)
+lengthFloatArrayI = BUILTIN
 
 deleteFloatArray : *FloatArray -> ()
 deleteFloatArray = BUILTIN
