@@ -12,8 +12,8 @@ module Language.Granule.Runtime
   , pure
   , mkIOBenchMain,fromStdin,toStdout,toStderr,timeDate,readInt,showChar,intToFloat
   , showInt,showFloat, charToInt, charFromInt, stringAppend
-  , newFloatArray,newFloatArray',writeFloatArray,writeFloatArray'
-  , readFloatArray,readFloatArray',lengthFloatArray,deleteFloatArray,copyFloatArray'
+  , newFloatArray,newFloatArrayI,writeFloatArray,writeFloatArrayI
+  , readFloatArray,readFloatArrayI,lengthFloatArray,deleteFloatArray,copyFloatArray'
   , uniqueReturn,uniqueBind,uniquePush,uniquePull,uniquifyFloatArray,borrowFloatArray
   , cap, Cap(..), Capability(..), CapabilityType
 
@@ -146,9 +146,9 @@ newFloatArray size = unsafePerformIO $ do
   ptr <- callocArray size
   return $ PointerArray (size-1) ptr
 
-{-# NOINLINE newFloatArray' #-}
-newFloatArray' :: Int -> FloatArray
-newFloatArray' size = unsafePerformIO $ do
+{-# NOINLINE newFloatArrayI #-}
+newFloatArrayI :: Int -> FloatArray
+newFloatArrayI size = unsafePerformIO $ do
   arr <- MA.newArray (0,size-1) 0.0
   return $ HaskellArray (size-1) arr
 
@@ -163,9 +163,9 @@ writeFloatArray a i v =
       () <- pokeElemOff ptr i v
       return $ PointerArray len ptr
 
-{-# NOINLINE writeFloatArray' #-}
-writeFloatArray' :: FloatArray -> Int -> Float -> FloatArray
-writeFloatArray' a i v =
+{-# NOINLINE writeFloatArrayI #-}
+writeFloatArrayI :: FloatArray -> Int -> Float -> FloatArray
+writeFloatArrayI a i v =
   if i > grLength a
   then error $ "array index out of bounds: " ++ show i ++ " > " ++ show (grLength a)
   else case a of
@@ -186,11 +186,11 @@ readFloatArray a i =
       v <- peekElemOff ptr i
       return (v,a)
 
-{-# NOINLINE readFloatArray' #-}
-readFloatArray' :: FloatArray -> Int -> (Float, FloatArray)
-readFloatArray' a i =
+{-# NOINLINE readFloatArrayI #-}
+readFloatArrayI :: FloatArray -> Int -> (Float, FloatArray)
+readFloatArrayI a i =
   if i > grLength a
-  then error $ "readFloatArray' index out of bounds: " ++ show i ++ " > " ++ show (grLength a)
+  then error $ "readFloatArrayI index out of bounds: " ++ show i ++ " > " ++ show (grLength a)
   else case a of
     PointerArray{} -> error "expected non-unique array"
     HaskellArray _ arr -> unsafePerformIO $ do
@@ -234,7 +234,7 @@ borrowFloatArray a =
   case a of
     HaskellArray{} -> error "expected unique array"
     PointerArray len ptr -> unsafePerformIO $ do
-      let arr' = newFloatArray' (len+1)
+      let arr' = newFloatArrayI (len+1)
       forM_ [0..len] $ \i -> do
         v <- peekElemOff ptr i
         MA.writeArray (grArr arr') i v

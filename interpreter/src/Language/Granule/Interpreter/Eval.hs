@@ -829,7 +829,7 @@ builtIns =
       return $ Nec () (Val nullSpan () False $ Ext () $ Runtime $ RT.newFloatArray i)
 
     newFloatArrayI :: RValue -> IO RValue
-    newFloatArrayI = \(NumInt i) -> return $ Ext () $ Runtime $ RT.newFloatArray' i
+    newFloatArrayI = \(NumInt i) -> return $ Ext () $ Runtime $ RT.newFloatArrayI i
 
     readFloatArray :: RValue -> IO RValue
     readFloatArray = \(Nec () (Val _ _ _ (Ext () (Runtime fa)))) -> return $ Ext () $ Primitive $ \(NumInt i) ->
@@ -838,7 +838,7 @@ builtIns =
 
     readFloatArrayI :: RValue -> IO RValue
     readFloatArrayI = \(Ext () (Runtime fa)) -> return $ Ext () $ Primitive $ \(NumInt i) ->
-      let (e,fa') = RT.readFloatArray' fa i
+      let (e,fa') = RT.readFloatArrayI fa i
       in return $ Constr () (mkId ",") [NumFloat e, Ext () $ Runtime fa']
 
     lengthFloatArray :: RValue -> IO RValue
@@ -862,7 +862,7 @@ builtIns =
     writeFloatArrayI = \(Ext () (Runtime fa)) -> return $
       Ext () $ Primitive $ \(NumInt i) -> return $
       Ext () $ Primitive $ \(NumFloat v) -> return $
-      Ext () $ Runtime $ RT.writeFloatArray' fa i v
+      Ext () $ Runtime $ RT.writeFloatArrayI fa i v
 
     deleteFloatArray :: RValue -> IO RValue
     deleteFloatArray = \(Nec _ (Val _ _ _ (Ext _ (Runtime fa)))) -> return $
