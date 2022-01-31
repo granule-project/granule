@@ -52,6 +52,7 @@ typeConstructors =
     , (mkId "String", (Type 0, [], False))
     , (mkId "Protocol", (Type 0, [], False))
     , (mkId "Inverse", ((funTy (Type 0) (Type 0)), [], False))
+    , (mkId "SingeAction", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], True))
     -- # Coeffect types
     , (mkId "Nat",      (kcoeffect, [], False))
     , (mkId "Q",        (kcoeffect, [], False)) -- Rationals
@@ -349,6 +350,18 @@ gclose = BUILTIN
 
 -- trace : String -> () <>
 -- trace = BUILTIN
+
+forkNonLinear : forall {p : Protocol, s : Semiring, r : s}
+              . {SingleAction p} => ((LChan p) [r] -> ()) -> (LChan (Dual p)) [r]
+forkNonLinear = BUILTIN
+
+-- forkMulticast : forall {p : Protocol, s : Semiring, r : s}
+--               . OnlySends r s p => (Chan p -> ()) -> (Chan (Dual p)) [r]
+-- forkMulticast = BUILTIN
+
+forkReplicate : forall {p : Protocol, n : Nat}
+              . (LChan p -> ()) [n] -> Vec n (LChan (Dual p))
+forkReplicate = BUILTIN
 
 --------------------------------------------------------------------------------
 -- File Handles

@@ -369,7 +369,8 @@ TyCase :: { (Type, Type) }
   : Type '->' Type           { ($1, $3) }
 
 Constraint :: { Type }
-  : TyAtom '>' TyAtom         { TyInfix TyOpGreaterNat $1 $3 }
+  : TyJuxt TyAtom             { TyApp $1 $2 }
+  | TyAtom '>' TyAtom         { TyInfix TyOpGreaterNat $1 $3 }
   | TyAtom '<' TyAtom         { TyInfix TyOpLesserNat $1 $3 }
   | TyAtom '<=' TyAtom        { TyInfix TyOpLesserEq $1 $3 }
   | TyAtom '.' '<=' TyAtom    { TyInfix TyOpLesserEqNat $1 $4 }
@@ -377,7 +378,6 @@ Constraint :: { Type }
   | TyAtom '.' '>=' TyAtom    { TyInfix TyOpGreaterEqNat $1 $4 }
   | TyAtom '==' TyAtom        { TyInfix TyOpEq $1 $3 }
   | TyAtom '/=' TyAtom        { TyInfix TyOpNotEq $1 $3 }
-
 
 TyAtom :: { Type }
   : CONSTR                    { case constrString $1 of
