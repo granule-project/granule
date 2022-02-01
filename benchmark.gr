@@ -4,13 +4,13 @@ fill : *FloatArray -> !Int -> *FloatArray
 fill arr [0] = arr;
 fill arr [i] =
   let f = intToFloat i;
-      arr' = writeFloatArray arr i f
+      arr' = writeFloatArray arr (i - 1) f
   in fill arr' [i - 1]
 
 sumArr : *FloatArray -> !Int -> (*FloatArray,Float)
 sumArr arr [0] = (arr, 0.0);
 sumArr arr [i] =
-  let (v1,arr') = readFloatArray arr i;
+  let (v1,arr') = readFloatArray arr (i - 1);
       (arr'',v2) = sumArr arr' [i - 1]
   in (arr'', v1 + v2)
 
@@ -18,13 +18,13 @@ fill' : FloatArray -> !Int -> FloatArray
 fill' arr [0] = arr;
 fill' arr [i] =
   let [f] = [intToFloat i];
-      arr' = writeFloatArray' arr i f
+      arr' = writeFloatArray' arr (i - 1) f
   in fill' arr' [i - 1]
 
 sumArr' : FloatArray [] -> Int [] -> (FloatArray [],Float)
 sumArr' [arr] [0] = ([arr], 0.0);
 sumArr' [arr] [i] =
-  let [(v1,arr')] = [(readFloatArray' arr i)];
+  let [(v1,arr')] = [(readFloatArray' arr (i - 1))];
       ([arr''],v2) = sumArr' [arr] [i - 1]
   in ([arr''], v1 + v2)
 
@@ -55,22 +55,24 @@ sumArrArrList' (Cons [arr] rest) =
   let ([arr'],v) = sumArr' [arr] [1000]
   in v + (sumArrArrList' rest)
 
-compute : !Int -> Float
-compute [0] = 0.0;
-compute [n] =
-  let v1 = compute [n - 1];
+computeUnique : Int -> Float
+computeUnique 0 = 0.0;
+computeUnique n =
+  let v1 = computeUnique (n - 1);
       v2 = sumArrArrList (genArrList [10])
   in v1 + v2
 
-compute' : !Int -> Float
-compute' [0] = 0.0;
-compute' [n] =
-  let v1 = compute' [n - 1];
+computeNonUnique : Int -> Float
+computeNonUnique 0 = 0.0;
+computeNonUnique n =
+  let v1 = computeNonUnique (n - 1);
       v2 = sumArrArrList' (genArrList' [10])
   in v1 + v2
 
-main : () <{Stdout}>
+main : () <{Stdout, Stdin}>
 main =
-  -- let sumIt = compute' [100]
-  let sumIt = compute [100]
+  let sizeS <- fromStdin in
+  let size = readInt sizeS in
+  -- let sumIt = computeNonUnique [size]
+  let sumIt = computeUnique size
   in toStdout (showFloat sumIt)

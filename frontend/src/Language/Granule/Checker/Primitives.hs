@@ -89,6 +89,9 @@ typeConstructors =
     , (mkId "Send", (funTy (Type 0) (funTy protocol protocol), [], False))
     , (mkId "Recv", (funTy (Type 0) (funTy protocol protocol), [], False))
     , (mkId "End" , (protocol, [], False))
+    , (mkId "Select" , (funTy protocol (funTy protocol protocol), [], False))
+    , (mkId "Offer" , (funTy protocol (funTy protocol protocol), [], False))
+    
     , (mkId "Chan", (funTy protocol (Type 0), [], True))
     , (mkId "LChan", (funTy protocol (Type 0), [], True))
     , (mkId "Dual", (funTy protocol protocol, [], True))
@@ -334,6 +337,17 @@ recv = BUILTIN
 
 close : LChan End -> ()
 close = BUILTIN
+
+selectLeft : forall {s t : Protocol}
+    . LChan (Select s t) -> LChan s
+selectLeft = BUILTIN
+
+selectRight : forall {s t : Protocol}
+    . LChan (Select s t) -> LChan t
+
+offer : forall {s t : Protocol, a : Type}
+      . (LChan s -> a) -> (LChan t -> a) -> LChan (Offer s t) -> a
+offer = BUILTIN
 
 gsend
   : forall {a : Type, s : Protocol}
