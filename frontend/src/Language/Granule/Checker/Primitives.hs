@@ -338,15 +338,16 @@ recv = BUILTIN
 close : LChan End -> ()
 close = BUILTIN
 
-selectLeft : forall {s t : Protocol}
-    . LChan (Select s t) -> LChan s
+selectLeft : forall {p1 p2 : Protocol}
+          . LChan (Select p1 p2) -> LChan p1
 selectLeft = BUILTIN
 
-selectRight : forall {s t : Protocol}
-    . LChan (Select s t) -> LChan t
+selectRight : forall {p1 p2 : Protocol}
+            . LChan (Select p1 p2) -> LChan p2
+selectRight = BUILTIN
 
-offer : forall {s t : Protocol, a : Type}
-      . (LChan s -> a) -> (LChan t -> a) -> LChan (Offer s t) -> a
+offer : forall {p1 p2 : Protocol, a : Type}
+      . (LChan p1 -> a) -> (LChan p2 -> a) -> LChan (Offer p1 p1) -> a
 offer = BUILTIN
 
 gsend
