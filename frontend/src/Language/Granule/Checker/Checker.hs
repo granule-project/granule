@@ -312,9 +312,10 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
             { predicateStack = []
             , tyVarContext = []
             , uniqueVarIdCounterMap = mempty
+            , wantedTypeConstraints = []
             }
         debugM "elaborateEquation" "checkEquation"
-        (elaboratedEq, subst) <- checkEquation defCtxt defName equation tys
+        (elaboratedEq, providedTcs, subst) <- checkEquation defCtxt defName equation tys
         debugM "elaborateEquation" "checkEquation done"
 
         -- Solve the generated constraints
@@ -325,6 +326,11 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
         debugM "FINAL SUBST" (pretty subst)
         predicate <- substitute subst predicate
         solveConstraints predicate (getSpan equation) defName
+
+        let wantedTcs = wantedTypeConstraints checkerState
+        wantedTcs <- mapM (substitute subst) wantedTcs
+        dischargedTypeConstraints s providedTcs wantedTcs
+
         debugM "elaborateEquation" "solveEq done"
         pure elaboratedEq
 
@@ -333,7 +339,10 @@ checkEquation :: (?globals :: Globals) =>
   -> Id              -- Name of the definition
   -> Equation () ()  -- Equation
   -> TypeScheme      -- Type scheme
-  -> Checker (Equation () Type, Substitution)
+  -> Checker (Equation () Type, [Type], Substitution)
+                     -- Returns triple of elaborated equation syntax
+                     --                   list of remaining type constraints (non-graded things)
+                    --                    final substitution
 
 checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls constraints ty) = do
   -- Check that the lhs doesn't introduce any duplicate binders
@@ -345,9 +354,7 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
   -- Create conjunct to capture the pattern constraints
   newConjunct
 
-  mapM_ (\ty -> do
-    pred <- compileTypeConstraintToConstraint s ty
-    addPredicate pred) constraints
+  providedTypeConstraints <- enforceConstraints s constraints
 
   -- Build the binding context for the branch pattern
   st <- get
@@ -411,7 +418,7 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
       let elab = Equation s name ty rf elaborated_pats elaboratedExpr
 
       elab' <- substitute subst'' elab
-      return (elab', subst'')
+      return (elab', providedTypeConstraints, subst'')
 
     -- Anything that was bound in the pattern but not used up
     (p:ps) -> illLinearityMismatch s (p:|ps)
@@ -884,9 +891,8 @@ synthExpr _ gam _ (Val s _ rf (Constr _ c [])) = do
 
       (ty, _, _, constraints, coercions') <- freshPolymorphicInstance InstanceQ False tySch coercions
 
-      mapM_ (\ty -> do
-        pred <- compileTypeConstraintToConstraint s ty
-        addPredicate pred) constraints
+      otherTypeConstraints <- enforceConstraints s constraints
+      registerWantedTypeConstraints otherTypeConstraints
 
       -- Apply coercions
       ty <- substitute coercions' ty
@@ -1995,9 +2001,8 @@ freshenTySchemeForVar :: (?globals :: Globals) => Span -> Bool -> Id -> TypeSche
 freshenTySchemeForVar s rf id tyScheme = do
   (ty', _, _, constraints, []) <- freshPolymorphicInstance InstanceQ False tyScheme [] -- discard list of fresh type variables
 
-  mapM_ (\ty -> do
-    pred <- compileTypeConstraintToConstraint s ty
-    addPredicate pred) constraints
+  otherTypeConstraints <- enforceConstraints s constraints
+  registerWantedTypeConstraints otherTypeConstraints
 
   let elaborated = Val s ty' rf (Var ty' id)
   return (ty', [], [], elaborated)
