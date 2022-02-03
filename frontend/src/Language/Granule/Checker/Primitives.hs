@@ -94,7 +94,6 @@ typeConstructors =
     , (mkId "End" , (protocol, [], False))
     , (mkId "Select" , (funTy protocol (funTy protocol protocol), [], False))
     , (mkId "Offer" , (funTy protocol (funTy protocol protocol), [], False))
-    
     , (mkId "Chan", (funTy protocol (Type 0), [], True))
     , (mkId "LChan", (funTy protocol (Type 0), [], True))
     , (mkId "Dual", (funTy protocol protocol, [], True))
@@ -350,7 +349,7 @@ selectRight : forall {p1 p2 : Protocol}
 selectRight = BUILTIN
 
 offer : forall {p1 p2 : Protocol, a : Type}
-      . (LChan p1 -> a) -> (LChan p2 -> a) -> LChan (Offer p1 p1) -> a
+      . (LChan p1 -> a) -> (LChan p2 -> a) -> LChan (Offer p1 p2) -> a
 offer = BUILTIN
 
 gsend

@@ -643,7 +643,10 @@ builtIns =
   , (mkId "fork",    Ext () $ PrimitiveClosure forkRep)
   , (mkId "recv",    Ext () $ Primitive recv)
   , (mkId "send",    Ext () $ Primitive send)
-  , (mkId "close",   Ext () $ Primitive close)
+  , (mkId "selectLeft",   Ext () $ Primitive selectLeft)
+  , (mkId "selectRight",  Ext () $ Primitive selectRight)
+  , (mkId "offer",        Ext () $ PrimitiveClosure offer)
+  , (mkId "close",    Ext () $ Primitive close)
   , (mkId "grecv",    Ext () $ Primitive grecv)
   , (mkId "gsend",    Ext () $ Primitive gsend)
   , (mkId "gclose",   Ext () $ Primitive gclose)
@@ -773,6 +776,31 @@ builtIns =
       (\v -> do CC.writeChan c v
                 return $ Ext () $ Chan c)
     send e = error $ "Bug in Granule. Trying to send from: " <> prettyDebug e
+
+    selectLeft :: (?globals :: Globals) => RValue -> IO RValue
+    selectLeft (Ext _ (Chan c)) = do
+      CC.writeChan c (Constr () (mkId "LeftTag") [])
+      return $ Ext () $ Chan c
+    selectLeft e = error $ "Bug in Granule. Trying to selectLeft from: " <> prettyDebug e
+
+    selectRight :: (?globals :: Globals) => RValue -> IO RValue
+    selectRight (Ext _ (Chan c)) = do
+      CC.writeChan c (Constr () (mkId "RightTag") [])
+      return $ Ext () $ Chan c
+    selectRight e = error $ "Bug in Granule. Trying to selectLeft from: " <> prettyDebug e
+
+    offer :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
+    offer ctxt (Ext _ (Chan c)) = return $ Ext () $ Primitive
+      (\f -> return $ Ext () $ Primitive
+        (\g -> do
+          x <- CC.readChan c
+          case x of
+            (Constr () (internalName -> "LeftTag") _) ->
+               evalIn ctxt (App nullSpan () False (Val nullSpan () False f) (valExpr $ Ext () $ Chan c))
+            (Constr () (internalName -> "RightTag") _) ->
+               evalIn ctxt (App nullSpan () False (Val nullSpan () False f) (valExpr $ Ext () $ Chan c))
+            x -> error $ "Bug in Granule. Offer got tag: " <> prettyDebug x))
+    offer ctxt x = error $ "Bug in Granule. Offer got supposed channel: " <> prettyDebug x
 
     close :: RValue -> IO RValue
     close (Ext _ (Chan c)) = return $ Constr () (mkId "()") []

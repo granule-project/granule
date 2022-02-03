@@ -456,6 +456,16 @@ isDualSession sp rel (TyApp (TyApp (TyCon c) t) s) (TyApp (TyApp (TyCon c') t') 
   u <- combineSubstitutions sp u1 u2
   return (eq1 && eq2, u)
 
+isDualSession sp rel (TyApp (TyApp (TyCon c) p1) p2) (TyApp (TyApp (TyCon c') p1') p2') ind
+  |  (internalName c == "Select" && internalName c' == "Offer")
+  || (internalName c == "Offer" && internalName c' == "Select") = do
+    -- recure duality
+    (eq1, u1) <- isDualSession sp rel p1 p1' ind
+    (eq2, u2) <- isDualSession sp rel p2 p2' ind
+    u <- combineSubstitutions sp u1 u2
+    return (eq1 && eq2, u)
+
+
 isDualSession _ _ (TyCon c) (TyCon c') _
   | internalName c == "End" && internalName c' == "End" =
   return (True, [])
