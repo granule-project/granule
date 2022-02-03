@@ -639,6 +639,7 @@ builtIns =
         return . Val nullSpan () False $ Constr () (mkId ",") [Ext () $ Handle h, boolflag])
   , (mkId "forkLinear", Ext () $ PrimitiveClosure forkLinear)
   , (mkId "forkLinear'", Ext () $ PrimitiveClosure forkLinear')
+  , (mkId "forkNonLinear", Ext () $ PrimitiveClosure forkNonLinear)
   , (mkId "fork",    Ext () $ PrimitiveClosure forkRep)
   , (mkId "recv",    Ext () $ Primitive recv)
   , (mkId "send",    Ext () $ Primitive send)
@@ -687,6 +688,16 @@ builtIns =
                                                       (valExpr $ Promote () $ valExpr $ Ext () $ Chan c))
                   return $ Ext () $ Chan c
       _oth -> error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
+
+    forkNonLinear :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
+    forkNonLinear ctxt e = case e of
+      Abs{} -> do c <- CC.newChan
+                  _ <- C.forkIO $ void $ evalIn ctxt (App nullSpan () False
+                                                      (valExpr e)
+                                                      (valExpr $ Promote () $ valExpr $ Ext () $ Chan c))
+                  return $ Promote () $ valExpr $ Ext () $ Chan c
+      _oth -> error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
+
 
     forkRep :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
     forkRep ctxt e = case e of
