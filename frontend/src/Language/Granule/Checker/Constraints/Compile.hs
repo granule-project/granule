@@ -98,8 +98,17 @@ isDefinedConstraint :: Type -> Checker Bool
 isDefinedConstraint (TyApp (TyCon (internalName -> "SingleAction")) protocol)
   = return (singleAction protocol)
 
+isDefinedConstraint (TyApp (TyCon (internalName -> "Receiver")) protocol)
+  = return (receiver protocol)
+
 isDefinedConstraint _
   = return False
+
+receiver :: Type -> Bool
+receiver (TyApp (TyCon (internalName -> "Recv")) t) = True
+receiver (TyApp
+           (TyApp (TyCon (internalName -> "Offer")) _) _) = True
+receiver _ = False
 
 singleAction :: Type -> Bool
 singleAction (TyCon (internalName -> "End")) = True
