@@ -1,0 +1,14 @@
+sender : (LChan (Send () (Send () End))) [1] -> ()
+sender [c] =
+      let c  = send c ();
+          c  = send c ()
+       in close c
+
+receiver : (LChan (Recv () (Recv () End))) [1] -> ()
+receiver [c] =
+      let ((), c)  = recv c;
+          ((), c)  = recv c 
+       in close c
+
+example : ()
+example = receiver (forkNonLinear sender)
