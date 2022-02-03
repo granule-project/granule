@@ -98,17 +98,29 @@ isDefinedConstraint :: Type -> Checker Bool
 isDefinedConstraint (TyApp (TyCon (internalName -> "SingleAction")) protocol)
   = return (singleAction protocol)
 
-isDefinedConstraint (TyApp (TyCon (internalName -> "Receiver")) protocol)
-  = return (receiver protocol)
+isDefinedConstraint (TyApp (TyCon (internalName -> "ReceivePrefix")) protocol)
+  = return (receivePrefix protocol)
+
+isDefinedConstraint (TyApp (TyCon (internalName -> "Sends")) protocol)
+  = return (sends protocol)
 
 isDefinedConstraint _
   = return False
 
-receiver :: Type -> Bool
-receiver (TyApp (TyCon (internalName -> "Recv")) t) = True
-receiver (TyApp
+receivePrefix :: Type -> Bool
+receivePrefix (TyApp (TyCon (internalName -> "Recv")) t) = True
+receivePrefix (TyApp
            (TyApp (TyCon (internalName -> "Offer")) _) _) = True
-receiver _ = False
+receivePrefix _ = False
+
+sends :: Type -> Bool
+sends (TyCon (internalName -> "End")) = True
+sends (TyApp (TyApp (TyCon (internalName -> "Send")) t) p) = sends p
+sends (TyApp (TyApp (TyCon (internalName -> "Recv")) t) p) = False
+sends (TyApp (TyApp (TyCon (internalName -> "Offer")) t) t') = False
+sends (TyApp (TyApp (TyCon (internalName -> "Select")) t) t') =
+  sends t && sends t'
+sends _ = False
 
 singleAction :: Type -> Bool
 singleAction (TyCon (internalName -> "End")) = True

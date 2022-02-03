@@ -53,6 +53,9 @@ typeConstructors =
     , (mkId "Protocol", (Type 0, [], False))
     , (mkId "Inverse", ((funTy (Type 0) (Type 0)), [], False))
     , (mkId "SingeAction", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], True))
+    , (mkId "ReceivePrefix", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], True))
+    , (mkId "Sends", (funTy (tyCon "Nat") (funTy (tyCon "Protocol") (tyCon "Predicate")), [], True))
+
     -- # Coeffect types
     , (mkId "Nat",      (kcoeffect, [], False))
     , (mkId "Q",        (kcoeffect, [], False)) -- Rationals
@@ -370,13 +373,21 @@ forkNonLinear : forall {p : Protocol, s : Semiring, r : s}
               . {SingleAction p} => ((LChan p) [r] -> ()) -> (LChan (Dual p)) [r]
 forkNonLinear = BUILTIN
 
--- forkMulticast : forall {p : Protocol, s : Semiring, r : s}
---               . OnlySends r s p => (Chan p -> ()) -> (Chan (Dual p)) [r]
--- forkMulticast = BUILTIN
+forkMulticast : forall {p : Protocol, n : Nat}
+              . {Sends n p} => (Chan p -> ()) -> Vec n (Chan (Dual p))
+forkMulticast = BUILTIN
 
 forkReplicate : forall {p : Protocol, n : Nat}
-              . (LChan p -> ()) [n] -> Vec n (LChan (Dual p))
+              . {ReceivePrefix p} => (LChan p -> ()) [n] -> Vec n (LChan (Dual p))
 forkReplicate = BUILTIN
+
+forkReplicateExactly : forall {p : Protocol, n : Nat} . {ReceivePrefix p}
+                  => (LChan p -> ()) [n] -> Vec n (LChan (Dual p))
+forkReplicateExactly = BUILTIN
+
+forkReplicateForever : forall {p : Protocol} . {ReceivePrefix p}
+                    => (LChan p -> ()) [0..Inf] -> List ((LChan (Dual p)) [0..1])
+forkReplicateForever = BUILTIN
 
 --------------------------------------------------------------------------------
 -- File Handles
