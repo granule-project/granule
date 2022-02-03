@@ -18,6 +18,7 @@ import Language.Granule.Checker.Kinding (checkKind, synthKind)
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
+import Language.Granule.Syntax.Identifiers
 
 -- import Language.Granule.Checker.Types
 
@@ -94,4 +95,26 @@ dischargedTypeConstraints s provided (w : ws) =
 
 -- TODO: provide some way to define this related with user syntax
 isDefinedConstraint :: Type -> Checker Bool
-isDefinedConstraint _ = return False
+isDefinedConstraint (TyApp (TyCon (internalName -> "SingleAction")) protocol)
+  = return (singleAction protocol)
+
+isDefinedConstraint _
+  = return False
+
+singleAction :: Type -> Bool
+singleAction (TyCon (internalName -> "End")) = True
+singleAction (TyApp
+              (TyApp (TyCon (internalName -> "Send")) t)
+              (TyCon (internalName -> "End"))) = True
+singleAction (TyApp
+              (TyApp (TyCon (internalName -> "Recv")) t)
+              (TyCon (internalName -> "End"))) = True
+singleAction (TyApp
+              (TyApp (TyCon (internalName -> "Offer"))
+              (TyCon (internalName -> "End")))
+              (TyCon (internalName -> "End"))) = True
+singleAction (TyApp
+              (TyApp (TyCon (internalName -> "Select"))
+              (TyCon (internalName -> "End")))
+              (TyCon (internalName -> "End"))) = True
+singleAction _ = False
