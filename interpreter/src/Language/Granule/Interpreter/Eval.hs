@@ -790,18 +790,19 @@ builtIns =
     selectRight e = error $ "Bug in Granule. Trying to selectLeft from: " <> prettyDebug e
 
     offer :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
-    offer ctxt (Ext _ (Chan c)) = return $ Ext () $ Primitive
-      (\f -> return $ Ext () $ Primitive
-        (\g -> do
-          x <- CC.readChan c
-          case x of
-            (Constr () (internalName -> "LeftTag") _) ->
-               evalIn ctxt (App nullSpan () False (Val nullSpan () False f) (valExpr $ Ext () $ Chan c))
-            (Constr () (internalName -> "RightTag") _) ->
-               evalIn ctxt (App nullSpan () False (Val nullSpan () False f) (valExpr $ Ext () $ Chan c))
-            x -> error $ "Bug in Granule. Offer got tag: " <> prettyDebug x))
-    offer ctxt x = error $ "Bug in Granule. Offer got supposed channel: " <> prettyDebug x
-
+    offer ctxt f = return $ Ext () $ Primitive
+      (\g -> return $ Ext () $ Primitive
+        (\c -> 
+          case c of
+            (Ext _ (Chan c)) -> do
+              x <- CC.readChan c
+              case x of
+                (Constr () (internalName -> "LeftTag") _) ->
+                  evalIn ctxt (App nullSpan () False (Val nullSpan () False f) (valExpr $ Ext () $ Chan c))
+                (Constr () (internalName -> "RightTag") _) ->
+                  evalIn ctxt (App nullSpan () False (Val nullSpan () False f) (valExpr $ Ext () $ Chan c))
+                x -> error $ "Bug in Granule. Offer got tag: " <> prettyDebug x
+            _ -> error $ "Bug in Granule. Offer got supposed channel: " <> prettyDebug c))
     close :: RValue -> IO RValue
     close (Ext _ (Chan c)) = return $ Constr () (mkId "()") []
     close rval = error "Runtime exception: trying to close a value which is not a channel"
