@@ -30,7 +30,7 @@ import System.IO.Unsafe (unsafePerformIO)
 import Control.Exception (catch, IOException)
 --import GHC.IO.Exception (IOErrorType( OtherError ))
 import qualified Control.Concurrent as C (forkIO)
-import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, Chan)
+import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, dupChan, Chan)
 import qualified System.IO as SIO
 
 --import System.IO.Error (mkIOError)
@@ -640,6 +640,7 @@ builtIns =
   , (mkId "forkLinear", Ext () $ PrimitiveClosure forkLinear)
   , (mkId "forkLinear'", Ext () $ PrimitiveClosure forkLinear')
   , (mkId "forkNonLinear", Ext () $ PrimitiveClosure forkNonLinear)
+  , (mkId "forkMulticast", Ext () $ PrimitiveClosure forkMulticast)
   , (mkId "fork",    Ext () $ PrimitiveClosure forkRep)
   , (mkId "recv",    Ext () $ Primitive recv)
   , (mkId "send",    Ext () $ Primitive send)
@@ -700,6 +701,27 @@ builtIns =
                                                       (valExpr $ Promote () $ valExpr $ Ext () $ Chan c))
                   return $ Promote () $ valExpr $ Ext () $ Chan c
       _oth -> error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
+
+    forkMulticast :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
+    forkMulticast ctxt f@(Abs{}) = return $ Ext () $ Primitive $ \n -> do
+          c      <- CC.newChan
+          -- receiver channeels
+          cs <- mapM (const (CC.dupChan c)) [1..(natToInt n)]
+          _  <- C.forkIO $ void $
+                -- Forked process
+                evalIn ctxt (App nullSpan () False
+                                (valExpr f)
+                                (valExpr $ Ext () $ Chan c))
+          return $ buildVec cs
+      where
+          natToInt (Constr () c [])  | internalName c == "Z" =  0
+          natToInt (Constr () c [v]) | internalName c == "S" =  1 + natToInt v
+          natToInt k = error $ "Bug in Granule. Trying to convert a N but got value " <> show k
+
+          buildVec [] = Constr () (mkId "Nil") []
+          buildVec (c:cs) = Constr () (mkId "Cons") [Ext () $ Chan c, buildVec cs]
+
+    forkMulticast _ e = error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
 
     forkRep :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue

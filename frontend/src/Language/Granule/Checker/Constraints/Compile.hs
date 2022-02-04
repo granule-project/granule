@@ -20,7 +20,7 @@ import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Identifiers
 
--- import Language.Granule.Checker.Types
+import Language.Granule.Checker.Types
 
 import Language.Granule.Utils
 
@@ -82,29 +82,29 @@ enforceConstraints s (t:ts) = do
 
 -- Match provided constraints (assumptions) against wanted constraints /
 -- see if the wanted constraints are already satisfied
-dischargedTypeConstraints :: Span -> [Type] -> [Type] -> Checker ()
+dischargedTypeConstraints :: (?globals :: Globals) => Span -> [Type] -> [Type] -> Checker ()
 dischargedTypeConstraints s provided [] = return ()
 dischargedTypeConstraints s provided (w : ws) =
   if w `elem` provided
     then dischargedTypeConstraints s provided ws
     else do
-      b <- isDefinedConstraint w
+      b <- isDefinedConstraint s w
       if b
         then dischargedTypeConstraints s provided ws
         else throw $ TypeConstraintNotSatisfied s w
 
 -- TODO: provide some way to define this related with user syntax
-isDefinedConstraint :: Type -> Checker Bool
-isDefinedConstraint (TyApp (TyCon (internalName -> "SingleAction")) protocol)
+isDefinedConstraint :: (?globals :: Globals) => Span -> Type -> Checker Bool
+isDefinedConstraint _ (TyApp (TyCon (internalName -> "SingleAction")) protocol)
   = return (singleAction protocol)
 
-isDefinedConstraint (TyApp (TyCon (internalName -> "ReceivePrefix")) protocol)
+isDefinedConstraint _ (TyApp (TyCon (internalName -> "ReceivePrefix")) protocol)
   = return (receivePrefix protocol)
 
-isDefinedConstraint (TyApp (TyCon (internalName -> "Sends")) protocol)
-  = return (sends protocol)
+isDefinedConstraint s (TyApp (TyApp (TyCon (internalName -> "Sends")) n) protocol)
+  = sends s n protocol
 
-isDefinedConstraint _
+isDefinedConstraint _ _
   = return False
 
 receivePrefix :: Type -> Bool
@@ -113,14 +113,24 @@ receivePrefix (TyApp
            (TyApp (TyCon (internalName -> "Offer")) _) _) = True
 receivePrefix _ = False
 
-sends :: Type -> Bool
-sends (TyCon (internalName -> "End")) = True
-sends (TyApp (TyApp (TyCon (internalName -> "Send")) t) p) = sends p
-sends (TyApp (TyApp (TyCon (internalName -> "Recv")) t) p) = False
-sends (TyApp (TyApp (TyCon (internalName -> "Offer")) t) t') = False
-sends (TyApp (TyApp (TyCon (internalName -> "Select")) t) t') =
-  sends t && sends t'
-sends _ = False
+sends :: (?globals :: Globals) => Span -> Type -> Type -> Checker Bool
+sends _ r (TyCon (internalName -> "End")) = return True
+sends s r (TyApp (TyApp (TyCon (internalName -> "Send")) t) p) =
+  case t of
+    Box r' _ -> do
+      -- check equality on grades
+      (isEq, kont) <- attemptChecker $ lEqualTypes s r' r
+      if isEq
+        then kont >> sends s r p
+        else return False
+    _ -> return False
+sends s r (TyApp (TyApp (TyCon (internalName -> "Recv")) t) p) = return False
+sends s r (TyApp (TyApp (TyCon (internalName -> "Offer")) t) t') = return False
+sends s r (TyApp (TyApp (TyCon (internalName -> "Select")) t) t') = do
+  b  <- sends s r t
+  b' <- sends s r t'
+  return $ b && b'
+sends _ _ _ = return False
 
 singleAction :: Type -> Bool
 singleAction (TyCon (internalName -> "End")) = True
