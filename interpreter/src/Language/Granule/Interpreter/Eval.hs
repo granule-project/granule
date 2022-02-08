@@ -640,6 +640,7 @@ builtIns =
   , (mkId "forkLinear", Ext () $ PrimitiveClosure forkLinear)
   , (mkId "forkLinear'", Ext () $ PrimitiveClosure forkLinear')
   , (mkId "forkNonLinear", Ext () $ PrimitiveClosure forkNonLinear)
+  , (mkId "forkReplicate", Ext () $ PrimitiveClosure forkReplicate)
   , (mkId "forkMulticast", Ext () $ PrimitiveClosure forkMulticast)
   , (mkId "fork",    Ext () $ PrimitiveClosure forkRep)
   , (mkId "recv",    Ext () $ Primitive recv)
@@ -721,7 +722,12 @@ builtIns =
           buildVec [] = Constr () (mkId "Nil") []
           buildVec (c:cs) = Constr () (mkId "Cons") [Ext () $ Chan c, buildVec cs]
 
-    forkMulticast _ e = error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
+    forkMulticast _ e = error $ "Bug in Granule. Trying to forkMulticate: " <> prettyDebug e
+
+    forkReplicate :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
+    forkReplicate ctxt (Promote _ (Val _ _ _ f@Abs{})) = error "WIP"
+    -- receivers <- mapM 
+    forkReplicate _ e = error $ "Bug in Granule. Trying to forkReplicate: " <> prettyDebug e
 
 
     forkRep :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
