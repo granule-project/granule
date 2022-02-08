@@ -714,19 +714,48 @@ builtIns =
                                 (valExpr f)
                                 (valExpr $ Ext () $ Chan c))
           return $ buildVec cs
-      where
-          natToInt (Constr () c [])  | internalName c == "Z" =  0
-          natToInt (Constr () c [v]) | internalName c == "S" =  1 + natToInt v
-          natToInt k = error $ "Bug in Granule. Trying to convert a N but got value " <> show k
-
-          buildVec [] = Constr () (mkId "Nil") []
-          buildVec (c:cs) = Constr () (mkId "Cons") [Ext () $ Chan c, buildVec cs]
 
     forkMulticast _ e = error $ "Bug in Granule. Trying to forkMulticate: " <> prettyDebug e
 
     forkReplicate :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
-    forkReplicate ctxt (Promote _ (Val _ _ _ f@Abs{})) = error "WIP"
-    -- receivers <- mapM 
+    forkReplicate ctxt (Promote _ (Val _ _ _ f@Abs{})) =
+      return $ Ext () $ Primitive $ \n -> do
+        -- make the chans
+        receiverChans <- mapM (const CC.newChan) [1..(natToInt n)]
+        -- fork the waiters which then fork the servers
+        _ <- flip mapM receiverChans
+              (\receiverChan -> C.forkIO $ void $ do
+                serverChan <- CC.dupChan receiverChan
+                -- Received an input
+                x <- CC.readChan receiverChan
+                putStrLn $ " got " ++ show x
+                -- kick off a server
+                C.forkIO $ void $
+                   evalIn ctxt (App nullSpan () False
+                                (valExpr f)
+                                (valExpr $ Ext () $ Chan serverChan)))
+                
+                -- Received an input
+                -- x <- CC.readChan receiverChan
+                -- -- and fork a server
+                -- serverChan <- CC.dupChan x
+                -- _ <- C.forkIO $ void $
+                --    evalIn ctxt (App nullSpan () False
+                --                 (valExpr f)
+                --                 (valExpr $ Ext () $ Chan serverChan))
+                -- -- send the received value onto the server chan
+                -- CC.writeChan serverChan x
+                -- -- fork a forwarding process now
+                -- C.forkIO $ void $
+                --   SIO.fixIO $ (\f -> do
+                --     x <- CC.readChan receiverChan
+                --     CC.writeChan serverChan x
+                --     return ())
+                    
+                 
+              -- )
+        return $ buildVec receiverChans
+
     forkReplicate _ e = error $ "Bug in Granule. Trying to forkReplicate: " <> prettyDebug e
 
 
@@ -936,6 +965,17 @@ builtIns =
     deleteFloatArray = \(Nec _ (Val _ _ _ (Ext _ (Runtime fa)))) -> return $
       case RT.deleteFloatArray fa of
         () -> Constr () (mkId "()") []
+
+-- Convert a Granule value representation of `N n` type into an Int
+natToInt :: RValue -> Int
+natToInt (Constr () c [])  | internalName c == "Z" =  0
+natToInt (Constr () c [v]) | internalName c == "S" =  1 + natToInt v
+natToInt k = error $ "Bug in Granule. Trying to convert a N but got value " <> show k
+
+-- Convert a list of channels into a granule `Vec n (LChan ...)` value.
+buildVec :: [CC.Chan (Value (Runtime ()) ())] -> RValue
+buildVec [] = Constr () (mkId "Nil") []
+buildVec (c:cs) = Constr () (mkId "Cons") [Ext () $ Chan c, buildVec cs]
 
 evalDefs :: (?globals :: Globals) => Ctxt RValue -> [Def (Runtime ()) ()] -> IO (Ctxt RValue)
 evalDefs ctxt [] = return ctxt
