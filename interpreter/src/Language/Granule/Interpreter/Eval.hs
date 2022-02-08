@@ -749,20 +749,51 @@ builtIns =
     forkReplicate ctxt (Promote _ (Val _ _ _ f@Abs{})) =
       return $ Ext () $ Primitive $ \n -> do
         -- make the chans
-        receiverChans <- mapM (const CC.newChan) [1..(natToInt n)]
+        receiverChans <- mapM (const newChan) [1..(natToInt n)]
         -- fork the waiters which then fork the servers
         _ <- flip mapM receiverChans
               (\receiverChan -> C.forkIO $ void $ do
-                serverChan <- CC.dupChan receiverChan
-                -- Received an input
-                x <- CC.readChan receiverChan
-                putStrLn $ " got " ++ show x
-                -- kick off a server
+                -- create intermediate channel
+                --serverChan <- newChan
+                -- wait to receive on the main channel
+                x <- readChan receiverChan
+                writeChan (dualEndpoint receiverChan) x
+                -- trigger fork of server
                 C.forkIO $ void $
                    evalIn ctxt (App nullSpan () False
                                 (valExpr f)
-                                (valExpr $ Ext () $ Chan serverChan)))
-                
+                                (valExpr $ Ext () $ Chan receiverChan)))
+                -- send on the triggering message
+                -- let serverChan' = dualEndpoint serverChan
+                -- writeChan serverChan' x
+                -- -- make forwarders
+                -- _ <- C.forkIO $ void $
+                --       SIO.fixIO $ (\f -> do
+                --         x <- CC.readChan (fwd serverChan')
+                --         CC.writeChan (fwd serverChan') x
+                --         return ())
+
+                -- C.forkIO $ void $
+                --       SIO.fixIO $ (\f -> do
+                --         x <- CC.readChan (bwd serverChan')
+                --         CC.writeChan (bwd serverChan') x
+                --         return ()))
+
+               {- -- pick the dual end
+                --receiverChan <- return $ dualEndpoint receiverChan
+                -- duplicate the channel
+                serverChan <- dupChan receiverChan
+                -- Received an input
+                putStrLn "waiting to read"
+                x <- readChan receiverChan
+                -- kick off a server
+                putStrLn $ "got " ++ show x
+                _ <- C.forkIO $ void $
+                   evalIn ctxt (App nullSpan () False
+                                (valExpr f)
+                                (valExpr $ Ext () $ Chan serverChan))
+              -}
+
                 -- Received an input
                 -- x <- CC.readChan receiverChan
                 -- -- and fork a server
