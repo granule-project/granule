@@ -53,7 +53,7 @@ data Runtime a =
   | Handle SIO.Handle
 
   -- | Channels
-  | Chan (CC.Chan (Value (Runtime a) a))
+  | Chan (BinaryChannel a)
 
   -- | Delayed side effects wrapper
   | PureWrapper (IO (Expr (Runtime a) ()))
@@ -61,6 +61,34 @@ data Runtime a =
   -- | Data managed by the runtime module (mutable arrays)
   | Runtime RuntimeData
 
+-- Dual-ended channel
+data BinaryChannel a =
+       BChan { fwd :: CC.Chan (Value (Runtime a) a)
+             , bwd :: CC.Chan (Value (Runtime a) a) }
+
+-- Channel primitive wrapps
+dualEndpoint :: BinaryChannel a -> BinaryChannel a
+dualEndpoint (BChan fwd bwd) = BChan bwd fwd
+
+newChan :: IO (BinaryChannel a)
+newChan = do
+  c  <- CC.newChan
+  c' <- CC.newChan
+  return $ BChan c c'
+
+readChan :: BinaryChannel a -> IO (Value (Runtime a) a)
+readChan (BChan _ bwd) = CC.readChan bwd
+
+writeChan :: BinaryChannel a -> (Value (Runtime a) a) -> IO ()
+writeChan (BChan fwd _) v = CC.writeChan fwd v
+
+dupChan :: BinaryChannel a -> IO (BinaryChannel a)
+dupChan (BChan fwd bwd) = do
+  fwd' <- CC.dupChan fwd
+  bwd' <- CC.dupChan bwd
+  return $ BChan fwd' bwd'
+
+---
 
 diamondConstr :: IO (Expr (Runtime ()) ()) -> RValue
 diamondConstr = Ext () . PureWrapper
@@ -679,40 +707,40 @@ builtIns =
   where
     forkLinear :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
     forkLinear ctxt e = case e of
-      Abs{} -> do c <- CC.newChan
+      Abs{} -> do c <- newChan
                   _ <- C.forkIO $ void $ evalIn ctxt (App nullSpan () False (valExpr e)
                                                        (valExpr $ Ext () $ Chan c))
-                  return $ Ext () $ Chan c
+                  return $ Ext () $ Chan (dualEndpoint c)
       _oth -> error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
     forkLinear' :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
     forkLinear' ctxt e = case e of
-      Abs{} -> do c <- CC.newChan
+      Abs{} -> do c <- newChan
                   _ <- C.forkIO $ void $ evalIn ctxt (App nullSpan () False
                                                       (valExpr e)
                                                       (valExpr $ Promote () $ valExpr $ Ext () $ Chan c))
-                  return $ Ext () $ Chan c
+                  return $ Ext () $ Chan (dualEndpoint c)
       _oth -> error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
     forkNonLinear :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
     forkNonLinear ctxt e = case e of
-      Abs{} -> do c <- CC.newChan
+      Abs{} -> do c <- newChan
                   _ <- C.forkIO $ void $ evalIn ctxt (App nullSpan () False
                                                       (valExpr e)
                                                       (valExpr $ Promote () $ valExpr $ Ext () $ Chan c))
-                  return $ Promote () $ valExpr $ Ext () $ Chan c
+                  return $ Promote () $ valExpr $ Ext () $ Chan (dualEndpoint c)
       _oth -> error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
     forkMulticast :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
     forkMulticast ctxt f@(Abs{}) = return $ Ext () $ Primitive $ \n -> do
-          c      <- CC.newChan
+          c      <- newChan
           -- receiver channeels
-          cs <- mapM (const (CC.dupChan c)) [1..(natToInt n)]
+          cs <- mapM (const (dupChan c)) [1..(natToInt n)]
           _  <- C.forkIO $ void $
                 -- Forked process
                 evalIn ctxt (App nullSpan () False
                                 (valExpr f)
-                                (valExpr $ Ext () $ Chan c))
+                                (valExpr $ Ext () $ Chan (dualEndpoint c)))
           return $ buildVec cs
 
     forkMulticast _ e = error $ "Bug in Granule. Trying to forkMulticate: " <> prettyDebug e
@@ -751,10 +779,9 @@ builtIns =
                 --     x <- CC.readChan receiverChan
                 --     CC.writeChan serverChan x
                 --     return ())
-                    
-                 
+
               -- )
-        return $ buildVec receiverChans
+        return $ buildVec (map dualEndpoint receiverChans)
 
     forkReplicate _ e = error $ "Bug in Granule. Trying to forkReplicate: " <> prettyDebug e
 
@@ -762,11 +789,11 @@ builtIns =
     forkRep :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
     forkRep ctxt e = case e of
       Abs{} -> return $ diamondConstr $ do
-        c <- CC.newChan
+        c <- newChan
         _ <- C.forkIO $ void $ evalIn ctxt (App nullSpan () False
                                             (valExpr e)
                                             (valExpr $ Promote () $ valExpr $ Ext () $ Chan c))
-        return $ valExpr $ Promote () $ valExpr $ Ext () $ Chan c
+        return $ valExpr $ Promote () $ valExpr $ Ext () $ Chan (dualEndpoint c)
       _oth -> error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
     uniqueReturn :: RValue -> IO RValue
@@ -824,35 +851,35 @@ builtIns =
 
     recv :: (?globals :: Globals) => RValue -> IO RValue
     recv (Ext _ (Chan c)) = do
-      x <- CC.readChan c
+      x <- readChan c
       return $ Constr () (mkId ",") [x, Ext () $ Chan c]
     recv e = error $ "Bug in Granule. Trying to receive from: " <> prettyDebug e
 
     send :: (?globals :: Globals) => RValue -> IO RValue
     send (Ext _ (Chan c)) = return $ Ext () $ Primitive
-      (\v -> do CC.writeChan c v
+      (\v -> do writeChan c v
                 return $ Ext () $ Chan c)
     send e = error $ "Bug in Granule. Trying to send from: " <> prettyDebug e
 
     selectLeft :: (?globals :: Globals) => RValue -> IO RValue
     selectLeft (Ext _ (Chan c)) = do
-      CC.writeChan c (Constr () (mkId "LeftTag") [])
+      writeChan c (Constr () (mkId "LeftTag") [])
       return $ Ext () $ Chan c
     selectLeft e = error $ "Bug in Granule. Trying to selectLeft from: " <> prettyDebug e
 
     selectRight :: (?globals :: Globals) => RValue -> IO RValue
     selectRight (Ext _ (Chan c)) = do
-      CC.writeChan c (Constr () (mkId "RightTag") [])
+      writeChan c (Constr () (mkId "RightTag") [])
       return $ Ext () $ Chan c
     selectRight e = error $ "Bug in Granule. Trying to selectLeft from: " <> prettyDebug e
 
     offer :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
     offer ctxt f = return $ Ext () $ Primitive
       (\g -> return $ Ext () $ Primitive
-        (\c -> 
+        (\c ->
           case c of
             (Ext _ (Chan c)) -> do
-              x <- CC.readChan c
+              x <- readChan c
               case x of
                 (Constr () (internalName -> "LeftTag") _) ->
                   evalIn ctxt (App nullSpan () False (Val nullSpan () False f) (valExpr $ Ext () $ Chan c))
@@ -866,14 +893,14 @@ builtIns =
 
     grecv :: (?globals :: Globals) => RValue -> IO RValue
     grecv (Ext _ (Chan c)) = return $ diamondConstr $ do
-      x <- CC.readChan c
+      x <- readChan c
       return $ valExpr $ Constr () (mkId ",") [x, Ext () $ Chan c]
     grecv e = error $ "Bug in Granule. Trying to receive from: " <> prettyDebug e
 
     gsend :: (?globals :: Globals) => RValue -> IO RValue
     gsend (Ext _ (Chan c)) = return $ Ext () $ Primitive
       (\v -> return $ diamondConstr $ do
-         CC.writeChan c v
+         writeChan c v
          return $ valExpr $ Ext () $ Chan c)
     gsend e = error $ "Bug in Granule. Trying to send from: " <> prettyDebug e
 
@@ -973,7 +1000,7 @@ natToInt (Constr () c [v]) | internalName c == "S" =  1 + natToInt v
 natToInt k = error $ "Bug in Granule. Trying to convert a N but got value " <> show k
 
 -- Convert a list of channels into a granule `Vec n (LChan ...)` value.
-buildVec :: [CC.Chan (Value (Runtime ()) ())] -> RValue
+buildVec :: [BinaryChannel ()] -> RValue
 buildVec [] = Constr () (mkId "Nil") []
 buildVec (c:cs) = Constr () (mkId "Cons") [Ext () $ Chan c, buildVec cs]
 
