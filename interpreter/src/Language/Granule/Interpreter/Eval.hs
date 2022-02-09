@@ -31,6 +31,7 @@ import Control.Exception (catch, IOException)
 --import GHC.IO.Exception (IOErrorType( OtherError ))
 import qualified Control.Concurrent as C (forkIO)
 import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, dupChan, Chan)
+import qualified Control.Concurrent.MVar as MV
 import qualified System.IO as SIO
 
 --import System.IO.Error (mkIOError)
@@ -64,29 +65,54 @@ data Runtime a =
 -- Dual-ended channel
 data BinaryChannel a =
        BChan { fwd :: CC.Chan (Value (Runtime a) a)
-             , bwd :: CC.Chan (Value (Runtime a) a) }
+             , bwd :: CC.Chan (Value (Runtime a) a)
+             , putbackFwd :: MV.MVar (Value (Runtime a) a)
+             , putbackBwd :: MV.MVar (Value (Runtime a) a) }
 
 -- Channel primitive wrapps
 dualEndpoint :: BinaryChannel a -> BinaryChannel a
-dualEndpoint (BChan fwd bwd) = BChan bwd fwd
+dualEndpoint (BChan fwd bwd mFwd mBwd) = BChan bwd fwd mBwd mFwd
 
 newChan :: IO (BinaryChannel a)
 newChan = do
   c  <- CC.newChan
   c' <- CC.newChan
-  return $ BChan c c'
+  m  <- MV.newEmptyMVar
+  m'  <- MV.newEmptyMVar
+  return $ BChan c c' m m'
 
-readChan :: BinaryChannel a -> IO (Value (Runtime a) a)
-readChan (BChan _ bwd) = CC.readChan bwd
+readChan :: BinaryChannel () -> IO RValue
+readChan (BChan _ bwd _ m) = do
+  putStrLn "Try read"
+  flag <- MV.isEmptyMVar m
+  putStrLn $ "Try read (F) " ++ show flag
+  if flag 
+    then do
+      putStrLn $ " try normal read "
+      x <- CC.readChan bwd
+      putStrLn $ " normal read of " ++ show x
+      return x
+    -- short-circuit the channel because a value was read and has been memo
+    else do
+      x <- MV.takeMVar m
+      putStrLn $ " read from put back: " ++ show x
+      return x
 
-writeChan :: BinaryChannel a -> (Value (Runtime a) a) -> IO ()
-writeChan (BChan fwd _) v = CC.writeChan fwd v
+putbackChan :: BinaryChannel a -> (Value (Runtime a) a) -> IO ()
+putbackChan (BChan _ _ _ bwdM) x = MV.putMVar bwdM x
+
+writeChan :: Show a => BinaryChannel a -> (Value (Runtime a) a) -> IO ()
+writeChan (BChan fwd _ _ _) v = do
+  putStrLn $ "try to write " ++ show v
+  CC.writeChan fwd v
+  putStrLn $ "written " ++ show v
 
 dupChan :: BinaryChannel a -> IO (BinaryChannel a)
-dupChan (BChan fwd bwd) = do
+dupChan (BChan fwd bwd m n) = do
   fwd' <- CC.dupChan fwd
   bwd' <- CC.dupChan bwd
-  return $ BChan fwd' bwd'
+  -- Behaviour here with the putback mvar is a bit weak, but not used in this way with dupChan
+  return $ BChan fwd' bwd' m n
 
 ---
 
@@ -753,65 +779,17 @@ builtIns =
         -- fork the waiters which then fork the servers
         _ <- flip mapM receiverChans
               (\receiverChan -> C.forkIO $ void $ do
-                -- create intermediate channel
-                --serverChan <- newChan
                 -- wait to receive on the main channel
                 x <- readChan receiverChan
-                writeChan (dualEndpoint receiverChan) x
-                -- trigger fork of server
+                putStrLn $ " got " ++ show x
+                () <- putbackChan receiverChan x
+                putStrLn $ " put back "
+
                 C.forkIO $ void $
                    evalIn ctxt (App nullSpan () False
                                 (valExpr f)
                                 (valExpr $ Ext () $ Chan receiverChan)))
-                -- send on the triggering message
-                -- let serverChan' = dualEndpoint serverChan
-                -- writeChan serverChan' x
-                -- -- make forwarders
-                -- _ <- C.forkIO $ void $
-                --       SIO.fixIO $ (\f -> do
-                --         x <- CC.readChan (fwd serverChan')
-                --         CC.writeChan (fwd serverChan') x
-                --         return ())
 
-                -- C.forkIO $ void $
-                --       SIO.fixIO $ (\f -> do
-                --         x <- CC.readChan (bwd serverChan')
-                --         CC.writeChan (bwd serverChan') x
-                --         return ()))
-
-               {- -- pick the dual end
-                --receiverChan <- return $ dualEndpoint receiverChan
-                -- duplicate the channel
-                serverChan <- dupChan receiverChan
-                -- Received an input
-                putStrLn "waiting to read"
-                x <- readChan receiverChan
-                -- kick off a server
-                putStrLn $ "got " ++ show x
-                _ <- C.forkIO $ void $
-                   evalIn ctxt (App nullSpan () False
-                                (valExpr f)
-                                (valExpr $ Ext () $ Chan serverChan))
-              -}
-
-                -- Received an input
-                -- x <- CC.readChan receiverChan
-                -- -- and fork a server
-                -- serverChan <- CC.dupChan x
-                -- _ <- C.forkIO $ void $
-                --    evalIn ctxt (App nullSpan () False
-                --                 (valExpr f)
-                --                 (valExpr $ Ext () $ Chan serverChan))
-                -- -- send the received value onto the server chan
-                -- CC.writeChan serverChan x
-                -- -- fork a forwarding process now
-                -- C.forkIO $ void $
-                --   SIO.fixIO $ (\f -> do
-                --     x <- CC.readChan receiverChan
-                --     CC.writeChan serverChan x
-                --     return ())
-
-              -- )
         return $ buildVec (map dualEndpoint receiverChans)
 
     forkReplicate _ e = error $ "Bug in Granule. Trying to forkReplicate: " <> prettyDebug e
@@ -888,7 +866,8 @@ builtIns =
 
     send :: (?globals :: Globals) => RValue -> IO RValue
     send (Ext _ (Chan c)) = return $ Ext () $ Primitive
-      (\v -> do writeChan c v
+      (\v -> do putStrLn $ "- - SEND " ++ show v
+                writeChan c v
                 return $ Ext () $ Chan c)
     send e = error $ "Bug in Granule. Trying to send from: " <> prettyDebug e
 
