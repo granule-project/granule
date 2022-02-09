@@ -67,10 +67,10 @@ instance Monad Synthesiser where
 instance MonadIO Synthesiser where
   liftIO = conv . liftIO
 
-runSynthesiser :: (?globals :: Globals) => Synthesiser a
+runSynthesiser ::  Int -> Synthesiser a
   -> (CheckerState -> StateT SynthesisData IO [((Either (NonEmpty CheckerError) a), CheckerState)])
-runSynthesiser m s = do
-  observeManyT (fromIntegral synthIndex) (runStateT (runExceptT (unSynthesiser m)) s)
+runSynthesiser index m s = do
+  observeManyT index (runStateT (runExceptT (unSynthesiser m)) s)
 
 conv :: Checker a -> Synthesiser a
 conv (Checker k) =
