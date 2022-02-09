@@ -148,7 +148,9 @@ makeCase :: Type -> Id -> [(Pattern Type, Expr () Type)] -> Type -> Maybe Type -
 makeCase ty id exprPats goal grade = 
   case grade of
     Nothing     -> Case s goal False (Val s ty False (Var ty id)) exprPats
-    Just grade' -> Case s goal False  (Val s (Box ty grade') False (Promote (Box ty grade') (Val s ty False (Var ty id)))) exprPats
+    Just grade' -> 
+      let exprPats' = map (\(pat, expr) -> (PBox s (Box ty grade') False pat, expr) ) exprPats in
+        Case s goal False  (Val s (Box ty grade') False (Promote (Box ty grade') (Val s ty False (Var ty id)))) exprPats'
   where s = nullSpanNoFile 
 
 makeBoxCase :: Type -> Type -> Id -> [(Pattern Type, Expr () Type)] -> Type -> Expr () Type

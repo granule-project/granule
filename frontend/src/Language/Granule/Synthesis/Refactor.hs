@@ -30,6 +30,11 @@ bubbleUpPatterns :: [Id] -> Expr v a -> [Pattern a] -> ([Pattern a], Expr v a)
 bubbleUpPatterns gradedVars (Val _ _ _ (Abs _ p _ e)) pats =
   bubbleUpPatterns gradedVars e (pats ++ [p])
 
+
+-- Handles pattern refactoring for double unboxing 
+bubbleUpPatterns gradedVars (App _ _ _ (Val _ _ _ (Abs _ p@(PBox _ _ _ (PVar _ _ _ id)) _ ( (App _ _ _ (Val _ _ _ (Abs _ p'@(PBox s a rf (PVar _ _ _ id')) _ e)) (Val _ _ _ (Var _ y)))))) (Val _ _ _ (Var _ x))) pats =
+  bubbleUpPatterns (id' : gradedVars) e (replaceInPats pats x (PBox s a rf p') )
+
 -- Beta-redex whose argument is a variable and the pattern is a box pattern
 -- (so also remember that `id` is now a graded variable)
 bubbleUpPatterns gradedVars (App _ _ _ (Val _ _ _ (Abs _ p@(PBox _ _ _ (PVar _ _ _ id)) _ e)) (Val _ _ _ (Var _ x))) pats =

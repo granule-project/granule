@@ -597,59 +597,56 @@ Subtractive
 Γ, x1 : [] r A ⊢ B ⇒ let [x2] = x1 in e; Δ
 
 -}
-
-unboxHelper defs left (var@(x1, (a, structure)) : right) gamma sub@Subtractive{} grade goalTy =
-  unboxHelper defs (var : left) right gamma sub grade goalTy `try`
-    (case a of
+unboxHelper defs gamma left (assumption@(x, (ty, structure)) : right) Subtractive False canDef depth focusPhase grade goal@(Goal goalTySch _) =
+  unboxHelper defs gamma (assumption : left) right Subtractive False canDef depth focusPhase grade goal `try`
+    (case ty of
       Linear (Box grade_r tyA) -> do
-        debugM "synthDebug" $ "Trying to unbox " ++ pretty a
+
+        debugM "synthDebug" $ "Trying to unbox " ++ show assumption
 
         let omega = left ++ right
-        (canUse, omega', _) <- useVar var omega sub grade
+        (canUse, leftOver, _) <- useVar assumption omega Subtractive grade
         if canUse then do
-          --
-          x2 <- freshIdentifier
-          let (gamma', omega'') = bindToContext (x2, (Discharged tyA grade_r, structure)) gamma omega' (isLAsync tyA)
-          -- Synthesise inner
-          debugM "synthDebug" $ "Inside unboxing try to synth for " ++ pretty goalTy ++ " under " ++ pretty [(x2, Discharged tyA grade_r)]
-          (e, delta, subst, bindings, sd) <- synthesiseInner defs False sub gamma' omega'' grade goalTy (True, True, False)
           ---
-          case lookupAndCutout x2 delta of
+          y <- freshIdentifier
+          let (gamma', omega') = bindToContext (y, (Discharged tyA grade_r, structure)) gamma leftOver (isLAsync tyA)
+          debugM "synthDebug" $ "Inside unboxing try to synth for " ++ pretty goalTySch ++ " under " ++ pretty [(y, Discharged tyA grade_r)]
+
+          (e, delta, subst, bindings, structurallyDecr) <- synthesiseInner defs Subtractive False canDef depth focusPhase gamma' omega' grade goal
+          ---
+          case lookupAndCutout y delta of
             Just (delta', (Discharged _ grade_s, _)) -> do
               -- Check that: 0 <= s
               (kind, _, _) <- conv $ synthKind nullSpan grade_s
               conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyGrade (Just kind) 0) grade_s kind)
               res <- solve
-              -- If we succeed, create the let binding
-              debugM "made aaaa: " (pretty $ makeUnbox x2 x1 goalTy (Box grade_r tyA) tyA e)
-              boolToSynthesiser res (makeUnbox x2 x1 goalTy (Box grade_r tyA) tyA e, delta', subst, (x1, (x2, Box grade_r tyA)):bindings, sd)
 
+              -- If we succeed, create the let binding
+              boolToSynthesiser res (makeUnbox y x goalTySch (Box grade_r tyA) tyA e, delta', subst, (x, (y, Box grade_r tyA)):bindings, structurallyDecr)
             _ -> none
         else none
       Discharged (Box grade_r tyA) grade_s -> do
-        debugM "I'm trying a double unboxing with "  (show grade_r)
+        debugM "synthDebug - (unbox - double) trying a double unboxing with "  (show grade_r)
+      
+       -- _ <- error "stoppp"
         let omega = left ++ right
-        (canUse, omega', _) <- useVar var omega sub grade 
-        debugM "in a double unboxing canUse: " (show canUse)
+        (canUse, _, _) <- useVar assumption [] Subtractive grade 
         if canUse then do 
           y <- freshIdentifier
-          let (gamma', omega'') = bindToContext (y, (Discharged tyA (TyInfix TyOpTimes grade_r grade_s), structure)) gamma omega' (isLAsync tyA)
-          debugM "in a double unboxing binding " (pretty y <> " : " <> pretty (Discharged tyA (TyInfix TyOpTimes grade_r grade_s)))
-          debugM "in a double unboxing trying to synth for " (pretty goalTy <> " with contexts gamma: " <> show gamma' <> " and omega: " <> show omega'') 
-          (e, delta, subst, bindings, sd) <- synthesiseInner defs False sub gamma' omega'' grade goalTy (True, True, False)
-          debugM "in a double unboxing making a " (pretty e <> " with output context delta: " <> show delta) 
+          let (gamma', omega') = bindToContext (y, (Discharged tyA (TyInfix TyOpTimes grade_r grade_s), structure)) gamma omega (isLAsync tyA) 
+          (e, delta, subst, bindings, structurallyDecr) <- synthesiseInner defs Subtractive False canDef depth focusPhase gamma' omega' grade goal 
           case lookupAndCutout y delta of
             Just (delta', (Discharged _ grade_s', _)) ->  do 
               (kind, _, _) <- conv $ synthKind nullSpan grade_s'
-              r' <- conv $ freshTyVarInContext (mkId "r'") kind
-              conv $ existential r' kind
+              r' <- freshIdentifier 
+              conv $ existentialTopLevel r' kind
               conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyInfix TyOpTimes (TyVar r') grade_s) grade_s' kind)
               res <- solve 
-              boolToSynthesiser res (makeUnbox y x1 goalTy (Box grade_r tyA) tyA e, replace delta' x1 (Discharged (Box grade_r tyA) (TyVar r'), structure), subst, (x1, (y, Box grade_r tyA)):bindings, sd)
+              debugM "synthDebug - (unbox - double) term: " (pretty $ makeUnbox y x goalTySch (Box grade_r tyA) tyA e)
+              boolToSynthesiser res (makeUnbox y x goalTySch (Box grade_r tyA) tyA e, replace delta' x (Discharged (Box grade_r tyA) (TyVar r'), structure), subst, (x, (y, Box grade_r tyA)):bindings, structurallyDecr)
             _ -> none
         else none
       _ -> none)
-
 {-
 Additive
 
