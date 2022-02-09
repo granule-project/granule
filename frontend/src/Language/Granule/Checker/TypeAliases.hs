@@ -52,7 +52,7 @@ replaceInExpr (TryCatch s a b e1 p mt e2 e3) =
 replaceInExpr (Val s a b v) = Val s a b v
 replaceInExpr (Case s a b e patsAndExprs) =
   Case s a b (replaceInExpr e) (map (\(a, b) -> (a, replaceInExpr b)) patsAndExprs)
-replaceInExpr (Hole s a b ids) = Hole s a b ids
+replaceInExpr (Hole s a b ids hints) = Hole s a b ids hints
 
 replaceInTypeScheme :: TypeScheme -> TypeScheme
 replaceInTypeScheme (Forall s quants constraints t) =

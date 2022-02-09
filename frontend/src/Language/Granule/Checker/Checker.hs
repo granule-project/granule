@@ -387,7 +387,7 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
 
   -- Store the equation type in the state in case it is needed when splitting
   -- on a hole.
-  modify (\st -> st { defName = Just id, defTy = Just equationTy', splittingTy = Just splittingTy})
+  modify (\st -> st { currentDef = Just id, splittingTy = Just splittingTy})
 
   patternGam <- substitute subst patternGam
   debugM "context in checkEquation 1" $ (show patternGam)
@@ -501,14 +501,14 @@ checkExpr :: (?globals :: Globals)
           -> Checker (Ctxt Assumption, Substitution, Expr () Type)
 
 -- Hit an unfilled hole
-checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
+checkExpr defs ctxt _ _ t (Hole s _ _ vars hints) = do
   debugM "checkExpr[Hole]" (pretty s <> " : " <> pretty t)
 
   let boundVariables = map fst $ filter (\ (id, _) -> sourceName id `elem` map sourceName vars) ctxt
   let unboundVariables = filter (\ x -> isNothing (lookup x ctxt)) vars
 
   -- elaborated hole
-  let hexpr = Hole s t False vars
+  let hexpr = Hole s t False vars hints
 
   case unboundVariables of
     (v:_) -> throw UnboundVariableError{ errLoc = s, errId = v }
@@ -521,11 +521,11 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
               -- Check to see if this hole is something we are interested in
               case globalsHolePosition ?globals of
                 -- Synth everything mode
-                Nothing -> programSynthesise ctxt vars t
+                Nothing -> programSynthesise defs ctxt vars hints t
                 Just pos ->
                   if spanContains pos s
                     -- This is a hole we want to synth on
-                    then programSynthesise ctxt vars t
+                    then programSynthesise defs ctxt vars hints t
                     -- This is not a hole we want to synth on
                     else  return hexpr
 
@@ -545,7 +545,7 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
               -- If we are in synthesise mode, also try to synthesise a
               -- term for each case split goal *if* this is also a hole
               -- of interest
-              let casesWithHoles = zip (map fst cases) (repeat (Hole s t True []))
+              let casesWithHoles = zip (map fst cases) (repeat (Hole s t True [] []))
 
               let holeVars = map (\id -> (id, id `elem` boundVariables)) (map fst ctxt)
               throw $ HoleMessage s t ctxt (tyVarContext st) holeVars casesWithHoles
@@ -910,7 +910,7 @@ synthExpr :: (?globals :: Globals)
           -> Checker (Type, Ctxt Assumption, Substitution, Expr () Type)
 
 -- Hit an unfilled hole
-synthExpr _ ctxt _ (Hole s _ _ _) = do
+synthExpr _ ctxt _ (Hole s _ _ _ _) = do
   debugM "synthExpr[Hole]" (pretty s)
   throw $ InvalidHolePosition s
 
@@ -2150,46 +2150,19 @@ freshenTySchemeForVar s rf id tyScheme = do
 
 
 -- Hook into the synthesis engine.
-programSynthesise :: (?globals :: Globals) =>
-  Ctxt Assumption -> [Id] -> Type -> Checker (Expr () Type)
-programSynthesise ctxt vars ty = do
+programSynthesise :: (?globals :: Globals) => Ctxt TypeScheme -> Ctxt Assumption-> [Id] -> [Hint] -> Type -> Checker (Expr () Type)
+programSynthesise defs ctxt vars hints ty = do
   currentState <- get
-  debugM "equation Nameeee" (show $ equationName currentState)
-  debugM "equation ctxt" (show $ ctxt)
-
-  let (currentDef, currentName) = case (defName currentState, defTy currentState) of
-        (Just name, Just ty') -> ([(name, ty')], name)
-        _ -> ([], mkId "")
-
   -- Run the synthesiser in this context
-  let mode = if alternateSynthesisMode then Syn.Alternative else Syn.Default
+  let mode = if (alternateSynthesisMode || HPruning `elem` hints) then Syn.Pruning else Syn.NonPruning
   synRes <-
-      liftIO $ Syn.synthesiseProgram defs currentName
-                  (if subtractiveSynthesisMode then (Syn.Subtractive mode) else (Syn.Additive mode))
-                  ctxt [] (Forall nullSpan [] [] ty) currentState
+      liftIO $ Syn.synthesiseProgram hints defs (currentDef currentState)
+                  (if (subtractiveSynthesisMode || HSubtractive `elem` hints) then Syn.Subtractive else (Syn.Additive mode))
+                  ctxt (Forall nullSpan [] [] ty) currentState
 
   case synRes of
     -- Nothing synthed, so create a blank hole instead
-    []    ->
-      return (Hole nullSpan ty True [])
-    ((_, _, _):_) ->
+    []    -> return (Hole nullSpan ty True [] hints)
+    (_:_) -> 
       case last synRes of
-        (t, _, _) -> return t
-
--- Classified those expressions which are resource allocators
-resourceAllocator :: Expr a t -> Bool
-resourceAllocator (Val _ _ _ (Var _ p)) =
-    internalName p `elem` Primitives.unpromotables
-resourceAllocator (Val _ _ _ (Promote _ e)) =
-    resourceAllocator e
-resourceAllocator (App _ _ _ e1 e2) =
-    resourceAllocator e1 || resourceAllocator e2
-resourceAllocator (AppTy _ _ _ e _) =
-    resourceAllocator e
-resourceAllocator (Binop _ _ _ _ e1 e2) =
-    resourceAllocator e1 || resourceAllocator e2
-resourceAllocator (Case _ _ _ eg cases) =
-    resourceAllocator eg || any (resourceAllocator . snd) cases
-resourceAllocator (TryCatch _ _ _ e1 _ _ e2 e3) =
-    resourceAllocator e1 || resourceAllocator e2 || resourceAllocator e3
-resourceAllocator _ = False
+        t -> return t

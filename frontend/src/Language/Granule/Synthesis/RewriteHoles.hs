@@ -102,7 +102,7 @@ holeRefactorEqn eqn goal =
 
 -- Refactors an expression by filling the hole with the new goal (could be another hole)
 holeRefactorExpr :: Expr () Type -> Expr () () -> Expr () ()
-holeRefactorExpr goal (Hole sp a _ _) = void goal
+holeRefactorExpr goal (Hole sp a _ _ _) = void goal
 holeRefactorExpr goal (App sp a rf e1 e2) =
   App sp a rf (holeRefactorExpr goal e1) (holeRefactorExpr goal e2)
 holeRefactorExpr goal (Binop sp a rf op e1 e2) =

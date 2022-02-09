@@ -11,11 +11,10 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Control.Monad.Except
 import Control.Monad.State.Strict
 import Control.Monad.Logic
-import Language.Granule.Utils (synthIndex, Globals)
 import qualified System.Clock as Clock
 import Language.Granule.Checker.SubstitutionContexts (Substitution)
 import Language.Granule.Syntax.Type (TypeScheme)
-import Language.Granule.Syntax.Identifiers (Id, mkId)
+import Language.Granule.Syntax.Identifiers 
 
 -- Data structure for collecting information about synthesis
 data SynthesisData =
@@ -26,18 +25,21 @@ data SynthesisData =
   , theoremSizeTotal          :: Integer
   , pathsExplored             :: Integer
   , startTime                 :: Clock.TimeSpec
-  , constructors              :: Ctxt (Ctxt (TypeScheme, Substitution))
-  , topLevelDef               :: Id 
-  , structurallyDecreasing    :: Bool 
+  , constructors              :: Ctxt (Ctxt (TypeScheme, Substitution), Bool)
+  , currDef                   :: [Id]
+  , elimDepthReached          :: Bool
+  , introDepthReached         :: Bool
+  , appDepthReached           :: Bool
+  , synDepthReached           :: Bool
   }
   deriving Show
 
 instance Semigroup SynthesisData where
- (SynthesisData calls stime time size paths startTime constructors topLevelDef structurallyDecreasing) <> (SynthesisData calls' stime' time' size' paths' startTime' constructors' topLevelDef' structurallyDecreasing') =
-    SynthesisData (calls + calls') (stime + stime') (time + time') (size + size') (paths + paths') (startTime + startTime') (constructors ++ constructors') topLevelDef' (structurallyDecreasing || structurallyDecreasing')
+ (SynthesisData calls stime time size paths startTime constructors currDef elimDepthReached introDepthReached appDepthReached synDepthReached) <> (SynthesisData calls' stime' time' size' paths' startTime' constructors' currDef' elimDepthReached' introDepthReached' appDepthReached' synDepthReached') =
+    SynthesisData (calls + calls') (stime + stime') (time + time') (size + size') (paths + paths') (startTime + startTime') (constructors ++ constructors') (currDef ++ currDef') (elimDepthReached || elimDepthReached') (introDepthReached || introDepthReached') (appDepthReached || appDepthReached') (synDepthReached || synDepthReached')
 
 instance Monoid SynthesisData where
-  mempty  = SynthesisData 0 0 0 0 0 0 [] (mkId "") False
+  mempty  = SynthesisData 0 0 0 0 0 0 [] [] False False False False
   mappend = (<>)
 
 -- Synthesiser monad

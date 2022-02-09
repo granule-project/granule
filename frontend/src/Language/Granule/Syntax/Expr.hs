@@ -123,7 +123,7 @@ data ExprF ev a expr value =
      -- try e1 as p : t in e2 catch e3
   | ValF Span a Bool value
   | CaseF Span a Bool expr [(Pattern a, expr)]
-  | HoleF Span a Bool [Id]
+  | HoleF Span a Bool [Id] [Hint]
   deriving (Generic, Eq, Rp.Data)
 
 data Operator
@@ -138,6 +138,22 @@ data Operator
   | OpDiv
   | OpMinus
   deriving (Generic, Eq, Ord, Show, Rp.Data)
+
+
+data Hint
+  = HSubtractive 
+  | HPruning 
+  | HNoMaxIntro 
+  | HMaxIntro Int
+  | HNoMaxElim 
+  | HMaxElim Int
+  | HSynNoTimeout
+  | HSynTimeout Int
+  | HSynIndex Int
+  | HUseAllDefs
+  | HUseDefs [Id]
+ deriving (Generic, Eq, Ord, Show, Rp.Data)
+
 
 deriving instance (Show ev, Show a, Show value, Show expr)
     => Show (ExprF ev a value expr)
@@ -206,10 +222,7 @@ pattern Case :: --forall {g :: * -> * -> * -> * -> *} {ev} {a}.
                 -> [(Pattern a, ExprFix2 ExprF g ev a)]
                 -> ExprFix2 ExprF g ev a
 pattern Case sp a rf swexp arms = (ExprFix2 (CaseF sp a rf swexp arms))
-
-pattern Hole :: --forall {g :: * -> * -> * -> * -> *} {ev} {a}.
-                Span -> a -> Bool -> [Id] -> ExprFix2 ExprF g ev a
-pattern Hole sp a rf vs = ExprFix2 (HoleF sp a rf vs)
+pattern Hole sp a rf vs hs = ExprFix2 (HoleF sp a rf vs hs)
 {-# COMPLETE App, Binop, LetDiamond, TryCatch, Val, Case, Hole #-}
 
 -- Cannot be automatically derived unfortunately
@@ -234,7 +247,7 @@ instance Functor (Expr ev) where
   fmap f (TryCatch s a b e p mt e1 e2) = TryCatch s (f a) b (fmap f e) (fmap f p) mt (fmap f e1) (fmap f e2)
   fmap f (Val s a b val) = Val s (f a) b (fmap f val)
   fmap f (Case s a b expr pats) = Case s (f a) b (fmap f expr) (map (\(p, e) -> (fmap f p, fmap f e)) pats)
-  fmap f (Hole s a b ids)  = Hole s (f a) b ids
+  fmap f (Hole s a b ids hints)  = Hole s (f a) b ids hints
 
 instance Bifunctor (f ev a)
     => Birecursive (ExprFix2 f g ev a) (ExprFix2 g f ev a) where
@@ -275,7 +288,7 @@ instance Rp.Refactorable (Expr ev a) where
   isRefactored (TryCatch _ _ True _ _ _ _ _) = Just Rp.Replace
   isRefactored (Val _ _ True _) = Just Rp.Replace
   isRefactored (Case _ _ True _ _) = Just Rp.Replace
-  isRefactored (Hole _ _ True _) = Just Rp.Replace
+  isRefactored (Hole _ _ True _ _) = Just Rp.Replace
   isRefactored _ = Nothing
 
   getSpan = convSpan . getFirstParameter
@@ -400,7 +413,7 @@ instance Term (Expr v a) where
     freeVars (Val _ _ _ e)                = freeVars e
     freeVars (Case _ _ _ e cases)         = freeVars e <> (concatMap (freeVars . snd) cases
                                       \\ concatMap (boundVars . fst) cases)
-    freeVars (Hole _ _ _ vars) = vars
+    freeVars (Hole _ _ _ vars _) = vars
 
     hasHole (App _ _ _ e1 e2) = hasHole e1 || hasHole e2
     hasHole (AppTy _ _ _ e _) = hasHole e
@@ -488,10 +501,10 @@ instance Monad m => Freshenable m (Expr v a) where
      v <- freshen v
      return (Val s a rf v)
 
-    freshen (Hole s a rf vars) = do
+    freshen (Hole s a rf vars hints) = do
       -- Freshen hole variables like they are normal variables
       vars' <- mapM freshenId vars
-      return $ Hole s a rf vars'
+      return $ Hole s a rf vars' hints
 
 -- If an expression is a right-nested application tree on a contructor then
 -- extract the head constructor and the list of parameters

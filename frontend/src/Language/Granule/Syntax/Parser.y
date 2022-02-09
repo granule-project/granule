@@ -328,6 +328,15 @@ Vars1 :: { [String] }
   : VAR                       { [symString $1] }
   | VAR Vars1                 { symString $1 : $2 }
 
+Hint :: { [Hint] }
+  : '-' VAR                      { parseHint $ (symString $2, Nothing, []) } 
+  | '-' VAR INT                  { let TokenInt _ x  = $3 in (parseHint (symString $2, Just x, [])) }
+  | '-' VAR Vars1                { parseHint $ (symString $2, Nothing, (map mkId $3)) }
+
+Hints :: { [Hint] } 
+  : Hint                      { $1 }
+  | Hint Hints                { $1 ++ $2 }
+
 Kind :: { Kind }
   : Type                           { $1 }
 
@@ -588,9 +597,11 @@ Juxt :: { Expr () () }
   | Juxt '@' TyAtom           {% (mkSpan (getStart $1, getEnd $1)) >>= \sp -> return $ AppTy sp () False $1 $3 } -- TODO: span is not very accurate here
 
 Hole :: { Expr () () }
-  : '{!' Vars1 '!}'           {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $3)) >>= \sp -> return $ Hole sp () False (map mkId $2) }
-  | '{!' '!}'                 {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $2)) >>= \sp -> return $ Hole sp () False [] }
-  | '?'                       {% (mkSpan (fst . getPosToSpan $ $1, second (+1) . snd . getPosToSpan $ $1)) >>= \sp -> return $ Hole sp () False [] }
+  : '{!' Vars1 '!}'           {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $3)) >>= \sp -> return $ Hole sp () False (map mkId $2) [] }
+  | '{!' Hints Vars1 '!}'     {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $4)) >>= \sp -> return $ Hole sp () False (map mkId $3) $2 }
+  | '{!' Hints '!}'     {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $3)) >>= \sp -> return $ Hole sp () False [] $2 }
+  | '{!' '!}'                 {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $2)) >>= \sp -> return $ Hole sp () False [] [] }
+  | '?'                       {% (mkSpan (fst . getPosToSpan $ $1, second (+1) . snd . getPosToSpan $ $1)) >>= \sp -> return $ Hole sp () False [] [] }
 
 Atom :: { Expr () () }
   : '(' Expr ')'              { $2 }
@@ -652,6 +663,20 @@ parseError t = do
 
 parseDefs :: FilePath -> String -> Either String (AST () (), [Extension])
 parseDefs file input = runReaderT (runStateT (topLevel $ scanTokens input) []) file
+
+parseHint :: (String, Maybe Int, [Id]) -> [Hint]
+parseHint ("s", Nothing,  [])  = [HSubtractive]
+parseHint ("p", Nothing,  [])  = [HPruning]
+parseHint ("i", Nothing,  [])  = [HNoMaxIntro]
+parseHint ("i", Just arg, [])  = [(HMaxIntro arg)]
+parseHint ("e", Nothing,  [])  = [HNoMaxElim]
+parseHint ("e", Just arg, [])  = [(HMaxElim arg)]
+parseHint ("t", Nothing,  [])  = [(HSynNoTimeout)]
+parseHint ("t", Just arg, [])  = [(HSynTimeout arg)]
+parseHint ("n", Just arg, [])  = [(HSynIndex arg)]
+parseHint ("d", Nothing,  [])  = [(HUseAllDefs)]
+parseHint ("d", Nothing,  ids) = [(HUseDefs ids)]
+parseHint _ = []
 
 parseAndDoImportsAndFreshenDefs :: (?globals :: Globals) => String -> IO (AST () (), [Extension])
 parseAndDoImportsAndFreshenDefs input = do

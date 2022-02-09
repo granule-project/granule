@@ -181,9 +181,7 @@ data CheckerState = CS
             -- Names from modules which are hidden
             , allHiddenNames :: M.Map Id Id
 
-            -- The type of the current definition being checked
-            , defTy :: Maybe Type
-            , defName :: Maybe Id
+            , currentDef :: Maybe Id
 
             -- Used by the case splitter 
             , splittingTy :: Maybe Type
@@ -215,8 +213,7 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , deriv = Nothing
                , derivStack = []
                , allHiddenNames = M.empty
-               , defTy = Nothing
-               , defName = Nothing
+               , currentDef = Nothing
                , splittingTy = Nothing
                , derivedDefinitions = []
                , wantedTypeConstraints = []
