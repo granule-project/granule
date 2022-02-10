@@ -50,11 +50,13 @@ typeConstructors =
     , (mkId "DFloat",  (Type 0, [], False)) -- special floats that can be tracked for sensitivty
     , (mkId "Char",   (Type 0, [], False))
     , (mkId "String", (Type 0, [], False))
-    , (mkId "Protocol", (Type 0, [], False))
     , (mkId "Inverse", ((funTy (Type 0) (Type 0)), [], False))
+    -- Session type related things
+    , (mkId "Protocol", (Type 0, [], False))
     , (mkId "SingeAction", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], True))
     , (mkId "ReceivePrefix", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], True))
     , (mkId "Sends", (funTy (tyCon "Nat") (funTy (tyCon "Protocol") (tyCon "Predicate")), [], True))
+    , (mkId "Graded", (funTy (tyCon "Nat") (funTy (tyCon "Protocol") (tyCon "Protocol")), [], True))
 
     -- # Coeffect types
     , (mkId "Nat",      (kcoeffect, [], False))
