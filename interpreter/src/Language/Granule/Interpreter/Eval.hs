@@ -759,15 +759,24 @@ builtIns =
 
     forkMulticast :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
     forkMulticast ctxt f@(Abs{}) = return $ Ext () $ Primitive $ \n -> do
-          c      <- newChan
-          -- receiver channeels
-          cs <- mapM (const (dupChan c)) [1..(natToInt n)]
+          -- Create initial channel that goes to the broadcaster
+          initChan <- newChan
           _  <- C.forkIO $ void $
                 -- Forked process
                 evalIn ctxt (App nullSpan () False
                                 (valExpr f)
-                                (valExpr $ Ext () $ Chan (dualEndpoint c)))
-          return $ buildVec cs
+                                (valExpr $ Ext () $ Chan (dualEndpoint initChan)))
+          -- receiver channels
+          interChan <- newChan
+          receiverChans <- mapM (const (dupChan interChan)) [1..(natToInt n)]
+          -- forwarder
+          _ <- C.forkIO $ void $ SIO.fixIO $ const $ do
+                e <- readChan initChan
+                case e of
+                  Promote _ (Val _ _ _ v) -> writeChan interChan v
+                  _ -> error $ "Bug in Granule. Multicast forwarder got non-boxed value " ++ show e
+          -- return receiver chans vector
+          return $ buildVec (map dualEndpoint receiverChans)
 
     forkMulticast _ e = error $ "Bug in Granule. Trying to forkMulticate: " <> prettyDebug e
 
