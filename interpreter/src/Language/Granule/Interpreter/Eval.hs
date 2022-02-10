@@ -32,6 +32,7 @@ import Control.Exception (catch, IOException)
 import qualified Control.Concurrent as C (forkIO)
 import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, dupChan, Chan)
 import qualified Control.Concurrent.MVar as MV
+import qualified Control.Concurrent.Lock as L
 import qualified System.IO as SIO
 
 --import System.IO.Error (mkIOError)
@@ -67,11 +68,12 @@ data BinaryChannel a =
        BChan { fwd :: CC.Chan (Value (Runtime a) a)
              , bwd :: CC.Chan (Value (Runtime a) a)
              , putbackFwd :: MV.MVar (Value (Runtime a) a)
-             , putbackBwd :: MV.MVar (Value (Runtime a) a) }
+             , putbackBwd :: MV.MVar (Value (Runtime a) a)
+             , lock :: L.Lock }
 
 -- Channel primitive wrapps
 dualEndpoint :: BinaryChannel a -> BinaryChannel a
-dualEndpoint (BChan fwd bwd mFwd mBwd) = BChan bwd fwd mBwd mFwd
+dualEndpoint (BChan fwd bwd mFwd mBwd l) = BChan bwd fwd mBwd mFwd l
 
 newChan :: IO (BinaryChannel a)
 newChan = do
@@ -79,10 +81,11 @@ newChan = do
   c' <- CC.newChan
   m  <- MV.newEmptyMVar
   m'  <- MV.newEmptyMVar
-  return $ BChan c c' m m'
+  l   <- L.new
+  return $ BChan c c' m m' l
 
 readChan :: BinaryChannel () -> IO RValue
-readChan (BChan _ bwd _ m) = do
+readChan (BChan _ bwd _ m lock) = do
   putStrLn "Try read"
   flag <- MV.isEmptyMVar m
   putStrLn $ "Try read (F) " ++ show flag
@@ -99,20 +102,20 @@ readChan (BChan _ bwd _ m) = do
       return x
 
 putbackChan :: BinaryChannel a -> (Value (Runtime a) a) -> IO ()
-putbackChan (BChan _ _ _ bwdM) x = MV.putMVar bwdM x
+putbackChan (BChan _ _ _ bwdM lock) x = MV.putMVar bwdM x
 
 writeChan :: Show a => BinaryChannel a -> (Value (Runtime a) a) -> IO ()
-writeChan (BChan fwd _ _ _) v = do
+writeChan (BChan fwd _ _ _ lock) v = do
   putStrLn $ "try to write " ++ show v
   CC.writeChan fwd v
   putStrLn $ "written " ++ show v
 
 dupChan :: BinaryChannel a -> IO (BinaryChannel a)
-dupChan (BChan fwd bwd m n) = do
+dupChan (BChan fwd bwd m n l) = do
   fwd' <- CC.dupChan fwd
   bwd' <- CC.dupChan bwd
-  -- Behaviour here with the putback mvar is a bit weak, but not used in this way with dupChan
-  return $ BChan fwd' bwd' m n
+  -- Behaviour here with the putback mvar + lock is a bit weak, but not used in this way with dupChan
+  return $ BChan fwd' bwd' m n l
 
 ---
 
