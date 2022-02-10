@@ -1,13 +1,8 @@
+module Parallel where
 ------
 --- Module: Parallel
 --- Description: Basic parallel combinators
 ------
-
---------- Currently fails 22/09/21
--- Checking ./work-in-progress/uniquearray.gr...
--- OK, evaluating...
--- Error during evaluation: ./work-in-progress/uniquearray.gr:
--- thread blocked indefinitely in an MVar operation
 
 -- parallel combinator defined in terms of linear channels
 -- `par` expects two thunks, `f` and `g`, and returns their resulting values in a pair
@@ -18,14 +13,3 @@ par f g =  let c = forkLinear (\c' -> close (send c' (f ()))); -- compute f in n
                -- (shared memory, should be constant time to share pointer!)
                _ = close c'
            in (a, b)
-
-foo : () -> Int
-foo () = 5
-
-bar : () -> Int
-bar () = 10
-
-main : () <{Stdout}>
-main =
-  let (v1,v2) = par foo bar
-  in toStdout (showInt (v1+v2))

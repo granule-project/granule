@@ -772,7 +772,7 @@ builtIns =
           -- forwarder
           _ <- C.forkIO $ void $ SIO.fixIO $ const $ do
                 e <- readChan initChan
-                case e of
+              case e of
                   Promote _ (Val _ _ _ v) -> writeChan interChan v
                   _ -> error $ "Bug in Granule. Multicast forwarder got non-boxed value " ++ show e
           -- return receiver chans vector
