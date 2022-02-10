@@ -20,8 +20,6 @@ import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Identifiers
 
-import Language.Granule.Checker.Types
-
 import Language.Granule.Utils
 
 compileTypeConstraintToConstraint ::
@@ -101,8 +99,8 @@ isDefinedConstraint _ (TyApp (TyCon (internalName -> "SingleAction")) protocol)
 isDefinedConstraint _ (TyApp (TyCon (internalName -> "ReceivePrefix")) protocol)
   = return (receivePrefix protocol)
 
-isDefinedConstraint s (TyApp (TyApp (TyCon (internalName -> "Sends")) n) protocol)
-  = sends s n protocol
+isDefinedConstraint s (TyApp (TyCon (internalName -> "Sends")) protocol)
+  = sends s protocol
 
 isDefinedConstraint _ _
   = return False
@@ -113,24 +111,17 @@ receivePrefix (TyApp
            (TyApp (TyCon (internalName -> "Offer")) _) _) = True
 receivePrefix _ = False
 
-sends :: (?globals :: Globals) => Span -> Type -> Type -> Checker Bool
-sends _ r (TyCon (internalName -> "End")) = return True
-sends s r (TyApp (TyApp (TyCon (internalName -> "Send")) t) p) =
-  case t of
-    Box r' _ -> do
-      -- check equality on grades
-      (isEq, kont) <- attemptChecker $ lEqualTypes s r' r
-      if isEq
-        then kont >> sends s r p
-        else return False
-    _ -> return False
-sends s r (TyApp (TyApp (TyCon (internalName -> "Recv")) t) p) = return False
-sends s r (TyApp (TyApp (TyCon (internalName -> "Offer")) t) t') = return False
-sends s r (TyApp (TyApp (TyCon (internalName -> "Select")) t) t') = do
-  b  <- sends s r t
-  b' <- sends s r t'
+-- TODO: this could probably be made into a pure function now
+sends :: (?globals :: Globals) => Span -> Type -> Checker Bool
+sends _ (TyCon (internalName -> "End")) = return True
+sends s (TyApp (TyApp (TyCon (internalName -> "Send")) t) p) = sends s p
+sends s (TyApp (TyApp (TyCon (internalName -> "Recv")) t) p) = return False
+sends s (TyApp (TyApp (TyCon (internalName -> "Offer")) t) t') = return False
+sends s (TyApp (TyApp (TyCon (internalName -> "Select")) t) t') = do
+  b  <- sends s t
+  b' <- sends s t'
   return $ b && b'
-sends _ _ _ = return False
+sends _ _ = return False
 
 singleAction :: Type -> Bool
 singleAction (TyCon (internalName -> "End")) = True

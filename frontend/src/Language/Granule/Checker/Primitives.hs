@@ -373,7 +373,7 @@ forkNonLinear : forall {p : Protocol, s : Semiring, r : s}
 forkNonLinear = BUILTIN
 
 forkMulticast : forall {p : Protocol, n : Nat}
-              . {Sends n p} => (LChan p -> ()) -> N n -> Vec n (LChan (Dual p))
+              . {Sends p} => (LChan (Graded n p) -> ()) -> N n -> Vec n (LChan (Dual p))
 forkMulticast = BUILTIN
 
 forkReplicate : forall {p : Protocol, n : Nat}
