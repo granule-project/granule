@@ -80,6 +80,7 @@ library:
   dependencies:
   - array
   - containers
+  - control-monad-omega
   - mtl >=2.2.1
   - sbv >=8.5
   - transformers >=0.5
