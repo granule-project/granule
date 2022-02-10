@@ -338,6 +338,13 @@ equalTypesRelatedCoeffectsInner s rel (TyApp (TyCon d) t) t' _ sp mode
 equalTypesRelatedCoeffectsInner s rel t (TyApp (TyCon d) t') _ sp mode
   | internalName d == "Dual" = isDualSession s rel t t' sp
 
+-- Do duality check (left) [special case of TyApp rule]
+equalTypesRelatedCoeffectsInner s rel (TyApp (TyCon d) t) t' _ sp mode
+  | internalName d == "Graded" = error "TODO"
+
+equalTypesRelatedCoeffectsInner s rel t (TyApp (TyCon d) t') _ sp mode
+  | internalName d == "Graded" = error "TODO"
+
 -- Equality on type application
 equalTypesRelatedCoeffectsInner s rel (TyApp t1 t2) (TyApp t1' t2') _ sp mode = do
   debugM "equalTypesRelatedCoeffectsInner (tyAp leftp)" (pretty t1 <> " = " <> pretty t1')
@@ -435,6 +442,8 @@ sessionInequality s (TyCon c) (TyCon c')
 
 sessionInequality s t1 t2 =
   throw TypeErrorAtLevel { errLoc = s, tyExpectedL = t1, tyActualL = t2 }
+
+
 
 -- | Is this protocol dual to the other?
 isDualSession :: (?globals :: Globals)
