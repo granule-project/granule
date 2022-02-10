@@ -7,7 +7,7 @@ module Language.Granule.Synthesis.Synth where
 
 import qualified Data.Map as M
 
-import Data.List (sort,sortBy,permutations,nub)
+import Data.List (sortBy,nub)
 
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Type
@@ -41,6 +41,7 @@ import qualified System.Timeout
 import Language.Granule.Utils
 import Data.Maybe (fromJust, catMaybes, fromMaybe, maybeToList)
 import Control.Arrow (second)
+import Control.Monad.Omega
 import System.Clock (TimeSpec)
 
 
@@ -1624,7 +1625,7 @@ synthesiseProgram hints defs currentDef resourceScheme gamma goalTy checkerState
 
 
 
-  result <- liftIO $ System.Timeout.timeout timeoutLim' $ loop (hintELim, hintILim) index defs' gamma' 0 0 0 0 initialState []
+  result <- liftIO $ System.Timeout.timeout timeoutLim' $ loop (hintELim, hintILim) index defs' gamma' 5 initialState
   fin <- case result of 
     Just (synthResults, aggregate) ->  do
       let results = nub $ map fst3 $ rights (map fst synthResults)
@@ -1681,38 +1682,28 @@ synthesiseProgram hints defs currentDef resourceScheme gamma goalTy checkerState
 
 
   where
-      loop (eHintMax, iHintMax) index defs gamma eLim iLim appLim synLim agg tried = do
-        let lims = [eLim, iLim, appLim]
-        let sortedLims = sort lims
 
-        let perms = if not $ sortedLims `elem` tried then filter (\(x1:x2:x3:[]) -> x1 <= eHintMax && x2 <= iHintMax) (nub $ permutations [eLim, iLim, appLim]) else []
-        pRes <- foldM (\acc (eLim':iLim':appLim':[]) -> 
-          case acc of
-            (Just res, agg')   -> return (Just res, agg')
-            (Nothing, agg') -> do
-              putStrLn $  "eLim: " <> (show eLim') <> " iLim: " <> (show iLim') <> " appLim: " <> (show appLim') <> " synLim: " <> (show synLim)  
-              let synRes = synthesise defs resourceScheme gamma [] (Depth 0 eLim' 0 iLim' 0 appLim' 0 synLim) (Goal goalTy NonDecreasing)
+      loop (eHintMax, iHintMax) index defs gamma level agg = do 
+        let (elimMax, introMax) = (if level < eHintMax then level else eHintMax, if level < iHintMax then level else iHintMax)
+        let lims = runOmega $ liftM3 (,,) (each [0..elimMax]) (each [0..introMax]) (each [0..level])
+        pRes <- foldM (\acc (elim, intro, app) -> 
+          case acc of 
+            (Just res, agg') -> return (Just res, agg')
+            (Nothing, agg')  -> do 
+              putStrLn $  "elim: " <> (show elim) <> " intro: " <> (show intro) <> " app: " <> (show app) <> " level: " <> (show level)  
+              let synRes = synthesise defs resourceScheme gamma [] (Depth 0 elim 0 intro 0 app 0 level) (Goal goalTy NonDecreasing)
               (res, agg'') <- runStateT (runSynthesiser index synRes checkerState) (resetState agg')
               if (not $ solved res) && (depthReached agg'') then return (Nothing, agg'') else return (Just res, agg'')
-          ) (Nothing, agg) perms
-        
+          ) (Nothing, agg) lims
         case pRes of 
           (Just finRes, finAgg) -> return (finRes, finAgg)
-          (Nothing, finAgg)     -> 
-            if eLim < synLim || (eLim == eHintMax && iLim == iHintMax && appLim <= synLim) then 
-              if iLim <= eLim || (iLim == iHintMax && appLim <= synLim) then 
-                if appLim <= iLim || (iLim == iHintMax && appLim <= synLim) then loop (eHintMax, iHintMax) index defs gamma eLim iLim (appLim+1) synLim finAgg (sortedLims:tried)
-                else
-                    loop (eHintMax, iHintMax) index defs gamma eLim (if iLim+1 <= iHintMax then iLim+1 else iLim) 0 synLim finAgg (sortedLims:tried)
-              else 
-                    loop (eHintMax, iHintMax) index defs gamma (if eLim+1 <= eHintMax then eLim+1 else eLim) 0 0 synLim finAgg (sortedLims:tried)
-            else 
-                    loop (eHintMax, iHintMax) index defs gamma 0 0 0 (synLim+1) finAgg []                
-                
+          (Nothing, finAgg) -> loop (eHintMax, iHintMax) index defs gamma (level+1) finAgg 
+ 
 
       depthReached st = elimDepthReached st || introDepthReached st || appDepthReached st || synDepthReached st
       solved res = case res of ((Right (expr, _, _), _):_) -> True ; _ -> False
       resetState st = st { elimDepthReached = False, introDepthReached = False, synDepthReached = False}
+
 
       hasTimeoutHint ((HSynTimeout x):hints) = Just x
       hasTimeoutHint (_:hints) = hasTimeoutHint hints
