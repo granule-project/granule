@@ -924,7 +924,7 @@ builtIns =
                 (Constr () (internalName -> "LeftTag") _) ->
                   evalIn ctxt (App nullSpan () False (Val nullSpan () False f) (valExpr $ Ext () $ Chan c))
                 (Constr () (internalName -> "RightTag") _) ->
-                  evalIn ctxt (App nullSpan () False (Val nullSpan () False f) (valExpr $ Ext () $ Chan c))
+                  evalIn ctxt (App nullSpan () False (Val nullSpan () False g) (valExpr $ Ext () $ Chan c))
                 x -> error $ "Bug in Granule. Offer got tag: " <> prettyDebug x
             _ -> error $ "Bug in Granule. Offer got supposed channel: " <> prettyDebug c))
     close :: RValue -> IO RValue
