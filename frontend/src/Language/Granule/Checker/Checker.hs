@@ -677,10 +677,12 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
 
     unpr <-  
       if (CBN `elem` globalsExtensions ?globals)
-      then return False
-      else case e of
-        App _ _ _ (Val _ _ _ (Var _ (internalName -> "newFloatArray"))) _ -> return True
-        App _ _ _ (Val _ _ _ (Var _ (internalName -> "forkLinear"))) _ -> return True
+        then return False
+        else case e of
+        App _ _ _ (Val _ _ _ (Var _ i)) _ -> 
+          if (internalName i `elem` Primitives.unpromotables) 
+            then return True 
+            else return False
         otherwise -> return False
     when unpr (throw $ UnpromotableError{errLoc = s, errTy = ty})
 
@@ -1221,13 +1223,15 @@ synthExpr defs gam pol (Val s _ rf (Promote _ e)) = do
    -- Synth type of promoted expression
    (t, gam', subst, elaboratedE) <- synthExpr defs gam pol e
 
-   unpr <-
-      if (CBN `elem` globalsExtensions ?globals)
+   unpr <-  
+    if (CBN `elem` globalsExtensions ?globals)
       then return False
       else case e of
-        App _ _ _ (Val _ _ _ (Var _ (internalName -> "newFloatArray"))) _ -> return True
-        App _ _ _ (Val _ _ _ (Var _ (internalName -> "forkLinear"))) _ -> return True
-        otherwise -> return False
+      App _ _ _ (Val _ _ _ (Var _ i)) _ -> 
+        if (internalName i `elem` Primitives.unpromotables) 
+          then return True 
+          else return False
+      otherwise -> return False
    when unpr (throw $ UnpromotableError{errLoc = s, errTy = t})
 
    -- Multiply the grades of all the used variables here
