@@ -640,6 +640,30 @@ isIndexedType t = do
       , tfTySig = \(Const b) _ _ -> return $ Const b } t
   return $ getConst b
 
+  -- | Find out if a type is unpromotable in CBV
+isUnpromotable :: (?globals :: Globals) => Type -> Checker Bool
+isUnpromotable t = do
+  if (CBN `elem` globalsExtensions ?globals)
+  then return $ getConst $ Const False
+  else do
+    b <- typeFoldM TypeFold
+        { tfTy = \_ -> return $ Const False
+        , tfFunTy = \_ (Const x) (Const y) -> return $ Const (x || y)
+        , tfTyCon = \c -> return $ Const (internalName c == "LChan") 
+        , tfBox = \_ (Const x) -> return $ Const x
+        , tfDiamond = \_ (Const x) -> return $ Const x
+        , tfStar = \_ (Const x) -> return $ Const True
+        , tfTyVar = \_ -> return $ Const False
+        , tfTyApp = \(Const x) (Const y) -> return $ Const (x || y)
+        , tfTyInt = \_ -> return $ Const False
+        , tfTyRational = \_ -> return $ Const False
+        , tfTyGrade = \_ _ -> return $ Const False
+        , tfTyInfix = \_ (Const x) (Const y) -> return $ Const (x || y)
+        , tfSet = \_ _ -> return $ Const False
+        , tfTyCase = \_ _ -> return $ Const False
+        , tfTySig = \(Const b) _ _ -> return $ Const b } t
+    return $ getConst b
+
 -- Given a type term, works out if its kind is actually an effect type
 -- if so, returns `Right effTy` where `effTy` is the effect type
 -- otherwise, returns `Left k` where `k` is the kind of the original type term

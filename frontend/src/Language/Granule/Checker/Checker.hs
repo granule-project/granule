@@ -675,6 +675,9 @@ checkExpr defs gam pol topLevel tau (App s _ rf e1 e2) = do
 checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
     debugM "checkExpr[Box]" (pretty s <> " : " <> pretty ty)
 
+    unpr <- isUnpromotable ty
+    when unpr (throw $ UnpromotableError{errLoc = s, errTy = ty})
+
     -- Checker the expression being promoted
     (gam', subst, elaboratedE) <- checkExpr defs gam pol False tau e
 
@@ -1217,6 +1220,10 @@ synthExpr defs gam pol (Val s _ rf (Promote _ e)) = do
 
    substFinal <- combineManySubstitutions s [subst, subst']
    let finalTy = Box (TyVar var) t
+
+   unpr <- isUnpromotable t
+   when unpr (throw $ UnpromotableError{errLoc = s, errTy = t})
+
    let elaborated = Val s finalTy rf (Promote t elaboratedE)
    return (finalTy, gam'', substFinal, elaborated)
 

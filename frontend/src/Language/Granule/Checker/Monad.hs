@@ -497,6 +497,8 @@ data CheckerError
     { errLoc :: Span, linearityMismatch :: LinearityMismatch }
   | UniquenessError
     { errLoc :: Span, uniquenessMismatch :: UniquenessMismatch }
+  | UnpromotableError
+    { errLoc :: Span, errTy :: Type }
   | PatternTypingError
     { errLoc :: Span, errPat :: Pattern (), tyExpected :: Type }
   | PatternTypingMismatch
@@ -622,6 +624,7 @@ instance UserMsg CheckerError where
   title IntervalGradeKindError{} = "Interval kind error"
   title LinearityError{} = "Linearity error"
   title UniquenessError{} = "Uniqueness error"
+  title UnpromotableError{} = "Unpromotable error"
   title PatternTypingError{} = "Pattern typing error"
   title PatternTypingMismatch{} = "Pattern typing mismatch"
   title PatternArityError{} = "Pattern arity error"
@@ -768,6 +771,8 @@ instance UserMsg CheckerError where
       "Cannot guarantee uniqueness of references for non-unique type `" <> pretty t <> "`."
     UniquePromotion t ->
       "Cannot promote non-unique value of type `" <> pretty t <> "` to unique, since uniqueness is not a coeffect."
+
+  msg UnpromotableError{..} = "Cannot promote a value of type `" <> pretty errTy <> "` in call-by-value mode."
 
   msg PatternTypingError{..}
     = "Pattern match `"
