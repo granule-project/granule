@@ -32,7 +32,6 @@ import Control.Exception (catch, IOException)
 import qualified Control.Concurrent as C (forkIO)
 import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, dupChan, Chan)
 import qualified Control.Concurrent.MVar as MV
-import qualified Control.Concurrent.Lock as L
 import qualified System.IO as SIO
 
 --import System.IO.Error (mkIOError)
@@ -69,18 +68,17 @@ data BinaryChannel a =
              , bwd :: CC.Chan (Value (Runtime a) a)
              , putbackFwd :: MV.MVar (Value (Runtime a) a)
              , putbackBwd :: MV.MVar (Value (Runtime a) a)
-             , lock :: L.Lock
-             , tag :: Prelude.String
-             , pol :: Bool }
+             , tag :: Prelude.String -- if this is not "" then debugging messages get output
+             , pol :: Bool } -- polarity
 
 -- Channel primitive wrapps
 dualEndpoint :: BinaryChannel a -> BinaryChannel a
-dualEndpoint (BChan fwd bwd mFwd mBwd l t pol) = BChan bwd fwd mBwd mFwd l t (not pol)
+dualEndpoint (BChan fwd bwd mFwd mBwd t pol) = BChan bwd fwd mBwd mFwd t (not pol)
 
-putStrLn' :: Prelude.String -> Bool -> Prelude.String -> IO ()
-putStrLn' "" _ x = return ()
-putStrLn' tag True x = putStrLn $ "[" ++ tag ++ " ->]: " ++ x
-putStrLn' tag False x = putStrLn $ "[" ++ tag ++ " <-]: " ++ x
+debugComms :: Prelude.String -> Bool -> Prelude.String -> IO ()
+debugComms "" _ x = return ()
+debugComms tag True x = putStrLn $ "[" ++ tag ++ " ->]: " ++ x
+debugComms tag False x = putStrLn $ "[" ++ tag ++ " <-]: " ++ x
 
 newChan :: IO (BinaryChannel a)
 newChan = do
@@ -88,52 +86,50 @@ newChan = do
   c' <- CC.newChan
   m  <- MV.newEmptyMVar
   m'  <- MV.newEmptyMVar
-  l   <- L.new
-  return $ BChan c c' m m' l "" True
+  return $ BChan c c' m m' "" True
 
+-- Adds a tag (channel name) for debugging
 newChan' :: Prelude.String -> IO (BinaryChannel a)
 newChan' tag = do
   c  <- CC.newChan
   c' <- CC.newChan
   m  <- MV.newEmptyMVar
   m'  <- MV.newEmptyMVar
-  l   <- L.new
-  return $ BChan c c' m m' l tag True
+  return $ BChan c c' m m' tag True
 
 readChan :: BinaryChannel () -> IO RValue
-readChan (BChan _ bwd _ m lock tag pol) = do
-  flag <- MV.isEmptyMVar m
-  if flag 
+readChan (BChan _ bwd _ bwdMV tag pol) = do
+  flag <- MV.isEmptyMVar bwdMV
+  if flag
     then do
-      putStrLn' tag pol $ "Read Normal"
+      debugComms tag pol $ "Read Normal"
       x <- CC.readChan bwd
-      putStrLn' tag pol $ "READ " ++ show x
+      debugComms tag pol $ "READ " ++ show x
       return x
     -- short-circuit the channel because a value was read and has been memo
     else do
-      putStrLn' tag pol $ "Read Putback"
-      x <- MV.takeMVar m
-      putStrLn' tag pol $ "READ from put back: " ++ show x
+      debugComms tag pol $ "Read Putback"
+      x <- MV.takeMVar bwdMV
+      debugComms tag pol $ "READ from put back: " ++ show x
       return x
 
 putbackChan :: BinaryChannel a -> (Value (Runtime a) a) -> IO ()
-putbackChan (BChan _ _ _ bwdM lock tag pol) x = do
-  putStrLn' tag pol " > putback"
-  MV.putMVar bwdM x
-  putStrLn' tag pol " < putback"
+putbackChan (BChan _ _ _ bwdMV tag pol) x = do
+  debugComms tag pol "Putback"
+  MV.putMVar bwdMV x
 
 writeChan :: Show a => BinaryChannel a -> (Value (Runtime a) a) -> IO ()
-writeChan (BChan fwd _ _ _ lock tag pol) v = do
-  putStrLn' tag pol $ "Try to write " ++ show v
+writeChan (BChan fwd _ _ _ tag pol) v = do
+  debugComms tag pol $ "Try to write " ++ show v
   CC.writeChan fwd v
-  putStrLn' tag pol $ "written"
+  debugComms tag pol $ "written"
 
 dupChan :: BinaryChannel a -> IO (BinaryChannel a)
-dupChan (BChan fwd bwd m n l t p) = do
+dupChan (BChan fwd bwd m n t p) = do
   fwd' <- CC.dupChan fwd
   bwd' <- CC.dupChan bwd
-  -- Behaviour here with the putback mvar + lock is a bit weak, but not used in this way with dupChan
-  return $ BChan fwd' bwd' m n l t p
+  -- Behaviour here with the putback mvar is a bit weak, should not used in this way with dupChan
+  return $ BChan fwd' bwd' m n (t ++ t) p
 
 ---
 
@@ -812,16 +808,13 @@ builtIns =
     forkReplicateCore wrapper ctxt (Promote _ (Val _ _ _ f@Abs{})) =
       return $ Ext () $ Primitive $ \n -> do
         -- make the chans
-        receiverChans <- mapM (\x -> newChan' ("c" ++ show x)) [1..(natToInt n)]
+        receiverChans <- mapM (const newChan) [1..(natToInt n)]
         -- fork the waiters which then fork the servers
         _ <- flip mapM receiverChans
               (\receiverChan -> C.forkIO $ void $ do
                 -- wait to receive on the main channel
-                putStrLn "INTERMEDIATE READ"
                 x <- readChan receiverChan
-                putStrLn $ " got " ++ show x
                 () <- putbackChan receiverChan x
-                putStrLn $ " put back "
 
                 C.forkIO $ void $
                    evalIn ctxt (App nullSpan () False
@@ -844,7 +837,7 @@ builtIns =
       _oth -> error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
     uniqueReturn :: RValue -> IO RValue
-    uniqueReturn (Nec () v) = return $ 
+    uniqueReturn (Nec () v) = return $
       case v of
         (Val nullSpan () False (Ext () (Runtime fa))) ->
           let borrowed = borrowFloatArray fa in
