@@ -675,7 +675,13 @@ checkExpr defs gam pol topLevel tau (App s _ rf e1 e2) = do
 checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
     debugM "checkExpr[Box]" (pretty s <> " : " <> pretty ty)
 
-    unpr <- isUnpromotable ty
+    unpr <-  
+      if (CBN `elem` globalsExtensions ?globals)
+      then return False
+      else case e of
+        App _ _ _ (Val _ _ _ (Var _ (internalName -> "newFloatArray"))) _ -> return True
+        App _ _ _ (Val _ _ _ (Var _ (internalName -> "forkLinear"))) _ -> return True
+        otherwise -> return False
     when unpr (throw $ UnpromotableError{errLoc = s, errTy = ty})
 
     -- Checker the expression being promoted
@@ -1215,14 +1221,20 @@ synthExpr defs gam pol (Val s _ rf (Promote _ e)) = do
    -- Synth type of promoted expression
    (t, gam', subst, elaboratedE) <- synthExpr defs gam pol e
 
+   unpr <-
+      if (CBN `elem` globalsExtensions ?globals)
+      then return False
+      else case e of
+        App _ _ _ (Val _ _ _ (Var _ (internalName -> "newFloatArray"))) _ -> return True
+        App _ _ _ (Val _ _ _ (Var _ (internalName -> "forkLinear"))) _ -> return True
+        otherwise -> return False
+   when unpr (throw $ UnpromotableError{errLoc = s, errTy = t})
+
    -- Multiply the grades of all the used variables here
    (gam'', subst') <- ctxtMult s (TyVar var) gam'
 
    substFinal <- combineManySubstitutions s [subst, subst']
    let finalTy = Box (TyVar var) t
-
-   unpr <- isUnpromotable t
-   when unpr (throw $ UnpromotableError{errLoc = s, errTy = t})
 
    let elaborated = Val s finalTy rf (Promote t elaboratedE)
    return (finalTy, gam'', substFinal, elaborated)
