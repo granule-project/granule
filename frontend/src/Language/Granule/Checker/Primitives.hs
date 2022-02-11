@@ -378,17 +378,13 @@ forkMulticast : forall {p : Protocol, n : Nat}
               . {Sends p} => (LChan (Graded n p) -> ()) -> N n -> Vec n (LChan (Dual p))
 forkMulticast = BUILTIN
 
-forkReplicate : forall {p : Protocol, n : Nat}
-              . {ReceivePrefix p} => (LChan p -> ()) [n] -> N n -> Vec n (LChan (Dual p))
+forkReplicate : forall {p : Protocol, n : Nat} . {ReceivePrefix p}
+              => (LChan p -> ()) [0..n] -> N n -> Vec n ((LChan (Dual p)) [0..1])
 forkReplicate = BUILTIN
 
 forkReplicateExactly : forall {p : Protocol, n : Nat} . {ReceivePrefix p}
                   => (LChan p -> ()) [n] ->  N n -> Vec n (LChan (Dual p))
 forkReplicateExactly = BUILTIN
-
-forkReplicateForever : forall {p : Protocol} . {ReceivePrefix p}
-                    => (LChan p -> ()) [0..Inf] -> List ((LChan (Dual p)) [0..1])
-forkReplicateForever = BUILTIN
 
 --------------------------------------------------------------------------------
 -- File Handles

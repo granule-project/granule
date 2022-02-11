@@ -698,6 +698,7 @@ builtIns =
   , (mkId "forkLinear'", Ext () $ PrimitiveClosure forkLinear')
   , (mkId "forkNonLinear", Ext () $ PrimitiveClosure forkNonLinear)
   , (mkId "forkReplicate", Ext () $ PrimitiveClosure forkReplicate)
+  , (mkId "forkReplicateExactly", Ext () $ PrimitiveClosure forkReplicateExactly)
   , (mkId "forkMulticast", Ext () $ PrimitiveClosure forkMulticast)
   , (mkId "fork",    Ext () $ PrimitiveClosure forkRep)
   , (mkId "recv",    Ext () $ Primitive recv)
@@ -779,12 +780,18 @@ builtIns =
                   Promote _ (Val _ _ _ v) -> writeChan interChan v
                   _ -> error $ "Bug in Granule. Multicast forwarder got non-boxed value " ++ show e
           -- return receiver chans vector
-          return $ buildVec (map dualEndpoint receiverChans)
+          return $ buildVec (map dualEndpoint receiverChans) id
 
     forkMulticast _ e = error $ "Bug in Granule. Trying to forkMulticate: " <> prettyDebug e
 
+    forkReplicateExactly :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
+    forkReplicateExactly = forkReplicateCore id
+
     forkReplicate :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
-    forkReplicate ctxt (Promote _ (Val _ _ _ f@Abs{})) =
+    forkReplicate = forkReplicateCore (\x -> Promote () (Val nullSpanNoFile () False x))
+
+    forkReplicateCore :: (?globals :: Globals) => (RValue -> RValue) -> Ctxt RValue -> RValue -> IO RValue
+    forkReplicateCore wrapper ctxt (Promote _ (Val _ _ _ f@Abs{})) =
       return $ Ext () $ Primitive $ \n -> do
         -- make the chans
         receiverChans <- mapM (const newChan) [1..(natToInt n)]
@@ -802,9 +809,9 @@ builtIns =
                                 (valExpr f)
                                 (valExpr $ Ext () $ Chan receiverChan)))
 
-        return $ buildVec (map dualEndpoint receiverChans)
+        return $ buildVec (map dualEndpoint receiverChans) wrapper
 
-    forkReplicate _ e = error $ "Bug in Granule. Trying to forkReplicate: " <> prettyDebug e
+    forkReplicateCore _ _ e = error $ "Bug in Granule. Trying to forkReplicate: " <> prettyDebug e
 
 
     forkRep :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
@@ -1022,9 +1029,9 @@ natToInt (Constr () c [v]) | internalName c == "S" =  1 + natToInt v
 natToInt k = error $ "Bug in Granule. Trying to convert a N but got value " <> show k
 
 -- Convert a list of channels into a granule `Vec n (LChan ...)` value.
-buildVec :: [BinaryChannel ()] -> RValue
-buildVec [] = Constr () (mkId "Nil") []
-buildVec (c:cs) = Constr () (mkId "Cons") [Ext () $ Chan c, buildVec cs]
+buildVec :: [BinaryChannel ()] -> (RValue -> RValue) -> RValue
+buildVec [] _ = Constr () (mkId "Nil") []
+buildVec (c:cs) f = Constr () (mkId "Cons") [f $ Ext () $ Chan c, buildVec cs f]
 
 evalDefs :: (?globals :: Globals) => Ctxt RValue -> [Def (Runtime ()) ()] -> IO (Ctxt RValue)
 evalDefs ctxt [] = return ctxt
