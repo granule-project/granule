@@ -680,9 +680,7 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
         then return False
         else case e of
         App _ _ _ (Val _ _ _ (Var _ i)) _ -> 
-          if (internalName i `elem` Primitives.unpromotables) 
-            then return True 
-            else return False
+          return $ internalName i `elem` Primitives.unpromotables
         otherwise -> return False
     when unpr (throw $ UnpromotableError{errLoc = s, errTy = ty})
 
@@ -1224,14 +1222,12 @@ synthExpr defs gam pol (Val s _ rf (Promote _ e)) = do
    (t, gam', subst, elaboratedE) <- synthExpr defs gam pol e
 
    unpr <-  
-    if (CBN `elem` globalsExtensions ?globals)
-      then return False
-      else case e of
-      App _ _ _ (Val _ _ _ (Var _ i)) _ -> 
-        if (internalName i `elem` Primitives.unpromotables) 
-          then return True 
-          else return False
-      otherwise -> return False
+      if (CBN `elem` globalsExtensions ?globals)
+        then return False
+        else case e of
+        App _ _ _ (Val _ _ _ (Var _ i)) _ -> 
+          return $ internalName i `elem` Primitives.unpromotables
+        otherwise -> return False
    when unpr (throw $ UnpromotableError{errLoc = s, errTy = t})
 
    -- Multiply the grades of all the used variables here
