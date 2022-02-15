@@ -328,4 +328,6 @@ instance Pretty Hint where
       HSynIndex x       -> " -n " <> show x
       HUseAllDefs       -> " -d"
       HUseDefs ids      -> " -d " <> (unwords $ map pretty ids)
+      HUseRec           -> " -r"
+      HGradeOnRule      -> " -g"
 

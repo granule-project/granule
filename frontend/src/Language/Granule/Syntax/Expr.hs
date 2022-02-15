@@ -131,6 +131,8 @@ data Hint
   | HSynIndex Int
   | HUseAllDefs
   | HUseDefs [Id]
+  | HUseRec
+  | HGradeOnRule
  deriving (Generic, Eq, Ord, Show, Rp.Data)
 
 

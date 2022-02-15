@@ -1601,6 +1601,11 @@ synthesiseProgram hints defs currentDef resourceScheme gamma goalTy checkerState
                       ,  synDepthReached = False
                       }
 
+
+
+  let gradeOnRule = (fromMaybe False (globalsGradeOnRule ?globals) || HGradeOnRule `elem` hints)
+  let initialGrade = if gradeOnRule then Just (TyGrade Nothing 1)  else Nothing
+
   let timeoutLim = fromMaybe 1000 $ hasTimeoutHint hints
   let timeoutLim' = if HSynNoTimeout `elem` hints then negate timeoutLim else (timeoutLim * 1000)
   let index = fromMaybe 1 $ hasSynthIndex hints
@@ -1617,11 +1622,11 @@ synthesiseProgram hints defs currentDef resourceScheme gamma goalTy checkerState
   let defs' = if HUseAllDefs `elem` hints then defs 
               else case hasDefsHint hints of 
                         Just ids -> filter (\(id, _) -> id `elem` ids) defs
-                        Nothing -> []
+                        Nothing -> if HUseRec `elem` hints then filter (\(id, _) -> id `elem` (maybeToList currentDef)) defs else []
 
 
 
-  result <- liftIO $ System.Timeout.timeout timeoutLim' $ loop (hintELim, hintILim) index defs' gamma' 5 initialState
+  result <- liftIO $ System.Timeout.timeout timeoutLim' $ loop (hintELim, hintILim) index defs' initialGrade gamma' 12 initialState
   fin <- case result of 
     Just (synthResults, aggregate) ->  do
       let results = nub $ map fst3 $ rights (map fst synthResults)
@@ -1679,7 +1684,7 @@ synthesiseProgram hints defs currentDef resourceScheme gamma goalTy checkerState
 
   where
 
-      loop (eHintMax, iHintMax) index defs gamma level agg = do 
+      loop (eHintMax, iHintMax) index defs grade gamma level agg = do 
         let (elimMax, introMax) = (if level < eHintMax then level else eHintMax, if level < iHintMax then level else iHintMax)
         let lims = runOmega $ liftM3 (,,) (each [0..elimMax]) (each [0..introMax]) (each [0..level])
         pRes <- foldM (\acc (elim, intro, app) -> 
@@ -1687,13 +1692,13 @@ synthesiseProgram hints defs currentDef resourceScheme gamma goalTy checkerState
             (Just res, agg') -> return (Just res, agg')
             (Nothing, agg')  -> do 
               putStrLn $  "elim: " <> (show elim) <> " intro: " <> (show intro) <> " app: " <> (show app) <> " level: " <> (show level)  
-              let synRes = synthesise defs resourceScheme gamma [] (Depth 0 elim 0 intro 0 app 0 level) (Goal goalTy NonDecreasing)
+              let synRes = synthesise defs resourceScheme gamma [] (Depth 0 elim 0 intro 0 app 0 level) grade (Goal goalTy NonDecreasing)
               (res, agg'') <- runStateT (runSynthesiser index synRes checkerState) (resetState agg')
               if (not $ solved res) && (depthReached agg'') then return (Nothing, agg'') else return (Just res, agg'')
           ) (Nothing, agg) lims
         case pRes of 
           (Just finRes, finAgg) -> return (finRes, finAgg)
-          (Nothing, finAgg) -> loop (eHintMax, iHintMax) index defs gamma (level+1) finAgg 
+          (Nothing, finAgg) -> loop (eHintMax, iHintMax) index defs grade gamma (level+1) finAgg 
  
 
       depthReached st = elimDepthReached st || introDepthReached st || appDepthReached st || synDepthReached st
