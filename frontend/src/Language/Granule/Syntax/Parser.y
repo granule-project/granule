@@ -676,6 +676,8 @@ parseHint ("t", Just arg, [])  = [(HSynTimeout arg)]
 parseHint ("n", Just arg, [])  = [(HSynIndex arg)]
 parseHint ("d", Nothing,  [])  = [(HUseAllDefs)]
 parseHint ("d", Nothing,  ids) = [(HUseDefs ids)]
+parseHint ("r", Nothing,  [])  = [(HUseRec)]
+parseHint ("g", Nothing,  [])  = [(HGradeOnRule)]
 parseHint _ = []
 
 parseAndDoImportsAndFreshenDefs :: (?globals :: Globals) => String -> IO (AST () (), [Extension])
