@@ -205,7 +205,7 @@ ctxtMerge _ [] [] = return []
 --  * Can meet/join an empty context to one that has graded assumptions
 ctxtMerge operator [] ((x, (Discharged t g, structure)) : ctxt) = do
   -- Left context has no `x`, so assume it has been weakened (0 gade)
-  (kind, _, _) <- conv $ synthKind nullSpan g
+--  (kind, _, _) <- conv $ synthKind nullSpan g
   ctxt' <- ctxtMerge operator [] ctxt
   return $ (x, (Discharged t g, structure)) : ctxt'
 --  return $ (x, Discharged t (operator (TyGrade (Just kind) 0) g)) : ctxt'
@@ -232,7 +232,6 @@ ctxtMerge operator ((x, (Discharged t1 g1, structure)) : ctxt1') ctxt2 =
     Nothing -> do
       -- Right context has no `x`, so assume it has been weakened (0 gade)
       ctxt' <- ctxtMerge operator ctxt1' ctxt2
-      (kind, _, _) <- conv $ synthKind nullSpan g1
       return $ (x, (Discharged t1 g1, structure)) : ctxt'
       --return $ (x, Discharged t1 (operator g1 (TyGrade (Just kind) 0))) : ctxt'
 
@@ -435,8 +434,8 @@ reconstructFunTy = foldl (flip (FunTy Nothing Nothing))
 
 
 makePattern :: Id ->  [Id] -> Maybe Type -> Pattern ()
-makePattern conId vars Nothing = PConstr nullSpanNoFile () False conId (map (PVar nullSpanNoFile () False) vars)
-makePattern conId vars (Just grade) = PBox nullSpanNoFile () False (PConstr nullSpanNoFile () False conId (map (PVar nullSpanNoFile () False) vars))
+makePattern conId vars _ = PConstr nullSpanNoFile () False conId (map (PVar nullSpanNoFile () False) vars)
+-- -- -- -- -- -- -- -- -- makePattern conId vars (Just grade) = PBox nullSpanNoFile () False (PConstr nullSpanNoFile () False conId (map (PVar nullSpanNoFile () False) vars))
 
 
 -- Construct a typed pattern from an untyped one from the context
@@ -523,7 +522,7 @@ useVar (name, (Discharged t grade, structure)) _ Additive{} Nothing = do
   return (True, [(name, (Discharged t (TyGrade (Just kind) 1), structure))], t)
 useVar (name, (Discharged t grade, structure)) _ Additive{} (Just grade') = do
   (kind, _, _) <- conv $ synthKind nullSpan grade
-  return (True, [(name, (Discharged t  grade', structure))], t)
+  return (True, [(name, (Discharged t grade', structure))], t)
 
 
 {--
@@ -903,8 +902,10 @@ boxHelper defs gamma resourceScheme inDef canDef depth focusPhase grade (Goal go
   in case resourceScheme of
       Additive{} -> do
         (e, delta, subst, bindings, structurallyDecr) <- synthesiseInner defs resourceScheme inDef True depth focusPhase gamma [] newGrade (Goal (Forall nullSpanNoFile binders constraints t) NonDecreasing) 
-        deltaOut <- case newGrade of {Just _ -> return delta ; Nothing -> ctxtMultByCoeffect g delta}
-        return (makeBox goalTySch e, deltaOut, subst, bindings, structurallyDecr)
+        case hasLinearVars delta of 
+          False -> do deltaOut <- case newGrade of {Just _ -> return delta ; Nothing -> ctxtMultByCoeffect g delta}
+                      return (makeBox goalTySch e, deltaOut, subst, bindings, structurallyDecr)
+          True  -> none
       Subtractive -> do
         (e, delta, subst, bindings, structurallyDecr) <- synthesiseInner defs resourceScheme inDef True depth focusPhase gamma [] newGrade (Goal (Forall nullSpanNoFile binders constraints t) NonDecreasing)
         deltaOut <- case newGrade of
@@ -916,6 +917,13 @@ boxHelper defs gamma resourceScheme inDef canDef depth focusPhase grade (Goal go
               ctxtSubtract gamma delta'
         res <- solve
         boolToSynthesiser res (makeBox goalTySch e, deltaOut, subst, bindings, structurallyDecr)
+  
+  where 
+
+    hasLinearVars [] = False
+    hasLinearVars ((x, (Linear _, _)):xs) = True
+    hasLinearVars ((x, (_, _)):xs) = hasLinearVars xs
+
 boxHelper _ _ _ _ _ _ _ _ _ = none
 
 
@@ -1350,7 +1358,7 @@ constrElimHelper defs gamma left (assumption@(x, (tyA, structure)):right) mode F
                 else none
               _ -> (do
                 del'' <- checkAssumptions (x, t') add del' assmps unboxed
-                (kind, _, _) <- conv $ synthKind nullSpan g'
+                (kind, _, _) <- conv $ synthKind nullSpan g
                 conv $ addConstraint (ApproximatedBy nullSpanNoFile g' g kind)
                 res <- solve
                 if res then 
@@ -1534,7 +1542,7 @@ synthesise defs resourceScheme gamma omega depth goal = do
              constructors = relevantConstructorsWithRecLabels
                   })
 
-  result@(expr, ctxt, subst, bindings, _) <- synthesiseInner defs resourceScheme False False depth (Focus R Async) gamma omega initialGrade goal
+  result@(expr, ctxt, subst, bindings, _) <- synthesiseInner defs resourceScheme False False depth (Focus R Async) gamma omega grade goal
 
   case resourceScheme of
     Subtractive -> do
