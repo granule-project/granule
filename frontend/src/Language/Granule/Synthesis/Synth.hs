@@ -297,6 +297,28 @@ isAtomic TyVar {} = True
 isAtomic _ = False
 
 
+
+
+leftAsyncTransition :: Ctxt (Assumption, Structure) -> Ctxt (Assumption, Structure) -> Bool -> (Ctxt (Assumption, Structure), Ctxt (Assumption, Structure))
+leftAsyncTransition gamma omega eDepthReached  = do
+  foldr (\var@(x, (ty, structure)) (gam, omg) -> 
+    case getAssumptionType ty of 
+      FunTy{} -> (var:gam, omg)
+      ty' -> 
+        if isAtomic ty' || eDepthReached then (gam ++ [var], omg) 
+        else (gam, omg ++ [var])
+    ) (gamma, []) omega
+
+
+    -- leftAsyncTrans (assumption@(var, (tyA, structure)):omega') depthReached cons = 
+    --   (case getAssumptionType tyA of 
+    --     FunTy{} -> synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1}) (Focus L Async) (assumption:gamma) (omega') grade goal
+    --     tyB ->  if isAtomic tyB || structure == Decreasing || (isRecursiveType (isADTorGADT tyB) cons && depthReached) then  
+    --                synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1}) (Focus L Async) (assumption:gamma) (omega') grade goal
+    --             else none)
+
+
+
 {- 
 
      Given a data constructor, try to unify a fresh instance of this constructor with the assumption type. If the unification generates 
@@ -549,13 +571,12 @@ varHelper :: (?globals :: Globals)
   -> Ctxt (Assumption, Structure)
   -> Ctxt (Assumption, Structure)
   -> ResourceScheme PruningScheme
-  -> FocusPhase
   -> Maybe Type
   -> Goal
   -> Synthesiser (Expr () Type, Ctxt (Assumption, Structure), Substitution, Bindings, Bool)
-varHelper gamma left [] _ _ _ _ = none
-varHelper gamma left (assumption@(id, (a, structure)) : right) resourceScheme focusPhase grade goal@(Goal (goalTySch@(Forall _ _ _ goalTy)) _) =
-  varHelper gamma (assumption:left) right resourceScheme focusPhase grade goal `try` do
+varHelper gamma left [] _ _ _ = none
+varHelper gamma left (assumption@(id, (a, structure)) : right) resourceScheme grade goal@(Goal (goalTySch@(Forall _ _ _ goalTy)) _) =
+  varHelper gamma (assumption:left) right resourceScheme grade goal `try` do
     debugM "synthDebug - inside varHelper checking assumption: " (show assumption <> " against goal " <> show goalTy)
     conv $ resetAddedConstraintsFlag -- reset the flag that says if any constraints were added
     (success, specTy, subst) <- conv $ equalTypes nullSpanNoFile (getAssumptionType a) goalTy
@@ -593,14 +614,14 @@ defHelper :: (?globals :: Globals)
 defHelper _ [] _ _ _ _ _ _ _ _ _ = none
 
 defHelper left (def@(x, defTySch):right) gamma omega Subtractive inDef canDef depth focusPhase grade goal@(Goal goalTySch@(Forall _ binders constraints ty) structure) =
- defHelper (def:left) right gamma omega Subtractive inDef True depth focusPhase grade goal `try`
+ defHelper (def:left) right gamma omega Subtractive inDef canDef depth focusPhase grade goal `try`
   (case defTySch of
     (Forall _ _ _ (FunTy{})) -> do
 
       state <- Synthesiser $ lift $ lift $ get
 
       -- Only try the def if we haven't hit the def allowed depth 
-      if (appCurr depth) <= (appMax depth) && (canDef || not (x `elem` currDef state)) then do
+      if (appCurr depth) < (appMax depth) then do -- && (canDef || not (x `elem` currDef state)) then do
         (freshTy, tyVarsFreshD, substFromFreshening, constraints', _) <- conv $ freshPolymorphicInstance InstanceQ False defTySch [] [] 
         case freshTy of 
           (FunTy _ tyA tyB) -> do 
@@ -608,14 +629,24 @@ defHelper left (def@(x, defTySch):right) gamma omega Subtractive inDef canDef de
 
             y <- freshIdentifier
         
-            let (gamma', omega') = bindToContext (y, (Linear tyB, None)) gamma omega True
+            let (gamma', omega') = bindToContext (y, (Linear tyB, None)) gamma omega (isLAsync tyB)
+            debugM "gamma': " (show gamma')
+            debugM "omega': " (show omega')
+            let (gamma'', omega'' ) = leftAsyncTransition gamma' omega' ((appCurr depth) + 1 > appMax depth)
+            -- _ <- error "asda"
 
-            (e1, delta1, subst1, bindings1, structurallyDecr1) <- synthesiseInner (def:left ++ right) Subtractive True True (depth { appCurr = (appCurr depth) + 1 }) focusPhase gamma' omega' grade goal 
+
+            (e1, delta1, subst1, bindings1, structurallyDecr1) <- synthesiseInner (def:left ++ right) Subtractive True True (depth { appCurr = (appCurr depth) + 1 }) focusPhase gamma'' omega'' grade goal 
+            debugM "gamma': " (show gamma')
+            debugM "omega': " (show omega')
+            debugM "delta1: " (show delta1)
+            -- _ <- error (pretty e1)
 
             case lookup y delta1 of
               Nothing -> do
-            
+           
                 (e2, delta2, subst2, bindings2, structurallyDecr2) <- synthesiseInner (def:left ++ right) Subtractive True True (depth { appCurr = (appCurr depth) + 1 }) (Focus R Sync) delta1 [] grade (Goal (Forall nullSpanNoFile binders constraints tyA) structure) 
+
 
                 debugM "synthDebug - (def) e1: " (pretty e1)
                 debugM "synthDebug - (def) making a: " (pretty $ Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTySch tyA) y e1)
@@ -636,21 +667,23 @@ defHelper left (def@(x, defTySch):right) gamma omega Subtractive inDef canDef de
       else none
     _ -> none)
 defHelper left (def@(x, defTySch) : right) gamma omega add@(Additive mode) inDef canDef depth focusPhase grade goal@(Goal goalTySch@(Forall _ binders constraints ty) structure) =
- defHelper (def:left) right gamma omega add inDef True depth focusPhase grade goal `try`
+ defHelper (def:left) right gamma omega add inDef canDef depth focusPhase grade goal `try`
  (case defTySch of
     (Forall _ _ _ (FunTy _ _ _)) -> do      
 
       state <- Synthesiser $ lift $ lift $ get
 
       -- Only try the def if we haven't hit the def allowed depth 
-      if (appCurr depth) <= (appMax depth) && (canDef || not (x `elem` currDef state)) then do
+      if (appCurr depth) < (appMax depth) then do -- && (canDef || not (x `elem` currDef state)) then do
         (freshTy, tyVarsFreshD, substFromFreshening, constraints', _) <- conv $ freshPolymorphicInstance InstanceQ False defTySch [] [] 
         case freshTy of 
           (FunTy _ tyA tyB) -> do 
             debugM "synthDebug - (def) in defHelper attempting to use  def: " (pretty def <> " towards goal: " <> pretty goalTySch)
         
             y <- freshIdentifier
-            let (gamma', omega') = bindToContext (y, (Linear tyB, None)) gamma omega True
+            let (gamma', omega') = bindToContext (y, (Linear tyB, None)) (gamma++omega) [] (isLAsync tyB)
+--            _ <- error "sarasf"
+
             (e1, delta1, subst1, bindings1, structurallyDecr1) <- synthesiseInner (def:left ++ right) add True True (depth { appCurr = (appCurr depth) + 1 }) focusPhase gamma' omega' grade goal
 
             debugM "synthDebug - (def) e1: " (pretty e1)
@@ -665,21 +698,31 @@ defHelper left (def@(x, defTySch) : right) gamma omega add@(Additive mode) inDef
               Just (delta1', (Linear _, _)) -> do
                 gamma2 <-
                   case mode of
-                    NonPruning -> return (omega ++ gamma')
-                    Pruning    -> ctxtSubtract (omega ++ gamma') delta1'
+                    NonPruning -> return (omega ++ gamma)
+                    Pruning    -> ctxtSubtract (omega ++ gamma) delta1'
 
                 debugM "synthDebug - (def) gamma2: " (show gamma2)
                 debugM "synthDebug - (def) e1: " (pretty e1)
                 debugM "synthDebug - (def) delta1: " (show delta1)
+                --_ <- error ""
 
 
                 (e2, delta2, subst2, bindings2, structurallyDecr2) <- synthesiseInner (def:left ++ right) add True True (depth { appCurr = (appCurr depth) + 1 }) (Focus R Sync) gamma2 [] grade (Goal (Forall nullSpanNoFile binders constraints tyA) structure)
+
+                debugM "synthDebug - (def) e1: " (pretty e1)
+                debugM "synthDebug - (def) gamma' " (show gamma')
+                debugM "synthDebug - (def) onega' " (show omega')
+                debugM "synthDebug - (def) tyA " (show tyA)
+
+                debugM "synthDebug - (def) gamma2: " (show gamma2)
+                debugM "synthDebug - (def) e1: " (pretty e1)
            
                 debugM "synthDebug - (def) delta1: " (show delta1)
                 debugM "synthDebug - (def) making a: " (pretty $ Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTySch tyA) y e1)
                 debugM "synthDebug - (def) delta2: " (show delta2)
                 debugM "synthDebug - (def) structurallydecr1: " (show structurallyDecr1)
                 debugM "synthDebug - (def) structurallydecr2: " (show structurallyDecr2)
+              --  _ <- error ""
 
                 -- At least one of the sub-components of the application must be structurally decreasing
                 if structurallyDecr1 || structurallyDecr2 || not (x `elem` currDef state) then do
@@ -687,6 +730,7 @@ defHelper left (def@(x, defTySch) : right) gamma omega add@(Additive mode) inDef
                   -- Add the results
                   deltaOut <- maybeToSynthesiser $ ctxtAdd delta1' delta2
                   substOut <- conv $ combineSubstitutions nullSpan subst1 subst2
+                  debugM "deltaOut: " (show deltaOut)
                   return (Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTySch tyA) y e1, deltaOut, substOut, bindings1 ++ bindings2, True)
                 else none
               _ -> none
@@ -727,7 +771,7 @@ absHelper defs gamma omega resourceScheme inDef canDef depth focusPhase grade go
   -- Fresh var
   id <- useBinderNameOrFreshen name
   -- Build recursive context depending on focus mode
-  let (gamma', omega') = bindToContext (id, (Linear tyA, NonDecreasing)) gamma omega (isLAsync tyA) 
+  let (gamma', omega') = bindToContext (id, (Linear tyA, NonDecreasing)) gamma omega (isLAsync tyA && (eCurr depth < eMax depth)) 
 
   -- Synthesis body
   debugM "synthDebug" $ "(abs) lambda-binding " ++ pretty [(id, Linear tyA)]
@@ -737,7 +781,7 @@ absHelper defs gamma omega resourceScheme inDef canDef depth focusPhase grade go
 
   -- Check resource use at the end
   case (resourceScheme, lookupAndCutout id delta) of
-    (Additive{}, Just (delta', (Linear _, _))) -> 
+    (Additive{}, Just (delta', (Linear _, _))) -> do
       return (makeAbs id e goalTySch, delta', subst, bindings, structurallyDecr)
     (Subtractive, Nothing) ->
       return (makeAbs id e goalTySch, delta, subst, bindings, structurallyDecr)
@@ -784,14 +828,20 @@ appHelper defs gamma left (assumption@(x, (ty, _)) : right) Subtractive inDef ca
           then do
 
             y <- freshIdentifier
+
+
+            let (gamma', omega') = case lookupAndCutout x leftOver of 
+                            Just (omega'', assTy) -> (gamma ++ [(x, assTy)], omega'')
+                            _ -> (gamma, leftOver)
+
             -- Extend context (focused) with x2 : B
-            let (gamma'', omega'') = bindToContext (y, (Linear tyB, None)) gamma leftOver True
-
-            -- let (gamma'', omega'') = case lookupAndCutout x omega' of 
-            --                Just (omega'', var) -> (gamma', omega'')
-            --                _ -> (gamma', omega')
+            let (gamma'', omega'') = bindToContext (y, (Linear tyB, None)) gamma' omega' (isLAsync tyB)
 
 
+
+            debugM "gamma'': " (show gamma'')
+            debugM "omega'': " (show omega'')
+            debugM "goal: " (pretty goalTySch)
             debugM "synthDebug - (app) try to synth the goal " (pretty goalTySch ++ "\n under context of gamma'': " ++ (show gamma'') ++ "\n , omega'': " ++ (show omega''))
             (e1, delta1, subst1, bindings1, structurallyDecr1) <- synthesiseInner defs Subtractive inDef True (depth { appCurr = (appCurr depth) + 1 }) focusPhase gamma'' omega'' grade goal
             case lookup y delta1 of
@@ -801,6 +851,7 @@ appHelper defs gamma left (assumption@(x, (ty, _)) : right) Subtractive inDef ca
                 -- Synthesise the argument
                 (e2, delta2, subst2, bindings2, structurallyDecr2) <- synthesiseInner defs Subtractive inDef True (depth { appCurr = (appCurr depth) + 1 }) (Focus R Sync) delta1 [] grade (Goal (Forall nullSpanNoFile binders constraints tyA) NonDecreasing)
                 debugM "synthDebug - (app) made an e2: " (pretty $ Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTySch tyA) y e1)
+                debugM "delta2: " (show delta2)
 
                 substOut <- conv $ combineSubstitutions nullSpanNoFile subst1 subst2
                 return (Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTySch tyA) y e1, delta2, substOut, bindings1 ++ bindings2, structurallyDecr1 || structurallyDecr2)
@@ -839,25 +890,42 @@ appHelper defs gamma left (assumption@(x, (ty, _)) : right) add@(Additive mode) 
             -- leftOverOmega <- ctxtSubtract omega used 
 
             y <- freshIdentifier
+
+
+            -- Subtract the usage of this function type assumption from the total usage and rebind in gamma
+            gammaAfterUse <- ctxtSubtract (gamma ++ [assumption]) used
+
+            let (gamma', omega') = (gammaAfterUse, omega) -- leftAsyncTransition gammaAfterUse omega ((appCurr depth + 1) >= appMax depth) 
             -- Extend context (focused) with x2 : B
-            let (gamma', omega') = bindToContext (y, (Linear tyB, None)) gamma omega True
+            let (gamma'', omega'') = bindToContext (y, (Linear tyB, None)) gamma' omega' (isLAsync tyB)
 
-            -- let gamma'' = case lookupAndCutout x gamma' of 
-            --         Just (restOfGamma, (ty', _)) -> restOfGamma ++ [(x, (ty', Decreasing))]
-            --         _ -> gamma'
+            debugM "gamma' " (show gamma')
+            debugM "omega' " (show omega')
+            debugM "y " (show (y, (Linear tyB)))
+            debugM "galTySch " (pretty goalTySch)
+            debugM "assumption " (show assumption)
 
-            (e1, delta1, subst1, bindings1, structurallyDecr1) <- synthesiseInner defs add inDef True (depth { appCurr = (appCurr depth) + 1 }) focusPhase gamma' omega' grade goal 
+
+            (e1, delta1, subst1, bindings1, structurallyDecr1) <- synthesiseInner defs add inDef True (depth { appCurr = (appCurr depth) + 1 }) focusPhase (gamma'') omega'' grade goal 
               -- Make sure that `x2` appears in the result
             case lookupAndCutout y delta1 of
               Just (delta1',  (Linear _, _)) -> do
 
                 -- Pruning subtraction
                 gamma2 <- case mode of
-                      NonPruning -> return (omega ++ gamma')
-                      Pruning    -> ctxtSubtract (omega ++ gamma') delta1'
+                      NonPruning -> return (omega ++ gamma)
+                      Pruning    -> ctxtSubtract (omega ++ gamma) delta1'
 
+                debugM "delta1 " (show delta1)
+                debugM "gamma' " (show gamma')
+                debugM "gamma2 " (show gamma2)
+                debugM "omega' " (show omega')
+                debugM "y " (show (y, (Linear tyB)))
+                debugM "galTySch " (pretty goalTySch)
+                debugM "assumption " (show assumption)
+              --  _ <- error ""
                   -- Synthesise the argument
-                (e2, delta2, subst2, bindings2, structurallyDecr2) <- synthesiseInner defs add inDef True (depth { appCurr = (appCurr depth) + 1 }) (Focus R Sync) gamma2 [] grade (Goal (Forall nullSpanNoFile binders constraints tyA) NonDecreasing)
+                (e2, delta2, subst2, bindings2, structurallyDecr2) <- synthesiseInner defs add inDef True (depth { appCurr = (appCurr depth) + 1 }) (Focus R Sync) (assumption:gamma2) [] grade (Goal (Forall nullSpanNoFile binders constraints tyA) NonDecreasing)
                 debugM "synthDebug - (app) made an e2: " (pretty $ Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTySch tyA) y e1)
 
                   -- Add the results
@@ -949,8 +1017,8 @@ Subtractive
 Γ, x1 : [] r A ⊢ B ⇒ let [x2] = x1 in e; Δ
 
 -}
-unboxHelper defs gamma left (assumption@(x, (ty, structure)) : right) Subtractive False canDef depth focusPhase grade goal@(Goal goalTySch _) =
-  unboxHelper defs gamma (assumption : left) right Subtractive False canDef depth focusPhase grade goal `try`
+unboxHelper defs gamma left (assumption@(x, (ty, structure)) : right) Subtractive inDef canDef depth focusPhase grade goal@(Goal goalTySch _) =
+  unboxHelper defs gamma (assumption : left) right Subtractive inDef canDef depth focusPhase grade goal `try`
     (case ty of
       Linear (Box grade_r tyA) -> do
 
@@ -964,7 +1032,7 @@ unboxHelper defs gamma left (assumption@(x, (ty, structure)) : right) Subtractiv
           let (gamma', omega') = bindToContext (y, (Discharged tyA grade_r, structure)) gamma leftOver (isLAsync tyA)
           debugM "synthDebug" $ "Inside unboxing try to synth for " ++ pretty goalTySch ++ " under " ++ pretty [(y, Discharged tyA grade_r)]
 
-          (e, delta, subst, bindings, structurallyDecr) <- synthesiseInner defs Subtractive False canDef depth focusPhase gamma' omega' grade goal
+          (e, delta, subst, bindings, structurallyDecr) <- synthesiseInner defs Subtractive inDef canDef depth focusPhase gamma' omega' grade goal
           ---
           case lookupAndCutout y delta of
             Just (delta', (Discharged _ grade_s, _)) -> do
@@ -986,7 +1054,7 @@ unboxHelper defs gamma left (assumption@(x, (ty, structure)) : right) Subtractiv
         if canUse then do 
           y <- freshIdentifier
           let (gamma', omega') = bindToContext (y, (Discharged tyA (TyInfix TyOpTimes grade_r grade_s), structure)) gamma omega (isLAsync tyA) 
-          (e, delta, subst, bindings, structurallyDecr) <- synthesiseInner defs Subtractive False canDef depth focusPhase gamma' omega' grade goal 
+          (e, delta, subst, bindings, structurallyDecr) <- synthesiseInner defs Subtractive inDef canDef depth focusPhase gamma' omega' grade goal 
           case lookupAndCutout y delta of
             Just (delta', (Discharged _ grade_s', _)) ->  do 
               (kind, _, _) <- conv $ synthKind nullSpan grade_s'
@@ -1008,8 +1076,8 @@ s <= r
 Γ, x1 : [] r A ⊢ B ⇒ let [x2] = x1 in t ; Δ, x1 : [] r A
 
 -}
-unboxHelper defs gamma left (assumption@(x, (ty, structure)) : right) add@(Additive{}) False canDef depth focusPhase grade goal@(Goal goalTySch _) =
-  unboxHelper defs gamma (assumption : left) right add False canDef depth focusPhase grade goal `try`
+unboxHelper defs gamma left (assumption@(x, (ty, structure)) : right) add@(Additive{}) inDef canDef depth focusPhase grade goal@(Goal goalTySch _) =
+  unboxHelper defs gamma (assumption : left) right add inDef canDef depth focusPhase grade goal `try`
    (case ty of
      (Linear (Box grade_r tyA)) -> do
        let omega = left ++ right
@@ -1021,7 +1089,7 @@ unboxHelper defs gamma left (assumption@(x, (ty, structure)) : right) add@(Addit
             let (gamma', omega') = bindToContext (y, (Discharged tyA grade_r, structure)) gamma omega (isLAsync tyA)
 
             -- Synthesise the body of a `let` unboxing
-            (e, delta, subst, bindings, structurallyDecr) <- synthesiseInner defs add False canDef depth focusPhase gamma' omega' grade goal
+            (e, delta, subst, bindings, structurallyDecr) <- synthesiseInner defs add inDef canDef depth focusPhase gamma' omega' grade goal
 
             -- Add usage at the binder to the usage in the body
             delta' <- maybeToSynthesiser $ ctxtAdd used delta
@@ -1044,7 +1112,7 @@ unboxHelper defs gamma left (assumption@(x, (ty, structure)) : right) add@(Addit
         if canUse then do
           y <- freshIdentifier
           let (gamma', omega') = bindToContext (y, (Discharged tyA (TyInfix TyOpTimes grade_r grade_s), structure)) gamma omega (isLAsync tyA)
-          (e, delta, subst, bindings, structurallyDecr) <- synthesiseInner defs add False canDef depth focusPhase gamma' omega' grade goal 
+          (e, delta, subst, bindings, structurallyDecr) <- synthesiseInner defs add inDef canDef depth focusPhase gamma' omega' grade goal 
           case lookupAndCutout y delta of
             Just (delta', (Discharged _ grade_s', _)) ->  do
               (kind, _, _) <- conv $ synthKind nullSpan grade_s'
@@ -1063,7 +1131,7 @@ unboxHelper defs gamma left (assumption@(x, (ty, structure)) : right) add@(Addit
 
      _ -> none)
 
-unboxHelper _ _ _ _ _ _ _ _ _ _ _ = none
+-- unboxHelper _ _ _ _ _ _ _ _ _ _ _ = none
 
 
 constrIntroHelper :: (?globals :: Globals)
@@ -1193,10 +1261,10 @@ constrElimHelper :: (?globals :: Globals)
   -> Goal
   -> Synthesiser (Expr () Type, Ctxt (Assumption, Structure), Substitution, Bindings, Bool)
 constrElimHelper _ _ _ [] _ _ _ _ _ _ _ = none
-constrElimHelper defs gamma left (assumption@(x, (tyA, structure)):right) mode False canDef depth focusPhase grade goal@(Goal goalTySch@(Forall _ _ _ tyB) _) =
-  constrElimHelper defs gamma (assumption:left) right mode False canDef depth focusPhase grade goal `try` do
+constrElimHelper defs gamma left (assumption@(x, (tyA, structure)):right) mode inDef canDef depth focusPhase grade goal@(Goal goalTySch@(Forall _ _ _ tyB) _) =
+  constrElimHelper defs gamma (assumption:left) right mode inDef canDef depth focusPhase grade goal `try` do
     state <- Synthesiser $ lift $ lift $ get
-    if (eCurr depth) < (eMax depth) || not (isRecursiveType (isADTorGADT $ getAssumptionType tyA) (constructors state))  then do
+    if (eCurr depth) < (eMax depth)  then do
       debugM "synthDebug in constrElimHelper with assumption: " (show assumption <> " and goal " <> show tyB)
       let omega = (left ++ right)
       (canUse, usageOut, _) <- useVar assumption omega mode grade
@@ -1231,27 +1299,58 @@ constrElimHelper defs gamma left (assumption@(x, (tyA, structure)):right) mode F
                   let constrElimPattern = makePattern conId vars grade
 
 
+                  -- If we are rebinding the assumption we are currently doing the eliminatino on (i.e. if it's graded) then
+                  -- we need to rebing it in gamma NOT omega. Otherwise we will end up staying focused on it and trying to use
+                  -- it even when we can not 
                   (gamma', omega') <- 
                     case mode of 
                       Additive{} -> do 
-                        usageOut' <- ctxtSubtract (assumption:gamma) usageOut
-                        return (gamma, omega)
+                        gamma' <- ctxtSubtract (gamma ++ [assumption]) usageOut
+                        return (gamma', omega)
                       Subtractive -> 
                         case lookupAndCutout x usageOut of 
-                          Just (usageOut', (ty', structure')) -> return ((x, (ty', Decreasing)):gamma, usageOut')
+                          Just (usageOut', (ty', structure')) -> return ((x, (ty', structure')):gamma, usageOut')
                           _ -> return (gamma, usageOut)                  
-                  let (gamma'', omega'', unboxed) = bindAssumptions (elimDepthReached state) [] assumptions gamma' omega'
+                  
+                  -- Required for focusing with recursive data structures. If we have hit the depth limit but still have other vars in omega 
+                  -- that cannot be decomposed we need to move them into gamma
+
+                  let (gamma'', omega'', unboxed) = bindAssumptions ((eCurr depth + 1) >= eMax depth) [] assumptions gamma' omega'
+                  let (gamma''', omega''') = leftAsyncTransition gamma'' omega'' ((eCurr depth + 1) >= eMax depth) 
 
                   debugM "synthDebug - (conElim) trying con: " (pretty conId)
-                  debugM "synthDebug - (conElim) gamma: " (show gamma'')
-                  debugM "synthDebug - (conElim) gamma: " (show omega'')
+                  debugM "synthDebug - (conElim) gamma': " (show gamma')
+                  debugM "synthDebug - (conElim) omega': " (show omega')
 
-                  (expr, delta, subst, bindings, structurallyDecr') <- synthesiseInner defs mode False canDef (if isRecursiveType (Just name) (constructors state) then depth { eCurr = (eCurr depth) + 1} else depth) focusPhase gamma'' omega'' grade goal 
+                  debugM "synthDebug - (conElim) gamma'': " (show gamma'')
+                  debugM "synthDebug - (conElim) omega'': " (show omega'')
 
+                  debugM "synthDebug - (conElim) gamma''': " (show gamma''')
+                  debugM "synthDebug - (conElim) omega''': " (show omega''')
+                  --liftIO $ putStrLn (show gamma'')
+                  -- _ <- if pretty conId == "Next" then error "" else return ()
+
+                  (expr, delta, subst, bindings, structurallyDecr') <- synthesiseInner defs mode False canDef (depth { eCurr = (eCurr depth) + 1}) focusPhase gamma''' omega''' grade goal 
+                
+                  debugM "expr" (pretty expr)
+                  debugM "synthDebug - (conElim) delta: " (show delta)
+                  -- _ <- if pretty conId == "Next" && "map_list" `isInfixOf` (pretty expr) then error "" else return ()
+                   
+                  -- _ <- error (pretty expr)
+                  -- _ <- if (pretty expr) == "((test1 x) v) z" then do 
+                  --   liftIO $ putStrLn ("delta: " <> show delta) 
+                  --   liftIO $ putStrLn ("gamma'': " <> show gamma'') 
+                  --   liftIO $ putStrLn ("omega'': " <> show omega'') 
+                  --   error "STOOPPPP" else return ()
                   delta' <- checkAssumptions (x, assumptionTy) mode delta assumptions unboxed
-                  case transformPattern bindings assumptionTy (gamma'' ++ omega'') constrElimPattern unboxed of
+
+
+                  
+--                  _ <- if (pretty expr) == "((test1 x) v) z" then error "STOOPPPP" else return ()
+                  case transformPattern bindings assumptionTy (gamma''' ++ omega''') constrElimPattern unboxed of
                     Just (pattern, bindings') ->
                       let mergeOp = case mode of Additive{} -> TyInfix TyOpJoin ; _ -> TyInfix TyOpMeet in do
+                        debugM "expr" (pretty expr)
                         returnDelta <- if index == 0 then return delta' else ctxtMerge mergeOp deltas delta' 
                         conv $ concludeImplication nullSpanNoFile [] 
                         returnSubst <- conv $ combineSubstitutions nullSpanNoFile subst substs
@@ -1267,7 +1366,6 @@ constrElimHelper defs gamma left (assumption@(x, (tyA, structure)):right) mode F
             case patterns of 
               (_:_) -> do 
                 debugM "made: " (pretty $ makeCase assumptionTy x patterns tyB assumptionGrade)
-             --   _ <- error "errorrr"
                 finDelta <- case (mode, assumptionGrade) of {(Additive{}, Nothing) -> maybeToSynthesiser $ ctxtAdd usageOut delta; _ -> return delta}
                 return (makeCase assumptionTy x patterns tyB assumptionGrade, finDelta, resSubst, resBindings, structurallyDecr)
               _ -> none
@@ -1370,7 +1468,7 @@ constrElimHelper defs gamma left (assumption@(x, (tyA, structure)):right) mode F
             res <- solve
             if res then checkAssumptions (x, t') add del assmps unboxed else none
 
-constrElimHelper _ _ _ _ _ _ _ _ _ _ _ = none
+-- constrElimHelper _ _ _ _ _ _ _ _ _ _ _ = none
 
 
 
@@ -1417,91 +1515,143 @@ synthesiseInner defs resourceScheme inDef canDef depth focusPhase gamma omega gr
   debugM "synthDebug - synthesiseInner with syn depth reached: " (show $ synDepthReached state)
   debugM "synthDebug - synthesiseInner with app depth reached: " (show $ appDepthReached state)
 
+  case (focusPhase, omega, synCurr depth < synMax depth) of 
 
-  case (focusPhase, (synCurr depth < synMax depth) ) of -- &&  ((not $ (synDepthReached state && elimDepthReached state && introDepthReached state && appDepthReached state && defDepthReached state)))) of
-      (Focus R Async, True) -> varHelper [] [] (gamma ++ omega) resourceScheme (Focus R Async) grade goal
-                      `try`
-                      absHelper defs gamma omega resourceScheme inDef canDef depth (Focus R Async) grade goal
-                      `try`
-                      rightAsyncTrans ty
-      (Focus L Async, True) ->  
-          -- varHelper [] [] (omega ++ gamma) resourceScheme (Focus L Async) grade goal
-          -- `try`
-          constrElimHelper defs gamma [] omega resourceScheme inDef canDef depth (Focus L Async) grade goal
+    (Focus R Async, _, True) -> do
+      varHelper [] [] (gamma ++ omega) resourceScheme grade goal
+      `try`
+      absHelper defs gamma omega resourceScheme inDef canDef depth (Focus R Async) grade goal
+      `try`
+      rightAsyncTrans ty
+    (Focus L Async, (x:xs), True) -> do 
+      varHelper [] [] (gamma ++ omega) resourceScheme grade goal
+      `try`
+      unboxHelper defs gamma [] omega resourceScheme inDef canDef depth (Focus L Async) grade goal
+      `try`
+      -- leftAsyncTrans omega (elimDepthReached state) (constructors state)
+      -- `try`
+      constrElimHelper defs gamma [] omega resourceScheme inDef canDef depth (Focus L Async) grade goal
+    (Focus L Async, [], True) -> do
+      focus gamma (isAtomic ty) (appCurr depth > appMax depth)
+    (Focus R Sync, [], True) ->
+      varHelper [] [] gamma resourceScheme grade goal
+      `try`
+      constrIntroHelper defs gamma resourceScheme inDef canDef depth (Focus R Sync) grade goal
+      `try`
+      boxHelper defs gamma resourceScheme inDef canDef depth (Focus R Sync) grade goal
+      `try`
+      synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1}) (Focus R Async) gamma [] grade goal
+    (Focus L Sync, assumption@(x, (tyA, _)):[], True) -> 
+      case (isLAsync (getAssumptionType tyA) && (not $ isAtomic (getAssumptionType tyA))) || isRecursiveType (isADTorGADT (getAssumptionType tyA)) (constructors state) of 
+        True -> synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1}) (Focus L Async) gamma [assumption] grade goal
+        _ -> do
+          varHelper gamma [] omega resourceScheme grade goal
           `try`
-          unboxHelper defs gamma [] omega resourceScheme inDef canDef depth (Focus L Async) grade goal
+          defHelper [] defs gamma omega resourceScheme inDef canDef depth (Focus L Sync) grade goal
           `try`
-          leftAsyncTrans omega (eCurr depth >= eMax depth) (constructors state)
-          `try`
-          focusLeft [] gamma
-          `try`
-          focusRight ty omega 
-      (Focus R Sync, True) ->
-          varHelper [] [] gamma resourceScheme (Focus R Sync) grade goal
-          `try`
-          constrIntroHelper defs gamma resourceScheme inDef canDef depth (Focus R Sync) grade goal
-          `try`
-          boxHelper defs gamma resourceScheme inDef canDef depth (Focus R Sync) grade goal
-          `try`
-          blurRight goal 
-      (Focus L Sync, True) -> 
-            varHelper gamma [] omega resourceScheme (Focus L Sync) grade goal
-            `try`
-            appHelper defs gamma [] omega resourceScheme inDef canDef depth (Focus L Sync) grade goal
-            `try`
-            defHelper [] defs gamma omega resourceScheme inDef canDef depth (Focus L Sync) grade goal
-            `try`
-            blurLeft omega  (constructors state) (not $ appDepthReached state)
-      (_, False) -> 
-            varHelper [] [] (gamma ++ omega) resourceScheme (Focus L Sync) grade goal
+          appHelper defs gamma [] omega resourceScheme inDef canDef depth (Focus L Sync) grade goal
+    (Focus L Sync, [], True) -> do
+        synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1}) (Focus R Async) gamma [] grade goal
+
+    _ -> none
+
 
   where 
 
-    rightAsyncTrans (TyApp{}) = synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1}) (Focus L Async) gamma omega grade goal
-    rightAsyncTrans (TyCon{}) = synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1}) (Focus L Async) gamma omega grade goal 
-    rightAsyncTrans (Box{})   = synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1}) (Focus L Async) gamma omega grade goal
-    rightAsyncTrans (TyVar{}) = synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1}) (Focus L Async) gamma omega grade goal
-    rightAsyncTrans _ = none
+    rightAsyncTrans (FunTy{}) = none 
+    rightAsyncTrans _ = synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1}) (Focus L Async) gamma omega grade goal
 
-    leftAsyncTrans [] _ _ = none
-    leftAsyncTrans (assumption@(var, (tyA, structure)):omega') depthReached cons = 
-      (case getAssumptionType tyA of 
-        FunTy{} -> synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1}) (Focus L Async) (assumption:gamma) (omega') grade goal
-        tyB ->  if isAtomic tyB || isZeroGrade tyA || structure == Decreasing || (isRecursiveType (isADTorGADT tyB) cons && depthReached) then  
-                   synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1}) (Focus L Async) (assumption:gamma) (omega') grade goal
-                else none)
-
-    focusRight (TyApp{}) [] = synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1}) (Focus R Sync) gamma [] grade goal
-    focusRight (TyCon{}) [] = synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1}) (Focus R Sync) gamma [] grade goal
-    focusRight (Box{})   [] = synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1}) (Focus R Sync) gamma [] grade goal
-    focusRight _ _ = none
+    -- leftAsyncTrans [] _ _ = none
+    -- leftAsyncTrans (assumption@(var, (tyA, structure)):omega') depthReached cons = 
+    --   (case getAssumptionType tyA of 
+    --     FunTy{} -> synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1}) (Focus L Async) (assumption:gamma) (omega') grade goal
+    --     tyB ->  if isAtomic tyB || structure == Decreasing || (isRecursiveType (isADTorGADT tyB) cons && depthReached) then  
+    --                synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1}) (Focus L Async) (assumption:gamma) (omega') grade goal
+    --             else none)
+     
+    focus gamma False False =  
+      synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1}) (Focus R Sync) gamma [] grade goal
+      `try`
+      focusLeft [] gamma 
+    focus gamma True False = focusLeft [] gamma
+    focus _ _ True = none
 
     focusLeft _ [] = none
     focusLeft left (assumption:right) = 
       focusLeft (assumption : left) right
       `try`
-      synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1}) (Focus L Sync) (left ++ right) (assumption:omega) grade goal
+      synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1}) (Focus L Sync) (left ++ right) [assumption] grade goal
 
-    blurRight (Goal (Forall _ _ _ FunTy{}) _)  =
-      synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1 }) (Focus R Async) gamma omega grade goal
-    blurRight (Goal (Forall _ _ _ TyVar{}) _) = 
-      synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1 }) (Focus R Async) gamma omega grade goal
-    blurRight (Goal (Forall _ _ _ TyApp{}) _) = 
-      synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1 }) (Focus R Async) gamma omega grade goal
-    blurRight (Goal (Forall _ _ _ TyCon{}) _) = 
-      synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1 }) (Focus R Async) gamma omega grade goal
-    blurRight _ = none
+
+  -- case (focusPhase, (synCurr depth < synMax depth) ) of -- &&  ((not $ (synDepthReached state && elimDepthReached state && introDepthReached state && appDepthReached state && defDepthReached state)))) of
+  --     (Focus R Async, True) -> varHelper [] [] (gamma ++ omega) resourceScheme (Focus R Async) grade goal
+  --                     `try`
+  --                     absHelper defs gamma omega resourceScheme inDef canDef depth (Focus R Async) grade goal
+  --                     `try`
+  --                     rightAsyncTrans ty
+  --     (Focus L Async, True) ->  
+  --         -- varHelper [] [] (omega ++ gamma) resourceScheme (Focus L Async) grade goal
+  --         -- `try`
+  --         constrElimHelper defs gamma [] omega resourceScheme inDef canDef depth (Focus L Async) grade goal
+  --         `try`
+  --         unboxHelper defs gamma [] omega resourceScheme inDef canDef depth (Focus L Async) grade goal
+  --         `try`
+  --         leftAsyncTrans omega (eCurr depth >= eMax depth) (constructors state)
+  --         `try`
+  --         focusLeft [] gamma
+  --         `try`
+  --         focusRight ty omega 
+  --     (Focus R Sync, True) ->
+  --         varHelper [] [] gamma resourceScheme (Focus R Sync) grade goal
+  --         `try`
+  --         constrIntroHelper defs gamma resourceScheme inDef canDef depth (Focus R Sync) grade goal
+  --         `try`
+  --         boxHelper defs gamma resourceScheme inDef canDef depth (Focus R Sync) grade goal
+  --         `try`
+  --         blurRight goal 
+  --     (Focus L Sync, True) -> 
+  --           varHelper gamma [] omega resourceScheme (Focus L Sync) grade goal
+  --           `try`
+  --           appHelper defs gamma [] omega resourceScheme inDef canDef depth (Focus L Sync) grade goal
+  --           `try`
+  --           defHelper [] defs gamma omega resourceScheme inDef canDef depth (Focus L Sync) grade goal
+  --           `try`
+  --           blurLeft omega  (constructors state) (not $ appDepthReached state)
+  --     (_, False) -> 
+  --          varHelper [] [] (gamma ++ omega) resourceScheme (Focus L Sync) grade goal
+
+  --   rightAsyncTrans (TyCon{}) = synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1}) (Focus L Async) gamma omega grade goal 
+  --   rightAsyncTrans (Box{})   = synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1}) (Focus L Async) gamma omega grade goal
+  --   rightAsyncTrans (TyVar{}) = synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1}) (Focus L Async) gamma omega grade goal
+  --   rightAsyncTrans _ = none
+
+
+  --   focusRight (TyApp{}) [] = synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1}) (Focus R Sync) gamma [] grade goal
+  --   focusRight (TyCon{}) [] = synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1}) (Focus R Sync) gamma [] grade goal
+  --   focusRight (Box{})   [] = synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1}) (Focus R Sync) gamma [] grade goal
+  --   focusRight _ _ = none
+
+
+  --   blurRight (Goal (Forall _ _ _ FunTy{}) _)  =
+  --     synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1 }) (Focus R Async) gamma omega grade goal
+  --   blurRight (Goal (Forall _ _ _ TyVar{}) _) = 
+  --     synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1 }) (Focus R Async) gamma omega grade goal
+  --   blurRight (Goal (Forall _ _ _ TyApp{}) _) = 
+  --     synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1 }) (Focus R Async) gamma omega grade goal
+  --   blurRight (Goal (Forall _ _ _ TyCon{}) _) = 
+  --     synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1 }) (Focus R Async) gamma omega grade goal
+  --   blurRight _ = none
   
-    blurLeft ((var@(_, (tyA, _))):omega) cons _ = 
-      case (getAssumptionType tyA, isRecursiveType (isADTorGADT $ getAssumptionType tyA) cons) of 
-        (TyApp{}, False) -> 
-          synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1 }) (Focus L Async) gamma (var:omega) grade goal
-        (TyCon{}, False) -> 
-          synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1 }) (Focus L Async) gamma (var:omega) grade goal
-        (Box{}, False) -> 
-          synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1 }) (Focus L Async) gamma (var:omega) grade goal
-        _ -> none
-    blurLeft _ _ _ = none
+  --   blurLeft ((var@(_, (tyA, _))):omega) cons _ = 
+  --     case (getAssumptionType tyA, isRecursiveType (isADTorGADT $ getAssumptionType tyA) cons) of 
+  --       (TyApp{}, False) -> 
+  --         synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1 }) (Focus L Async) gamma (omega ++ [var]) grade goal
+  --       (TyCon{}, False) -> 
+  --         synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1 }) (Focus L Async) gamma (omega ++ [var]) grade goal
+  --       (Box{}, False) -> 
+  --         synthesiseInner defs resourceScheme inDef canDef (depth { synCurr = (synCurr depth) + 1 }) (Focus L Async) gamma (omega ++ [var]) grade goal
+  --       _ -> none
+  --   blurLeft _ _ _ = none
 
 
 synthesise :: (?globals :: Globals)
@@ -1510,11 +1660,10 @@ synthesise :: (?globals :: Globals)
            -> Ctxt (Assumption, Structure)    -- (unfocused) free variables
            -> Ctxt (Assumption, Structure)    -- focused variables
            -> Depth 
+           -> Maybe Type
            -> Goal           -- type from which to synthesise
            -> Synthesiser (Expr () Type, Ctxt (Assumption, Structure), Substitution)
-synthesise defs resourceScheme gamma omega depth goal = do
-  let gradeOnRule = fromMaybe False (globalsGradeOnRule ?globals)
-  let initialGrade = if gradeOnRule then Just (TyGrade Nothing 1)  else Nothing
+synthesise defs resourceScheme gamma omega depth grade goal = do
 
 
   st' <- get
