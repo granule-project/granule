@@ -36,6 +36,7 @@ import Control.Monad.State.Strict
 
 import qualified Control.Monad.State.Strict as State (get)
 import qualified System.Clock as Clock
+-- import qualified Control.Monad.Memo as Memo
 import qualified System.Timeout
 
 import Language.Granule.Utils
