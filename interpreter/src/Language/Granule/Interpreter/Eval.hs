@@ -699,19 +699,19 @@ builtIns =
       _oth -> error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
     uniqueReturn :: RValue -> IO RValue
-    uniqueReturn (Nec () v) = return $ 
+    uniqueReturn (Nec () v) =
       case v of
-        (Val nullSpan () False (Ext () (Runtime fa))) ->
-          let borrowed = borrowFloatArray fa in
-            Promote () (Val nullSpan () False (Ext () (Runtime borrowed)))
-        _otherwise -> Promote () v
+        (Val nullSpan () False (Ext () (Runtime fa))) -> do
+          borrowed <- borrowFloatArraySafe fa
+          return $ Promote () (Val nullSpan () False (Ext () (Runtime borrowed)))
+        _otherwise -> return $ Promote () v
     uniqueReturn v = error $ "Bug in Granule. Can't borrow a non-unique: " <> prettyDebug v
 
     uniqueBind :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
-    uniqueBind ctxt f = return $ Ext () $ Primitive $ \(Promote () v) -> do
+    uniqueBind ctxt f = return $ Ext () $ Primitive $ \(Promote () v) ->
       case v of
-        (Val nullSpan () False (Ext () (Runtime fa))) ->
-          let copy = copyFloatArray' fa in
+        (Val nullSpan () False (Ext () (Runtime fa))) -> do
+          copy <- copyFloatArraySafe fa
           evalIn ctxt
               (App nullSpan () False
                 (Val nullSpan () False f)
@@ -822,24 +822,27 @@ builtIns =
     closeHandle (Ext _ (Handle h)) = return $ diamondConstr $ do
          SIO.hClose h
          return $ valExpr (Constr () (mkId "()") [])
-    closeHandle _ = error $ "Runtime exception: trying to close a non handle value"
+    closeHandle _ = error "Runtime exception: trying to close a non handle value"
 
     newFloatArray :: RValue -> IO RValue
     newFloatArray = \(NumInt i) -> do
-      return $ Nec () (Val nullSpan () False $ Ext () $ Runtime $ RT.newFloatArray i)
+      arr <- RT.newFloatArraySafe i
+      return $ Nec () $ Val nullSpan () False $ Ext () $ Runtime arr
 
     newFloatArrayI :: RValue -> IO RValue
-    newFloatArrayI = \(NumInt i) -> return $ Ext () $ Runtime $ RT.newFloatArrayI i
+    newFloatArrayI = \(NumInt i) -> do
+      arr <- RT.newFloatArrayISafe i
+      return $ Ext () $ Runtime arr
 
     readFloatArray :: RValue -> IO RValue
-    readFloatArray = \(Nec () (Val _ _ _ (Ext () (Runtime fa)))) -> return $ Ext () $ Primitive $ \(NumInt i) ->
-      let (e,fa') = RT.readFloatArray fa i
-      in return $ Constr () (mkId ",") [NumFloat e, Nec () (Val nullSpan () False $ Ext () $ Runtime fa')]
+    readFloatArray = \(Nec () (Val _ _ _ (Ext () (Runtime fa)))) -> return $ Ext () $ Primitive $ \(NumInt i) -> do
+      (e,fa') <- RT.readFloatArraySafe fa i
+      return $ Constr () (mkId ",") [NumFloat e, Nec () (Val nullSpan () False $ Ext () $ Runtime fa')]
 
     readFloatArrayI :: RValue -> IO RValue
-    readFloatArrayI = \(Ext () (Runtime fa)) -> return $ Ext () $ Primitive $ \(NumInt i) ->
-      let (e,fa') = RT.readFloatArrayI fa i
-      in return $ Constr () (mkId ",") [NumFloat e, Ext () $ Runtime fa']
+    readFloatArrayI = \(Ext () (Runtime fa)) -> return $ Ext () $ Primitive $ \(NumInt i) -> do
+      (e,fa') <- RT.readFloatArrayISafe fa i
+      return $ Constr () (mkId ",") [NumFloat e, Ext () $ Runtime fa']
 
     lengthFloatArray :: RValue -> IO RValue
     lengthFloatArray = \(Nec () (Val _ _ _ (Ext () (Runtime fa)))) -> return $ Ext () $ Primitive $ \(NumInt i) ->
@@ -853,21 +856,22 @@ builtIns =
 
     writeFloatArray :: RValue -> IO RValue
     writeFloatArray = \(Nec _ (Val _ _ _ (Ext _ (Runtime fa)))) -> return $
-       Ext () $ Primitive $ \(NumInt i) -> return $
-       Ext () $ Primitive $ \(NumFloat v) -> do
-       return $
-         Nec () $ Val nullSpan () False $ Ext () $ Runtime $ RT.writeFloatArray fa i v
+      Ext () $ Primitive $ \(NumInt i) -> return $
+        Ext () $ Primitive $ \(NumFloat v) -> do
+          arr <- RT.writeFloatArraySafe fa i v
+          return $ Nec () $ Val nullSpan () False $ Ext () $ Runtime arr
 
     writeFloatArrayI :: RValue -> IO RValue
     writeFloatArrayI = \(Ext () (Runtime fa)) -> return $
       Ext () $ Primitive $ \(NumInt i) -> return $
-      Ext () $ Primitive $ \(NumFloat v) -> return $
-      Ext () $ Runtime $ RT.writeFloatArrayI fa i v
+      Ext () $ Primitive $ \(NumFloat v) -> do
+        arr <- RT.writeFloatArrayISafe fa i v
+        return $ Ext () $ Runtime arr
 
     deleteFloatArray :: RValue -> IO RValue
-    deleteFloatArray = \(Nec _ (Val _ _ _ (Ext _ (Runtime fa)))) -> return $
-      case RT.deleteFloatArray fa of
-        () -> Constr () (mkId "()") []
+    deleteFloatArray = \(Nec _ (Val _ _ _ (Ext _ (Runtime fa)))) -> do
+      deleteFloatArraySafe fa
+      return $ Constr () (mkId "()") []
 
 evalDefs :: (?globals :: Globals) => Ctxt RValue -> [Def (Runtime ()) ()] -> IO (Ctxt RValue)
 evalDefs ctxt [] = return ctxt
