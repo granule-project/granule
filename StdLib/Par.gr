@@ -1,0 +1,32 @@
+module Par where
+------
+--- Module: Par
+--- Description: Combinators for parallel programming in Granule
+--- Authors: Michael Vollmer, Dominic Orchard
+--- License: BSD3
+--- Copyright: (c) Authors 2022
+--- Issue-tracking: https://github.com/dorchard/granule/issues
+--- Repository: https://github.com/dorchard/granule
+------
+
+import List
+
+-- basic parallel combinator (defined in terms of linear channels)
+-- `par` expects two thunks, `f` and `g`, and returns their resulting values in a pair
+par : forall {a : Type, b : Type} . (() -> a) -> (() -> b) -> (a, b)
+par f g =  let c = forkLinear (\c' -> close (send c' (f ()))); -- compute f in new thread
+               b = g (); -- compute g in current thread
+               (a, c') = recv c; -- get result of f from other thread
+               -- (shared memory, should be constant time to share pointer!)
+               _ = close c'
+           in (a, b)
+
+-- parallel combinator for lists of computations
+-- `parList` expects a list of thunks, and returns a list of values (computed in parallel)
+parList : forall {a : Type} . List (() -> a) -> List a
+parList lst =
+  case lst of
+    Empty -> Empty;
+    (Next f fs) -> case (par f (\x -> case x of
+                                   () -> parList fs)) of
+                     (e, lst2) -> Next e lst2
