@@ -99,6 +99,7 @@ library:
   - logict >= 0.7.1.0
   - clock
   - monad-memo
+  - data-ordlist
 
 tests:
   frontend-spec:
