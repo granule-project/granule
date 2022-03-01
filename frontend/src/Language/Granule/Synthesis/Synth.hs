@@ -1069,7 +1069,7 @@ constrIntroHelper defs gamma resourceScheme False depth focusPhase grade goal@(G
                         return (s'', boolToStructure $ isDecreasing name [s])) conArgs
 
                       (exprs, delta, subst, bindings, structurallyDecr) <- synthConArgs name (constructors state) defs args conBinders conConstraints conSubst
-                      conv $ concludeImplication nullSpanNoFile [] 
+                    --  conv $ concludeImplication nullSpanNoFile [] 
                       return (Just $ makeConstr exprs conName conTy, delta, subst, bindings, structurallyDecr) `try` return a
                     Nothing -> do
                       --conv $ concludeImplication nullSpanNoFile [] 
