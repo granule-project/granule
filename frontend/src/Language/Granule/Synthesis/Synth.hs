@@ -100,8 +100,8 @@ solve = do
   let pred = Conj $ predicateStack cs
   debugM "synthDebug" ("SMT on pred = " ++ pretty pred)
   tyVars <- conv $ includeOnlyGradeVariables nullSpanNoFile (tyVarContext cs)
-
-  tyVars <- conv $ tyVarContextExistential >>= includeOnlyGradeVariables nullSpanNoFile
+  -- 
+  -- tyVars <- conv $ tyVarContextExistential >>= includeOnlyGradeVariables nullSpanNoFile
   -- Prove the predicate
   start  <- liftIO $ Clock.getTime Clock.Monotonic
   constructors <- conv allDataConstructorNames
@@ -316,11 +316,12 @@ isAtomic _ = False
 
 -}
 checkConstructor :: (?globals::Globals)
-      => TypeScheme 
+      => Bool -- Do impossibility check?
+      -> TypeScheme 
       -> Type 
       -> Substitution 
       -> Synthesiser (Bool, Bool, Type, [Type], Substitution, Substitution)
-checkConstructor con@(Forall  _ binders constraints conTy) assumptionTy subst = do
+checkConstructor impossibility con@(Forall  _ binders constraints conTy) assumptionTy subst = do
     conv $ resetAddedConstraintsFlag -- reset the flag that says if any constraints were added
     (conTyFresh, tyVarsFreshD, substFromFreshening, constraints', coercions) <- conv $ freshPolymorphicInstance InstanceQ True con subst []
 
@@ -334,12 +335,13 @@ checkConstructor con@(Forall  _ binders constraints conTy) assumptionTy subst = 
     -- Run the solver (i.e. to check constraints on type indexes hold)
 
     cs <- conv $ get
-    if addedConstraints cs then do
+    if impossibility && addedConstraints cs then do
 
       let predicate = Conj $ predicateStack cs
       predicate <- conv $ substitute subst' predicate
       debugM "show predicate: " (pretty predicate)
       coeffectVars <- conv $ tyVarContextExistential >>= includeOnlyGradeVariables nullSpanNoFile
+      --coeffectVars <- conv $ (get >>= (\st -> return $ tyVarContext st)) >>= includeOnlyGradeVariables nullSpanNoFile
       constructors <- conv$ allDataConstructorNames
       (_, result) <- conv$ liftIO $ provePredicate predicate coeffectVars constructors
       let smtResult = case result of QED -> True ; _ -> False
@@ -1047,9 +1049,10 @@ constrIntroHelper defs gamma resourceScheme False depth focusPhase grade goal@(G
         (maybeExpr, deltaOut, substOut, bindingsOut, structurallyDecrOut) <- foldM (\ a (conName, (conTySch@(Forall s conBinders conConstraints conTy), conSubst)) -> do
           case a of 
             (Nothing, [], [], [], False) -> do
-              conv $ newConjunct
-              result <- checkConstructor conTySch tyA conSubst
-              conv $ newConjunct
+              -- conv $ newConjunct
+              debugM "compiletoSBV (check constructor)" $ pretty conName
+              result <- checkConstructor False conTySch tyA conSubst
+              -- conv $ newConjunct
               case result of
                 (True, True, specTy, _, specSubst, substFromFreshening) -> do
                   specTy' <- conv $ substitute substFromFreshening specTy
@@ -1059,7 +1062,7 @@ constrIntroHelper defs gamma resourceScheme False depth focusPhase grade goal@(G
                   case constrArgs conTy of 
                     Just [] -> do 
                       let delta = case resourceScheme of {Additive{} -> []; Subtractive{} -> gamma}
-                      conv $ concludeImplication nullSpanNoFile [] 
+                      -- conv $ concludeImplication nullSpanNoFile [] 
                       return (Just $ makeNullaryConstructor conName, delta, conSubst, [], False) `try` return a
                     Just conArgs -> do 
                       args <- conv $ mapM (\s -> do 
@@ -1071,10 +1074,10 @@ constrIntroHelper defs gamma resourceScheme False depth focusPhase grade goal@(G
                       conv $ concludeImplication nullSpanNoFile [] 
                       return (Just $ makeConstr exprs conName conTy, delta, subst, bindings, structurallyDecr) `try` return a
                     Nothing -> do
-                      conv $ concludeImplication nullSpanNoFile [] 
+                      --conv $ concludeImplication nullSpanNoFile [] 
                       return a
                 _ -> do
-                  conv $ concludeImplication nullSpanNoFile [] 
+                  --conv $ concludeImplication nullSpanNoFile [] 
                   return a
             res -> return res) (Nothing, [], [], [], False) sortedCons   
         case maybeExpr of  
@@ -1161,7 +1164,8 @@ constrElimHelper defs gamma left (assumption@(x, (tyA, (AInfo structure eDepth))
 
             (patterns, delta, resSubst, resBindings, structurallyDecr, _) <- foldM (\ (exprs, deltas, substs, bindings, structurallyDecr, index) (conId, (conTySch@(Forall s binders constraints conTy), conSubst)) -> do
               conv newConjunct 
-              result <- checkConstructor conTySch assumptionTy conSubst
+              debugM "compiletoSBV (check constructor)" $ pretty conId
+              result <- checkConstructor True conTySch assumptionTy conSubst
               conv newConjunct 
               case result of 
                 (True, True, specTy, conTyArgs, conSubst', _) -> do
