@@ -38,13 +38,15 @@ import qualified Control.Monad.State.Strict as State (get)
 import qualified System.Clock as Clock
 -- import qualified Control.Monad.Memo as Memo
 import qualified System.Timeout
+import qualified Data.List.Ordered as Ordered
 
 import Language.Granule.Utils
 import Data.Maybe (fromJust, catMaybes, fromMaybe, maybeToList)
 import Control.Arrow (second)
-import Control.Monad.Omega
+-- import Control.Monad.Omega
 import System.Clock (TimeSpec)
 
+import Data.Ord
 
 
 {-- SYNTHESIS
@@ -107,8 +109,6 @@ solve = do
   _ <- return result
   end    <- liftIO $ Clock.getTime Clock.Monotonic
   let proverTime' = fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double)
-  --state <- Synthesiser $ lift $ lift $ lift get
-  -- traceM  $ show state
   -- Update benchmarking data
   Synthesiser $ lift $ lift $ lift $ modify (\state ->
             state {
@@ -426,13 +426,6 @@ isDecreasing id1 ((TyApp t1 t2):tys)   = isDecreasing id1 (t1:t2:tys)
 isDecreasing id1 (x:xs) = isDecreasing id1 xs
 
 
-constrArgs :: Type -> Maybe [Type]
-constrArgs (TyCon _) = Just []
-constrArgs (TyApp _ _) = Just []
-constrArgs (FunTy _ e1 e2) = do
-  res <- constrArgs e2
-  return $ e1 : res
-constrArgs _ = Nothing
 
 
 
@@ -443,97 +436,43 @@ rightMostFunTy t = (t, [])
 reconstructFunTy :: Type -> [Type] -> Type
 reconstructFunTy = foldl (flip (FunTy Nothing Nothing))
 
-
-makePattern :: Id ->  [Id] -> Maybe Type -> Pattern ()
-makePattern conId vars _ = PConstr nullSpanNoFile () False conId (map (PVar nullSpanNoFile () False) vars)
--- -- -- -- -- -- -- -- -- makePattern conId vars (Just grade) = PBox nullSpanNoFile () False (PConstr nullSpanNoFile () False conId (map (PVar nullSpanNoFile () False) vars))
-
-
--- Construct a typed pattern from an untyped one from the context
-transformPattern :: 
-     Ctxt (Id, Type)
-  -> Type 
-  -> [(Id, (Assumption, Structure))] 
-  -> Pattern () 
-  -> Ctxt (Assumption, Structure) 
-  -> Maybe (Pattern Type, Ctxt (Id, Type))
-transformPattern bindings adt ctxt (PConstr s () b id pats) unboxed = do
-  (pats', bindings') <- transformPatterns bindings adt ctxt pats unboxed
-  Just (PConstr s adt b id pats', bindings)
-transformPattern bindings adt ctxt (PVar s () b name) unboxed =
-  let (pat, name', bindings') = case lookup name unboxed of
-        Just (Discharged ty _, structure) -> (PBox s ty False, name, bindings)
-        _ -> (id, name, bindings)
-  in
-  case lookup name ctxt of
-     Just (Linear t, structure) -> Just (pat $ PVar s t b name', bindings')
-     Just (Discharged t c, structure) -> Just (pat $ PVar s t b name', bindings')
-     Nothing -> Nothing
-transformPattern bindings adt ctxt (PBox s () b p) unboxed = do
-  (pat', bindings') <- transformPattern bindings adt ctxt p unboxed
-  Just (PBox s adt b pat', bindings')
-transformPattern _ _ _ _ _ = Nothing
-
-
-instance Pretty a => Pretty (Structure a) where
-  pretty None    = "None"
-  pretty (Arg a) = "Arg " <> pretty a
-  pretty (Dec a) = "Dec " <> pretty a
-
-bindToContext :: (Id, (Assumption, Structure Id)) -> Ctxt (Assumption, Structure Id) -> Ctxt (Assumption, Structure Id) -> Bool -> (Ctxt (Assumption, Structure Id), Ctxt (Assumption, Structure Id))
-bindToContext var gamma omega True = (gamma, omega ++ [var])
-bindToContext var gamma omega False = (gamma ++ [var], omega)
-transformPatterns :: 
-     Ctxt (Id, Type) 
-  -> Type 
-  -> [(Id, (Assumption, Structure))] 
-  -> [Pattern ()]
-  -> Ctxt (Assumption, Structure) 
-  -> Maybe ([Pattern Type], Ctxt (Id, Type))
-transformPatterns bindings adt ctxt [] unboxed = Just ([], bindings)
-transformPatterns bindings adt ctxt (p:ps) unboxed = do
-  (pat, bindings') <- transformPattern bindings adt ctxt p unboxed
-  (res, bindingsFinal) <- transformPatterns bindings' adt ctxt ps unboxed
-  return (pat:res, bindingsFinal)
-
-
 -- Note that the way this is used, the (var, assumption) pair in the first
 -- argument is not contained in the provided context (second argument)
 useVar :: (?globals :: Globals)
-  => (Id, (Assumption, Structure))
-  -> Ctxt (Assumption, Structure)
+  => (Id, (Assumption, AssumptionInfo))
+  -> Ctxt (Assumption, AssumptionInfo)
   -> ResourceScheme PruningScheme
   -> Maybe Type -- Grade on rule style of synthesis 
-  -> Synthesiser (Bool, Ctxt (Assumption, Structure), Type)
+  -> Synthesiser (Bool, Ctxt (Assumption, AssumptionInfo), Type)
 -- Subtractive
 useVar (name, (Linear t, _)) gamma Subtractive _ = return (True, gamma, t)
-useVar (name, (Discharged t grade, structure)) gamma Subtractive Nothing = do
+useVar (name, (Discharged t grade, info)) gamma Subtractive Nothing = do
   (kind, _, _) <- conv $ synthKind nullSpan grade
   var <- freshIdentifier 
   conv $ existentialTopLevel var kind -- Existentials must be at the topLevel because they may be generated inside an implication but may occur outside of the implication 
   conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyInfix TyOpPlus (TyVar var) (TyGrade (Just kind) 1)) grade kind)
   res <- solve
   if res then
-    return (True, replace gamma name (Discharged t (TyVar var), structure), t) else
+    return (True, replace gamma name (Discharged t (TyVar var), info), t) else
     return (False, [], t)
-useVar (name, (Discharged t grade, structure)) gamma Subtractive (Just grade') = do
+useVar (name, (Discharged t grade, info)) gamma Subtractive (Just grade') = do
   (kind, _, _) <- conv $ synthKind nullSpan grade
   var <- freshIdentifier -- conv $ freshTyVarInContext (mkId "c") kind
   conv $ existentialTopLevel var kind
   conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyInfix TyOpPlus (TyVar var) grade') grade kind)
   res <- solve
   if res then
-    return (True, replace gamma name (Discharged t (TyVar var), structure), t) else
+    return (True, replace gamma name (Discharged t (TyVar var), info), t) else
     return (False, [], t)
 
 -- Additive
-useVar (name, (Linear t, structure)) _ Additive{} _ = return (True, [(name, (Linear t, structure))], t)
-useVar (name, (Discharged t grade, structure)) _ Additive{} Nothing = do
+useVar (name, (Linear t, info)) _ Additive{} _ = return (True, [(name, (Linear t, info))], t)
+useVar (name, (Discharged t grade, info)) _ Additive{} Nothing = do
   (kind, _, _) <- conv $ synthKind nullSpan grade
-  return (True, [(name, (Discharged t (TyGrade (Just kind) 1), structure))], t)
-useVar (name, (Discharged t grade, structure)) _ Additive{} (Just grade') = do
+  return (True, [(name, (Discharged t (TyGrade (Just kind) 1), info))], t)
+useVar (name, (Discharged t grade, info)) _ Additive{} (Just grade') = do
   (kind, _, _) <- conv $ synthKind nullSpan grade
-  return (True, [(name, (Discharged t grade', structure))], t)
+  return (True, [(name, (Discharged t grade', info))], t)
 
 
 {--
