@@ -50,9 +50,9 @@ provePredicate predicate vars constructors
       debugM "solveConstraints" "Skipping solver because predicate is trivial."
       return (0.0, QED)
   | otherwise = do
-      debugM "about to compiletoSBV" (show vars)
+      debugM "compiletoSBV" (pretty vars ++ " . " ++ pretty predicate)
       let (sbvTheorem, _, unsats) = compileToSBV predicate vars constructors
-      debugM "compiledtoSBV" ""
+      --debugM "compiledtoSBV" ""
 
       -- Benchmarking start
       start  <- if benchmarking then Clock.getTime Clock.Monotonic else return 0
@@ -69,8 +69,7 @@ provePredicate predicate vars constructors
       end    <- if benchmarking then Clock.getTime Clock.Monotonic else return 0
       let duration = (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double))
 
-      debugM "compiledtoSBV!!!" ""
-      return $ (duration, case thmRes of
+      res <- return $ (duration, case thmRes of
         -- we're good: the negation of the theorem is unsatisfiable
         Unsatisfiable {} -> QED
         ProofError _ msgs _ -> SolverProofError $ unlines msgs
@@ -96,6 +95,8 @@ provePredicate predicate vars constructors
                    NotValid $ "is " <> show (ThmResult thmRes)
             Right (True, _) -> NotValid "returned probable model."
             Left str -> OtherSolverError str)
+      debugM "compiletoSBV" (case res of (_,QED) -> "True"; _ -> "False")
+      return res
 
 -- | Compile constraint into an SBV symbolic bool, along with a list of
 -- | constraints which are trivially unequal (if such things exist) (e.g., things like 1=0).
