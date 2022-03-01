@@ -30,16 +30,15 @@ data SynthesisData =
   , elimDepthReached          :: Bool
   , introDepthReached         :: Bool
   , appDepthReached           :: Bool
-  , synDepthReached           :: Bool
   }
   deriving Show
 
 instance Semigroup SynthesisData where
- (SynthesisData calls stime time size paths startTime constructors currDef elimDepthReached introDepthReached appDepthReached synDepthReached) <> (SynthesisData calls' stime' time' size' paths' startTime' constructors' currDef' elimDepthReached' introDepthReached' appDepthReached' synDepthReached') =
-    SynthesisData (calls + calls') (stime + stime') (time + time') (size + size') (paths + paths') (startTime + startTime') (constructors ++ constructors') (currDef ++ currDef') (elimDepthReached || elimDepthReached') (introDepthReached || introDepthReached') (appDepthReached || appDepthReached') (synDepthReached || synDepthReached')
+ (SynthesisData calls stime time size paths startTime constructors currDef elimDepthReached introDepthReached appDepthReached) <> (SynthesisData calls' stime' time' size' paths' startTime' constructors' currDef' elimDepthReached' introDepthReached' appDepthReached') =
+    SynthesisData (calls + calls') (stime + stime') (time + time') (size + size') (paths + paths') (startTime + startTime') (constructors ++ constructors') (currDef ++ currDef') (elimDepthReached || elimDepthReached') (introDepthReached || introDepthReached') (appDepthReached || appDepthReached') 
 
 instance Monoid SynthesisData where
-  mempty  = SynthesisData 0 0 0 0 0 0 [] [] False False False False
+  mempty  = SynthesisData 0 0 0 0 0 0 [] [] False False False
   mappend = (<>)
 
 -- Synthesiser monad
@@ -86,6 +85,7 @@ try m n = do
       pathsExplored = 1 + pathsExplored state
       })
   Synthesiser $ ExceptT ((runExceptT (unSynthesiser m)) `interleave` (runExceptT (unSynthesiser n)))
+
 
 none :: Synthesiser a
 none = Synthesiser (ExceptT mzero)
