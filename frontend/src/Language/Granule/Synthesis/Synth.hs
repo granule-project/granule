@@ -69,6 +69,8 @@ type Bindings = [(Id, (Id, Type))]
 data Goal = Goal TypeScheme Structure
   deriving (Show, Eq)
 
+newtype FocusingContext a = FocusingContext (Ctxt a)
+
 data Depth = Depth 
   {
     eMax    :: Int  -- Maximum number of eliminations (of recursive data structures) allowed

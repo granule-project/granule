@@ -12,6 +12,7 @@ import Control.Monad.Except
 import Control.Monad.State.Strict
 import Control.Monad.Logic
 import qualified System.Clock as Clock
+-- import Language.Granule.Checker.Predicate
 import Language.Granule.Checker.SubstitutionContexts (Substitution)
 import Language.Granule.Syntax.Type (TypeScheme)
 import Language.Granule.Syntax.Identifiers 
@@ -30,6 +31,7 @@ data SynthesisData =
   , elimDepthReached          :: Bool
   , introDepthReached         :: Bool
   , appDepthReached           :: Bool
+  --, predicateContext          :: PredContext
   }
   deriving Show
 
