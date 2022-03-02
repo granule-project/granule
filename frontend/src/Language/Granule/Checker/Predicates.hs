@@ -461,11 +461,11 @@ rewriteBindersInPredicate ctxt =
 -- Zipper formulation of predicates (more expressive for working in a context where we need to solve on partial formulae)
 
 data PredContext =
-    Top         
+    Top
   | ExistsHere     Id Kind PredContext
   | NegPredHere    PredContext
-  | ConjHere       [Pred] PredContext [Pred]
-  | DisjHere       [Pred] PredContext [Pred]
+  | ConjHere       [Pred] PredContext
+  | DisjHere       [Pred] PredContext
   | ImplAntecedent (Ctxt Kind) PredContext
   | ImplConsequent (Ctxt Kind) Pred PredContext
   deriving Show -- for debugging
@@ -476,8 +476,8 @@ fromPredicateZipper :: PredZipper -> Pred
 fromPredicateZipper (PredZipper Top p)                           = p
 fromPredicateZipper (PredZipper (ExistsHere v k path) p)         = fromPredicateZipper (PredZipper path (Exists v k p))
 fromPredicateZipper (PredZipper (NegPredHere path) p)            = fromPredicateZipper (PredZipper path (NegPred p))
-fromPredicateZipper (PredZipper (ConjHere ps1 path ps2) p)       = fromPredicateZipper (PredZipper path (Conj (ps1 ++ [p] ++ ps2)))
-fromPredicateZipper (PredZipper (DisjHere ps1 path ps2) p)       = fromPredicateZipper (PredZipper path (Disj (ps1 ++ [p] ++ ps2)))
+fromPredicateZipper (PredZipper (ConjHere ps path) p)            = fromPredicateZipper (PredZipper path (Conj (p : ps)))
+fromPredicateZipper (PredZipper (DisjHere ps path) p)            = fromPredicateZipper (PredZipper path (Disj (p : ps)))
 fromPredicateZipper (PredZipper (ImplAntecedent ctxt path) p)    = fromPredicateZipper (PredZipper path (Impl ctxt p (Conj [])))
 fromPredicateZipper (PredZipper (ImplConsequent ctxt pa path) p) = fromPredicateZipper (PredZipper path (Impl ctxt pa p))
 
@@ -488,13 +488,29 @@ fromPredicateContext path = fromPredicateZipper (PredZipper path (Conj []))
 moveToConsequent :: PredContext -> Either String PredContext
 moveToConsequent path = rollup path (Conj [])
   where
-    rollup Top                           p = Left $ "Bug: reached top of formula without hitting an implication, rolled up " ++ show p
     rollup (ExistsHere v k path)         p = rollup path (Exists v k p)
     rollup (NegPredHere path)            p = rollup path (NegPred p)
-    rollup (ConjHere ps1 path ps2)       p = rollup path (Conj (ps1 ++ [p] ++ ps2))
-    rollup (DisjHere ps1 path ps2)       p = rollup path (Disj (ps1 ++ [p] ++ ps2))
+    rollup (ConjHere ps path)            p = rollup path (Conj (p:ps))
+    rollup (DisjHere ps path)            p = rollup path (Disj (p:ps))
     rollup (ImplConsequent ctxt pa path) p = rollup path (Impl ctxt pa p)
     rollup (ImplAntecedent ctxt path)    p = Right $ ImplConsequent ctxt p path
-    
+    rollup Top                           p =
+      Left $ "Bug: reached top of formula without hitting an implication, rolled up " ++ show p
+
+moveToNewConjunct :: PredContext -> Either String PredContext
+moveToNewConjunct path = rollup path (Conj [])
+  where
+    rollup (ExistsHere v k path)         p = rollup path (Exists v k p)
+    rollup (NegPredHere path)            p = rollup path (NegPred p)
+    rollup (ConjHere ps path)            p = Right $ ConjHere (p:ps) path
+    rollup (DisjHere ps path)            p = rollup path (Disj (p:ps))
+    rollup (ImplConsequent ctxt pa path) p = rollup path (Impl ctxt pa p)
+    rollup (ImplAntecedent ctxt path)    p = rollup path (Impl ctxt p (Conj []))
+    rollup Top                           p =
+      Left $ "Bug: reached top of formula without hitting an implication, rolled up " ++ show p
+
 newImplication :: Ctxt Kind -> PredContext -> PredContext
 newImplication ctxt path = ImplAntecedent ctxt path
+
+addConstraintViaConjunction :: Constraint -> PredContext -> PredContext
+addConstraintViaConjunction c path = ConjHere [Con c] path
