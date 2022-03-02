@@ -1165,10 +1165,10 @@ constrElimHelper defs gamma left (assumption@(x, (tyA, (AInfo structure eDepth))
             let sortedCons = sortBy compareArity nonRecursiveCons ++ sortBy compareArity recursiveCons
 
             (patterns, delta, resSubst, resBindings, structurallyDecr, _) <- foldM (\ (exprs, deltas, substs, bindings, structurallyDecr, index) (conId, (conTySch@(Forall s binders constraints conTy), conSubst)) -> do
-              conv newConjunct 
-              debugM "compiletoSBV (check constructor)" $ pretty conId
+              conv newConjunct -- newImplication
+              debugM "compiletoSBV ELIM (check constructor)" $ pretty conId
               result <- checkConstructor True conTySch assumptionTy conSubst
-              conv newConjunct 
+              conv newConjunct -- moveToConsequent
               case result of 
                 (True, True, specTy, conTyArgs, conSubst', _) -> do
 
@@ -1191,7 +1191,9 @@ constrElimHelper defs gamma left (assumption@(x, (tyA, (AInfo structure eDepth))
                   (gamma', omega') <- 
                     case mode of 
                       Additive{} -> do 
+                        -- TODO: don't do this.
                         gamma' <- ctxtSubtract ((x, (tyA, (AInfo structure (eDepth+1)))):gamma) usageOut
+                        --gamma' <- return gamma
                         return (gamma', omega)
                       Subtractive -> 
                         case lookupAndCutout x usageOut of 
@@ -1211,7 +1213,8 @@ constrElimHelper defs gamma left (assumption@(x, (tyA, (AInfo structure eDepth))
                     Just (pattern, bindings') ->
                       let mergeOp = case mode of Additive{} -> TyInfix TyOpJoin ; _ -> TyInfix TyOpMeet in do
                         returnDelta <- if index == 0 then return delta' else ctxtMerge mergeOp deltas delta' 
-                        conv $ concludeImplication nullSpanNoFile [] 
+                        debugM "compiletoSBV - CONCLUDE IMPLICATION" ""
+                        conv $ concludeImplication nullSpanNoFile [] -- moveToNewConjunct
                         returnSubst <- conv $ combineSubstitutions nullSpanNoFile subst substs
                         return ((pattern, expr):exprs, returnDelta, returnSubst, bindings ++ bindings', structurallyDecr || structurallyDecr', index + 1)
                     Nothing -> do 
