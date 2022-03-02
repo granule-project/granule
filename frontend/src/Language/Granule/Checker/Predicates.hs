@@ -459,20 +459,49 @@ data PredContext =
   | ImplConsequent (Ctxt Kind) Pred PredContext
   deriving Show -- for debugging
 
-data PredZipper = PredZipper PredContext Pred
 
-fromPredicateZipper :: PredZipper -> Pred
-fromPredicateZipper (PredZipper Top p)                           = p
-fromPredicateZipper (PredZipper (ExistsHere v k path) p)         = fromPredicateZipper (PredZipper path (Exists v k p))
-fromPredicateZipper (PredZipper (NegPredHere path) p)            = fromPredicateZipper (PredZipper path (NegPred p))
-fromPredicateZipper (PredZipper (ConjHere ps path) p)            = fromPredicateZipper (PredZipper path (Conj (p : ps)))
-fromPredicateZipper (PredZipper (DisjHere ps path) p)            = fromPredicateZipper (PredZipper path (Disj (p : ps)))
-fromPredicateZipper (PredZipper (ImplAntecedent ctxt path) p)    = fromPredicateZipper (PredZipper path (Impl ctxt p (Conj [])))
-fromPredicateZipper (PredZipper (ImplConsequent ctxt pa path) p) = fromPredicateZipper (PredZipper path (Impl ctxt pa p))
+-----    ImplConsequent [("x", Nat)] p path
+-----
+----     represents
+-----
+-----       .
+-----       .  path
+-----       . 
+----     forall x : Nat . _ -> _
+----     /   \
+---     p    [ ]
+
+---    ImplAntecedent [("x", Nat)] path
+
+---      . 
+---      .  path
+---      . 
+---   forall x : Nat . -> 
+---      /      \
+---    [ ]      ?
+
+
+----   fromPredicateContext (ImplConsequent [("x", Nat)] p (ConjHere [Con c] Top))
+
+---    -> Conj [Impl [("x", Nat)] p (Conj []), Con c]
+
 
 fromPredicateContext :: PredContext -> Pred
 -- fill the 'hole' with True (which is just an empty conjunction)
-fromPredicateContext path = fromPredicateZipper (PredZipper path (Conj []))
+fromPredicateContext path = fromPredicateZipper path (Conj [])
+  where
+    fromPredicateZipper :: PredContext -> Pred -> Pred
+    fromPredicateZipper Top                           p = p
+    fromPredicateZipper (ExistsHere v k path)         p = fromPredicateZipper path (Exists v k p)
+    fromPredicateZipper (NegPredHere path)            p = fromPredicateZipper path (NegPred p)
+    fromPredicateZipper (ConjHere ps path)            p = fromPredicateZipper path (Conj (p : ps))
+    fromPredicateZipper (DisjHere ps path)            p = fromPredicateZipper path (Disj (p : ps))
+    fromPredicateZipper (ImplAntecedent ctxt path)    p = fromPredicateZipper path (Impl ctxt p (Conj []))
+    fromPredicateZipper (ImplConsequent ctxt pa path) p = fromPredicateZipper path (Impl ctxt pa p)
+
+
+newImplication :: Ctxt Kind -> PredContext -> PredContext
+newImplication ctxt path = ImplAntecedent ctxt path
 
 moveToConsequent :: PredContext -> Either String PredContext
 moveToConsequent path = rollup path (Conj [])
@@ -486,20 +515,19 @@ moveToConsequent path = rollup path (Conj [])
     rollup Top                           p =
       Left $ "Bug: reached top of formula without hitting an implication, rolled up " ++ show p
 
-moveToNewConjunct :: PredContext -> Either String PredContext
+moveToNewConjunct :: PredContext -> PredContext
 moveToNewConjunct path = rollup path (Conj [])
   where
     rollup (ExistsHere v k path)         p = rollup path (Exists v k p)
     rollup (NegPredHere path)            p = rollup path (NegPred p)
-    rollup (ConjHere ps path)            p = Right $ ConjHere (p:ps) path
+    rollup (ConjHere ps path)            p = ConjHere (p:ps) path
     rollup (DisjHere ps path)            p = rollup path (Disj (p:ps))
     rollup (ImplConsequent ctxt pa path) p = rollup path (Impl ctxt pa p)
     rollup (ImplAntecedent ctxt path)    p = rollup path (Impl ctxt p (Conj []))
-    rollup Top                           p =
-      Left $ "Bug: reached top of formula without hitting an implication, rolled up " ++ show p
-
-newImplication :: Ctxt Kind -> PredContext -> PredContext
-newImplication ctxt path = ImplAntecedent ctxt path
+    rollup Top                           p = ConjHere [] Top
 
 addConstraintViaConjunction :: Constraint -> PredContext -> PredContext
 addConstraintViaConjunction c path = ConjHere [Con c] path
+
+addPredicateViaConjunction :: Pred -> PredContext -> PredContext
+addPredicateViaConjunction p path = ConjHere [p] path
