@@ -456,3 +456,45 @@ rewriteBindersInPredicate ctxt =
     updateCoeffect ckindVar ckind (TyInfix op c1 c2) =
       TyInfix op (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
     updateCoeffect _ _ c = c
+
+------------------------------------------------------------------------------------------------------------
+-- Zipper formulation of predicates (more expressive for working in a context where we need to solve on partial formulae)
+
+data PredContext =
+    Top         
+  | ExistsHere     Id Kind PredContext
+  | NegPredHere    PredContext
+  | ConjHere       [Pred] PredContext [Pred]
+  | DisjHere       [Pred] PredContext [Pred]
+  | ImplAntecedent (Ctxt Kind) PredContext
+  | ImplConsequent (Ctxt Kind) Pred PredContext
+  deriving Show -- for debugging
+
+data PredZipper = PredZipper PredContext Pred
+
+fromPredicateZipper :: PredZipper -> Pred
+fromPredicateZipper (PredZipper Top p)                           = p
+fromPredicateZipper (PredZipper (ExistsHere v k path) p)         = fromPredicateZipper (PredZipper path (Exists v k p))
+fromPredicateZipper (PredZipper (NegPredHere path) p)            = fromPredicateZipper (PredZipper path (NegPred p))
+fromPredicateZipper (PredZipper (ConjHere ps1 path ps2) p)       = fromPredicateZipper (PredZipper path (Conj (ps1 ++ [p] ++ ps2)))
+fromPredicateZipper (PredZipper (DisjHere ps1 path ps2) p)       = fromPredicateZipper (PredZipper path (Disj (ps1 ++ [p] ++ ps2)))
+fromPredicateZipper (PredZipper (ImplAntecedent ctxt path) p)    = fromPredicateZipper (PredZipper path (Impl ctxt p (Conj [])))
+fromPredicateZipper (PredZipper (ImplConsequent ctxt pa path) p) = fromPredicateZipper (PredZipper path (Impl ctxt pa p))
+
+fromPredicateContext :: PredContext -> Pred
+-- fill the 'hole' with True (which is just an empty conjunction)
+fromPredicateContext path = fromPredicateZipper (PredZipper path (Conj []))
+
+moveToConsequent :: PredContext -> Either String PredContext
+moveToConsequent path = rollup path (Conj [])
+  where
+    rollup Top                           p = Left $ "Bug: reached top of formula without hitting an implication, rolled up " ++ show p
+    rollup (ExistsHere v k path)         p = rollup path (Exists v k p)
+    rollup (NegPredHere path)            p = rollup path (NegPred p)
+    rollup (ConjHere ps1 path ps2)       p = rollup path (Conj (ps1 ++ [p] ++ ps2))
+    rollup (DisjHere ps1 path ps2)       p = rollup path (Disj (ps1 ++ [p] ++ ps2))
+    rollup (ImplConsequent ctxt pa path) p = rollup path (Impl ctxt pa p)
+    rollup (ImplAntecedent ctxt path)    p = Right $ ImplConsequent ctxt p path
+    
+newImplication :: Ctxt Kind -> PredContext -> PredContext
+newImplication ctxt path = ImplAntecedent ctxt path
