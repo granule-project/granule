@@ -1085,53 +1085,18 @@ constrIntroHelper :: (?globals :: Globals)
 constrIntroHelper defs gamma resourceScheme False depth focusPhase grade goal@(Goal goalTySch@(Forall s binders constraints tyA) structure) =
   case (isADTorGADT tyA) of
     Just name -> do
-
-      state <- Synthesiser $ lift $ lift $ get
-
       if (iCurr depth) <= (iMax depth) || structure /= Decreasing then do
 
 
         debugM "synthDebug - entered constrIntroHelper with goal: " (show goal)
         debugM "synthDebug - entered constrIntroHelper with gamma: " (show gamma)
+        state <- Synthesiser $ lift $ lift $ get
 
         let (recursiveCons, nonRecursiveCons) = relevantConstructors name (constructors state)
         let sortedCons = sortBy compareArity nonRecursiveCons ++ sortBy compareArity recursiveCons
 
         -- For each relevent data constructor, we must now check that it's type matches the goal
-        (maybeExpr, deltaOut, substOut, bindingsOut, structurallyDecrOut) <- foldM (\ a (conName, (conTySch@(Forall s conBinders conConstraints conTy), conSubst)) -> do
-          case a of 
-            (Nothing, [], [], [], False) -> do
-              -- conv $ newConjunct
-              debugM "compiletoSBV (check constructor)" $ pretty conName
-              result <- checkConstructor False conTySch tyA conSubst
-              -- conv $ newConjunct
-              case result of
-                (True, True, specTy, _, specSubst, substFromFreshening) -> do
-                  specTy' <- conv $ substitute substFromFreshening specTy
-                  subst' <- conv $ combineSubstitutions s conSubst specSubst
-                  specTy'' <- conv $ substitute subst' specTy'
-                  debugM "synthDebug - constrIntroHelper - synthing arguments for: " (show conName)
-                  case constrArgs conTy of 
-                    Just [] -> do 
-                      let delta = case resourceScheme of {Additive{} -> []; Subtractive{} -> gamma}
-                      -- conv $ concludeImplication nullSpanNoFile [] 
-                      return (Just $ makeNullaryConstructor conName, delta, conSubst, [], False) `try` return a
-                    Just conArgs -> do 
-                      args <- conv $ mapM (\s -> do 
-                        s' <- substitute substFromFreshening s
-                        s'' <- substitute specSubst s'
-                        return (s'', boolToStructure $ isDecreasing name [s])) conArgs
-
-                      (exprs, delta, subst, bindings, structurallyDecr) <- synthConArgs name (constructors state) defs args conBinders conConstraints conSubst
-                    --  conv $ concludeImplication nullSpanNoFile [] 
-                      return (Just $ makeConstr exprs conName conTy, delta, subst, bindings, structurallyDecr) `try` return a
-                    Nothing -> do
-                      --conv $ concludeImplication nullSpanNoFile [] 
-                      return a
-                _ -> do
-                  --conv $ concludeImplication nullSpanNoFile [] 
-                  return a
-            res -> return res) (Nothing, [], [], [], False) sortedCons   
+        (maybeExpr, deltaOut, substOut, bindingsOut, structurallyDecrOut) <- tryConstructors name state [] sortedCons
         case maybeExpr of  
           Just expr -> return (expr, deltaOut, substOut, bindingsOut, False)
           _ -> none
@@ -1139,6 +1104,29 @@ constrIntroHelper defs gamma resourceScheme False depth focusPhase grade goal@(G
     _ -> none
   where
 
+    tryConstructors _ _ _ [] = none
+    tryConstructors adtName state right ((conName, (conTySch@(Forall s conBinders conConstraints conTy), conSubst)):left) = 
+      tryConstructors adtName state ((conName, (conTySch, conSubst)):right) left `try` do
+        result <- checkConstructor False conTySch tyA conSubst
+        case result of 
+          (True, specTy, _, specSubst, substFromFreshening) -> do
+            specTy' <- conv $ substitute substFromFreshening specTy
+            subst' <- conv $ combineSubstitutions s conSubst specSubst
+            specTy'' <- conv $ substitute subst' specTy'
+            debugM "synthDebug - constrIntroHelper - synthing arguments for: " (show conName)
+            case constrArgs conTy of 
+              Just [] -> do 
+                let delta = case resourceScheme of {Additive{} -> []; Subtractive{} -> gamma}
+                return (Just $ makeNullaryConstructor conName, delta, conSubst, [], False) 
+              Just conArgs -> do 
+                args <- conv $ mapM (\s -> do 
+                  s' <- substitute substFromFreshening s
+                  s'' <- substitute specSubst s'
+                  return (s'', boolToStructure $ isDecreasing adtName [s])) conArgs
+                (exprs, delta, subst, bindings, structurallyDecr) <- synthConArgs adtName (constructors state) defs args conBinders conConstraints conSubst
+                return (Just $ makeConstr exprs conName conTy, delta, subst, bindings, structurallyDecr) 
+              Nothing -> none
+          _ -> none
 
     constrArgs :: Type -> Maybe [Type]
     constrArgs (TyCon _) = Just []
