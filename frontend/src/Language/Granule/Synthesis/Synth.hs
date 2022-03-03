@@ -1230,11 +1230,7 @@ constrElimHelper defs gamma left (assumption@(x, (tyA, (AInfo structure eDepth))
 
                   (gamma', omega') <- 
                     case mode of 
-                      Additive{} -> do 
-                        -- TODO: don't do this.
-                        gamma' <- ctxtSubtract ((x, (tyA, (AInfo structure (eDepth+1)))):gamma) usageOut
-                        --gamma' <- return gamma
-                        return (gamma', omega)
+                      Additive{} -> return (((x, (tyA, (AInfo structure (eDepth+1)))):gamma), omega)
                       Subtractive -> 
                         case lookupAndCutout x usageOut of 
                           Just (usageOut', (ty', AInfo structure' _)) -> return (gamma ++ [(x, (ty', AInfo structure' (eDepth+1)))], usageOut')
