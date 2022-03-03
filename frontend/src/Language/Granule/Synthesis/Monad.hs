@@ -12,7 +12,7 @@ import Control.Monad.Except
 import Control.Monad.State.Strict
 import Control.Monad.Logic
 import qualified System.Clock as Clock
--- import Language.Granule.Checker.Predicate
+import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.SubstitutionContexts (Substitution)
 import Language.Granule.Syntax.Type (TypeScheme)
 import Language.Granule.Syntax.Identifiers 
@@ -31,16 +31,17 @@ data SynthesisData =
   , elimDepthReached          :: Bool
   , introDepthReached         :: Bool
   , appDepthReached           :: Bool
-  --, predicateContext          :: PredContext
+  , predicateContext          :: PredContext
   }
   deriving Show
 
+
 instance Semigroup SynthesisData where
- (SynthesisData calls stime time size paths startTime constructors currDef elimDepthReached introDepthReached appDepthReached) <> (SynthesisData calls' stime' time' size' paths' startTime' constructors' currDef' elimDepthReached' introDepthReached' appDepthReached') =
-    SynthesisData (calls + calls') (stime + stime') (time + time') (size + size') (paths + paths') (startTime + startTime') (constructors ++ constructors') (currDef ++ currDef') (elimDepthReached || elimDepthReached') (introDepthReached || introDepthReached') (appDepthReached || appDepthReached') 
+ (SynthesisData calls stime time size paths startTime constructors currDef elimDepthReached introDepthReached appDepthReached predContext) <> (SynthesisData calls' stime' time' size' paths' startTime' constructors' currDef' elimDepthReached' introDepthReached' appDepthReached' predContext') =
+    SynthesisData (calls + calls') (stime + stime') (time + time') (size + size') (paths + paths') (startTime + startTime') (constructors ++ constructors') (currDef ++ currDef') (elimDepthReached || elimDepthReached') (introDepthReached || introDepthReached') (appDepthReached || appDepthReached') (predContext)
 
 instance Monoid SynthesisData where
-  mempty  = SynthesisData 0 0 0 0 0 0 [] [] False False False
+  mempty  = SynthesisData 0 0 0 0 0 0 [] [] False False False Top
   mappend = (<>)
 
 -- Synthesiser monad
@@ -98,3 +99,13 @@ maybeToSynthesiser Nothing = none
 boolToSynthesiser :: Bool -> a -> Synthesiser a
 boolToSynthesiser True x = return x
 boolToSynthesiser False _ = none
+
+
+getSynthState ::  Synthesiser (SynthesisData)
+getSynthState = Synthesiser $ lift $ lift $ get
+
+modifyPred :: PredContext -> Synthesiser ()
+modifyPred pred = Synthesiser $ lift $ lift $ lift $ modify (\state -> 
+  state {
+    predicateContext = pred
+        })
