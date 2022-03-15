@@ -28,28 +28,30 @@ data SynthesisData =
   , startTime                 :: Clock.TimeSpec
   , constructors              :: Ctxt (Ctxt (TypeScheme, Substitution), Bool)
   , currDef                   :: [Id]
-  , elimDepthReached          :: Bool
-  , introDepthReached         :: Bool
-  , appDepthReached           :: Bool
-  , predicateContext          :: PredContext
+  , depthReached              :: Bool
   }
   deriving Show
 
+-- data SynthesisState = 
+--   SynthState {
+--     predicateContext  :: PredContext
+--   }
 
 instance Semigroup SynthesisData where
- (SynthesisData calls stime time size paths startTime constructors currDef elimDepthReached introDepthReached appDepthReached predContext) <> (SynthesisData calls' stime' time' size' paths' startTime' constructors' currDef' elimDepthReached' introDepthReached' appDepthReached' predContext') =
-    SynthesisData (calls + calls') (stime + stime') (time + time') (size + size') (paths + paths') (startTime + startTime') (constructors ++ constructors') (currDef ++ currDef') (elimDepthReached || elimDepthReached') (introDepthReached || introDepthReached') (appDepthReached || appDepthReached') (predContext)
+ (SynthesisData calls stime time size paths startTime constructors currDef depthReached) <> (SynthesisData calls' stime' time' size' paths' startTime' constructors' currDef' depthReached') =
+    SynthesisData (calls + calls') (stime + stime') (time + time') (size + size') (paths + paths') (startTime + startTime') (constructors ++ constructors') (currDef ++ currDef')  (depthReached || depthReached') 
 
 instance Monoid SynthesisData where
-  mempty  = SynthesisData 0 0 0 0 0 0 [] [] False False False Top
+  mempty  = SynthesisData 0 0 0 0 0 0 [] [] False 
   mappend = (<>)
 
 -- Synthesiser monad
 
 newtype Synthesiser a = Synthesiser
   { unSynthesiser ::
-      ExceptT (NonEmpty CheckerError) (StateT CheckerState (LogicT (StateT SynthesisData IO))) a }
+    (ExceptT (NonEmpty CheckerError) (StateT CheckerState (LogicT (StateT SynthesisData IO)))) a }
   deriving (Functor, Applicative, MonadState CheckerState, MonadError (NonEmpty CheckerError))
+  
 
 -- Synthesiser always uses fair bind from LogicT
 instance Monad Synthesiser where
@@ -76,9 +78,9 @@ runSynthesiser index m s = do
 
 conv :: Checker a -> Synthesiser a
 conv (Checker k) =
-  Synthesiser
+  Synthesiser 
     (ExceptT
-         (StateT (\s -> lift $ lift (runStateT (runExceptT k) s))))
+         (StateT (\s -> lift $ lift $  (runStateT (runExceptT k) (s)))))
 
 try :: Synthesiser a -> Synthesiser a -> Synthesiser a
 try m n = do
@@ -105,7 +107,7 @@ getSynthState ::  Synthesiser (SynthesisData)
 getSynthState = Synthesiser $ lift $ lift $ get
 
 modifyPred :: PredContext -> Synthesiser ()
-modifyPred pred = Synthesiser $ lift $ lift $ lift $ modify (\state -> 
+modifyPred pred = Synthesiser $ lift $ modify (\state -> 
   state {
     predicateContext = pred
         })

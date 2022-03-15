@@ -196,6 +196,7 @@ data CheckerState = CS
 
             -- flag to find out if constraints got added
             , addedConstraints :: Bool
+            , predicateContext :: PredContext
             }
   deriving (Eq, Show) -- for debugging
 
@@ -218,6 +219,7 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , derivedDefinitions = []
                , wantedTypeConstraints = []
                , addedConstraints = False
+               , predicateContext = Top
                }
 
 -- *** Various helpers for manipulating the context

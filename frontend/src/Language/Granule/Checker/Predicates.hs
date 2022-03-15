@@ -468,7 +468,7 @@ data PredContext =
   | DisjHere       [Pred] PredContext
   | ImplAntecedent (Ctxt Kind) PredContext
   | ImplConsequent (Ctxt Kind) Pred PredContext
-  deriving Show -- for debugging
+  deriving (Show, Eq) -- for debugging
 
 
 -----    ImplConsequent [("x", Nat)] p path
