@@ -73,10 +73,8 @@ newtype FocusingContext a = FocusingContext (Ctxt a)
 
 data Depth = Depth 
   {
-    eMax    :: Int  -- Maximum number of eliminations (of recursive data structures) allowed
-  , iCurr   :: Int  -- Current level of eliminations (of recursive data structures)
-  , iMax    :: Int  -- Maximum number of introductions (of recursive data structures) allowed
-  , appMax  :: Int  -- Maximum number of nested applications allowed
+    introLevel   :: Int  -- Current level of eliminations (of recursive data structures)
+  , maxDepth     :: Int  -- Maximum number of introductions (of recursive data structures) allowed
   }
   deriving (Show, Eq)
 
@@ -645,7 +643,7 @@ defHelper left (def@(x, (defTySch, appDepth)) : right) gamma omega add@(Additive
       state <- Synthesiser $ lift $ lift $ get
 
       -- Only try the def if we haven't hit the def allowed depth 
-      if appDepth <= appMax depth then do
+      if True then do
         (freshTy, tyVarsFreshD, substFromFreshening, constraints', _) <- conv $ freshPolymorphicInstance InstanceQ False defTySch [] [] 
         case freshTy of 
           (FunTy _ tyA tyB) -> do 
@@ -760,7 +758,7 @@ appHelper defs gamma left (assumption@(x, (ty, (AInfo _ appDepth))) : right) Sub
   (case getAssumptionType ty of
     (FunTy _ tyA tyB) -> do
       -- Only try the app if we haven't hit the app allowed depth 
-      if appDepth < (appMax depth) then do
+      if True then do
 
         debugM "synthDebug - (app) trying to use a function " (show assumption ++ " to get goal " ++ pretty goalTySch)
 
@@ -822,7 +820,7 @@ appHelper defs gamma left (assumption@(x, (ty, AInfo structure appDepth)) : righ
   (case getAssumptionType ty of
     (FunTy _ tyA tyB) -> do
       -- Only try the app if we haven't hit the app allowed depth 
-      if appDepth <= (appMax depth) then do
+      if True then do
 
         let omega = (left ++ right)
         (canUse, used, _) <- useVar assumption omega add grade
@@ -1085,7 +1083,7 @@ constrIntroHelper :: (?globals :: Globals)
 constrIntroHelper defs gamma resourceScheme False depth focusPhase grade goal@(Goal goalTySch@(Forall s binders constraints tyA) structure) =
   case (isADTorGADT tyA) of
     Just name -> do
-      if (iCurr depth) <= (iMax depth) || structure /= Decreasing then do
+      if (introLevel depth) <= (maxDepth depth) || structure /= Decreasing then do
 
 
         debugM "synthDebug - entered constrIntroHelper with goal: " (show goal)
@@ -1138,7 +1136,7 @@ constrIntroHelper defs gamma resourceScheme False depth focusPhase grade goal@(G
 
     -- Traverse the argument types to the constructor and synthesise a term for each one
     synthConArgs tyAName consGlobal defs [(argTyA, isDecr)] conBinders conConstraints conSubst = do
-      (expr, delta, subst, bindings, structurallyDecr) <- synthesiseInner defs resourceScheme False (if isDecr == Decreasing then depth { iCurr = (iCurr depth) + 1 } else depth) (Focus R Async) gamma [] grade (Goal (Forall s conBinders conConstraints argTyA) isDecr)
+      (expr, delta, subst, bindings, structurallyDecr) <- synthesiseInner defs resourceScheme False (if isDecr == Decreasing then depth { introLevel = (introLevel depth) + 1 } else depth) (Focus R Async) gamma [] grade (Goal (Forall s conBinders conConstraints argTyA) isDecr)
       subst' <- conv $ combineSubstitutions nullSpanNoFile conSubst subst
       debugM "constrIntro with goal: " (pretty goalTySch <> " made a " <> pretty expr <> " for arg " <> pretty argTyA)
       return ([(expr, argTyA)], delta, subst', bindings, structurallyDecr)
@@ -1149,7 +1147,7 @@ constrIntroHelper defs gamma resourceScheme False depth focusPhase grade goal@(G
             Additive NonPruning -> return gamma
             Additive Pruning -> ctxtSubtract gamma deltas -- Pruning
             Subtractive -> return deltas
-      (expr, delta, subst, bindings', structurallyDecr') <- synthesiseInner defs resourceScheme False (if isDecr == Decreasing then depth { iCurr = (iCurr depth) + 1 } else depth) (Focus R Async) gamma' [] grade (Goal (Forall s conBinders conConstraints argTyA) isDecr)
+      (expr, delta, subst, bindings', structurallyDecr') <- synthesiseInner defs resourceScheme False (if isDecr == Decreasing then depth { introLevel = (introLevel depth) + 1 } else depth) (Focus R Async) gamma' [] grade (Goal (Forall s conBinders conConstraints argTyA) isDecr)
       subst'' <- conv $ combineSubstitutions nullSpanNoFile subst substs'
       delta' <- case resourceScheme of
             Additive{} -> maybeToSynthesiser $ ctxtAdd deltas delta
@@ -1184,8 +1182,9 @@ constrElimHelper :: (?globals :: Globals)
 constrElimHelper _ _ _ [] _ _ _ _ _ _ = none
 constrElimHelper defs gamma left (assumption@(x, (tyA, (AInfo structure eDepth))):right) mode False depth focusPhase grade goal@(Goal goalTySch@(Forall _ _ _ tyB) _) =
   constrElimHelper defs gamma (assumption:left) right mode False depth focusPhase grade goal `try` do
-    state <- Synthesiser $ lift $ lift $ get
-    if eDepth <= eMax depth  || structure /= Decreasing then do
+    state <- getSynthState
+    cs <- conv get
+    if eDepth <= maxDepth depth  || structure /= Decreasing then do
 
       debugM "synthDebug in constrElimHelper with assumption: " (show assumption <> " and goal " <> show tyB)
       let omega = (left ++ right)
@@ -1303,19 +1302,29 @@ constrElimHelper defs gamma left (assumption@(x, (tyA, (AInfo structure eDepth))
     bindAssumptions depthReached unboxed assmps gamma' omega' 
 
 
+
+
+  
+  -- Checks that assumptions bound via constrElim were used correctly in the synthesised term
   checkAssumptions :: (?globals::Globals) 
     => (Id, Type)
     -> ResourceScheme PruningScheme
     -> [(Id, (Assumption, AssumptionInfo))]
     -> [(Id, (Assumption, AssumptionInfo))]
     -> Ctxt (Assumption, AssumptionInfo) -> Synthesiser [(Id, (Assumption, AssumptionInfo))]
+  -- Base case
   checkAssumptions _ mode del [] _ = return del
+
+
+  -- Subtractive
+  -- For bound linear assumptions, we simply check the assumption was used
   checkAssumptions x sub@Subtractive{} del ((id, (Linear t, info)):assmps) unboxed =
     case lookup id del of
       Nothing -> checkAssumptions x sub del assmps unboxed
       _ -> none
+  -- For bound graded assumptions we check that the assumption was used according to its grade
   checkAssumptions (x, t') sub@Subtractive{} del ((id, (Discharged t g, info)):assmps) unboxed = do
-    s <- getSynthState
+    s <- conv get
     case lookupAndCutout id del of
       Just (del', (Discharged _ g', info)) ->
         case lookup id unboxed of
@@ -1433,7 +1442,7 @@ synthesiseInner defs resourceScheme inDef depth focusPhase gamma omega grade goa
   Synthesiser $ lift $ lift $ lift $ modify (\state ->
             state {
                 --  elimDepthReached  = if not $ elimDepthReached state  then eCurr depth  >= eMax depth else True
-                introDepthReached = if not $ introDepthReached state then iCurr depth >= iMax depth else True
+                depthReached = if not $ depthReached state then introLevel depth >= introLevel depth else True
               -- ,  appDepthReached = if not $ appDepthReached state then appCurr depth >= appMax depth else True
                   })
 
@@ -1441,15 +1450,6 @@ synthesiseInner defs resourceScheme inDef depth focusPhase gamma omega grade goa
   debugM "synthDebug - synthesiseInner with gamma: " (show gamma)
   debugM "synthDebug - synthesiseInner with omega: " (show omega)
   debugM "synthDebug - synthesiseInner with focusPhase: " (show focusPhase)
-
-  debugM "synthDebug - synthesiseInner with current e max: " (show $ eMax depth)
-  debugM "synthDebug - synthesiseInner with current i depth: " (show $ iCurr depth)
-  debugM "synthDebug - synthesiseInner with current i max: " (show $ iMax depth)
-  debugM "synthDebug - synthesiseInner with current app max: " (show $ appMax depth)
-
-  debugM "synthDebug - synthesiseInner with elim depth reached: " (show $ elimDepthReached state)
-  debugM "synthDebug - synthesiseInner with intro depth reached: " (show $ introDepthReached state)
-  debugM "synthDebug - synthesiseInner with app depth reached: " (show $ appDepthReached state)
 
   case (focusPhase, omega) of 
 
@@ -1622,10 +1622,7 @@ synthesiseProgram hints defs currentDef resourceScheme gamma goalTy checkerState
                       ,  startTime=start 
                       ,  constructors=[] 
                       ,  currDef = (maybeToList currentDef)
-                      ,  elimDepthReached = False
-                      ,  introDepthReached = False
-                      ,  appDepthReached = False
-                      ,  predicateContext = Top
+                      ,  depthReached = False
                       }
 
 
@@ -1637,11 +1634,11 @@ synthesiseProgram hints defs currentDef resourceScheme gamma goalTy checkerState
   let timeoutLim' = if HSynNoTimeout `elem` hints then negate timeoutLim else (timeoutLim * 1000)
   let index = fromMaybe 1 $ hasSynthIndex hints
 
-  let (hintELim, hintILim) = case (hasElimHint hints, hasIntroHint hints) of 
-            (Just e, Just i)   -> (e, i)
-            (Just e, Nothing)  -> (e, 1)
-            (Nothing, Just i)  -> (1, i)
-            (Nothing, Nothing) -> (1, 1)
+  -- let (hintELim, hintILim) = case (hasElimHint hints, hasIntroHint hints) of 
+  --           (Just e, Just i)   -> (e, i)
+  --           (Just e, Nothing)  -> (e, 1)
+  --           (Nothing, Just i)  -> (1, i)
+  --           (Nothing, Nothing) -> (1, 1)
         
   let gamma' = map (\(v, a) -> (v, (a, AInfo None 0))) gamma
 
@@ -1653,7 +1650,7 @@ synthesiseProgram hints defs currentDef resourceScheme gamma goalTy checkerState
 
 
 
-  result <- liftIO $ System.Timeout.timeout timeoutLim' $ loop (hintELim, hintILim) index defs' initialGrade gamma' 0 initialState
+  result <- liftIO $ System.Timeout.timeout timeoutLim' $ loop index defs' initialGrade gamma' 0 initialState
   fin <- case result of 
     Just (synthResults, aggregate) ->  do
       let results = nub $ map fst3 $ rights (map fst synthResults)
@@ -1711,35 +1708,45 @@ synthesiseProgram hints defs currentDef resourceScheme gamma goalTy checkerState
 
   where
 
-      loop (eHintMax, iHintMax) index defs grade gamma level agg = do 
-        let (elimMax, introMax) = (if level < eHintMax then level else eHintMax, if level < iHintMax then level else iHintMax)
-
---      Diagonal search
---      let lims = runOmega $ liftM3 (,,) (each [0..elimMax]) (each [0..introMax]) (each [0..level])
-
---      Rectilinear search
-        let norm (x,y,z) = sqrt (fromIntegral x^2+fromIntegral y^2+fromIntegral z^2)
-        let mergeByNorm = Ordered.mergeAllBy (comparing norm)
-        let lims = mergeByNorm (map mergeByNorm [[[(x,y,z)| x <- [0..elimMax]] | y <- [0..introMax]] | z <- [0..level]])
+      loop index defs grade gamma level agg = do 
+        let synRes = synthesise defs resourceScheme gamma [] (Depth 0 level) grade (Goal goalTy NonDecreasing)
+        (res, agg') <- runStateT (runSynthesiser index synRes checkerState) agg 
+        if (not $ solved res) && (not $ depthReached agg') then
+          loop index defs grade gamma (level+1) (resetState agg')
+        else return (res, agg')
 
 
-        pRes <- foldM (\acc (elim, intro, app) -> 
-          case acc of 
-            (Just res, agg') -> return (Just res, agg')
-            (Nothing, agg')  -> do 
-              putStrLn $  "elim: " <> (show elim) <> " intro: " <> (show intro) <> " app: " <> (show app) <> " level: " <> (show level)  
-              let synRes = synthesise defs resourceScheme gamma [] (Depth elim 0 intro level) grade (Goal goalTy NonDecreasing)
-              (res, agg'') <- runStateT (runSynthesiser index synRes checkerState) (resetState agg')
-              if (not $ solved res) && (depthReached agg'') then return (Nothing, agg'') else return (Just res, agg'')
-          ) (Nothing, agg) lims
-        case pRes of 
-          (Just finRes, finAgg) -> return (finRes, finAgg)
-          (Nothing, finAgg) -> loop (eHintMax, iHintMax) index defs grade gamma (level+1) finAgg 
+
+
+--       loop (eHintMax, iHintMax) index defs grade gamma level agg = do 
+--         let (elimMax, introMax) = (if level < eHintMax then level else eHintMax, if level < iHintMax then level else iHintMax)
+
+-- --      Diagonal search
+-- --      let lims = runOmega $ liftM3 (,,) (each [0..elimMax]) (each [0..introMax]) (each [0..level])
+
+-- --      Rectilinear search
+--         let norm (x,y,z) = sqrt (fromIntegral x^2+fromIntegral y^2+fromIntegral z^2)
+--         let mergeByNorm = Ordered.mergeAllBy (comparing norm)
+--         let lims = mergeByNorm (map mergeByNorm [[[(x,y,z)| x <- [0..elimMax]] | y <- [0..introMax]] | z <- [0..level]])
+
+
+--         pRes <- foldM (\acc (elim, intro, app) -> 
+--           case acc of 
+--             (Just res, agg') -> return (Just res, agg')
+--             (Nothing, agg')  -> do 
+--               putStrLn $  "elim: " <> (show elim) <> " intro: " <> (show intro) <> " app: " <> (show app) <> " level: " <> (show level)  
+--               let synRes = synthesise defs resourceScheme gamma [] (Depth elim 0 intro level) grade (Goal goalTy NonDecreasing)
+--               (res, agg'') <- runStateT (runSynthesiser index synRes checkerState) (resetState agg')
+--               if (not $ solved res) && (depthReached agg'') then return (Nothing, agg'') else return (Just res, agg'')
+--           ) (Nothing, agg) lims
+--         case pRes of 
+--           (Just finRes, finAgg) -> return (finRes, finAgg)
+--           (Nothing, finAgg) -> loop (eHintMax, iHintMax) index defs grade gamma (level+1) finAgg 
  
 
-      depthReached st = elimDepthReached st || introDepthReached st || appDepthReached st 
+      depthReached st = depthReached st 
       solved res = case res of ((Right (expr, _, _), _):_) -> True ; _ -> False
-      resetState st = st { elimDepthReached = False, introDepthReached = False, appDepthReached = False}
+      resetState st = st { depthReached = False }
 
 
 
@@ -1755,15 +1762,15 @@ synthesiseProgram hints defs currentDef resourceScheme gamma goalTy checkerState
       hasDefsHint (_:hints) = hasDefsHint hints
       hasDefsHint [] = Nothing
 
-      hasElimHint ((HMaxElim x):hints) = Just x
-      hasElimHint ((HNoMaxElim):hints) = Just 9999 
-      hasElimHint (_:hints) = hasElimHint hints
-      hasElimHint [] = Nothing
+      -- hasElimHint ((HMaxElim x):hints) = Just x
+      -- hasElimHint ((HNoMaxElim):hints) = Just 9999 
+      -- hasElimHint (_:hints) = hasElimHint hints
+      -- hasElimHint [] = Nothing
 
-      hasIntroHint ((HMaxIntro x):hints) = Just x
-      hasIntroHint ((HNoMaxIntro):hints) = Just 9999 
-      hasIntroHint (_:hints) = hasIntroHint hints
-      hasIntroHint [] = Nothing
+      -- hasIntroHint ((HMaxIntro x):hints) = Just x
+      -- hasIntroHint ((HNoMaxIntro):hints) = Just 9999 
+      -- hasIntroHint (_:hints) = hasIntroHint hints
+      -- hasIntroHint [] = Nothing
 
       fst3 (x, y, z) = x
 
