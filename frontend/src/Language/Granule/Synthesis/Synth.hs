@@ -1239,6 +1239,10 @@ constrElimHelper gamma (Focused left) (Focused (var@(x, assumption):right)) mode
   bindAssumptions depthReached unboxed ((id, _):assmps) gamma omega = (gamma, omega, unboxed)
 
 
+
+
+  
+  -- Checks that assumptions bound via constrElim were used correctly in the synthesised term
   checkAssumptions :: (?globals::Globals) 
     => (Id, Type)
     -> ResourceScheme PruningScheme
