@@ -1,12 +1,17 @@
-  # 0.8.2.0 (in preparation)
-  - Bug fixes related to sensitivity analysis
-  - Bug fixes relating to derived operation copyShape
+  # 0.9.0.0
+  - Major features:
+      - Uniqueness modality and mutable arrays
+      - Session types with non-linear behaviours
+      - Granule -> Haskell compiler (grc)
+      - language-server protocol
   - Any semiring can now be lifted to a top-completed semiring with Ext (previously only allowed for Nat)
   - New graded modalities
     - LNL semiring (None, One, Many) recovers linear logic via new `hsup` operation
        to control 'push' behaviour on tensors. See: https://granule-project.github.io/papers/tlla_2021_paper11.pdf
-    - Uniqueness modality. See: paper draft?
-  - Language pragmas. See: wiki page?
+  - Language pragmas. See: https://github.com/granule-project/granule/wiki/Language-Extensions
+  - Bug fixes:
+    - Bug fixes related to sensitivity analysis
+    - Bug fixes relating to derived operation copyShape
 
   # 0.8.1.0
   - New semirings: `Sec` and `Set t` for some type `t` (and `SetOp t`)
