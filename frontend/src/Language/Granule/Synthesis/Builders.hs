@@ -20,37 +20,37 @@ pattern ProdTy t1 t2 = TyApp (TyApp (TyCon (Id "," ",")) t1) t2
 pattern SumTy :: Type -> Type -> Type
 pattern SumTy t1 t2  = TyApp (TyApp (TyCon (Id "Either" "Either")) t1) t2
 
-makeVar :: Id -> TypeScheme -> Expr () Type
-makeVar name (Forall _ _ _ t) =
-  Val s t False (Var t name)
-  where s = nullSpanNoFile
+-- makeVar :: Id -> TypeScheme -> Expr () Type
+-- makeVar name (Forall _ _ _ t) =
+--   Val s t False (Var t name)
+--   where s = nullSpanNoFile
 
 makeVarUntyped :: Id -> Expr () ()
 makeVarUntyped name =
   Val s () False (Var () name)
   where s = nullSpanNoFile
 
-makeAbs :: Id -> Expr () Type -> TypeScheme -> Expr () Type
-makeAbs name e (Forall _ _ _ t@(FunTy _ _ t1 t2)) =
-  Val s t False (Abs t (PVar s t False name) (Just t1) e)
-  where s = nullSpanNoFile
-makeAbs name e _ = error "Cannot synth here" -- TODO: better error handling
+-- makeAbs :: Id -> Expr () Type -> TypeScheme -> Expr () Type
+-- makeAbs name e (Forall _ _ _ t@(FunTy _ t1 t2)) =
+--   Val s t False (Abs t (PVar s t False name) Nothing e)
+--   where s = nullSpanNoFile
+-- makeAbs name e _ = error "Cannot synth here" -- TODO: better error handling
 
-makeAbsUnbox :: Type -> Id -> Expr () Type -> TypeScheme -> Expr () Type
-makeAbsUnbox t name e (Forall _ _ _ t'@(FunTy _ _ t1 t2)) =
-  Val s t False (Abs t (PBox s t False (PVar s t' False name)) (Just t1) e)
-  where s = nullSpanNoFile
-makeAbsUnbox _ name e _ = error "Cannot synth here" -- TODO: better error handling
+-- makeAbsUnbox :: Type -> Id -> Expr () Type -> TypeScheme -> Expr () Type
+-- makeAbsUnbox t name e (Forall _ _ _ t'@(FunTy _ t1 t2)) =
+--   Val s t False (Abs t (PBox s t False (PVar s t' False name)) (Just t1) e)
+--   where s = nullSpanNoFile
+-- makeAbsUnbox _ name e _ = error "Cannot synth here" -- TODO: better error handling
 
-makeApp :: Id -> Expr () Type -> TypeScheme -> Type -> Expr () Type
-makeApp name e (Forall _ _ _ t1) t2 =
-  App s t1 False (makeVar name (Forall nullSpanNoFile [] [] t2)) e
-  where s = nullSpanNoFile
+-- makeApp :: Id -> Expr () Type -> TypeScheme -> Type -> Expr () Type
+-- makeApp name e (Forall _ _ _ t1) t2 =
+--   App s t1 False (makeVar name (Forall nullSpanNoFile [] [] t2)) e
+--   where s = nullSpanNoFile
 
-makeBox :: TypeScheme -> Expr () Type -> Expr () Type
-makeBox (Forall _ _ _ t) e =
-  Val s t False (Promote t e)
-  where s = nullSpanNoFile
+-- makeBox :: TypeScheme -> Expr () Type -> Expr () Type
+-- makeBox (Forall _ _ _ t) e =
+--   Val s t False (Promote t e)
+--   where s = nullSpanNoFile
 
 makeBoxUntyped :: Expr () () -> Expr () ()
 makeBoxUntyped e =
@@ -87,29 +87,29 @@ makeUnboxUntyped name1 expr e =
   expr
     where s = nullSpanNoFile
 
-makePair :: Type -> Type -> Expr () Type -> Expr () Type -> Expr () Type
-makePair lTy rTy e1 e2 =
-  App s rTy False (App s lTy False (Val s (ProdTy lTy rTy) False (Constr (ProdTy lTy rTy) (mkId ",") [])) e1) e2
-  where s = nullSpanNoFile
+-- makePair :: Type -> Type -> Expr () Type -> Expr () Type -> Expr () Type
+-- makePair lTy rTy e1 e2 =
+--   App s rTy False (App s lTy False (Val s (ProdTy lTy rTy) False (Constr (ProdTy lTy rTy) (mkId ",") [])) e1) e2
+--   where s = nullSpanNoFile
 
 makePairUntyped :: Expr () () -> Expr () () -> Expr () ()
 makePairUntyped e1 e2 =
   App s () False (App s () False (Val s () False (Constr () (mkId ",") [])) e1) e2
   where s = nullSpanNoFile
 
-makePairElim :: Id -> Id -> Id -> TypeScheme -> Type -> Type -> Expr () Type -> Expr () Type
-makePairElim name lId rId goalTyS lTy rTy e =
-   makePairElimP id (Val s (ProdTy lTy rTy) False (Var (ProdTy lTy rTy) name)) lId rId goalTyS lTy rTy e
-     where s = nullSpanNoFile
+-- makePairElim :: Id -> Id -> Id -> TypeScheme -> Type -> Type -> Expr () Type -> Expr () Type
+-- makePairElim name lId rId goalTyS lTy rTy e =
+--    makePairElimP id (Val s (ProdTy lTy rTy) False (Var (ProdTy lTy rTy) name)) lId rId goalTyS lTy rTy e
+--      where s = nullSpanNoFile
 
-makePairElimP :: (Pattern Type -> Pattern Type) -> Expr () Type -> Id -> Id -> TypeScheme -> Type -> Type -> Expr () Type -> Expr () Type
-makePairElimP ptransf elimExpr lId rId (Forall _ _ _ goalTy) lTy rTy e =
-  App s goalTy False
-  (Val s (ProdTy lTy rTy) False
-    (Abs (FunTy Nothing Nothing (ProdTy lTy rTy) goalTy)
-      (ptransf $ PConstr s (ProdTy lTy rTy) False (mkId ",") [(PVar s lTy False lId), (PVar s rTy False rId)] )
-        Nothing e)) elimExpr
-  where s = nullSpanNoFile
+-- makePairElimP :: (Pattern Type -> Pattern Type) -> Expr () Type -> Id -> Id -> TypeScheme -> Type -> Type -> Expr () Type -> Expr () Type
+-- makePairElimP ptransf elimExpr lId rId (Forall _ _ _ goalTy) lTy rTy e =
+--   App s goalTy False
+--   (Val s (ProdTy lTy rTy) False
+--     (Abs (FunTy Nothing (ProdTy lTy rTy) goalTy)
+--       (ptransf $ PConstr s (ProdTy lTy rTy) False (mkId ",") [(PVar s lTy False lId), (PVar s rTy False rId)] )
+--         Nothing e)) elimExpr
+--   where s = nullSpanNoFile
 
 makePairElimPUntyped :: (Pattern () -> Pattern ()) -> Expr () () -> Id -> Id -> Expr () () -> Expr () ()
 makePairElimPUntyped ptransf elimExpr lId rId e =
@@ -129,15 +129,15 @@ makePairElimPUntyped' ptransf elimExpr lId rId e =
         Nothing e)) elimExpr
   where s = nullSpanNoFile
 
-makeEitherLeft :: Type -> Type -> Expr () Type -> Expr () Type
-makeEitherLeft lTy rTy e  =
-  (App s lTy False (Val s (SumTy lTy rTy) False (Constr (SumTy lTy rTy) (mkId "Left") [])) e)
-  where s = nullSpanNoFile
+-- makeEitherLeft :: Type -> Type -> Expr () Type -> Expr () Type
+-- makeEitherLeft lTy rTy e  =
+--   (App s lTy False (Val s (SumTy lTy rTy) False (Constr (SumTy lTy rTy) (mkId "Left") [])) e)
+--   where s = nullSpanNoFile
 
-makeEitherRight :: Type -> Type -> Expr () Type -> Expr () Type
-makeEitherRight lTy rTy e  =
-  (App s rTy False (Val s (SumTy lTy rTy) False (Constr (SumTy lTy rTy) (mkId "Right") [])) e)
-  where s = nullSpanNoFile
+-- makeEitherRight :: Type -> Type -> Expr () Type -> Expr () Type
+-- makeEitherRight lTy rTy e  =
+--   (App s rTy False (Val s (SumTy lTy rTy) False (Constr (SumTy lTy rTy) (mkId "Right") [])) e)
+--   where s = nullSpanNoFile
 
 -- makeCase :: Type -> Type -> Id -> Id -> Id -> Expr () Type -> Expr () Type -> Expr () Type
 -- makeCase t1 t2 sId lId rId lExpr rExpr =
@@ -158,10 +158,10 @@ makeBoxCase ty grade id exprPats goal =
   Case s goal False (Val s (Box ty grade) False (Promote (Box ty grade) (Val s ty False (Var ty id)))) exprPats
   where s = nullSpanNoFile 
 
-makeNullaryConstructor :: Id -> Expr () Type
-makeNullaryConstructor id =
-  Val nullSpanNoFile (TyCon id) True
-    (Constr (TyCon id) id [])
+-- makeNullaryConstructor :: Id -> Expr () Type
+-- makeNullaryConstructor id =
+--   Val nullSpanNoFile (TyCon id) True
+--     (Constr (TyCon id) id [])
 
 makeConstr :: [((Expr () Type), Type)] -> Id -> Type -> Expr () Type
 makeConstr terms name goal = buildTerm (reverse terms)
