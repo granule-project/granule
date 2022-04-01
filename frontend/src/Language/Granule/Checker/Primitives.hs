@@ -67,11 +67,6 @@ typeConstructors =
     , (mkId "Zero",     (tyCon "LNL", [], False))
     , (mkId "One",      (tyCon "LNL", [], False))
     , (mkId "Many",     (tyCon "LNL", [], False))
-    -- Borrowing
-    , (mkId "Borrowing", (kcoeffect, [], False))
-    , (mkId "One",       (tyCon "Borrowing", [], False))
-    , (mkId "Beta",      (tyCon "Borrowing", [], False))
-    , (mkId "Omega",     (tyCon "Borrowing", [], False))
     -- Security levels
     , (mkId "Level",    (kcoeffect, [], False)) -- Security level
     , (mkId "Private",  (tyCon "Level", [], False))
