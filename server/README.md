@@ -16,11 +16,11 @@ Some examples:
 
 * VS Code, via the [granule-vscode-extension](https://github.com/granule-project/granule-vscode-extension). Note that this extension also includes additional features such as syntax highlighting, snippets and commands for program synthesis.
 
-<img src="https://github.com/granule-project/granule/blob/language-server/server/vscode-diagnostics.gif" width=500px alt="Error feedback in VS Code" />
+<img src="https://github.com/granule-project/granule/blob/dev-minor/server/vscode-diagnostics.gif" width=500px alt="Error feedback in VS Code" />
 
 * VIM, using [vim-lsc](https://github.com/natebosch/vim-lsc).
 
-<img src="https://github.com/granule-project/granule/blob/language-server/server/vim-diagnostics.gif" width=500px alt="Error feedback in VIM" />
+<img src="https://github.com/granule-project/granule/blob/dev-minor/server/vim-diagnostics.gif" width=500px alt="Error feedback in VIM" />
 
 
 
