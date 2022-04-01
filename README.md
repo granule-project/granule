@@ -78,6 +78,12 @@ page](https://github.com/granule-project/granule/wiki/Installing-Granule).
 
 ## Compiler
 
+### Granule -> Haskell compiler
+
+This provided by `grc` which takes a .gr file as input and outputs a .hs file of the code compiled to Haskell which imports the [Language.Granule.Runtime](https://github.com/granule-project/granule/blob/main/runtime/src/Language/Granule/Runtime.hs) module (so you need this in the path if you want to then compiler the resulting .hs file). 
+
+### LLVM compiler
+
 If you would also like to install the LLVM compiler (experimental and a
 work in progress) you can get this from its [separate repo](https://github.com/granule-project/granule-compiler-llvm) and install it via:
 
