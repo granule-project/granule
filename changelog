@@ -6,9 +6,9 @@
       - language-server protocol
   - Any semiring can now be lifted to a top-completed semiring with Ext (previously only allowed for Nat)
   - New graded modalities
-    - LNL semiring (None, One, Many) recovers linear logic via new `hsup` operation
+    - LNL semiring (Zero, One, Many) recovers linear logic via new `hsup` operation
        to control 'push' behaviour on tensors. See: https://granule-project.github.io/papers/tlla_2021_paper11.pdf
-  - Language extensions and pragrams: See: https://github.com/granule-project/granule/wiki/Language-Extensions
+  - Language extensions and pragmas: See: https://github.com/granule-project/granule/wiki/Language-Extensions
     - Includes CBN interpreter as an option
   - Bug fixes:
     - Bug fixes related to sensitivity analysis
