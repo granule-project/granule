@@ -12,9 +12,12 @@ module Language.Granule.Runtime
   , pure
   , mkIOBenchMain,fromStdin,toStdout,toStderr,timeDate,readInt,showChar,intToFloat
   , showInt,showFloat, charToInt, charFromInt, stringAppend
-  , newFloatArray,newFloatArray',writeFloatArray,writeFloatArray'
-  , readFloatArray,readFloatArray',lengthFloatArray,deleteFloatArray,copyFloatArray'
+  , newFloatArray,newFloatArrayI,writeFloatArray,writeFloatArrayI
+  , readFloatArray,readFloatArrayI,lengthFloatArray,deleteFloatArray,copyFloatArray'
   , uniqueReturn,uniqueBind,uniquePush,uniquePull,uniquifyFloatArray,borrowFloatArray
+  , newFloatArraySafe,newFloatArrayISafe,writeFloatArraySafe,writeFloatArrayISafe
+  , readFloatArraySafe,readFloatArrayISafe,deleteFloatArraySafe,copyFloatArraySafe
+  , uniquifyFloatArraySafe,borrowFloatArraySafe
   , cap, Cap(..), Capability(..), CapabilityType
 
   -- Re-exported from Prelude
@@ -142,58 +145,76 @@ data FloatArray =
 
 {-# NOINLINE newFloatArray #-}
 newFloatArray :: Int -> FloatArray
-newFloatArray size = unsafePerformIO $ do
+newFloatArray = unsafePerformIO . newFloatArraySafe
+
+newFloatArraySafe :: Int -> IO FloatArray
+newFloatArraySafe size = do
   ptr <- callocArray size
   return $ PointerArray (size-1) ptr
 
-{-# NOINLINE newFloatArray' #-}
-newFloatArray' :: Int -> FloatArray
-newFloatArray' size = unsafePerformIO $ do
+{-# NOINLINE newFloatArrayI #-}
+newFloatArrayI :: Int -> FloatArray
+newFloatArrayI = unsafePerformIO . newFloatArrayISafe
+
+newFloatArrayISafe :: Int -> IO FloatArray
+newFloatArrayISafe size = do
   arr <- MA.newArray (0,size-1) 0.0
   return $ HaskellArray (size-1) arr
 
 {-# NOINLINE writeFloatArray #-}
 writeFloatArray :: FloatArray -> Int -> Float -> FloatArray
-writeFloatArray a i v =
+writeFloatArray a i v = unsafePerformIO $ writeFloatArraySafe a i v
+
+writeFloatArraySafe :: FloatArray -> Int -> Float -> IO FloatArray
+writeFloatArraySafe a i v =
   if i > grLength a
   then error $ "array index out of bounds: " ++ show i ++ " > " ++ show (grLength a)
   else case a of
     HaskellArray{} -> error "expected unique array"
-    PointerArray len ptr -> unsafePerformIO $ do
+    PointerArray len ptr -> do
       () <- pokeElemOff ptr i v
       return $ PointerArray len ptr
 
-{-# NOINLINE writeFloatArray' #-}
-writeFloatArray' :: FloatArray -> Int -> Float -> FloatArray
-writeFloatArray' a i v =
+{-# NOINLINE writeFloatArrayI #-}
+writeFloatArrayI :: FloatArray -> Int -> Float -> FloatArray
+writeFloatArrayI a i v = unsafePerformIO $ writeFloatArrayISafe a i v
+
+writeFloatArrayISafe :: FloatArray -> Int -> Float -> IO FloatArray
+writeFloatArrayISafe a i v =
   if i > grLength a
   then error $ "array index out of bounds: " ++ show i ++ " > " ++ show (grLength a)
   else case a of
     PointerArray{} -> error "expected non-unique array"
-    HaskellArray len arr -> unsafePerformIO $ do
+    HaskellArray len arr -> do
       arr' <- MA.mapArray id arr
       () <- MA.writeArray arr' i v
       return $ HaskellArray len arr'
 
 {-# NOINLINE readFloatArray #-}
 readFloatArray :: FloatArray -> Int -> (Float, FloatArray)
-readFloatArray a i =
+readFloatArray a i = unsafePerformIO $ readFloatArraySafe a i
+
+readFloatArraySafe :: FloatArray -> Int -> IO (Float, FloatArray)
+readFloatArraySafe a i =
   if i > grLength a
   then error $ "readFloatArray index out of bounds: " ++ show i ++ " > " ++ show (grLength a)
   else case a of
     HaskellArray{} -> error "expected unique array"
-    PointerArray len ptr -> unsafePerformIO $ do
+    PointerArray len ptr -> do
       v <- peekElemOff ptr i
       return (v,a)
 
-{-# NOINLINE readFloatArray' #-}
-readFloatArray' :: FloatArray -> Int -> (Float, FloatArray)
-readFloatArray' a i =
+{-# NOINLINE readFloatArrayI #-}
+readFloatArrayI :: FloatArray -> Int -> (Float, FloatArray)
+readFloatArrayI a i = unsafePerformIO $ readFloatArrayISafe a i
+
+readFloatArrayISafe :: FloatArray -> Int -> IO (Float, FloatArray)
+readFloatArrayISafe a i =
   if i > grLength a
-  then error $ "readFloatArray' index out of bounds: " ++ show i ++ " > " ++ show (grLength a)
+  then error $ "readFloatArrayI index out of bounds: " ++ show i ++ " > " ++ show (grLength a)
   else case a of
     PointerArray{} -> error "expected non-unique array"
-    HaskellArray _ arr -> unsafePerformIO $ do
+    HaskellArray _ arr -> do
       e <- MA.readArray arr i
       return (e,a)
 
@@ -202,27 +223,36 @@ lengthFloatArray a = (grLength a, a)
 
 {-# NOINLINE deleteFloatArray #-}
 deleteFloatArray :: FloatArray -> ()
-deleteFloatArray PointerArray{grPtr} =
-  unsafePerformIO $ free grPtr
-deleteFloatArray HaskellArray{grArr} =
-  unsafePerformIO $ void (MA.mapArray (const undefined) grArr)
+deleteFloatArray = unsafePerformIO . deleteFloatArraySafe
+
+deleteFloatArraySafe :: FloatArray -> IO ()
+deleteFloatArraySafe PointerArray{grPtr} =
+  free grPtr
+deleteFloatArraySafe HaskellArray{grArr} =
+  void (MA.mapArray (const undefined) grArr)
 
 {-# NOINLINE copyFloatArray' #-}
 copyFloatArray' :: FloatArray -> FloatArray
-copyFloatArray' a =
+copyFloatArray' = unsafePerformIO . copyFloatArraySafe
+
+copyFloatArraySafe :: FloatArray -> IO FloatArray
+copyFloatArraySafe a =
   case a of
     PointerArray{} -> error "expected non-unique array"
-    HaskellArray len arr -> unsafePerformIO $ do
+    HaskellArray len arr -> do
       arr' <- MA.mapArray id arr
       return $ uniquifyFloatArray $ HaskellArray len arr'
 
 {-# NOINLINE uniquifyFloatArray #-}
 uniquifyFloatArray :: FloatArray -> FloatArray
-uniquifyFloatArray a =
+uniquifyFloatArray = unsafePerformIO . uniquifyFloatArraySafe
+
+uniquifyFloatArraySafe :: FloatArray -> IO FloatArray
+uniquifyFloatArraySafe a =
   case a of
     PointerArray{} -> error "expected non-unique array"
-    HaskellArray len arr -> unsafePerformIO $ do
-      let arr' = newFloatArray (len+1)
+    HaskellArray len arr -> do
+      arr' <- newFloatArraySafe (len+1)
       forM_ [0..len] $ \i -> do
         v <- MA.readArray arr i
         pokeElemOff (grPtr arr') i v
@@ -230,11 +260,14 @@ uniquifyFloatArray a =
 
 {-# NOINLINE borrowFloatArray #-}
 borrowFloatArray :: FloatArray -> FloatArray
-borrowFloatArray a = 
+borrowFloatArray = unsafePerformIO . borrowFloatArraySafe
+
+borrowFloatArraySafe :: FloatArray -> IO FloatArray
+borrowFloatArraySafe a =
   case a of
     HaskellArray{} -> error "expected unique array"
-    PointerArray len ptr -> unsafePerformIO $ do
-      let arr' = newFloatArray' (len+1)
+    PointerArray len ptr -> do
+      arr' <- newFloatArrayISafe (len+1)
       forM_ [0..len] $ \i -> do
         v <- peekElemOff ptr i
         MA.writeArray (grArr arr') i v
@@ -275,4 +308,3 @@ type instance CapabilityType 'TimeDateTag = () -> Text
 cap :: Capability cap -> () -> CapabilityType cap
 cap Console ()  = \x -> unsafePerformIO $ toStdout $ x
 cap TimeDate () = \() -> unsafePerformIO $ timeDate ()
-

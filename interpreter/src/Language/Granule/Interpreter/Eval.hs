@@ -738,10 +738,10 @@ builtIns =
   , (mkId "lengthFloatArray",  Ext () $ Primitive lengthFloatArray)
   , (mkId "readFloatArray",  Ext () $ Primitive readFloatArray)
   , (mkId "writeFloatArray",  Ext () $ Primitive writeFloatArray)
-  , (mkId "newFloatArray'",  Ext () $ Primitive newFloatArray')
-  , (mkId "lengthFloatArray'",  Ext () $ Primitive lengthFloatArray')
-  , (mkId "readFloatArray'",  Ext () $ Primitive readFloatArray')
-  , (mkId "writeFloatArray'",  Ext () $ Primitive writeFloatArray')
+  , (mkId "newFloatArrayI",  Ext () $ Primitive newFloatArrayI)
+  , (mkId "lengthFloatArrayI",  Ext () $ Primitive lengthFloatArrayI)
+  , (mkId "readFloatArrayI",  Ext () $ Primitive readFloatArrayI)
+  , (mkId "writeFloatArrayI",  Ext () $ Primitive writeFloatArrayI)
   , (mkId "deleteFloatArray", Ext () $ Primitive deleteFloatArray)
   -- Additive conjunction (linear logic)
   , (mkId "with", Ext () $ Primitive $ \v -> return $ Ext () $ Primitive $ \w -> return $ Constr () (mkId "&") [v, w])
@@ -837,19 +837,19 @@ builtIns =
       _oth -> error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
     uniqueReturn :: RValue -> IO RValue
-    uniqueReturn (Nec () v) = return $
+    uniqueReturn (Nec () v) =
       case v of
-        (Val nullSpan () False (Ext () (Runtime fa))) ->
-          let borrowed = borrowFloatArray fa in
-            Promote () (Val nullSpan () False (Ext () (Runtime borrowed)))
-        _otherwise -> Promote () v
+        (Val nullSpan () False (Ext () (Runtime fa))) -> do
+          borrowed <- borrowFloatArraySafe fa
+          return $ Promote () (Val nullSpan () False (Ext () (Runtime borrowed)))
+        _otherwise -> return $ Promote () v
     uniqueReturn v = error $ "Bug in Granule. Can't borrow a non-unique: " <> prettyDebug v
 
     uniqueBind :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
-    uniqueBind ctxt f = return $ Ext () $ Primitive $ \(Promote () v) -> do
+    uniqueBind ctxt f = return $ Ext () $ Primitive $ \(Promote () v) ->
       case v of
-        (Val nullSpan () False (Ext () (Runtime fa))) ->
-          let copy = copyFloatArray' fa in
+        (Val nullSpan () False (Ext () (Runtime fa))) -> do
+          copy <- copyFloatArraySafe fa
           evalIn ctxt
               (App nullSpan () False
                 (Val nullSpan () False f)
@@ -990,48 +990,52 @@ builtIns =
 
     newFloatArray :: RValue -> IO RValue
     newFloatArray = \(NumInt i) -> do
-      return $ Nec () (Val nullSpan () False $ Ext () $ Runtime $ RT.newFloatArray i)
+      arr <- RT.newFloatArraySafe i
+      return $ Nec () $ Val nullSpan () False $ Ext () $ Runtime arr
 
-    newFloatArray' :: RValue -> IO RValue
-    newFloatArray' = \(NumInt i) -> return $ Ext () $ Runtime $ RT.newFloatArray' i
+    newFloatArrayI :: RValue -> IO RValue
+    newFloatArrayI = \(NumInt i) -> do
+      arr <- RT.newFloatArrayISafe i
+      return $ Ext () $ Runtime arr
 
     readFloatArray :: RValue -> IO RValue
-    readFloatArray = \(Nec () (Val _ _ _ (Ext () (Runtime fa)))) -> return $ Ext () $ Primitive $ \(NumInt i) ->
-      let (e,fa') = RT.readFloatArray fa i
-      in return $ Constr () (mkId ",") [NumFloat e, Nec () (Val nullSpan () False $ Ext () $ Runtime fa')]
+    readFloatArray = \(Nec () (Val _ _ _ (Ext () (Runtime fa)))) -> return $ Ext () $ Primitive $ \(NumInt i) -> do
+      (e,fa') <- RT.readFloatArraySafe fa i
+      return $ Constr () (mkId ",") [NumFloat e, Nec () (Val nullSpan () False $ Ext () $ Runtime fa')]
 
-    readFloatArray' :: RValue -> IO RValue
-    readFloatArray' = \(Ext () (Runtime fa)) -> return $ Ext () $ Primitive $ \(NumInt i) ->
-      let (e,fa') = RT.readFloatArray' fa i
-      in return $ Constr () (mkId ",") [NumFloat e, Ext () $ Runtime fa']
+    readFloatArrayI :: RValue -> IO RValue
+    readFloatArrayI = \(Ext () (Runtime fa)) -> return $ Ext () $ Primitive $ \(NumInt i) -> do
+      (e,fa') <- RT.readFloatArrayISafe fa i
+      return $ Constr () (mkId ",") [NumFloat e, Ext () $ Runtime fa']
 
     lengthFloatArray :: RValue -> IO RValue
     lengthFloatArray = \(Nec () (Val _ _ _ (Ext () (Runtime fa)))) -> return $ Ext () $ Primitive $ \(NumInt i) ->
       let (e,fa') = RT.lengthFloatArray fa
       in return $ Constr () (mkId ",") [NumInt e, Nec () (Val nullSpan () False $ Ext () $ Runtime fa')]
 
-    lengthFloatArray' :: RValue -> IO RValue
-    lengthFloatArray' = \(Ext () (Runtime fa)) -> return $ Ext () $ Primitive $ \(NumInt i) ->
+    lengthFloatArrayI :: RValue -> IO RValue
+    lengthFloatArrayI = \(Ext () (Runtime fa)) -> return $ Ext () $ Primitive $ \(NumInt i) ->
       let (e,fa') = RT.lengthFloatArray fa
       in return $ Constr () (mkId ",") [NumInt e, Ext () $ Runtime fa']
 
     writeFloatArray :: RValue -> IO RValue
     writeFloatArray = \(Nec _ (Val _ _ _ (Ext _ (Runtime fa)))) -> return $
-       Ext () $ Primitive $ \(NumInt i) -> return $
-       Ext () $ Primitive $ \(NumFloat v) -> do
-       return $
-         Nec () $ Val nullSpan () False $ Ext () $ Runtime $ RT.writeFloatArray fa i v
-
-    writeFloatArray' :: RValue -> IO RValue
-    writeFloatArray' = \(Ext () (Runtime fa)) -> return $
       Ext () $ Primitive $ \(NumInt i) -> return $
-      Ext () $ Primitive $ \(NumFloat v) -> return $
-      Ext () $ Runtime $ RT.writeFloatArray' fa i v
+        Ext () $ Primitive $ \(NumFloat v) -> do
+          arr <- RT.writeFloatArraySafe fa i v
+          return $ Nec () $ Val nullSpan () False $ Ext () $ Runtime arr
+
+    writeFloatArrayI :: RValue -> IO RValue
+    writeFloatArrayI = \(Ext () (Runtime fa)) -> return $
+      Ext () $ Primitive $ \(NumInt i) -> return $
+      Ext () $ Primitive $ \(NumFloat v) -> do
+        arr <- RT.writeFloatArrayISafe fa i v
+        return $ Ext () $ Runtime arr
 
     deleteFloatArray :: RValue -> IO RValue
-    deleteFloatArray = \(Nec _ (Val _ _ _ (Ext _ (Runtime fa)))) -> return $
-      case RT.deleteFloatArray fa of
-        () -> Constr () (mkId "()") []
+    deleteFloatArray = \(Nec _ (Val _ _ _ (Ext _ (Runtime fa)))) -> do
+      deleteFloatArraySafe fa
+      return $ Constr () (mkId "()") []
 
 -- Convert a Granule value representation of `N n` type into an Int
 natToInt :: RValue -> Int
