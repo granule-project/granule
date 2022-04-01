@@ -986,7 +986,7 @@ builtIns =
     closeHandle (Ext _ (Handle h)) = return $ diamondConstr $ do
          SIO.hClose h
          return $ valExpr (Constr () (mkId "()") [])
-    closeHandle _ = error $ "Runtime exception: trying to close a non handle value"
+    closeHandle _ = error "Runtime exception: trying to close a non handle value"
 
     newFloatArray :: RValue -> IO RValue
     newFloatArray = \(NumInt i) -> do

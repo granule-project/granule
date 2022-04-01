@@ -10,4 +10,4 @@ main =
   let x = fill (newFloatArray 10) [10] in
   let [y] = &x in
   let [()] = clone [y] as y' in (let () = deleteFloatArray y' in [()])
-  in readFloatArray' y 9
+  in readFloatArrayI y 9
