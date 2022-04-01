@@ -50,8 +50,14 @@ typeConstructors =
     , (mkId "DFloat",  (Type 0, [], False)) -- special floats that can be tracked for sensitivty
     , (mkId "Char",   (Type 0, [], False))
     , (mkId "String", (Type 0, [], False))
-    , (mkId "Protocol", (Type 0, [], False))
     , (mkId "Inverse", ((funTy (Type 0) (Type 0)), [], False))
+    -- Session type related things
+    , (mkId "Protocol", (Type 0, [], False))
+    , (mkId "SingeAction", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], True))
+    , (mkId "ReceivePrefix", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], True))
+    , (mkId "Sends", (funTy (tyCon "Nat") (funTy (tyCon "Protocol") (tyCon "Predicate")), [], True))
+    , (mkId "Graded", (funTy (tyCon "Nat") (funTy (tyCon "Protocol") (tyCon "Protocol")), [], True))
+
     -- # Coeffect types
     , (mkId "Nat",      (kcoeffect, [], False))
     , (mkId "Q",        (kcoeffect, [], False)) -- Rationals
@@ -61,11 +67,6 @@ typeConstructors =
     , (mkId "Zero",     (tyCon "LNL", [], False))
     , (mkId "One",      (tyCon "LNL", [], False))
     , (mkId "Many",     (tyCon "LNL", [], False))
-    -- Borrowing
-    , (mkId "Borrowing", (kcoeffect, [], False))
-    , (mkId "One",       (tyCon "Borrowing", [], False))
-    , (mkId "Beta",      (tyCon "Borrowing", [], False))
-    , (mkId "Omega",     (tyCon "Borrowing", [], False))
     -- Security levels
     , (mkId "Level",    (kcoeffect, [], False)) -- Security level
     , (mkId "Private",  (tyCon "Level", [], False))
@@ -88,6 +89,8 @@ typeConstructors =
     , (mkId "Send", (funTy (Type 0) (funTy protocol protocol), [], False))
     , (mkId "Recv", (funTy (Type 0) (funTy protocol protocol), [], False))
     , (mkId "End" , (protocol, [], False))
+    , (mkId "Select" , (funTy protocol (funTy protocol protocol), [], False))
+    , (mkId "Offer" , (funTy protocol (funTy protocol protocol), [], False))
     , (mkId "Chan", (funTy protocol (Type 0), [], True))
     , (mkId "LChan", (funTy protocol (Type 0), [], True))
     , (mkId "Dual", (funTy protocol protocol, [], True))
@@ -334,6 +337,18 @@ recv = BUILTIN
 close : LChan End -> ()
 close = BUILTIN
 
+selectLeft : forall {p1 p2 : Protocol}
+          . LChan (Select p1 p2) -> LChan p1
+selectLeft = BUILTIN
+
+selectRight : forall {p1 p2 : Protocol}
+            . LChan (Select p1 p2) -> LChan p2
+selectRight = BUILTIN
+
+offer : forall {p1 p2 : Protocol, a : Type}
+      . (LChan p1 -> a) -> (LChan p2 -> a) -> LChan (Offer p1 p2) -> a
+offer = BUILTIN
+
 gsend
   : forall {a : Type, s : Protocol}
   . Chan (Send a s) -> a -> (Chan s) <Session>
@@ -349,6 +364,22 @@ gclose = BUILTIN
 
 -- trace : String -> () <>
 -- trace = BUILTIN
+
+forkNonLinear : forall {p : Protocol, s : Semiring, r : s}
+              . {SingleAction p} => ((LChan p) [r] -> ()) -> (LChan (Dual p)) [r]
+forkNonLinear = BUILTIN
+
+forkMulticast : forall {p : Protocol, n : Nat}
+              . {Sends p} => (LChan (Graded n p) -> ()) -> N n -> Vec n (LChan (Dual p))
+forkMulticast = BUILTIN
+
+forkReplicate : forall {p : Protocol, n : Nat} . {ReceivePrefix p}
+              => (LChan p -> ()) [0..n] -> N n -> Vec n ((LChan (Dual p)) [0..1])
+forkReplicate = BUILTIN
+
+forkReplicateExactly : forall {p : Protocol, n : Nat} . {ReceivePrefix p}
+                  => (LChan p -> ()) [n] ->  N n -> Vec n (LChan (Dual p))
+forkReplicateExactly = BUILTIN
 
 --------------------------------------------------------------------------------
 -- File Handles
@@ -639,3 +670,8 @@ builtins :: [(Id, TypeScheme)]
 
       unDef :: Def () () -> (Id, TypeScheme)
       unDef (Def _ name _ _ (Forall _ bs cs t)) = (name, Forall nullSpanBuiltin bs cs t)
+
+-- List of primitives that can't be promoted in CBV
+unpromotables :: [String]
+unpromotables = ["newFloatArray", "forkLinear", "forkLinear'", "forkMulticast", "forkReplicate", "forkReplicateExactly"]
+

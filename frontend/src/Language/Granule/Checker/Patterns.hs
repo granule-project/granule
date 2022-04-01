@@ -202,9 +202,8 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
       (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, constraints, coercions') <-
           freshPolymorphicInstance BoundQ True tySch coercions
 
-      mapM_ (\ty -> do
-        pred <- compileTypeConstraintToConstraint s ty
-        addPredicate pred) constraints
+      otherTypeConstraints <- enforceConstraints s constraints
+      registerWantedTypeConstraints otherTypeConstraints
 
       -- Debugging
       debugM "ctxt" $ "### DATA CONSTRUCTOR (" <> pretty dataC <> ")"

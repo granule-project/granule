@@ -41,10 +41,6 @@ data SGrade =
      | SOOZ SBool
      -- LNL
      | SLNL SInteger -- 0 = Zero, 1 = One, 2 = Many
-     -- Borrowing
-     | SBorrow SInteger
-     -- Uniqueness
-     | SUnique
 
      -- A kind of embedded uninterpreted sort which can accept some equations
      -- Used for doing some limited solving over poly coeffect grades
@@ -67,12 +63,6 @@ dunnoRepresentation   = 2
 hiRepresentation, loRepresentation :: SBool
 hiRepresentation = sTrue
 loRepresentation = sFalse
-
--- Representation for `Borrowing`
-oneRepresentation, betaRepresentation, omegaRepresentation :: Integer
-oneRepresentation   = 1
-betaRepresentation  = 2
-omegaRepresentation = 3
 
 zeroRep, oneRep, manyRep :: Integer
 zeroRep = 0
@@ -155,8 +145,6 @@ match (SUnknown _) (SUnknown _) = True
 match (SOOZ _) (SOOZ _) = True
 match (SSec _) (SSec _) = True
 match (SLNL _) (SLNL _) = True
-match (SBorrow _) (SBorrow _) = True
-match SUnique SUnique = True
 match (SExt _ _) (SExt _ _) = True
 match _ _ = False
 
@@ -212,8 +200,6 @@ instance Mergeable SGrade where
   symbolicMerge s sb (SUnknown a) (SUnknown b) = SUnknown (SynMerge sb a b)
   symbolicMerge s sb (SSec a) (SSec b) = SSec (symbolicMerge s sb a b)
   symbolicMerge s sb (SLNL a) (SLNL b) = SLNL (symbolicMerge s sb a b)
-  symbolicMerge s sb (SBorrow a) (SBorrow b) = SBorrow (symbolicMerge s sb a b)
-  symbolicMerge s sb SUnique SUnique = SUnique
   symbolicMerge s sb (SExt r isInf) (SExt r' isInf') =
     SExt (symbolicMerge s sb r r') (symbolicMerge s sb isInf isInf')
 
@@ -239,7 +225,6 @@ symGradeLess (SLevel n) (SLevel n') =
 symGradeLess (SSet _ n) (SSet _ n')  = solverError "Can't do < on sets"
 symGradeLess (SExtNat n) (SExtNat n') = return $ n .< n'
 symGradeLess SPoint SPoint            = return sTrue
-symGradeLess (SBorrow n) (SBorrow n') = return $ n .< n'
 symGradeLess (SUnknown s) (SUnknown t) = sLtTree s t
 
 symGradeLess s t | isSProduct s || isSProduct t =
@@ -287,8 +272,6 @@ symGradeEq s t | isSProduct s || isSProduct t =
 symGradeEq (SUnknown t) (SUnknown t') = sEqTree t t'
 symGradeEq (SSec n) (SSec n') = return $ n .== n'
 symGradeEq (SLNL n) (SLNL m) = return $ n .== m
-symGradeEq (SBorrow n) (SBorrow m) = return $ n .== m
-symGradeEq SUnique SUnique = return sTrue
 symGradeEq (SExt r sInf) (SExt r' sInf') = do
   eq <- symGradeEq r r'
   return $
@@ -406,9 +389,6 @@ symGradePlus (SUnknown um) (SUnknown un) =
 symGradePlus (SSec a) (SSec b) = symGradeMeet (SSec a) (SSec b)
 symGradePlus (SLNL a) (SLNL b) = return $ ite (a .== literal zeroRep) (SLNL b)
                                             (ite (b .== literal zeroRep) (SLNL a) (SLNL (literal manyRep)))
-
-symGradePlus (SBorrow a) (SBorrow b) = return $ SBorrow (a `smax` b `smax` literal betaRepresentation)
-
 symGradePlus (SExt r isInf) (SExt r' isInf') = do
   s <- symGradePlus r r'
   return $
@@ -476,7 +456,6 @@ symGradeTimes (SUnknown um) (SUnknown un) =
 symGradeTimes (SSec a) (SSec b) = symGradeJoin (SSec a) (SSec b)
 symGradeTimes (SLNL a) (SLNL b) = return $ ite (a .== literal zeroRep) (SLNL (literal zeroRep))
                                             (ite (b .== literal zeroRep) (SLNL (literal zeroRep)) (SLNL $ a `smax` b))
-symGradeTimes (SBorrow a) (SBorrow b) = return $ SBorrow $ a `smax` b
 symGradeTimes (SExt r isInf) (SExt r' isInf') = do
   s <- symGradeTimes r r'
   return $

@@ -112,13 +112,14 @@ equalTypesRelatedCoeffects s rel t1 t2 spec mode = do
   substFinal <- combineManySubstitutions s [subst,subst',subst'']
   return (eqT, substFinal)
 
+-- Check if `t1 == t2` at kind `k`
 equalTypesRelatedCoeffectsInner :: (?globals :: Globals)
   => Span
   -- Explain how coeffects should be related by a solver constraint
   -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
-  -> Type
-  -> Type
-  -> Type
+  -> Type -- t1
+  -> Type -- t2
+  -> Type -- k - Kind parameter
   -- Indicates whether the first type or second type is a specification
   -> SpecIndicator
   -- Flag to say whether this type is actually an effect or not
@@ -338,6 +339,15 @@ equalTypesRelatedCoeffectsInner s rel (TyApp (TyCon d) t) t' _ sp mode
 equalTypesRelatedCoeffectsInner s rel t (TyApp (TyCon d) t') _ sp mode
   | internalName d == "Dual" = isDualSession s rel t t' sp
 
+-- Do duality check (left) [special case of TyApp rule]
+equalTypesRelatedCoeffectsInner s rel t0@(TyApp (TyApp (TyCon d) grd) t) t' ind sp mode
+  | internalName d == "Graded" = do
+    eqGradedProtocolFunction s rel grd t t' sp
+
+equalTypesRelatedCoeffectsInner s rel t' t0@(TyApp (TyApp (TyCon d) grd) t) ind sp mode
+  | internalName d == "Graded" = do
+    eqGradedProtocolFunction s rel grd t t' sp
+
 -- Equality on type application
 equalTypesRelatedCoeffectsInner s rel (TyApp t1 t2) (TyApp t1' t2') _ sp mode = do
   debugM "equalTypesRelatedCoeffectsInner (tyAp leftp)" (pretty t1 <> " = " <> pretty t1')
@@ -436,6 +446,117 @@ sessionInequality s (TyCon c) (TyCon c')
 sessionInequality s t1 t2 =
   throw TypeErrorAtLevel { errLoc = s, tyExpectedL = t1, tyActualL = t2 }
 
+-- Compute the behaviour of `Graded n p` on a protocol `p`
+gradedProtocolBeta :: (?globals :: Globals)
+  => Type -- graded
+  -> Type -- protocol/type
+  -> Checker Type
+gradedProtocolBeta grd protocolType@(TyApp (TyApp (TyCon c) t) s)
+  | internalName c == "Send" || internalName c == "Recv" = do
+    s <- gradedProtocolBeta grd s
+    return $ (TyApp (TyApp (TyCon c) (Box grd t)) s)
+
+gradedProtocolBeta grd (TyApp (TyApp (TyCon c) p1) p2)
+  | internalName c == "Select" || internalName c == "Offer" = do
+    p1' <- gradedProtocolBeta grd p1
+    p2' <- gradedProtocolBeta grd p2
+    return $ TyApp (TyApp (TyCon c) p1') p2'
+
+gradedProtocolBeta grd protocol@(TyCon c) | internalName c == "End" = return protocol
+
+gradedProtocolBeta grd t = return $ TyApp (TyApp (TyCon $ mkId "Graded") grd) t
+
+-- Compute the inverse of `Graded n p` on a protocol, i.e,
+-- given a protocol `p1` which we know is the result of `Graded n p` then
+-- then calculate what is `p`, which will involve making some equalities between
+-- grades in `p1` and `n`.
+gradedProtocolBetaInvert :: (?globals :: Globals)
+  => Span
+  -- Explain how coeffects should be related by a solver constraint
+  -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
+  -> Type -- graded
+  -> Type -- protocol/type
+  -- Indicates whether the first type or second type is a specification
+  -> SpecIndicator
+  -- Flag to say whether this type is actually an effect or not
+  -> Mode
+  -> Checker (Type, Substitution)
+-- Send/receive case
+-- i.e., Graded n p = Send (Box n' t) p'
+-- therefore check `n ~ n'` and then recurse
+gradedProtocolBetaInvert sp rel grd protocolType@(TyApp (TyApp (TyCon c) (Box grd' t)) s) spec mode
+  | internalName c == "Send" || internalName c == "Recv" = do
+    -- Comput equality on grades
+    (_, subst) <- equalTypesRelatedCoeffects sp rel grd grd' spec mode
+    (s, subst') <- gradedProtocolBetaInvert sp rel grd s spec mode
+    substFinal <- combineSubstitutions sp subst subst'
+    return (TyApp (TyApp (TyCon c) t) s, substFinal)
+
+-- Congurence on Select/Offer
+gradedProtocolBetaInvert sp rel grd (TyApp (TyApp (TyCon c) p1) p2) spec mode
+  | internalName c == "Select" || internalName c == "Offer" = do
+    (p1', subst1) <- gradedProtocolBetaInvert sp rel grd p1 spec mode
+    (p2', subst2) <- gradedProtocolBetaInvert sp rel grd p2 spec mode
+    substFinal <- combineSubstitutions sp subst1 subst2
+    return (TyApp (TyApp (TyCon c) p1') p2', substFinal)
+--
+gradedProtocolBetaInvert _ _ grd protocol@(TyCon c) _ _ | internalName c == "End" =
+    return (protocol, [])
+
+-- TODO: possibly this is the wrong fall through case?
+gradedProtocolBetaInvert _ _ grd t _ _ = return (t, [])
+
+-- Check if `Graded n p ~ p'` which may involve some normalisation in the
+-- case where `p'` is a variable or some inversion in the case that `p` is a variable.
+eqGradedProtocolFunction :: (?globals :: Globals)
+  => Span
+  -- Explain how coeffects should be related by a solver constraint
+  -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
+  -- These two arguments are the arguments to `Graded n p`
+  -> Type -- graded
+  -> Type -- protocol/type
+  -- This is the argument of the type which we are trying to see if it equal to `Graded n p`
+  -> Type -- compared against
+  -> SpecIndicator
+  -> Checker (Bool, Substitution)
+eqGradedProtocolFunction sp rel grad protocolType@(TyApp (TyApp (TyCon c) t) s) (TyApp (TyApp (TyCon c') t') s') ind
+  |  (internalName c == "Send" && internalName c == "Send")
+  || (internalName c == "Recv" && internalName c' == "Recv") = do
+  (eq1, u1) <- equalTypesRelatedCoeffects sp rel (Box grad t) t' ind Types
+  s <- substitute u1 s
+  s' <- substitute u1 s'
+  (eq2, u2) <- isDualSession sp rel s s' ind
+  u <- combineSubstitutions sp u1 u2
+  return (eq1 && eq2, u)
+
+eqGradedProtocolFunction sp rel grad (TyApp (TyApp (TyCon c) p1) p2) (TyApp (TyApp (TyCon c') p1') p2') ind
+  |  (internalName c == "Select" && internalName c' == "Select")
+  || (internalName c == "Offer" && internalName c' == "Offer") = do
+    -- recure duality
+    (eq1, u1) <- eqGradedProtocolFunction sp rel grad p1 p1' ind
+    (eq2, u2) <- eqGradedProtocolFunction sp rel grad p2 p2' ind
+    u <- combineSubstitutions sp u1 u2
+    return (eq1 && eq2, u)
+
+eqGradedProtocolFunction _ _ _ (TyCon c) (TyCon c') _
+  | internalName c == "End" && internalName c' == "End" =
+  return (True, [])
+
+-- try to apply `Graded` directly (beta reduce it) on `t`
+eqGradedProtocolFunction sp rel grad t (TyVar v) ind = do
+  t' <- gradedProtocolBeta grad t
+  equalTypesRelatedCoeffects sp rel t' (TyVar v) ind Types
+
+-- try to invert `Graded` on the protocol `t`
+eqGradedProtocolFunction sp rel grad (TyVar v) t ind = do
+  (t', subst) <- gradedProtocolBetaInvert sp rel grad t ind Types
+  (eq, subst') <- equalTypesRelatedCoeffects sp rel t' (TyVar v) ind Types
+  substFinal <- combineSubstitutions sp subst subst'
+  return (eq, substFinal)
+
+eqGradedProtocolFunction sp _ grad t1 t2 _ = throw
+  TypeError{ errLoc = sp, tyExpected = (TyApp (TyApp (TyCon $ mkId "Graded") grad) t1), tyActual = t2 }
+
 -- | Is this protocol dual to the other?
 isDualSession :: (?globals :: Globals)
     => Span
@@ -455,6 +576,16 @@ isDualSession sp rel (TyApp (TyApp (TyCon c) t) s) (TyApp (TyApp (TyCon c') t') 
   (eq2, u2) <- isDualSession sp rel s s' ind
   u <- combineSubstitutions sp u1 u2
   return (eq1 && eq2, u)
+
+isDualSession sp rel (TyApp (TyApp (TyCon c) p1) p2) (TyApp (TyApp (TyCon c') p1') p2') ind
+  |  (internalName c == "Select" && internalName c' == "Offer")
+  || (internalName c == "Offer" && internalName c' == "Select") = do
+    -- recure duality
+    (eq1, u1) <- isDualSession sp rel p1 p1' ind
+    (eq2, u2) <- isDualSession sp rel p2 p2' ind
+    u <- combineSubstitutions sp u1 u2
+    return (eq1 && eq2, u)
+
 
 isDualSession _ _ (TyCon c) (TyCon c') _
   | internalName c == "End" && internalName c' == "End" =

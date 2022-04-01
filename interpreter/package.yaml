@@ -8,6 +8,7 @@ github: dorchard/granule
 dependencies:
 - base >=4.10 && <5
 - directory
+- concurrent-extra
 - extra
 - filepath
 - gitrev

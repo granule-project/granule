@@ -30,7 +30,8 @@ import System.IO.Unsafe (unsafePerformIO)
 import Control.Exception (catch, IOException)
 --import GHC.IO.Exception (IOErrorType( OtherError ))
 import qualified Control.Concurrent as C (forkIO)
-import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, Chan)
+import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, dupChan, Chan)
+import qualified Control.Concurrent.MVar as MV
 import qualified System.IO as SIO
 
 --import System.IO.Error (mkIOError)
@@ -53,7 +54,7 @@ data Runtime a =
   | Handle SIO.Handle
 
   -- | Channels
-  | Chan (CC.Chan (Value (Runtime a) a))
+  | Chan (BinaryChannel a)
 
   -- | Delayed side effects wrapper
   | PureWrapper (IO (Expr (Runtime a) ()))
@@ -61,6 +62,76 @@ data Runtime a =
   -- | Data managed by the runtime module (mutable arrays)
   | Runtime RuntimeData
 
+-- Dual-ended channel
+data BinaryChannel a =
+       BChan { fwd :: CC.Chan (Value (Runtime a) a)
+             , bwd :: CC.Chan (Value (Runtime a) a)
+             , putbackFwd :: MV.MVar (Value (Runtime a) a)
+             , putbackBwd :: MV.MVar (Value (Runtime a) a)
+             , tag :: Prelude.String -- if this is not "" then debugging messages get output
+             , pol :: Bool } -- polarity
+
+-- Channel primitive wrapps
+dualEndpoint :: BinaryChannel a -> BinaryChannel a
+dualEndpoint (BChan fwd bwd mFwd mBwd t pol) = BChan bwd fwd mBwd mFwd t (not pol)
+
+debugComms :: Prelude.String -> Bool -> Prelude.String -> IO ()
+debugComms "" _ x = return ()
+debugComms tag True x = putStrLn $ "[" ++ tag ++ " ->]: " ++ x
+debugComms tag False x = putStrLn $ "[" ++ tag ++ " <-]: " ++ x
+
+newChan :: IO (BinaryChannel a)
+newChan = do
+  c  <- CC.newChan
+  c' <- CC.newChan
+  m  <- MV.newEmptyMVar
+  m'  <- MV.newEmptyMVar
+  return $ BChan c c' m m' "" True
+
+-- Adds a tag (channel name) for debugging
+newChan' :: Prelude.String -> IO (BinaryChannel a)
+newChan' tag = do
+  c  <- CC.newChan
+  c' <- CC.newChan
+  m  <- MV.newEmptyMVar
+  m'  <- MV.newEmptyMVar
+  return $ BChan c c' m m' tag True
+
+readChan :: BinaryChannel () -> IO RValue
+readChan (BChan _ bwd _ bwdMV tag pol) = do
+  flag <- MV.isEmptyMVar bwdMV
+  if flag
+    then do
+      debugComms tag pol $ "Read Normal"
+      x <- CC.readChan bwd
+      debugComms tag pol $ "READ " ++ show x
+      return x
+    -- short-circuit the channel because a value was read and has been memo
+    else do
+      debugComms tag pol $ "Read Putback"
+      x <- MV.takeMVar bwdMV
+      debugComms tag pol $ "READ from put back: " ++ show x
+      return x
+
+putbackChan :: BinaryChannel a -> (Value (Runtime a) a) -> IO ()
+putbackChan (BChan _ _ _ bwdMV tag pol) x = do
+  debugComms tag pol "Putback"
+  MV.putMVar bwdMV x
+
+writeChan :: Show a => BinaryChannel a -> (Value (Runtime a) a) -> IO ()
+writeChan (BChan fwd _ _ _ tag pol) v = do
+  debugComms tag pol $ "Try to write " ++ show v
+  CC.writeChan fwd v
+  debugComms tag pol $ "written"
+
+dupChan :: BinaryChannel a -> IO (BinaryChannel a)
+dupChan (BChan fwd bwd m n t p) = do
+  fwd' <- CC.dupChan fwd
+  bwd' <- CC.dupChan bwd
+  -- Behaviour here with the putback mvar is a bit weak, should not used in this way with dupChan
+  return $ BChan fwd' bwd' m n (t ++ t) p
+
+---
 
 diamondConstr :: IO (Expr (Runtime ()) ()) -> RValue
 diamondConstr = Ext () . PureWrapper
@@ -639,10 +710,17 @@ builtIns =
         return . Val nullSpan () False $ Constr () (mkId ",") [Ext () $ Handle h, boolflag])
   , (mkId "forkLinear", Ext () $ PrimitiveClosure forkLinear)
   , (mkId "forkLinear'", Ext () $ PrimitiveClosure forkLinear')
+  , (mkId "forkNonLinear", Ext () $ PrimitiveClosure forkNonLinear)
+  , (mkId "forkReplicate", Ext () $ PrimitiveClosure forkReplicate)
+  , (mkId "forkReplicateExactly", Ext () $ PrimitiveClosure forkReplicateExactly)
+  , (mkId "forkMulticast", Ext () $ PrimitiveClosure forkMulticast)
   , (mkId "fork",    Ext () $ PrimitiveClosure forkRep)
   , (mkId "recv",    Ext () $ Primitive recv)
   , (mkId "send",    Ext () $ Primitive send)
-  , (mkId "close",   Ext () $ Primitive close)
+  , (mkId "selectLeft",   Ext () $ Primitive selectLeft)
+  , (mkId "selectRight",  Ext () $ Primitive selectRight)
+  , (mkId "offer",        Ext () $ PrimitiveClosure offer)
+  , (mkId "close",    Ext () $ Primitive close)
   , (mkId "grecv",    Ext () $ Primitive grecv)
   , (mkId "gsend",    Ext () $ Primitive gsend)
   , (mkId "gclose",   Ext () $ Primitive gclose)
@@ -673,29 +751,89 @@ builtIns =
   where
     forkLinear :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
     forkLinear ctxt e = case e of
-      Abs{} -> do c <- CC.newChan
+      Abs{} -> do c <- newChan
                   _ <- C.forkIO $ void $ evalIn ctxt (App nullSpan () False (valExpr e)
                                                        (valExpr $ Ext () $ Chan c))
-                  return $ Ext () $ Chan c
+                  return $ Ext () $ Chan (dualEndpoint c)
       _oth -> error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
     forkLinear' :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
     forkLinear' ctxt e = case e of
-      Abs{} -> do c <- CC.newChan
+      Abs{} -> do c <- newChan
                   _ <- C.forkIO $ void $ evalIn ctxt (App nullSpan () False
                                                       (valExpr e)
                                                       (valExpr $ Promote () $ valExpr $ Ext () $ Chan c))
-                  return $ Ext () $ Chan c
+                  return $ Ext () $ Chan (dualEndpoint c)
       _oth -> error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
+
+    forkNonLinear :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
+    forkNonLinear ctxt e = case e of
+      Abs{} -> do c <- newChan
+                  _ <- C.forkIO $ void $ evalIn ctxt (App nullSpan () False
+                                                      (valExpr e)
+                                                      (valExpr $ Promote () $ valExpr $ Ext () $ Chan c))
+                  return $ Promote () $ valExpr $ Ext () $ Chan (dualEndpoint c)
+      _oth -> error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
+
+    forkMulticast :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
+    forkMulticast ctxt f@(Abs{}) = return $ Ext () $ Primitive $ \n -> do
+          -- Create initial channel that goes to the broadcaster
+          initChan <- newChan
+          _  <- C.forkIO $ void $
+                -- Forked process
+                evalIn ctxt (App nullSpan () False
+                                (valExpr f)
+                                (valExpr $ Ext () $ Chan (dualEndpoint initChan)))
+          -- receiver channels
+          interChan <- newChan
+          receiverChans <- mapM (const (dupChan interChan)) [1..(natToInt n)]
+          -- forwarder
+          _ <- C.forkIO $ void $ SIO.fixIO $ const $ do
+                e <- readChan initChan
+                case e of
+                  Promote _ (Val _ _ _ v) -> writeChan interChan v
+                  _ -> error $ "Bug in Granule. Multicast forwarder got non-boxed value " ++ show e
+          -- return receiver chans vector
+          return $ buildVec (map dualEndpoint receiverChans) id
+
+    forkMulticast _ e = error $ "Bug in Granule. Trying to forkMulticate: " <> prettyDebug e
+
+    forkReplicateExactly :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
+    forkReplicateExactly = forkReplicateCore id
+
+    forkReplicate :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
+    forkReplicate = forkReplicateCore (\x -> Promote () (Val nullSpanNoFile () False x))
+
+    forkReplicateCore :: (?globals :: Globals) => (RValue -> RValue) -> Ctxt RValue -> RValue -> IO RValue
+    forkReplicateCore wrapper ctxt (Promote _ (Val _ _ _ f@Abs{})) =
+      return $ Ext () $ Primitive $ \n -> do
+        -- make the chans
+        receiverChans <- mapM (const newChan) [1..(natToInt n)]
+        -- fork the waiters which then fork the servers
+        _ <- flip mapM receiverChans
+              (\receiverChan -> C.forkIO $ void $ do
+                -- wait to receive on the main channel
+                x <- readChan receiverChan
+                () <- putbackChan receiverChan x
+
+                C.forkIO $ void $
+                   evalIn ctxt (App nullSpan () False
+                                (valExpr f)
+                                (valExpr $ Ext () $ Chan receiverChan)))
+
+        return $ buildVec (map dualEndpoint receiverChans) wrapper
+
+    forkReplicateCore _ _ e = error $ "Bug in Granule. Trying to forkReplicate: " <> prettyDebug e
+
 
     forkRep :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
     forkRep ctxt e = case e of
       Abs{} -> return $ diamondConstr $ do
-        c <- CC.newChan
+        c <- newChan
         _ <- C.forkIO $ void $ evalIn ctxt (App nullSpan () False
                                             (valExpr e)
                                             (valExpr $ Promote () $ valExpr $ Ext () $ Chan c))
-        return $ valExpr $ Promote () $ valExpr $ Ext () $ Chan c
+        return $ valExpr $ Promote () $ valExpr $ Ext () $ Chan (dualEndpoint c)
       _oth -> error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
     uniqueReturn :: RValue -> IO RValue
@@ -753,30 +891,56 @@ builtIns =
 
     recv :: (?globals :: Globals) => RValue -> IO RValue
     recv (Ext _ (Chan c)) = do
-      x <- CC.readChan c
+      x <- readChan c
       return $ Constr () (mkId ",") [x, Ext () $ Chan c]
     recv e = error $ "Bug in Granule. Trying to receive from: " <> prettyDebug e
 
     send :: (?globals :: Globals) => RValue -> IO RValue
     send (Ext _ (Chan c)) = return $ Ext () $ Primitive
-      (\v -> do CC.writeChan c v
+      (\v -> do writeChan c v
                 return $ Ext () $ Chan c)
     send e = error $ "Bug in Granule. Trying to send from: " <> prettyDebug e
 
+    selectLeft :: (?globals :: Globals) => RValue -> IO RValue
+    selectLeft (Ext _ (Chan c)) = do
+      writeChan c (Constr () (mkId "LeftTag") [])
+      return $ Ext () $ Chan c
+    selectLeft e = error $ "Bug in Granule. Trying to selectLeft from: " <> prettyDebug e
+
+    selectRight :: (?globals :: Globals) => RValue -> IO RValue
+    selectRight (Ext _ (Chan c)) = do
+      writeChan c (Constr () (mkId "RightTag") [])
+      return $ Ext () $ Chan c
+    selectRight e = error $ "Bug in Granule. Trying to selectLeft from: " <> prettyDebug e
+
+    offer :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
+    offer ctxt f = return $ Ext () $ Primitive
+      (\g -> return $ Ext () $ Primitive
+        (\c ->
+          case c of
+            (Ext _ (Chan c)) -> do
+              x <- readChan c
+              case x of
+                (Constr () (internalName -> "LeftTag") _) ->
+                  evalIn ctxt (App nullSpan () False (Val nullSpan () False f) (valExpr $ Ext () $ Chan c))
+                (Constr () (internalName -> "RightTag") _) ->
+                  evalIn ctxt (App nullSpan () False (Val nullSpan () False g) (valExpr $ Ext () $ Chan c))
+                x -> error $ "Bug in Granule. Offer got tag: " <> prettyDebug x
+            _ -> error $ "Bug in Granule. Offer got supposed channel: " <> prettyDebug c))
     close :: RValue -> IO RValue
     close (Ext _ (Chan c)) = return $ Constr () (mkId "()") []
     close rval = error "Runtime exception: trying to close a value which is not a channel"
 
     grecv :: (?globals :: Globals) => RValue -> IO RValue
     grecv (Ext _ (Chan c)) = return $ diamondConstr $ do
-      x <- CC.readChan c
+      x <- readChan c
       return $ valExpr $ Constr () (mkId ",") [x, Ext () $ Chan c]
     grecv e = error $ "Bug in Granule. Trying to receive from: " <> prettyDebug e
 
     gsend :: (?globals :: Globals) => RValue -> IO RValue
     gsend (Ext _ (Chan c)) = return $ Ext () $ Primitive
       (\v -> return $ diamondConstr $ do
-         CC.writeChan c v
+         writeChan c v
          return $ valExpr $ Ext () $ Chan c)
     gsend e = error $ "Bug in Granule. Trying to send from: " <> prettyDebug e
 
@@ -872,6 +1036,17 @@ builtIns =
     deleteFloatArray = \(Nec _ (Val _ _ _ (Ext _ (Runtime fa)))) -> do
       deleteFloatArraySafe fa
       return $ Constr () (mkId "()") []
+
+-- Convert a Granule value representation of `N n` type into an Int
+natToInt :: RValue -> Int
+natToInt (Constr () c [])  | internalName c == "Z" =  0
+natToInt (Constr () c [v]) | internalName c == "S" =  1 + natToInt v
+natToInt k = error $ "Bug in Granule. Trying to convert a N but got value " <> show k
+
+-- Convert a list of channels into a granule `Vec n (LChan ...)` value.
+buildVec :: [BinaryChannel ()] -> (RValue -> RValue) -> RValue
+buildVec [] _ = Constr () (mkId "Nil") []
+buildVec (c:cs) f = Constr () (mkId "Cons") [f $ Ext () $ Chan c, buildVec cs f]
 
 evalDefs :: (?globals :: Globals) => Ctxt RValue -> [Def (Runtime ()) ()] -> IO (Ctxt RValue)
 evalDefs ctxt [] = return ctxt

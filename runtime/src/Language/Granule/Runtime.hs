@@ -308,4 +308,3 @@ type instance CapabilityType 'TimeDateTag = () -> Text
 cap :: Capability cap -> () -> CapabilityType cap
 cap Console ()  = \x -> unsafePerformIO $ toStdout $ x
 cap TimeDate () = \() -> unsafePerformIO $ timeDate ()
-
