@@ -1,4 +1,3 @@
 Type checking failed: 
 Falsifiable theorem: frontend/tests/cases/negative/leakSec.gr:2:1:
-The following theorem associated with `fooa` is falsifiable:
-	(Lo ≤ Hi)
+  When checking `fooa`, lo is not approximatable by Hi for type Sec

@@ -1,4 +1,3 @@
 Type checking failed: 
 Falsifiable theorem: frontend/tests/cases/negative/extensions/noTopLevelApprox.gr:4:1:
-The following theorem associated with `copy` is falsifiable:
-	((1 : Interval Nat) + (1 : Interval Nat) = 0..3)
+  When checking `copy`, actual grade or index `(1 : Interval Nat) + (1 : Interval Nat)` is not equal to specified grade or index `0..3`

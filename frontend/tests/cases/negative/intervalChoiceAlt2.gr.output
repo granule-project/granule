@@ -1,4 +1,4 @@
 Type checking failed: 
 Falsifiable theorem: frontend/tests/cases/negative/intervalChoiceAlt2.gr:6:1:
-The following theorem associated with `b` is falsifiable:
-	(0..1 ≤ 0..1) ∧ ((0..1) + (1 : Interval Nat) ≤ 1..1)
+  The following constraint associated with `b` is false:
+	  (0..1 ≤ 0..1) ∧ ((0..1) + (1 : Interval Nat) ≤ 1..1)

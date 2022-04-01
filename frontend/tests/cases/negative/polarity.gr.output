@@ -3,5 +3,5 @@ Unification failed: frontend/tests/cases/negative/polarity.gr:3:40:
 Type variable `a` cannot be unified with type `a [0]` (occurs check failure; implies infinite type).
 
 Falsifiable theorem: frontend/tests/cases/negative/polarity.gr:7:1:
-The following theorem associated with `secondOrderAlt` is falsifiable:
-	(prom_[7:26]0 = 0) ∧ (1 = prom_[7:26]0)
+  The following constraint associated with `secondOrderAlt` is false:
+	  (prom_[7:26]0 = 0) ∧ (1 = prom_[7:26]0)

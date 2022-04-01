@@ -1,7 +1,6 @@
 Type checking failed: 
 Counter example: frontend/tests/cases/negative/universal.gr:2:1:
-The following theorem associated with `foo` is falsifiable:
-	((1 : Nat) + (1 : Nat) = n)
+  When checking `foo`, expected n uses, but instead there are (2 : Nat) actual uses.
 
 Counter-example:
   n = 0 :: Integer

@@ -1,7 +1,7 @@
 Type checking failed: 
 Counter example: frontend/tests/cases/negative/flat.gr:2:1:
-The following theorem associated with `flatten` is falsifiable:
-	((1 : Nat) = d + 1) ∧ ((c + 1) * (d + 1) = c + 1)
+  The following constraint associated with `flatten` is false:
+	  ((1 : Nat) = d + 1) ∧ ((c + 1) * (d + 1) = c + 1)
 
 Counter-example:
   d = 1 :: Integer

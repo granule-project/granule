@@ -1,7 +1,6 @@
 Type checking failed: 
 Counter example: frontend/tests/cases/negative/fixCounterExample.gr:2:1:
-The following theorem associated with `fix` is falsifiable:
-	((1 : s) + r0 ≤ r)
+  When checking `fix`, (1 : s) + r0 is not approximatable by r for type s
 
 Counter-example:
   r = 0 :: s

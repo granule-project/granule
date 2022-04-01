@@ -921,15 +921,11 @@ instance UserMsg CheckerError where
     <> pretty errExpr <> "`"
 
   msg SolverErrorCounterExample{..}
-    =  "The following theorem associated with `" <> pretty errDefId
-    <> "` is falsifiable:\n\t"
-    <> pretty errPred
+    =  prettyNegPred errDefId errPred
     <> (if null message then "" else "\n\n" <> message)
 
   msg SolverErrorFalsifiableTheorem{..}
-    =  "The following theorem associated with `" <> pretty errDefId
-    <> "` is falsifiable:\n\t"
-    <> pretty errPred
+    =  prettyNegPred errDefId errPred
 
   msg SolverError{..} = errMsg <> " for theorem:\n\t" <> pretty errPred
 

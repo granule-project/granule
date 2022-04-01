@@ -45,7 +45,9 @@ simplifyPred' (Conj ps) = do
   -- Remove any duplications
   let ps'' = nub ps'
   -- Output the final conjunction
-  return $ Conj ps''
+  if length ps'' == 1
+    then return $ head ps''
+    else return $ Conj ps''
 
 simplifyPred' (Disj ps) = do
   ps <- mapM simplifyPred' ps
