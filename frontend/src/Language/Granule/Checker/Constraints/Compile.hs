@@ -106,7 +106,7 @@ isDefinedConstraint _ _
   = return False
 
 receivePrefix :: Type -> Bool
-receivePrefix (TyApp (TyCon (internalName -> "Recv")) t) = True
+receivePrefix (TyApp (TyApp (TyCon (internalName -> "Recv")) t) p) = True
 receivePrefix (TyApp
            (TyApp (TyCon (internalName -> "Offer")) _) _) = True
 receivePrefix _ = False
