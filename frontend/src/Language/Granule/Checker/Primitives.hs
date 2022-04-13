@@ -45,6 +45,7 @@ typeConstructors =
     , (mkId "Predicate", (Type 0, [], False))
     , (mkId "->",     (funTy (Type 0) (funTy (Type 0) (Type 0)), [], False))
     , (mkId ",,",     (funTy kcoeffect (funTy kcoeffect kcoeffect), [mkId ",,"], False))
+    , (mkId "ExactSemiring", (funTy (tyCon "Semiring") (tyCon "Predicate"), [], True))
     , (mkId "Int",    (Type 0, [], False))
     , (mkId "Float",  (Type 0, [], False))
     , (mkId "DFloat",  (Type 0, [], False)) -- special floats that can be tracked for sensitivty
@@ -53,7 +54,7 @@ typeConstructors =
     , (mkId "Inverse", ((funTy (Type 0) (Type 0)), [], False))
     -- Session type related things
     , (mkId "Protocol", (Type 0, [], False))
-    , (mkId "SingeAction", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], True))
+    , (mkId "SingleAction", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], True))
     , (mkId "ReceivePrefix", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], True))
     , (mkId "Sends", (funTy (tyCon "Nat") (funTy (tyCon "Protocol") (tyCon "Predicate")), [], True))
     , (mkId "Graded", (funTy (tyCon "Nat") (funTy (tyCon "Protocol") (tyCon "Protocol")), [], True))
@@ -366,7 +367,7 @@ gclose = BUILTIN
 -- trace = BUILTIN
 
 forkNonLinear : forall {p : Protocol, s : Semiring, r : s}
-              . {SingleAction p} => ((LChan p) [r] -> ()) -> (LChan (Dual p)) [r]
+              . {SingleAction p, ExactSemiring s} => ((LChan p) [r] -> ()) -> (LChan (Dual p)) [r]
 forkNonLinear = BUILTIN
 
 forkMulticast : forall {p : Protocol, n : Nat}
