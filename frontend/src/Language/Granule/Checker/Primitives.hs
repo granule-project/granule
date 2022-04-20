@@ -312,7 +312,7 @@ readInt = BUILTIN
 
 fork
   : forall {s : Protocol, k : Coeffect, c : k}
-  . ((Chan s) [c] -> () <Session>) -> ((Chan (Dual s)) [c]) <Session>
+  . {SingleAction s, ExactSemiring k} => ((Chan s) [c] -> () <Session>) -> ((Chan (Dual s)) [c]) <Session>
 fork = BUILTIN
 
 forkLinear
