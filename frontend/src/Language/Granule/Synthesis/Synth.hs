@@ -89,6 +89,64 @@ data Depth = Depth
   }
   deriving (Show, Eq)
 
+
+-- Additional semiring-dependent constraints for additive resource management.
+-- If we are in additive mode, we can finish early if such a constraint is not 
+-- satisfiable:
+-- 
+-- ∀x,y . x ⊑︎ y => xRy
+--  
+increasingConstraints :: (?globals :: Globals) => Ctxt SAssumption -> Ctxt SAssumption -> Synthesiser ()
+increasingConstraints gamma delta = increasingConstraints' gamma delta False
+  where 
+    increasingConstraints' [] delta addedConstraints = do 
+      res <- if addedConstraints then solve else return True
+      boolToSynthesiser res ()
+    increasingConstraints' (gVar@(name, SVar (Discharged _ grade) _):gamma) delta addedConstraints = 
+      case lookup name delta of 
+        Just (SVar (Discharged _ grade') _) -> do 
+          (kind, _, _) <- conv $ synthKind ns grade
+          addIncreasingConstraint kind grade grade'
+          increasingConstraints' gamma delta True
+        _ -> increasingConstraints' gamma delta addedConstraints
+  
+
+addIncreasingConstraint :: Kind -> Type -> Type -> Synthesiser ()
+addIncreasingConstraint k@(isInterval -> Just t) gradeIn gradeOut = do 
+  st <- conv get
+  var <- freshIdentifier
+  conv $ existentialTopLevel var k
+  liftIO $ putStrLn $ "gradeIn: " <> show gradeIn
+  liftIO $ putStrLn $ "gradeOut: " <> show gradeOut
+  modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (TyInfix TyOpPlus gradeOut (TyVar var)) gradeIn k) (predicateContext st)
+
+addIncreasingConstraint k@(TyCon con) gradeIn gradeOut  = 
+  case internalName con of 
+
+    -- Natural Numbers: R = {(x, y) | ∃z. x + z ⊑ y} 
+    "Nat" -> do 
+      st <- conv get
+      var <- freshIdentifier
+      conv $ existentialTopLevel var k
+      liftIO $ putStrLn $ "gradeIn: " <> show gradeIn
+      liftIO $ putStrLn $ "gradeOut: " <> show gradeOut
+      modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (TyInfix TyOpPlus gradeOut (TyVar var)) gradeIn k) (predicateContext st)
+
+    -- Linear/Non Linear: R = {(x, y) | } 
+    "LNL" -> do
+      st <- conv get
+      var <- freshIdentifier
+      conv $ existentialTopLevel var k
+      liftIO $ putStrLn $ "gradeIn: " <> show gradeIn
+      liftIO $ putStrLn $ "gradeOut: " <> show gradeOut
+      modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (TyInfix TyOpPlus gradeOut (TyVar var)) gradeIn k) (predicateContext st)
+
+    -- TBD
+    "Level" -> return ()
+    "Borrowing" -> return ()
+    "OOZ" -> return ()
+addIncreasingConstraint _ _ _ = return ()
+
 ns :: Span 
 ns = nullSpanNoFile
 
