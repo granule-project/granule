@@ -144,7 +144,7 @@ checkTyCon d@(DataDecl sp name tyVars kindAnn ds)
     ids = map dataConstrId ds -- the IDs of data constructors
     tyConKind = mkKind (map snd tyVars)
     mkKind [] = case kindAnn of Just k -> k; Nothing -> Type 0 -- default to `Type`
-    mkKind (v:vs) = FunTy Nothing v (mkKind vs)
+    mkKind (v:vs) = FunTy Nothing (Just (TyGrade Nothing 1)) v (mkKind vs)
 
 checkDataCons :: (?globals :: Globals) => DataDecl -> Checker ()
 checkDataCons d@(DataDecl sp name tyVars k dataConstrs) = do
@@ -231,7 +231,7 @@ checkDataCon
 
       (v:vs) -> (throwError . fmap mkTyVarNameClashErr) (v:|vs)
   where
-    indexKinds (FunTy _ k1 k2) = k1 : indexKinds k2
+    indexKinds (FunTy _ _ k1 k2) = k1 : indexKinds k2
     indexKinds k = []
 
     registerDataConstructor dataConstrTy subst boundVars = do
@@ -291,9 +291,9 @@ checkAndGenerateSubstitution sp tName ty ixkinds =
         | otherwise = throw UnexpectedTypeConstructor
           { errLoc = sp, tyConActual = tC, tyConExpected = tName }
 
-    checkAndGenerateSubstitution' sp tName (FunTy id arg res) kinds = do
+    checkAndGenerateSubstitution' sp tName (FunTy id grade arg res) kinds = do
       (res', subst, tyVarsNew) <- checkAndGenerateSubstitution' sp tName res kinds
-      return (FunTy id arg res', subst, tyVarsNew)
+      return (FunTy id grade arg res', subst, tyVarsNew)
 
     checkAndGenerateSubstitution' sp tName (TyApp fun arg) (kind:kinds) = do
       varSymb <- freshIdentifierBase "t"
@@ -496,9 +496,9 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
 
     replaceParameters :: [[Type]] -> Type -> Type
     replaceParameters [] ty = ty
-    replaceParameters ([]:tss) (FunTy id _ ty) = replaceParameters tss ty
+    replaceParameters ([]:tss) (FunTy id grade _ ty) = replaceParameters tss ty
     replaceParameters ((t:ts):tss) ty =
-      FunTy Nothing t (replaceParameters (ts:tss) ty)
+      FunTy Nothing Nothing t (replaceParameters (ts:tss) ty)
     replaceParameters _ t = error $ "Expecting function type: " <> pretty t
 
     -- Convert an id+assumption to a type.
@@ -605,7 +605,11 @@ checkExpr _ _ _ _ ty@(TyCon c) (Val s _ rf (NumFloat n)) | internalName c == "DF
   let elaborated = Val s ty rf (NumFloat n)
   return (usedGhostVariableContext, [], elaborated)
 
-checkExpr defs gam pol _ ty@(FunTy _ sig tau) (Val s _ rf (Abs _ p t e)) = do
+checkExpr defs gam pol _ ty@(FunTy _ grade sig tau) (Val s _ rf (Abs _ p t e)) | usingExtension GradedBase = do
+  -- TODO:
+  fail "checkExpr FunTy not implemented for graded base"
+
+checkExpr defs gam pol _ ty@(FunTy _ Nothing sig tau) (Val s _ rf (Abs _ p t e)) = do
   debugM "checkExpr[FunTy]" (pretty s <> " : " <> pretty ty)
   -- If an explicit signature on the lambda was given, then check
   -- it confirms with the type being checked here
@@ -664,7 +668,8 @@ checkExpr defs gam pol topLevel tau
       subst'' <- combineSubstitutions s subst subst'
 
       -- Create elborated AST
-      let scaleTy = FunTy Nothing floatTy (FunTy Nothing (Box (TyRational (toRational x)) floatTy) floatTy)
+      let scaleTy = FunTy Nothing Nothing floatTy 
+                      (FunTy Nothing Nothing (Box (TyRational (toRational x)) floatTy) floatTy)
       let elab' = App s floatTy rf
                     (App s' scaleTy rf' (Val s'' floatTy rf'' (Var floatTy v)) (Val s3 floatTy rf3 (NumFloat x))) elab
 
@@ -673,11 +678,15 @@ checkExpr defs gam pol topLevel tau
         throw $ TypeError { errLoc = s, tyExpected = TyCon $ mkId "DFloat", tyActual = tau }
 
 -- Application checking
-checkExpr defs gam pol topLevel tau (App s _ rf e1 e2) = do
+checkExpr defs gam pol topLevel tau (App s _ rf e1 e2) | (usingExtension GradedBase) = do
+  -- TODO
+  fail "TODO implement checkExpr App in GradedBase mode"
+
+checkExpr defs gam pol topLevel tau (App s _ rf e1 e2) | not (usingExtension GradedBase) = do
     debugM "checkExpr[App]" (pretty s <> " : " <> pretty tau)
     (argTy, gam2, subst2, elaboratedR) <- synthExpr defs gam pol e2
 
-    funTy <- substitute subst2 (FunTy Nothing argTy tau)
+    funTy <- substitute subst2 (FunTy Nothing Nothing argTy tau)
     (gam1, subst1, elaboratedL) <- checkExpr defs gam pol topLevel funTy e1
 
     gam <- ctxtPlus s gam1 gam2
@@ -1170,8 +1179,8 @@ synthExpr defs gam pol
 
   let floatTy = TyCon $ mkId "DFloat"
 
-  let scaleTyApplied = FunTy Nothing (Box (TyRational (toRational r)) floatTy) floatTy
-  let scaleTy = FunTy Nothing floatTy scaleTyApplied
+  let scaleTyApplied = FunTy Nothing Nothing (Box (TyRational (toRational r)) floatTy) floatTy
+  let scaleTy = FunTy Nothing Nothing floatTy scaleTyApplied
 
   let elab = App s scaleTy rf (Val s' scaleTy rf' (Var scaleTy v)) (Val s'' floatTy rf'' (NumFloat r))
 
@@ -1184,7 +1193,7 @@ synthExpr defs gam pol (App s _ rf e e') = do
 
     case fTy of
       -- Got a function type for the left-hand side of application
-      (FunTy _ sig tau) -> do
+      (FunTy _ grade sig tau) | not (usingExtension GradedBase) -> do
          (gam2, subst2, elaboratedR) <- checkExpr defs gam (flipPol pol) False sig e'
          gamNew <- ctxtPlus s gam1 gam2
 
@@ -1196,8 +1205,13 @@ synthExpr defs gam pol (App s _ rf e e') = do
          let elaborated = App s tau rf elaboratedL elaboratedR
          return (tau, gamNew, subst, elaborated)
 
-      -- Not a function type
-      t -> throw LhsOfApplicationNotAFunction{ errLoc = s, errTy = t }
+      -- 
+      -- Taking this out for now 
+      -- (FunTy _ grade sig tau) | usingExtension GradedBase -> do
+
+         -- Not a function type
+      t -> throw LhsOfApplicationNotAFunction{ errLoc = s, errTy = fTy }
+
 
 {- Promotion
 
@@ -1318,7 +1332,7 @@ synthExpr defs gam pol (Binop s _ rf op e1 e2) = do
     -- No matching type were found (meaning there is a type error)
     selectFirstByType t1 t2 [] = return Nothing
 
-    selectFirstByType t1 t2 ((FunTy _ opt1 (FunTy _ opt2 resultTy)):ops) = do
+    selectFirstByType t1 t2 ((FunTy _ grade1 opt1 (FunTy _ grade2 opt2 resultTy)):ops) = do
       -- Attempt to use this typing
       (result, local) <- peekChecker $ do
          (eq1, _, _) <- equalTypes s t1 opt1
@@ -1350,7 +1364,7 @@ synthExpr defs gam pol (Val s _ rf (Abs _ p (Just sig) e)) = do
      -- Locally we should have this property (as we are under a binder)
      subst0 <- ctxtApprox s (gam'' `intersectCtxts` bindings) bindings
 
-     let finalTy = FunTy Nothing sig tau
+     let finalTy = FunTy Nothing Nothing sig tau
      let elaborated = Val s finalTy rf (Abs finalTy elaboratedP (Just sig) elaboratedE)
 
      substFinal <- combineManySubstitutions s [subst0, substP, subst]
@@ -1383,7 +1397,7 @@ synthExpr defs gam pol (Val s _ rf (Abs _ p Nothing e)) = do
      -- Locally we should have this property (as we are under a binder)
      subst0 <- ctxtApprox s (gam'' `intersectCtxts` bindings) bindings
 
-     let finalTy = FunTy Nothing sig tau
+     let finalTy = FunTy Nothing Nothing sig tau
      let elaborated = Val s finalTy rf (Abs finalTy elaboratedP (Just sig) elaboratedE)
      finalTy' <- substitute substP finalTy
 

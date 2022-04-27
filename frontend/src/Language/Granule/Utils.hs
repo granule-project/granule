@@ -53,7 +53,7 @@ data Globals = Globals
   } deriving (Read, Show)
 
 -- | Allowed extensions
-data Extension = Base | CBN | NoTopLevelApprox | SecurityLevels
+data Extension = Base | CBN | NoTopLevelApprox | GradedBase | SecurityLevels
  deriving (Eq, Read, Show)
 
 -- | Parse valid extension names
@@ -62,6 +62,9 @@ parseExtensions xs =
   case readsPrec 0 xs of
     ((x, ""):_) -> Just x
     _           -> Nothing
+
+usingExtension :: (?globals :: Globals) => Extension -> Bool
+usingExtension e = elem e $ globalsExtensions ?globals
 
 
 -- | Accessors for global flags with default values

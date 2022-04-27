@@ -226,7 +226,7 @@ getAssumConstr a =
   where
     getTypeConstr :: Type -> Maybe Id
     getTypeConstr (Type _) = Nothing
-    getTypeConstr (FunTy _ t1 _) = Nothing
+    getTypeConstr (FunTy _ _ t1 _) = Nothing
     getTypeConstr (TyCon id) = Just id
     getTypeConstr (Box _ t) = getTypeConstr t
     getTypeConstr (Diamond t1 _) = getTypeConstr t1
@@ -256,7 +256,7 @@ getAssumConstr a =
 -- as a new lower bound. This is because when case splitting, we generate a
 -- single usage from the pattern match.
 expandGrades :: Type -> Type
-expandGrades (FunTy id t1 t2) = FunTy id (expandGrades t1) (expandGrades t2)
+expandGrades (FunTy id mCoeff t1 t2) = FunTy id mCoeff (expandGrades t1) (expandGrades t2)
 expandGrades (Box (TyInfix TyOpInterval (TyGrade k lower) (TyGrade k' upper)) t) | lower > 1 =
   Box (TyInfix TyOpInterval (TyGrade k 1) (TyGrade k' upper)) t
 expandGrades (Box (TyInfix TyOpInterval (TyInt lower) (TyInt upper)) t) | lower > 1 =
@@ -308,7 +308,7 @@ tsTypeNames :: TypeScheme -> [Maybe Id]
 tsTypeNames (Forall _ _ _ t) = typeNames t
    where
      typeNames :: Type -> [Maybe Id]
-     typeNames (FunTy id _ t2) = id : typeNames t2
+     typeNames (FunTy id _ _ t2) = id : typeNames t2
      typeNames _ = []
 
 -- Given a context of patterns, couples the IDs with the Cartesian product of

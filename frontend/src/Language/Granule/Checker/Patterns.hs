@@ -333,7 +333,7 @@ ctxtFromTypedPatterns' :: (?globals :: Globals)
 ctxtFromTypedPatterns' _ sp _ ty [] _ =
   return ([], ty, [], [], [], [])
 
-ctxtFromTypedPatterns' outerCoeff s pos (FunTy _ t1 t2) (pat:pats) (cons:consumptionsIn) = do
+ctxtFromTypedPatterns' outerCoeff s pos (FunTy _ _ t1 t2) (pat:pats) (cons:consumptionsIn) = do
 
   -- Match a pattern
   (localGam, eVars, subst, elabP, consumption) <- ctxtFromTypedPattern' outerCoeff s pos t1 pat cons
@@ -358,8 +358,8 @@ ctxtFromTypedPatterns' _ s _ ty (p:ps) _ = do
   -- First build a representation of what the type would look like
   -- if this was well typed, i.e., if we have two patterns left we get
   -- p0 -> p1 -> ?
-  psTyVars <- mapM (\_ -> freshIdentifierBase "?" Data.Functor.<&> (TyVar . mkId)) ps
-  let spuriousType = foldr (FunTy Nothing) (TyVar $ mkId "?") psTyVars
+  psTyVars <- mapM (\_ -> freshIdentifierBase "?" >>= return . TyVar . mkId) ps
+  let spuriousType = foldr (FunTy Nothing Nothing) (TyVar $ mkId "?") psTyVars
   throw TooManyPatternsError
     { errLoc = s, errPats = p :| ps, tyExpected = ty, tyActual = spuriousType }
 

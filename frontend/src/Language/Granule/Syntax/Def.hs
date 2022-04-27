@@ -161,7 +161,7 @@ typeIndices (DataDecl _ _ tyVars _ constrs) =
       case t2 of
         TyVar v' | v == v' -> findIndices (index+1) tyVars t1
         _                  -> index : findIndices (index+1) tyVars t1
-    findIndices index tyVars (FunTy _ _ t) = findIndices (index+1) tyVars t
+    findIndices index tyVars (FunTy _ _ _ t) = findIndices (index+1) tyVars t
     findIndices _ [] (TyCon _) = []
     -- Defaults to `empty` (acutally an ill-formed case for data types)
     findIndices _ _ _ = []
@@ -192,7 +192,7 @@ nonIndexedToIndexedDataConstr tName tyVars (DataConstrNonIndexed sp dName params
     -- Don't push the parameters into the type scheme yet
     = DataConstrIndexed sp dName (Forall sp [] [] ty)
   where
-    ty = foldr (FunTy Nothing) (returnTy (TyCon tName) tyVars) params
+    ty = foldr (FunTy Nothing Nothing) (returnTy (TyCon tName) tyVars) params
     returnTy t [] = t
     returnTy t (v:vs) = returnTy (TyApp t ((TyVar . fst) v)) vs
 

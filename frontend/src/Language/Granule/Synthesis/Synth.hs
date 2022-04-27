@@ -692,7 +692,7 @@ absHelper :: (?globals :: Globals)
   -> Maybe Type
   -> Goal
   -> Synthesiser (Expr () Type, Ctxt SAssumption, Substitution, Bindings, Bool)
-absHelper gamma (Focused omega) resourceScheme inDef depth focusPhase grade goal@(Goal goalTySch@(Forall _ binders constraints gt@(FunTy name tyA tyB)) sInf) = do
+absHelper gamma (Focused omega) resourceScheme inDef depth focusPhase grade goal@(Goal goalTySch@(Forall _ binders constraints gt@(FunTy name _ tyA tyB)) sInf) = do
 
   -- Fresh var
   id <- useBinderNameOrFreshen name
@@ -748,7 +748,7 @@ appHelper gamma (Focused left) (Focused (var@(x, assumption) : right)) Subtracti
   appHelper gamma (Focused (var : left)) (Focused right) Subtractive inDef depth focusPhase grade goal `try` do
   assumptionTy <- getSAssumptionType assumption 
   (case assumptionTy of
-    (FunTy _ tyA tyB, isTopLevelDef, _, _) -> do
+    (FunTy _ _ tyA tyB, isTopLevelDef, _, _) -> do
 
       -- Only try the app if we haven't hit the app allowed depth 
       -- debugM "synthDebug - (app) trying to use a function " (show var ++ " to get goal " ++ pretty goalTySch)
@@ -806,7 +806,7 @@ appHelper gamma (Focused left) (Focused (var@(x, assumption) : right)) add@(Addi
   appHelper gamma (Focused (var : left)) (Focused right) add inDef depth focusPhase grade goal `try` do
   assumptionTy <- getSAssumptionType assumption
   case assumptionTy of
-    (FunTy _ tyA tyB, isTopLevelDef, _, _) -> do
+    (FunTy _ _ tyA tyB, isTopLevelDef, _, _) -> do
 
       let omega = (left ++ right)
       used <- useVar var omega add grade
