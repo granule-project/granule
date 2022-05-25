@@ -313,6 +313,10 @@ equalTypesRelatedCoeffectsInner s rel (TyVar n) t kind sp mode = do
            addConstraint $ Eq s (TyVar n) t (TyCon $ mkId "Nat")
            return (True, unif ++ [(n, SubstT t)])
 
+         Just (TyCon (Id "Q" "Q"), unif, _) -> do
+           addConstraint $ Eq s (TyVar n) t (TyCon $ mkId "Q")
+           return (True, unif ++ [(n, SubstT t)])
+
          _ -> throw UnificationFail{ errLoc = s, errVar = n, errKind = k1, errTy = t, tyIsConcrete = True }
 
     (Just (_, InstanceQ)) -> error "Please open an issue at https://github.com/granule-project/granule/issues"
@@ -413,6 +417,11 @@ equalTypesRelatedCoeffectsInner s rel t1 t2 k sp mode = do
         (TyCon (internalName -> "Nat")) -> do
           debugM "equality on nats" (pretty t1 ++ " =? " ++ pretty t2)
           addConstraint $ Eq s t1 t2 (TyCon $ mkId "Nat")
+          return (True, [])
+
+        (TyCon (internalName -> "Q")) -> do
+          debugM "equality on Qs" (pretty t1 ++ " =? " ++ pretty t2)
+          addConstraint $ Eq s t1 t2 (TyCon $ mkId "Q")
           return (True, [])
 
         (TyCon (internalName -> "Protocol")) ->
