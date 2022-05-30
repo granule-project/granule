@@ -102,6 +102,9 @@ isDefinedConstraint _ (TyApp (TyCon (internalName -> "ReceivePrefix")) protocol)
 isDefinedConstraint s (TyApp (TyCon (internalName -> "Sends")) protocol)
   = sends s protocol
 
+isDefinedConstraint s (TyApp (TyCon (internalName -> "ExactSemiring")) semiring)
+  = return (exactSemiring semiring)
+
 isDefinedConstraint _ _
   = return False
 
@@ -140,3 +143,13 @@ singleAction (TyApp
               (TyCon (internalName -> "End")))
               (TyCon (internalName -> "End"))) = True
 singleAction _ = False
+
+exactSemiring :: Type -> Bool
+exactSemiring (TyCon (internalName -> "Nat")) = True
+exactSemiring (TyApp
+               (TyCon (internalName -> "Ext")) s) = exactSemiring s
+exactSemiring (TyApp
+                (TyApp (TyCon (internalName -> ",,"))
+                 s1)
+                 s2) = exactSemiring s1 && exactSemiring s2
+exactSemiring _ = False

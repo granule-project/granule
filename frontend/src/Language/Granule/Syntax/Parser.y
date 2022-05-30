@@ -387,6 +387,7 @@ TyAtom :: { Type }
   | '(' ',' ')'               { TyCon $ mkId "," }
   | VAR                       { TyVar (mkId $ symString $1) }
   | INT                       { let TokenInt _ x = $1 in TyGrade Nothing x }
+  | FLOAT                     { let TokenFloat _ x = $1 in TyRational $ myReadFloat x }
   -- | '.' INT                   { let TokenInt _ x = $2 in TyInt x }
   | '(' Type ')'              { $2 }
   | '(' Type ',' Type ')'     { TyApp (TyApp (TyCon $ mkId ",") $2) $4 }
