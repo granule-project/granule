@@ -3,7 +3,7 @@
    - forkNonLinear can only work over semirings with exact equality for soundess
    - Tweaks to the way type-level float equality works
 
-  # 0.9.0.1
+  # 0.9.0.0
   - Major features:
       - Uniqueness modality and mutable arrays 
         - https://granule-project.github.io/papers/esop22-paper.pdf
