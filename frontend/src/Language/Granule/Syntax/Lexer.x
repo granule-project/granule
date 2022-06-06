@@ -114,6 +114,7 @@ tokens :-
   "!"                           { \p _ -> TokenBang p}
   "&"                           { \p _ -> TokenBorrow p}
   "#"                           { \p _ -> TokenHash p }
+  "⊸"                           { \p _ -> TokenArrow p }
 
 {
 
