@@ -13,7 +13,7 @@
 module Language.Granule.Syntax.Pretty where
 
 import Data.Foldable (toList)
-import Data.List
+import Data.List (intercalate)
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Pattern
