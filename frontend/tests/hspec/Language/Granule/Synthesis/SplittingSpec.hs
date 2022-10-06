@@ -64,10 +64,10 @@ runSplitter :: (?globals :: Globals)
   -> IO ([Id], [[Pattern ()]])
 runSplitter ty dataCons tyCons tyVarCtxt ctxt boundIds = do
   let st = initState {
-    patternConsumption = repeat NotFull,
-    dataConstructors = concatMap snd dataCons,
-    typeConstructors = tyCons,
-    tyVarContext = tyVarCtxt,
-    equationTy = Just ty }
+    patternConsumption = repeat NotFull
+  , dataConstructors = concatMap snd dataCons
+  , typeConstructors = tyCons
+  , tyVarContext     = tyVarCtxt
+  , splittingTy      = Just ty }
   (Right (ids, res), _) <- runChecker st (generateCases nullSpan dataCons ctxt boundIds)
   return (ids, map fst res)
