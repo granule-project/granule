@@ -1,0 +1,3 @@
+Type checking failed: 
+Type constraint error: frontend/tests/cases/negative/typeConstraintSessions.gr:13:1:
+Constraint `SingleAction (Send () (Send () End))` does not hold or is not provided by the type constraint assumptions here.
