@@ -450,6 +450,8 @@ moveChar = BUILTIN
 moveInt : Int -> Int []
 moveInt = BUILTIN
 
+moveString : String -> String []
+moveString = BUILTIN
 
 --------------------------------------------------------------------------------
 -- String manipulation
