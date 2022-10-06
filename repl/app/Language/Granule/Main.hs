@@ -323,11 +323,12 @@ relevantMessages :: Bool -> NonEmpty.NonEmpty Checker.CheckerError -> [Checker.C
 relevantMessages ignoreHoles es =
   NonEmpty.filter (\ e -> case e of Checker.HoleMessage{} -> not ignoreHoles; _ -> True) es
 
+-- Adds a definition into the context (unless it is already there)
 loadInQueue :: (?globals::Globals) => Def () () -> REPLStateIO  ()
 loadInQueue def@(Def _ id _ _ _) = do
   st <- get
   if M.member (pretty id) (defns st)
-    then Ex.throwError (TermInContext (pretty id))
+    then return ()
     else put $ st { defns = M.insert (pretty id) (def, nub $ extractFreeVars id (freeVars def)) (defns st) }
 
 dumpStateAux :: (?globals::Globals) => M.Map String (Def () (), [String]) -> [String]
@@ -354,7 +355,7 @@ buildAST m var =
       def : concatMap (buildAST m) dependencies
 
 buildRelevantASTdefinitions :: [Id] -> M.Map String (Def () (), [String]) -> [Def () ()]
-buildRelevantASTdefinitions vars m = reverse . concatMap (buildAST m . sourceName) $ vars
+buildRelevantASTdefinitions vars m = reverse . nub . concatMap (buildAST m . sourceName) $ vars
 
 buildCheckerState :: (?globals::Globals) => [DataDecl] -> Checker.Checker ()
 buildCheckerState dataDecls = do
