@@ -95,7 +95,7 @@ library:
   - syz >=0.2.0.0
   - text >=1.1.2
   - split
-  - logict == 0.7.0.2
+  - logict == 0.7.1.0
   - clock
 
 tests:

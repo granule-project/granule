@@ -23,7 +23,6 @@ import Control.Monad.State
 import Control.Monad.Trans.Reader
 import qualified Control.Monad.Except as Ex
 import System.Console.Haskeline
-import System.Console.Haskeline.MonadException()
 
 import "Glob" System.FilePath.Glob (glob)
 import Language.Granule.Utils
@@ -267,17 +266,6 @@ synthTypeFromInputExpr exprAst = do
   case checkerResult of
     Right res -> return res
     Left err -> Ex.throwError (TypeCheckerError err (files st))
-
--- Exceptions behaviour
-instance MonadException m => MonadException (StateT ReplState m) where
-  controlIO f = StateT $ \s -> controlIO $ \(RunIO run) -> let
-                  run' = RunIO (fmap (StateT . const) . run . flip runStateT s)
-                  in fmap (flip runStateT s) $ f run'
-
-instance MonadException m => MonadException (Ex.ExceptT e m) where
-  controlIO f = Ex.ExceptT $ controlIO $ \(RunIO run) -> let
-                  run' = RunIO (fmap Ex.ExceptT . run . Ex.runExceptT)
-                  in fmap Ex.runExceptT $ f run'
 
 replEval :: (?globals :: Globals) => Int -> AST () () -> IO (Maybe RValue)
 replEval val = evalAtEntryPoint (mkId (" repl" <> show val))

@@ -185,8 +185,8 @@ checkerDiagnostics doc version l = do
 checkerErrorToDiagnostic :: (?globals :: Globals) => NormalizedUri -> TextDocumentVersion -> CheckerError -> Diagnostic
 checkerErrorToDiagnostic doc version e =
   let span = errLoc e
-      (startLine, startCol) = startPos span
-      (endLine, endCol) = endPos span
+      (startLine, startCol) = let (x,y) = startPos span in (fromIntegral x, fromIntegral y)
+      (endLine, endCol) = let (x,y) = endPos span in (fromIntegral x, fromIntegral y)
       message = title e ++ ":\n" ++ msg e
       in Diagnostic
           (Range (Position (startLine-1) (startCol-1)) (Position (endLine-1) endCol))
@@ -206,30 +206,30 @@ objectToSymbol objSpan objId obj = let loc = objSpan obj in SymbolInformation
   (Location 
       (filePathToUri $ filename loc)
       (Range
-        (let (x, y) = startPos loc in Position (x-1) (y-1))
-        (let (x, y) = endPos loc in Position (x-1) (y-1))))
+        (let (x, y) = startPos loc in Position (fromIntegral x-1) (fromIntegral y-1))
+        (let (x, y) = endPos loc in Position (fromIntegral x-1) (fromIntegral y-1))))
   (Nothing)
 
 posInSpan :: Position -> Span -> Bool
 posInSpan (Position l c) s = let
   (testLine, testColumn) = (l+1, c+1)
-  (startLine, startColumn) = startPos s
-  (endLine, endColumn) = endPos s
+  (startLine, startColumn) = let (x,y) = startPos s in (fromIntegral x, fromIntegral y)
+  (endLine, endColumn) = let (x,y) = endPos s in (fromIntegral x, fromIntegral y)
   in (startLine < testLine && testLine < endLine) || (startLine == testLine && startColumn <= testColumn) || (testLine == endLine && testColumn <= endColumn)
 
 spanToLocation :: Span -> Location
 spanToLocation s = Location
     (filePathToUri $ filename s)
     (Range
-      (let (x, y) = startPos s in Position (x-1) (y-1))
-      (let (x, y) = endPos s in Position (x-1) (y-1)))
+      (let (x, y) = startPos s in Position (fromIntegral x-1) (fromIntegral y-1))
+      (let (x, y) = endPos s in Position (fromIntegral x-1) (fromIntegral y-1)))
 
 getWordAtPosition :: T.Text -> Position -> Maybe String
 getWordAtPosition t (Position l c) = let ls = lines (T.unpack t) in
-  if Prelude.length ls < l then Nothing else let
-    targetLine = ls!!l in
-      if Prelude.length targetLine < c then Nothing else
-        Just $ getWordFromString targetLine c ""
+  if Prelude.length ls < fromIntegral l then Nothing else let
+    targetLine = ls!!(fromIntegral l) in
+      if Prelude.length targetLine < fromIntegral c then Nothing else
+        Just $ getWordFromString targetLine (fromIntegral c) ""
 
 getWordFromString :: String -> Int -> String -> String
 getWordFromString [] _ acc = acc
@@ -257,7 +257,7 @@ handlers = mconcat
       mdoc <- getVirtualFile doc
       case mdoc of
         Just vf@(VirtualFile _ version _rope) -> do
-          validateGranuleCode doc (Just version) (virtualFileText vf)
+          validateGranuleCode doc (Just (fromIntegral version)) (virtualFileText vf)
         _ -> debugS $ "No virtual file found for: " <> (T.pack (show msg))
   , requestHandler SWorkspaceSymbol $ \req responder -> do
       let query = T.unpack $ req ^. L.params . L.query
@@ -286,7 +286,7 @@ handlers = mconcat
         Just vf@(VirtualFile _ version _rope) -> do
           let t = virtualFileText vf
               query = getWordAtPosition t pos
-          validateGranuleCode doc (Just version) t
+          validateGranuleCode doc (Just (fromIntegral version)) t
           case query of
             Nothing -> debugS $ "This should be impossible!"
             Just q -> do
