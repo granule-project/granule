@@ -1,3 +1,8 @@
+  # 0.9.0.1
+   - Bug fixes to pretty printer
+   - forkNonLinear can only work over semirings with exact equality for soundess
+   - Tweaks to the way type-level float equality works
+
   # 0.9.0.0
   - Major features:
       - Uniqueness modality and mutable arrays 

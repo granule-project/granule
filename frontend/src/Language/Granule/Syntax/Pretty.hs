@@ -13,7 +13,7 @@
 module Language.Granule.Syntax.Pretty where
 
 import Data.Foldable (toList)
-import Data.List
+import Data.List (intercalate)
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Pattern
@@ -214,7 +214,7 @@ instance Pretty (Pattern a) where
     pretty (PBox _ _ _ p)     = "[" <> prettyNested p <> "]"
     pretty (PInt _ _ _ n)     = show n
     pretty (PFloat _ _ _ n)   = show n
-    pretty (PConstr _ _ _ name args) | internalName name == "," = intercalate ", " (map prettyNested args)
+    pretty (PConstr _ _ _ name args) | internalName name == "," = "(" <> intercalate ", " (map prettyNested args) <> ")"
     pretty (PConstr _ _ _ name args) = unwords (pretty name : map prettyNested args)
 
 instance {-# OVERLAPS #-} Pretty [Pattern a] where
@@ -226,6 +226,7 @@ instance Pretty t => Pretty (Maybe t) where
     pretty (Just x) = pretty x
 
 instance Pretty v => Pretty (Value v a) where
+    pretty (Abs _ x Nothing e) = "\\" <> pretty x <> " -> " <> pretty e
     pretty (Abs _ x t e) = "\\(" <> pretty x <> " : " <> pretty t
                                  <> ") -> " <> pretty e
     pretty (Promote _ e) = "[" <> pretty e <> "]"

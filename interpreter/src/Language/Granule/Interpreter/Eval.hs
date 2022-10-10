@@ -652,6 +652,9 @@ builtIns =
   -- substrctural combinators
   , (mkId "moveChar", Ext () $ Primitive $ \(CharLiteral c) -> return $ Promote () (Val nullSpan () False (CharLiteral c)))
   , (mkId "moveInt", Ext () $ Primitive $ \(NumInt c) -> return $ Promote () (Val nullSpan () False (NumInt c)))
+  , ( mkId "moveString"
+    , Ext () $ Primitive $ \(StringLiteral s) -> return $
+        Promote () $ valExpr $ (StringLiteral s))
   , (mkId "drop@Int", Ext () $ Primitive $ const $ return $ Constr () (mkId "()") [])
   , (mkId "drop@Char", Ext () $ Primitive $ const $ return $ Constr () (mkId "()") [])
   , (mkId "drop@Float", Ext () $ Primitive $ const $ return $ Constr () (mkId "()") [])

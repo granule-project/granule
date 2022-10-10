@@ -207,7 +207,7 @@ freshSolverVarScoped quant name (isProduct -> Just (t1, t2)) q k =
 
 freshSolverVarScoped quant name (TyCon (internalName -> "Q")) q k =
   -- Floats (rationals)
-    quant q name (\solverVar -> k (sTrue, SFloat solverVar))
+    quant q name (\solverVar -> k (sNot (fpIsNaN solverVar), SFloat solverVar))
 
 freshSolverVarScoped quant name (TyCon (internalName -> "Sec")) q k =
     quant q name (\solverVar -> k (sTrue, SSec solverVar))
