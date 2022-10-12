@@ -21,6 +21,7 @@ cabal.sandbox.config
 *.eventlog
 .stack-work/
 cabal.project.local
+stack.yaml.lock
 .HTF/
 
 ### macOS ###
