@@ -200,7 +200,7 @@ containsTypeSig :: Type -> Bool
 containsTypeSig =
   runIdentity . typeFoldM (TypeFold
       { tfTy = \_ -> return $ False
-      , tfFunTy = \_ x y -> return (x || y)
+      , tfFunTy = \_ c x y -> return (x || y)
       , tfTyCon = \_ -> return False
       , tfBox = \x y -> return (x || y)
       , tfDiamond = \x y -> return $ (x || y)
@@ -279,7 +279,7 @@ mTySig t _ k      = return (TySig t k)
 -- Monadic algebra for types
 data TypeFold m a = TypeFold
   { tfTy      :: Int                -> m a
-  , tfFunTy   :: Maybe Id -> a -> a -> m a
+  , tfFunTy   :: Maybe Id -> Maybe Coeffect -> a -> a -> m a
   , tfTyCon   :: Id                 -> m a
   , tfBox     :: a -> a             -> m a
   , tfDiamond :: a -> a             -> m a
@@ -305,10 +305,10 @@ typeFoldM algebra = go
   where
    go :: Type -> m a
    go (Type l) = (tfTy algebra) l
-   go (FunTy v t1 t2) = do
+   go (FunTy v coeff t1 t2) = do
      t1' <- go t1
      t2' <- go t2
-     (tfFunTy algebra) v t1' t2'
+     (tfFunTy algebra) v coeff t1' t2'
    go (TyCon s) = (tfTyCon algebra) s
    go (Box c t) = do
      c' <- go c
@@ -358,7 +358,7 @@ typeFoldM algebra = go
 instance Term Type where
     freeVars = getConst . runIdentity . typeFoldM TypeFold
       { tfTy      = \_ -> return (Const [])
-      , tfFunTy   = \_ (Const x) (Const y) -> return $ Const (x <> y)
+      , tfFunTy   = \_ _ (Const x) (Const y) -> return $ Const (x <> y)
       , tfTyCon   = \_ -> return (Const []) -- or: const (return [])
       , tfBox     = \(Const c) (Const t) -> return $ Const (c <> t)
       , tfDiamond = \(Const e) (Const t) -> return $ Const (e <> t)

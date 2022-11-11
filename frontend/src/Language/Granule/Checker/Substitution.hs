@@ -454,7 +454,7 @@ instance Unifiable Type where
     unify' t t' | t == t' = return []
     unify' (TyVar v) t    = return [(v, SubstT t)]
     unify' t (TyVar v)    = return [(v, SubstT t)]
-    unify' (FunTy _ t1 t2) (FunTy _ t1' t2') = do
+    unify' (FunTy _ _ t1 t2) (FunTy _ _ t1' t2') = do
         u1 <- unify' t1 t1'
         u2 <- unify' t2 t2'
         lift $ combineSubstitutionsHere u1 u2

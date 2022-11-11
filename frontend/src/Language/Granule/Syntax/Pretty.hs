@@ -13,7 +13,7 @@
 module Language.Granule.Syntax.Pretty where
 
 import Data.Foldable (toList)
-import Data.List
+import Data.List (intercalate)
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Pattern
@@ -90,14 +90,23 @@ instance Pretty Type where
     pretty (Type l) =
       "Type " <> pretty l
 
-    pretty (FunTy Nothing t1 t2)  =
+    pretty (FunTy Nothing Nothing t1 t2)  =
       case t1 of
         FunTy{} -> "(" <> pretty t1 <> ") -> " <> pretty t2
         _ -> pretty t1 <> " -> " <> pretty t2
 
-    pretty (FunTy (Just id) t1 t2)  =
+    pretty (FunTy Nothing (Just coeffect) t1 t2)  =
+      case t1 of
+        FunTy{} -> "(" <> pretty t1 <> ") -> " <> pretty t2
+        _ -> pretty t1 <> " ^ " <> pretty coeffect <>  " -> " <> pretty t2
+
+    pretty (FunTy (Just id) Nothing t1 t2)  =
       let pt1 = case t1 of FunTy{} -> "(" <> pretty t1 <> ")"; _ -> pretty t1
       in  "(" <> pretty id <> " : " <> pt1 <> ") -> " <> pretty t2
+
+    pretty (FunTy (Just id) (Just coeffect) t1 t2)  =
+      let pt1 = case t1 of FunTy{} -> "(" <> pretty t1 <> ")"; _ -> pretty t1
+      in  "(" <> pretty id <> " : " <> pt1 <> ") ^ " <> pretty coeffect <> " -> " <> pretty t2
 
     pretty (Box c t)      =
       prettyNested t <> " [" <> pretty c <> "]"

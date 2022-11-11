@@ -62,6 +62,10 @@ parseExtensions xs =
     ((x, ""):_) -> Just x
     _           -> Nothing
 
+usingExtension :: (?globals :: Globals) => Extension -> Bool
+usingExtension e = elem e $ globalsExtensions ?globals
+
+
 -- | Accessors for global flags with default values
 debugging, noColors, alternativeColors, noEval, suppressInfos, suppressErrors,
   timestamp, testing, ignoreHoles, benchmarking, benchmarkingRawData, subtractiveSynthesisMode, alternateSynthesisMode :: (?globals :: Globals) => Bool

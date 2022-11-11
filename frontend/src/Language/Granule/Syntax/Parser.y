@@ -322,16 +322,17 @@ Kind :: { Kind }
   : Type                           { $1 }
 
 Type :: { Type }
-  : '(' VAR ':' Type ')' '->' Type { FunTy (Just . mkId . symString $ $2) $4 $7 }
-  | TyJuxt                         { $1 }
-  | '!' TyAtom                     { Box (TyCon $ mkId "NonLin") $2 }
-  | Type '->' Type                 { FunTy Nothing Nothing $1 $3 }
-  | Type '^' Coeffect '->' Type    { FunTy Nothing (Just $3) $1 $5 }
-  | Type '×' Type                  { TyApp (TyApp (TyCon $ mkId ",") $1) $3 }
-  | TyAtom '[' Coeffect ']'        { Box $3 $1 }
-  | TyAtom '[' ']'                 { Box (TyInfix TyOpInterval (TyGrade (Just extendedNat) 0) infinity) $1 }
-  | TyAtom '<' Effect '>'          { Diamond $3 $1 }
-  | case Type of TyCases { TyCase $2 $4 }
+  : '(' VAR ':' Type ')' '->' Type              { FunTy (Just . mkId . symString $ $2) Nothing $4 $7 }
+  | '(' VAR ':' Type ')' '^' Coeffect '->' Type { FunTy (Just . mkId . symString $ $2) (Just $7) $4 $9 } 
+  | TyJuxt                                      { $1 }
+  | '!' TyAtom                                  { Box (TyCon $ mkId "NonLin") $2 }
+  | Type '->' Type                              { FunTy Nothing Nothing $1 $3 }
+  | Type '^' Coeffect '->' Type                 { FunTy Nothing (Just $3) $1 $5 }
+  | Type '×' Type                               { TyApp (TyApp (TyCon $ mkId ",") $1) $3 }
+  | TyAtom '[' Coeffect ']'                     { Box $3 $1 }
+  | TyAtom '[' ']'                              { Box (TyInfix TyOpInterval (TyGrade (Just extendedNat) 0) infinity) $1 }
+  | TyAtom '<' Effect '>'                       { Diamond $3 $1 }
+  | case Type of TyCases                        { TyCase $2 $4 }
 
 TyApp :: { Type }
  : TyJuxt TyAtom              { TyApp $1 $2 }

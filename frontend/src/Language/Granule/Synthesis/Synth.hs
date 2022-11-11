@@ -335,7 +335,7 @@ absHelper :: (?globals :: Globals)
   -> ResourceScheme AltOrDefault
   -> TypeScheme
   -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution, Bindings)
-absHelper gamma omega resourceScheme goalTy@(Forall _ binders constraints (FunTy name t1 t2)) = do
+absHelper gamma omega resourceScheme goalTy@(Forall _ binders constraints (FunTy name _ t1 t2)) = do
     -- Fresh var
     id <- useBinderNameOrFreshen name
 
@@ -385,7 +385,7 @@ x2 ∉ Δ1
 appHelper left (var@(x, a) : right) (sub@Subtractive{}) goalTy@(Forall _ binders constraints _ ) =
   (appHelper (var : left) right sub goalTy) `try`
   (case getAssumptionType a of
-    (FunTy _ t1 t2) -> do
+    (FunTy _ _ t1 t2) -> do
       debugM "synthDebug" ("Trying to use a function " ++ pretty var ++ " to get goal " ++ pretty goalTy)
 
       let omega = left ++ right
@@ -426,7 +426,7 @@ Additive (Pruning)
 appHelper left (var@(x, a) : right) (add@(Additive mode)) goalTy@(Forall _ binders constraints _ ) =
   (appHelper (var : left) right add goalTy) `try`
   (case getAssumptionType a of
-    (FunTy _ tyA tyB) -> do
+    (FunTy _ _ tyA tyB) -> do
       let omega = left ++ right
       (canUse, useContextOut, _) <- useVar var omega add
       if canUse

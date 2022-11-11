@@ -129,7 +129,7 @@ equalTypesRelatedCoeffectsInner :: (?globals :: Globals)
 equalTypesRelatedCoeffectsInner s rel t1 t2 _ _ _ | t1 == t2 =
   return (True, [])
 
-equalTypesRelatedCoeffectsInner s rel fTy1@(FunTy _ t1 t2) fTy2@(FunTy _ t1' t2') _ sp mode = do
+equalTypesRelatedCoeffectsInner s rel fTy1@(FunTy _ _ t1 t2) fTy2@(FunTy _ _ t1' t2') _ sp mode = do
   -- contravariant position (always approximate)
   (eq1, u1) <- equalTypesRelatedCoeffects s ApproximatedBy t1' t1 (flipIndicator sp) mode
    -- covariant position (depends: is not always over approximated)
@@ -468,7 +468,7 @@ isIndexedType :: Type -> Checker Bool
 isIndexedType t = do
   b <- typeFoldM TypeFold
       { tfTy = \_ -> return $ Const False
-      , tfFunTy = \_ (Const x) (Const y) -> return $ Const (x || y)
+      , tfFunTy = \_ _ (Const x) (Const y) -> return $ Const (x || y)
       , tfTyCon = \c -> do {
           st <- get;
           return $ Const $ case lookup c (typeConstructors st) of Just (_,_,ixed) -> ixed; Nothing -> False }
