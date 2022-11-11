@@ -4,7 +4,7 @@ f [x] = (scale 2.5 [x] + 1.0) * (scale 3.0 [x])
 g : DFloat [7.5] → DFloat
 g [x] = scale 3.0 [scale 2.5 [x]]
 
-main : Float
+main : DFloat
 main = f [g [10.0]]
 
 

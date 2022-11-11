@@ -1,5 +1,5 @@
 {-# LANGUAGE GADTs #-}
-module Language.Granule.Checker.CoeffectsTypeConverter(justCoeffectTypes, tyVarContextExistential) where
+module Language.Granule.Checker.CoeffectsTypeConverter(includeOnlyGradeVariables, tyVarContextExistential) where
 
 import Control.Monad.Except (catchError)
 import Control.Monad.State.Strict
@@ -16,9 +16,9 @@ import Language.Granule.Syntax.Type
 
 import Language.Granule.Utils
 
-justCoeffectTypes :: (?globals :: Globals)
+includeOnlyGradeVariables :: (?globals :: Globals)
   => Span -> [(a, (Type, b))] -> Checker [(a, (Type, b))]
-justCoeffectTypes s xs = mapM convert xs >>= (return . catMaybes)
+includeOnlyGradeVariables s xs = mapM convert xs >>= (return . catMaybes)
   where
     convert (var, (t, q)) = (do
       k <- checkKind s t kcoeffect

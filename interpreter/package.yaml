@@ -2,7 +2,7 @@ name: granule-interpreter
 version: '0.8.1.0'
 synopsis: The Granule interpreter
 author: Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Jack Hughes, Preston Keel
-copyright: 2018-20 authors
+copyright: 2018-22 authors
 license: BSD3
 github: dorchard/granule
 dependencies:

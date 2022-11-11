@@ -231,7 +231,7 @@ evalIn ctxt (Val _ _ _ (Var _ x)) = do
     case lookup x ctxt of
       Just val@(Ext _ (PrimitiveClosure f)) -> return $ Ext () $ Primitive (f ctxt)
       Just val -> return val
-      Nothing  -> fail $ "Variable '" <> sourceName x <> "' is undefined in context."
+      Nothing  -> fail $ "Variable '" <> sourceName x <> "' is undefined in context. Context is " <> show ctxt
 
 evalIn ctxt (Val s _ _ (Promote _ e)) = do
   -- CallByName extension

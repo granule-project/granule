@@ -47,6 +47,15 @@ mguCoeffectTypes' :: (?globals :: Globals)
 -- Trivial case
 mguCoeffectTypes' s t t' | t == t' = return $ Just (t, [], (id, id))
 
+-- Ext case
+mguCoeffectTypes' s (isExt -> Just t) (isExt -> Just t') = do
+  coeffecTyUpper <- mguCoeffectTypes' s t t'
+  case coeffecTyUpper of
+    Just (upperTy, subst, (inj1, inj2)) -> do
+      return $ Just (TyApp (TyCon $ mkId "Ext") upperTy, subst, (inj1, inj2))            
+    Nothing -> return Nothing
+
+
 -- Both are variables
 mguCoeffectTypes' s (TyVar kv1) (TyVar kv2) | kv1 /= kv2 = do
   st <- get
