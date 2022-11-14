@@ -674,8 +674,8 @@ joinTypesNoMGU'' :: (?globals :: Globals)
           -> MaybeT Checker (Type, Substitution, Maybe Injections)
 joinTypesNoMGU'' s t t' rel | t == t' = return (t, [], Nothing)
 
-joinTypesNoMGU'' s (FunTy id mc t1 t2) (FunTy x mc' t1' t2') rel =
-  joinTypes'' s (FunTy id mc t1 t2) (FunTy x mc' t1' t2') rel
+joinTypesNoMGU'' s (FunTy id g t1 t2) (FunTy x g' t1' t2') rel =
+  joinTypes'' s (FunTy id g t1 t2) (FunTy x g' t1' t2') rel
 
 joinTypesNoMGU'' s (Diamond ef1 t1) (Diamond ef2 t2) rel =
   joinTypes'' s (Diamond ef1 t1) (Diamond ef2 t2) rel
@@ -722,3 +722,309 @@ mguCoeffectTypesFromCoeffects s c1 c2 = do
   (coeffTy, subst3, res) <- mguCoeffectTypes s coeffTy1 coeffTy2
   subst <- combineManySubstitutions s [subst1, subst2, subst3]
   return (coeffTy, subst, res)
+
+-- Compute the most general unification between two coeffect types
+-- which produces their unification, a substitution, and a pair of injections
+-- for terms of the previous types. i.e.,
+--  if `mguCoeffectTypes t1 t2` yields type `t3` and injections `(i1, i2)`
+--  then if `r1 : t1` and `r2 : t2` then `i1 r1 : t3` and `i2 t2 : t3`.
+
+mguCoeffectTypes :: (?globals :: Globals)
+                 => Span -> Type -> Type -> Checker (Type, Substitution, Injections)
+mguCoeffectTypes s t1 t2 = do
+  upper <- mguCoeffectTypes' s t1 t2
+  case upper of
+    Just x -> return x
+    -- Cannot unify so form a product
+    Nothing -> return
+      (TyApp (TyApp (TyCon (mkId ",,")) t1) t2, [],
+                  (\x -> cProduct x (TyGrade (Just t2) 1), \x -> cProduct (TyGrade (Just t1) 1) x))
+
+-- Inner definition which does not throw its error, and which operates on just the types
+mguCoeffectTypes' :: (?globals :: Globals)
+  => Span -> Type -> Type -> Checker (Maybe (Type, Substitution, (Coeffect -> Coeffect, Coeffect -> Coeffect)))
+
+-- Trivial case
+mguCoeffectTypes' s t t' | t == t' = return $ Just (t, [], (id, id))
+
+-- Unifying with variables
+
+mguCoeffectTypes' s (TyVar kvar1) kv2 = do
+  subst <- unification s kvar1 kv2 Eq
+  return $ Just (kv2, subst, (id, id))
+
+mguCoeffectTypes' s kv1 (TyVar kv2) = do
+  mguCoeffectTypes' s (TyVar kv2) kv1
+
+-- Ext cases
+-- unify (Ext t) (Ext t') = Ext (unify t t')
+mguCoeffectTypes' s (isExt -> Just t) (isExt -> Just t') = do
+  coeffecTyUpper <- mguCoeffectTypes' s t t'
+  case coeffecTyUpper of
+    Just (upperTy, subst, (inj1, inj2)) -> do
+      return $ Just (TyApp (TyCon $ mkId "Ext") upperTy, subst, (inj1, inj2))
+    Nothing -> return Nothing
+
+-- unify (Ext t) t' = Ext (unify t t')
+mguCoeffectTypes' s (isExt -> Just t) t' = do
+  coeffecTyUpper <- mguCoeffectTypes' s t t'
+  case coeffecTyUpper of
+    Just (upperTy, subst, (inj1, inj2)) -> do
+      return $ Just (TyApp (TyCon $ mkId "Ext") upperTy, subst, (inj1, inj2))
+    Nothing -> return Nothing
+
+-- unify t (Ext t') = Ext (unify t t')
+mguCoeffectTypes' s t (isExt -> Just t') = do
+  coeffecTyUpper <- mguCoeffectTypes' s t t'
+  case coeffecTyUpper of
+    Just (upperTy, subst, (inj1, inj2)) -> do
+      return $ Just (TyApp (TyCon $ mkId "Ext") upperTy, subst, (inj1, inj2))
+    Nothing -> return Nothing
+
+-- `Nat` can unify with `Q` to `Q`
+mguCoeffectTypes' s (TyCon (internalName -> "Q")) (TyCon (internalName -> "Nat")) =
+    return $ Just $ (TyCon $ mkId "Q", [], (id, inj))
+  where inj =  runIdentity . typeFoldM baseTypeFold
+                { tfTyInt = \x -> return $ TyRational (fromInteger . toInteger $ x) }
+
+mguCoeffectTypes' s (TyCon (internalName -> "Nat")) (TyCon (internalName -> "Q")) =
+    return $ Just $ (TyCon $ mkId "Q", [], (inj, id))
+  where inj = runIdentity . typeFoldM baseTypeFold
+                { tfTyInt = \x -> return $ TyRational (fromInteger . toInteger $ x) }
+
+-- `Nat` can unify with `Ext Nat` to `Ext Nat`
+mguCoeffectTypes' s t (TyCon (internalName -> "Nat")) | t == extendedNat =
+  return $ Just (extendedNat, [], (id, id))
+
+mguCoeffectTypes' s (TyCon (internalName -> "Nat")) t | t == extendedNat =
+  return $ Just (extendedNat, [], (id, id))
+
+-- Unifying a product of (t, t') with t yields (t, t') [and the symmetric versions]
+mguCoeffectTypes' s coeffTy1@(isProduct -> Just (t1, t2)) coeffTy2 | t1 == coeffTy2 =
+  return $ Just (coeffTy1, [], (id, \x -> cProduct x (TyGrade (Just t2) 1)))
+
+mguCoeffectTypes' s coeffTy1@(isProduct -> Just (t1, t2)) coeffTy2 | t2 == coeffTy2 =
+  return $ Just (coeffTy1, [], (id, \x -> cProduct (TyGrade (Just t1) 1) x))
+
+mguCoeffectTypes' s coeffTy1 coeffTy2@(isProduct -> Just (t1, t2)) | t1 == coeffTy1 =
+  return $ Just (coeffTy2, [], (\x -> cProduct x (TyGrade (Just t2) 1), id))
+
+mguCoeffectTypes' s coeffTy1 coeffTy2@(isProduct -> Just (t1, t2)) | t2 == coeffTy1 =
+  return $ Just (coeffTy2, [], (\x -> cProduct (TyGrade (Just t1) 1) x, id))
+
+-- Unifying with an interval
+mguCoeffectTypes' s coeffTy1 coeffTy2@(isInterval -> Just t') | coeffTy1 == t' =
+  return $ Just (coeffTy2, [], (\x -> TyInfix TyOpInterval x x, id))
+
+mguCoeffectTypes' s coeffTy1@(isInterval -> Just t') coeffTy2 | coeffTy2 == t' =
+  return $ Just (coeffTy1, [], (id, \x -> TyInfix TyOpInterval x x))
+
+-- Unifying inside an interval (recursive case)
+
+-- Both intervals
+mguCoeffectTypes' s (isInterval -> Just t) (isInterval -> Just t') = do
+-- See if we can recursively unify inside an interval
+  -- This is done in a local type checking context as `mguCoeffectType` can cause unification
+  coeffecTyUpper <- mguCoeffectTypes' s t t'
+  case coeffecTyUpper of
+    Just (upperTy, subst, (inj1, inj2)) -> do
+      return $ Just (TyApp (TyCon $ mkId "Interval") upperTy, subst, (inj1', inj2'))
+            where
+              inj1' = runIdentity . typeFoldM baseTypeFold { tfTyInfix = \op c1 c2 -> return $ case op of TyOpInterval -> TyInfix op (inj1 c1) (inj1 c2); _ -> TyInfix op c1 c2 }
+              inj2' = runIdentity . typeFoldM baseTypeFold { tfTyInfix = \op c1 c2 -> return $ case op of TyOpInterval -> TyInfix op (inj2 c1) (inj2 c2); _ -> TyInfix op c1 c2 }
+    Nothing -> return Nothing
+
+mguCoeffectTypes' s t (isInterval -> Just t') = do
+  -- See if we can recursively unify inside an interval
+  -- This is done in a local type checking context as `mguCoeffectType` can cause unification
+  coeffecTyUpper <- mguCoeffectTypes' s t t'
+  case coeffecTyUpper of
+    Just (upperTy, subst, (inj1, inj2)) ->
+      return $ Just (TyApp (TyCon $ mkId "Interval") upperTy, subst, (\x -> TyInfix TyOpInterval (inj1 x) (inj1 x), inj2'))
+            where inj2' = runIdentity . typeFoldM baseTypeFold { tfTyInfix = \op c1 c2 -> return $ case op of TyOpInterval -> TyInfix op (inj2 c1) (inj2 c2); _ -> TyInfix op c1 c2 }
+
+    Nothing -> return Nothing
+
+mguCoeffectTypes' s (isInterval -> Just t') t = do
+  -- See if we can recursively unify inside an interval
+  -- This is done in a local type checking context as `mguCoeffectType` can cause unification
+  coeffecTyUpper <- mguCoeffectTypes' s t' t
+  case coeffecTyUpper of
+    Just (upperTy, subst, (inj1, inj2)) ->
+      return $ Just (TyApp (TyCon $ mkId "Interval") upperTy, subst, (inj1', \x -> TyInfix TyOpInterval (inj2 x) (inj2 x)))
+            where inj1' = runIdentity . typeFoldM baseTypeFold { tfTyInfix = \op c1 c2 -> return $ case op of TyOpInterval -> TyInfix op (inj1 c1) (inj1 c2); _ -> TyInfix op c1 c2 }
+
+    Nothing -> return Nothing
+
+-- No way to unify (outer function will take the product)
+mguCoeffectTypes' s coeffTy1 coeffTy2 = return Nothing
+
+
+cProduct :: Type -> Type -> Type
+cProduct x y = TyApp (TyApp (TyCon (mkId ",,")) x) y
+
+--
+requiresSolver :: (?globals :: Globals) => Span -> Type -> Checker Bool
+requiresSolver s ty = do
+  (result, putChecker) <- peekChecker (checkKind s ty kcoeffect <|> checkKind s ty keffect)
+  case result of
+    -- Checking as coeffect or effect caused an error so ignore
+    Left _  -> return False
+    Right _ -> putChecker >> return True
+
+
+-- | Find out whether a coeffect if flattenable, and if so get the operation
+-- | used to represent flattening on the grades
+flattenable :: (?globals :: Globals)
+            => Type -> Type -> Checker (Maybe ((Coeffect -> Coeffect -> Coeffect), Substitution, Type))
+flattenable t1 t2
+ | t1 == t2 = case t1 of
+    t1 | t1 == extendedNat -> return $ Just (TyInfix TyOpTimes, [], t1)
+
+    TyCon (internalName -> "Nat")   -> return $ Just (TyInfix TyOpTimes, [], t1)
+    TyCon (internalName -> "Level") -> return $ Just (TyInfix TyOpMeet, [], t1)
+
+    TyApp (TyCon (internalName -> "Interval")) t ->  flattenable t t
+
+    -- Sets can use multiply to fold two levels
+    (isSet -> Just (elemType, polarity)) -> return $ Just (TyInfix TyOpTimes, [], t1)
+
+    _ -> return $ Nothing
+ | otherwise =
+      case (t1, t2) of
+        (isInterval -> Just t, TyCon (internalName -> "LNL")) | t == extendedNat ->
+          return $ Just (TyInfix TyOpTimes, [], TyApp (TyCon $ mkId "Interval") extendedNat)
+
+        (TyCon (internalName -> "LNL"), isInterval -> Just t) | t == extendedNat ->
+          return $ Just (TyInfix TyOpTimes, [], TyApp (TyCon $ mkId "Interval") extendedNat)
+
+        (t1, TyCon (internalName -> "Nat")) | t1 == extendedNat ->
+          return $ Just (TyInfix TyOpTimes, [], t1)
+
+        (TyCon (internalName -> "Nat"), t2) | t2 == extendedNat ->
+          return $ Just (TyInfix TyOpTimes, [], t2)
+
+        (t1, t2) -> do
+          -- If we have a unification, then use the flattenable
+          jK <- mguCoeffectTypes' nullSpan t1 t2
+          case jK of
+            Just (t, subst, (inj1, inj2)) -> do
+              flatM <- flattenable t t
+              case flatM of
+                Just (op, subst', t) ->
+                  return $ Just (\c1 c2 -> op (inj1 c1) (inj2 c2), subst', t)
+                Nothing      -> return $ Just (cProduct, subst, TyCon (mkId ",,") .@ t1 .@ t2)
+            Nothing        -> return $ Just (cProduct, [], TyCon (mkId ",,") .@ t1 .@ t2)
+
+-- | Defines what it means to unify a variable
+--   given by the second parameter with a type given
+--   by the third. Checks quantification issues etc.
+
+--  This is abstracted for use in various places
+unification :: (?globals :: Globals)
+          => Span
+          -> Id
+          -> Type
+          -> (Span -> Type -> Type -> Type -> Constraint) -- how to build a constraint for grades
+          -> Checker Substitution
+unification s var1 typ2 rel = do
+  checkerState <- get
+  case lookup var1 (tyVarContext checkerState) of
+    -- Unknown variable
+    Nothing -> throw UnboundTypeVariable { errLoc = s, errId = var1 }
+
+    Just (kind1, quantifier1) -> do
+      -----------
+      debugM "unifier" $ "Unifying variable @ " <> pretty s <> " ("
+              <> pretty var1 <> " : " <> pretty kind1 <> " as " <> pretty quantifier1
+              <> ")\n\t against type: " <> pretty typ2
+      -----------
+      -- Case on the quantification mode of this variable
+      case quantifier1 of
+        -- * BoundQ
+        --BoundQ -> error $ "boundq deprecated"
+
+        -- * Universal quantifier
+        ForallQ ->
+          case typ2 of
+            -- Same variable so unification accepted
+            (TyVar var2) | internalName var1 == internalName var2 -> return []
+            -- A different type variable, unification allowed if this is
+            -- a unification variable and we are making the unification
+            -- in the opposite direction
+            (TyVar var2) -> do
+              case lookup var2 (tyVarContext checkerState) of
+              -- Unknown variable
+                Nothing -> throw UnboundTypeVariable { errLoc = s, errId = var2 }
+
+                Just (kind2, quantifier2) -> do
+                  case quantifier2 of
+                    InstanceQ -> do
+                      -- Join kinds
+                      joinedKindM <- joinTypes s kind1 kind2
+                      case joinedKindM of
+                        Nothing -> throw $ KindsNotEqual s kind1 kind2
+                        Just (kind, subst, _) -> do
+
+                          -- Do an occurs check for types
+                          case kind of
+                            -- loop in type
+                            Type _ | var1 `elem` freeVars typ2 ->
+                              throw OccursCheckFail { errLoc = s, errVar = var1, errTy = typ2 }
+                            -- loop in higher type
+                            FunTy _ _ _ (Type _) | var1 `elem` freeVars typ2 ->
+                              throw OccursCheckFail { errLoc = s, errVar = var1, errTy = typ2 }
+                            _ -> return ()
+
+                          -- Types which need solver handling (effects and coeffects)
+                          -- need to have constraints registered
+                          whenM (requiresSolver s kind)
+                            (addConstraint (rel s (TyVar var1) (TyVar var2) kind))
+
+                          -- Local substitution of var2 for the universal var1
+                          let localSubst = (var2, SubstT (TyVar var1))
+                          -- Apply thhis unification result to the type variable context
+                          substIntoTyVarContext var2 (TyVar var1)
+
+                          return (localSubst : subst)
+
+                    _ -> throw $ UnificationFail s var1 typ2 kind1 False
+
+            -- Not a matching tyvar
+            _ -> do
+              -- Types which need solver handling (effects and coeffects)
+              -- need to have constraints registered
+              ifM (requiresSolver s kind1)
+                -- Create solver constraint and let things get sorted there
+                (addConstraint (rel s (TyVar var1) typ2 kind1) >> return [])
+                -- This ultimately mostly likely represent a general unification failure
+                (throw $ UnificationFail s var1 typ2 kind1 False)
+
+        -- * Unification variable
+        _ -> do -- InstanceQ or BoundQ
+          -- Join kinds by checking that `typ2` has the same kind as the variable
+          (subst1, typ2') <- checkKind s typ2 kind1
+
+          -- Do an occurs check for types
+          case kind1 of
+            -- loop in type
+            Type _ | var1 `elem` freeVars typ2 ->
+              throw OccursCheckFail { errLoc = s, errVar = var1, errTy = typ2 }
+            -- loop in higher type
+            FunTy _ _ _ (Type _) | var1 `elem` freeVars typ2 ->
+              throw OccursCheckFail { errLoc = s, errVar = var1, errTy = typ2 }
+            _ -> return ()
+
+          -- Types which need solver handling (effects and coeffects)
+          -- need to have constraints registered
+          whenM (requiresSolver s kind1)
+              -- Create solver constraint
+              (addConstraint (rel s (TyVar var1) typ2 kind1))
+
+          -- Apply thhis unification result to the type variable context
+          substIntoTyVarContext var1 typ2
+
+          -- Local substitution
+          let localSubst = (var1, SubstT typ2)
+          --subst <- combineSubstitutions s subst1 subst2
+          return (localSubst : subst1)
