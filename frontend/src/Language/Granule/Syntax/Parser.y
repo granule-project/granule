@@ -623,11 +623,12 @@ Juxt :: { Expr () () }
   | Juxt '@' TyAtom           {% (mkSpan (getStart $1, getEnd $1)) >>= \sp -> return $ AppTy sp () False $1 $3 } -- TODO: span is not very accurate here
 
 Hole :: { Expr () () }
-  : '{!' Vars1 '!}'           {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $3)) >>= \sp -> return $ Hole sp () False (map mkId $2) [] }
-  | '{!' Hints Vars1 '!}'     {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $4)) >>= \sp -> return $ Hole sp () False (map mkId $3) $2 }
-  | '{!' Hints '!}'     {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $3)) >>= \sp -> return $ Hole sp () False [] $2 }
-  | '{!' '!}'                 {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $2)) >>= \sp -> return $ Hole sp () False [] [] }
-  | '?'                       {% (mkSpan (fst . getPosToSpan $ $1, second (+1) . snd . getPosToSpan $ $1)) >>= \sp -> return $ Hole sp () False [] [] }
+  : '{!' Vars1 '!}'           {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $3)) >>= \sp -> return $ Hole sp () False (map mkId $2) Nothing }
+  | '{!' Hints '!}'           {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $3)) >>= \sp -> return $ Hole sp () False [] (Just $ parseHints $2) }
+  | '{!' Hints Vars1 '!}'     {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $4)) >>= \sp -> return $ Hole sp () False (map mkId $3) (Just $ parseHints $2) }
+  | '{!' Vars1 Hints '!}'     {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $4)) >>= \sp -> return $ Hole sp () False (map mkId $2) (Just $ parseHints $3) }
+  | '{!' '!}'                 {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $2)) >>= \sp -> return $ Hole sp () False [] Nothing }
+  | '?'                       {% (mkSpan (fst . getPosToSpan $ $1, second (+1) . snd . getPosToSpan $ $1)) >>= \sp -> return $ Hole sp () False [] Nothing }
 
 Atom :: { Expr () () }
   : '(' Expr ')'              { $2 }
@@ -690,21 +691,16 @@ parseError t = do
 parseDefs :: FilePath -> String -> Either String (AST () (), [Extension])
 parseDefs file input = runReaderT (runStateT (topLevel $ scanTokens input) []) file
 
-parseHint :: (String, Maybe Int, [Id]) -> [Hint]
-parseHint ("s", Nothing,  [])  = [HSubtractive]
-parseHint ("p", Nothing,  [])  = [HPruning]
-parseHint ("i", Nothing,  [])  = [HNoMaxIntro]
-parseHint ("i", Just arg, [])  = [(HMaxIntro arg)]
-parseHint ("e", Nothing,  [])  = [HNoMaxElim]
-parseHint ("e", Just arg, [])  = [(HMaxElim arg)]
-parseHint ("t", Nothing,  [])  = [(HSynNoTimeout)]
-parseHint ("t", Just arg, [])  = [(HSynTimeout arg)]
-parseHint ("n", Just arg, [])  = [(HSynIndex arg)]
-parseHint ("d", Nothing,  [])  = [(HUseAllDefs)]
-parseHint ("d", Nothing,  ids) = [(HUseDefs ids)]
-parseHint ("r", Nothing,  [])  = [(HUseRec)]
-parseHint ("g", Nothing,  [])  = [(HGradeOnRule)]
-parseHint _ = []
+parseHints :: [(String, Int)] -> Hints
+parseHints hints = 
+  Hints {
+    hSubtractive = ("s", 0) `elem` hints,
+    hPruning     = ("p", 0) `elem` hints,
+    hNoTimeout   = ("nt", 0) `elem` hints,
+    hGradeOnRule = ("g", 0) `elem` hints,
+    hTimeout     = lookup "t" hints,
+    hIndex       = lookup "i" hints
+  }
 
 parseAndDoImportsAndFreshenDefs :: (?globals :: Globals) => String -> IO (AST () (), [Extension])
 parseAndDoImportsAndFreshenDefs input = do

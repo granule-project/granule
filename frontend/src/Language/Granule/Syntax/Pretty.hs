@@ -303,8 +303,8 @@ instance Pretty (Value v a) => Pretty (Expr v a) where
   pretty (Case _ _ _ e ps) = "\n    (case " <> pretty e <> " of\n      "
                       <> intercalate ";\n      " (map (\(p, e') -> pretty p
                       <> " -> " <> pretty e') ps) <> ")"
-  pretty (Hole _ _ _ [] []) = "?"
-  pretty (Hole _ _ _ [] hints) = "{!" <> unwords (map pretty hints) <> " !}"
+  pretty (Hole _ _ _ [] Nothing) = "?"
+  pretty (Hole _ _ _ [] (Just hints)) = "{!" <> (pretty hints) <> " !}"
   pretty (Hole _ _ _ vs _) = "{!" <> unwords (map pretty vs) <> "!}"
 
 instance Pretty Operator where
@@ -337,19 +337,21 @@ instance Pretty Span where
 instance Pretty Pos where
     pretty (l, c) = show l <> ":" <> show c
 
-instance Pretty Hint where
-    pretty = \case 
-      HSubtractive      -> " -s"
-      HPruning          -> " -p"
-      HNoMaxIntro       -> " -i" 
-      HMaxIntro x       -> " -i " <> show x
-      HNoMaxElim        -> " -e"
-      HMaxElim x        -> " -e " <> show x
-      HSynNoTimeout     -> " -t"
-      HSynTimeout x     -> " -t " <> show x
-      HSynIndex x       -> " -n " <> show x
-      HUseAllDefs       -> " -d"
-      HUseDefs ids      -> " -d " <> (unwords $ map pretty ids)
-      HUseRec           -> " -r"
-      HGradeOnRule      -> " -g"
+instance Pretty Hints where
+    pretty (Hints hSub hPrun hNoTime hGOR hTime hIndex) = undefined
+      --  \case 
+
+      -- HSubtractive      -> " -s"
+      -- HPruning          -> " -p"
+      -- HNoMaxIntro       -> " -i" 
+      -- HMaxIntro x       -> " -i " <> show x
+      -- HNoMaxElim        -> " -e"
+      -- HMaxElim x        -> " -e " <> show x
+      -- HSynNoTimeout     -> " -t"
+      -- HSynTimeout x     -> " -t " <> show x
+      -- HSynIndex x       -> " -n " <> show x
+      -- HUseAllDefs       -> " -d"
+      -- HUseDefs ids      -> " -d " <> (unwords $ map pretty ids)
+      -- HUseRec           -> " -r"
+      -- HGradeOnRule      -> " -g"
 

@@ -123,7 +123,7 @@ data ExprF ev a expr value =
      -- try e1 as p : t in e2 catch e3
   | ValF Span a Bool value
   | CaseF Span a Bool expr [(Pattern a, expr)]
-  | HoleF Span a Bool [Id] [Hint]
+  | HoleF Span a Bool [Id] (Maybe Hints)
   deriving (Generic, Eq, Rp.Data)
 
 data Operator
@@ -140,21 +140,16 @@ data Operator
   deriving (Generic, Eq, Ord, Show, Rp.Data)
 
 
-data Hint
-  = HSubtractive 
-  | HPruning 
-  | HNoMaxIntro 
-  | HMaxIntro Int
-  | HNoMaxElim 
-  | HMaxElim Int
-  | HSynNoTimeout
-  | HSynTimeout Int
-  | HSynIndex Int
-  | HUseAllDefs
-  | HUseDefs [Id]
-  | HUseRec
-  | HGradeOnRule
- deriving (Generic, Eq, Ord, Show, Rp.Data)
+data Hints = 
+  Hints {
+    hSubtractive :: Bool,
+    hPruning     :: Bool,
+    hNoTimeout   :: Bool,
+    hGradeOnRule :: Bool,
+    hTimeout     :: Maybe Int, 
+    hIndex       :: Maybe Int
+  }
+  deriving (Generic, Eq, Ord, Show, Rp.Data)
 
 
 deriving instance (Show ev, Show a, Show value, Show expr)
