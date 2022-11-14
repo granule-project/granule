@@ -1708,7 +1708,7 @@ synthesiseProgram hints index unrComps rComps defId ctxt goalTy checkerState = d
               let synRes = synthesise resourceScheme gamma (Focused []) (Depth elim 0 intro) grade (Goal goalTy $ Just NonDecreasing)
               (res, agg'') <- runStateT (runSynthesiser index synRes checkerState) (resetState agg')
               if (not $ solved res) && (depthReached agg'') then return (Nothing, agg'') else return (Just res, agg'')
-          ) (Nothing, agg) lims
+           (Nothing, agg) lims
         case pRes of 
           (Just finRes, finAgg) -> do 
             return (finRes, finAgg)
