@@ -57,6 +57,8 @@ library:
   - Language.Granule.Checker.SubstitutionContexts
   - Language.Granule.Checker.TypeAliases
   - Language.Granule.Checker.Types
+  - Language.Granule.Evaluator.Desugar
+  - Language.Granule.Evaluator.Eval
   - Language.Granule.Syntax.Def
   - Language.Granule.Syntax.Expr
   - Language.Granule.Syntax.Helpers
@@ -73,7 +75,9 @@ library:
   - Language.Granule.Syntax.Preprocessor.Markdown
   - Language.Granule.Syntax.Span
   - Language.Granule.Syntax.Type
+  - Language.Granule.Synthesis.Builders
   - Language.Granule.Synthesis.Splitting
+  - Language.Granule.Synthesis.Synth
   - Language.Granule.Synthesis.RewriteHoles
   - Language.Granule.Context
   - Language.Granule.Utils

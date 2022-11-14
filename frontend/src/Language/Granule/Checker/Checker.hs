@@ -58,14 +58,13 @@ import Language.Granule.Syntax.Type hiding (Polarity)
 
 import Language.Granule.Synthesis.Deriving
 import Language.Granule.Synthesis.Splitting
-import qualified Language.Granule.Synthesis.Synth as Syn
 
 import Language.Granule.Utils
 
 -- Checking (top-level)
 check :: (?globals :: Globals)
   => AST () ()
-  -> IO (Either (NonEmpty CheckerError) (AST () Type, [Def () ()]))
+  -> IO (Either (NonEmpty CheckerError) (AST () Type, [Def () ()], SynthContext))
 check ast@(AST _ _ _ hidden _) = do
   evalChecker (initState { allHiddenNames = hidden }) $ (do
       ast@(AST dataDecls defs imports hidden name) <- return $ replaceTypeAliases ast
@@ -75,12 +74,13 @@ check ast@(AST _ _ _ hidden _) = do
       debugM "extensions" (show $ globalsExtensions ?globals)
       debugM "check" "kindCheckDef"
       defs <- runAll kindCheckDef defs
-      let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
-      defs <- runAll (checkDef defCtxt) defs
+      let defCtxt = map (\(Def _ name _ _ _ tys) -> (name, tys)) defs
+      defs' <- runAll (checkDef defCtxt) defs
       -- Add on any definitions computed by the type checker (derived)
       st <- get
       let derivedDefs = map (snd . snd) (derivedDefinitions st)
-      pure $ (AST dataDecls defs imports hidden name, derivedDefs))
+      let holes = synthHoles st
+      pure $ (AST dataDecls defs' imports hidden name, derivedDefs, SynthContext defs holes st))
 
 -- Synthing the type of a single expression in the context of an asy
 synthExprInIsolation :: (?globals :: Globals)
@@ -387,7 +387,7 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
 
   -- Store the equation type in the state in case it is needed when splitting
   -- on a hole.
-  modify (\st -> st { currentDef = Just id, splittingTy = Just splittingTy})
+  modify (\st -> st { splittingTy = Just splittingTy})
 
   patternGam <- substitute subst patternGam
   debugM "context in checkEquation 1" $ (show patternGam)
@@ -521,11 +521,15 @@ checkExpr defs ctxt _ _ t (Hole s _ _ vars hints) = do
               -- Check to see if this hole is something we are interested in
               case globalsHolePosition ?globals of
                 -- Synth everything mode
-                Nothing -> programSynthesise defs ctxt vars hints t
+                Nothing -> do 
+                  put $ st { synthHoles = (hexpr, t, 0, ctxt, currentDef st):(synthHoles st) }
+                  return hexpr
                 Just pos ->
                   if spanContains pos s
                     -- This is a hole we want to synth on
-                    then programSynthesise defs ctxt vars hints t
+                    then do 
+                      put $ st { synthHoles = (hexpr, t, 0, ctxt, currentDef st):(synthHoles st) }
+                      return hexpr
                     -- This is not a hole we want to synth on
                     else  return hexpr
 
@@ -545,7 +549,7 @@ checkExpr defs ctxt _ _ t (Hole s _ _ vars hints) = do
               -- If we are in synthesise mode, also try to synthesise a
               -- term for each case split goal *if* this is also a hole
               -- of interest
-              let casesWithHoles = zip (map fst cases) (repeat (Hole s t True [] []))
+              let casesWithHoles = zip (map fst cases) (repeat (Hole s t True [] Nothing))
 
               let holeVars = map (\id -> (id, id `elem` boundVariables)) (map fst ctxt)
               throw $ HoleMessage s t ctxt (tyVarContext st) holeVars casesWithHoles
@@ -2148,21 +2152,3 @@ freshenTySchemeForVar s rf id tyScheme = do
   let elaborated = Val s ty' rf (Var ty' id)
   return (ty', [], [], elaborated)
 
-
--- Hook into the synthesis engine.
-programSynthesise :: (?globals :: Globals) => Ctxt TypeScheme -> Ctxt Assumption-> [Id] -> [Hint] -> Type -> Checker (Expr () Type)
-programSynthesise defs ctxt vars hints ty = do
-  currentState <- get
-  -- Run the synthesiser in this context
-  let mode = if (alternateSynthesisMode || HPruning `elem` hints) then Syn.Pruning else Syn.NonPruning
-  synRes <-
-      liftIO $ Syn.synthesiseProgram hints defs (currentDef currentState)
-                  (if (subtractiveSynthesisMode || HSubtractive `elem` hints) then Syn.Subtractive else (Syn.Additive mode))
-                  ctxt (Forall nullSpan [] [] ty) currentState
-
-  case synRes of
-    -- Nothing synthed, so create a blank hole instead
-    []    -> return (Hole nullSpan ty True [] hints)
-    (_:_) -> 
-      case last synRes of
-        t -> return t

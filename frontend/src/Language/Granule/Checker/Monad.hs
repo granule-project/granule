@@ -142,6 +142,13 @@ meetConsumption Empty Empty = Empty
 meetConsumption Empty Full = NotFull
 meetConsumption Full Empty = NotFull
 
+data SynthContext = SynthContext 
+            { 
+              defs :: [Def () ()]
+            , holes :: [(Expr () Type, Type, Int, Ctxt Assumption, (Maybe Id, Maybe (Spec () ())))]
+            , checkerState :: CheckerState
+            }
+
 data CheckerState = CS
             { -- Fresh variable id state
               uniqueVarIdCounterMap  :: M.Map String Int
@@ -181,8 +188,6 @@ data CheckerState = CS
             -- Names from modules which are hidden
             , allHiddenNames :: M.Map Id Id
 
-            , currentDef :: Maybe Id
-
             -- Used by the case splitter 
             , splittingTy :: Maybe Type
 
@@ -192,7 +197,8 @@ data CheckerState = CS
             -- Warning accumulator
             -- , warnings :: [Warning]
 
-            , wantedTypeConstraints :: [Type]
+            , synthHoles :: [(Expr () Type, Type, Int, Ctxt Assumption, (Maybe Id, Maybe (Spec () ())))]
+            , currentDef :: (Maybe Id, Maybe (Spec () ()))
 
             -- flag to find out if constraints got added
             , addedConstraints :: Bool
@@ -214,10 +220,10 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , deriv = Nothing
                , derivStack = []
                , allHiddenNames = M.empty
-               , currentDef = Nothing
                , splittingTy = Nothing
                , derivedDefinitions = []
-               , wantedTypeConstraints = []
+               , synthHoles = []
+               , currentDef = (Nothing, Nothing)
                , addedConstraints = False
                , predicateContext = Top
                }
