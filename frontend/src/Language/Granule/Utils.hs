@@ -49,6 +49,7 @@ data Globals = Globals
   , globalsSubtractiveSynthesis   :: Maybe Bool
   , globalsAlternateSynthesisMode :: Maybe Bool
   , globalsGradeOnRule         :: Maybe Bool
+  , globalsExampleLimit         :: Maybe Int
   , globalsExtensions           :: [Extension]
   } deriving (Read, Show)
 
@@ -102,6 +103,10 @@ gradeOnRule = fromMaybe False $ globalsGradeOnRule ?globals
 solverTimeoutMillis :: (?globals :: Globals) => Integer
 solverTimeoutMillis = fromMaybe 10000 $ globalsSolverTimeoutMillis ?globals
 
+-- | Limit to how many times we run the examples before giving up
+exampleLimit :: (?globals :: Globals) => Int
+exampleLimit = fromMaybe 5 $ globalsExampleLimit ?globals
+
 -- | Accessors for global file paths with default values
 includePath, sourceFilePath :: (?globals :: Globals) => FilePath
 includePath         = fromMaybe "StdLib" $ globalsIncludePath ?globals
@@ -135,6 +140,7 @@ instance Semigroup Globals where
       , globalsSubtractiveSynthesis   = globalsSubtractiveSynthesis   g1 <|> globalsSubtractiveSynthesis   g2
       , globalsAlternateSynthesisMode = globalsAlternateSynthesisMode g1 <|> globalsAlternateSynthesisMode g2
       , globalsGradeOnRule = globalsGradeOnRule g1 <|> globalsGradeOnRule g2
+      , globalsExampleLimit = globalsExampleLimit g1 <|> globalsExampleLimit g2
       , globalsExtensions = nub (globalsExtensions g1 <> globalsExtensions g2)
       }
 
@@ -161,6 +167,7 @@ instance Monoid Globals where
     , globalsSubtractiveSynthesis   = Nothing
     , globalsAlternateSynthesisMode = Nothing
     , globalsGradeOnRule = Nothing
+    , globalsExampleLimit = Nothing
     , globalsExtensions = [Base]
     }
 

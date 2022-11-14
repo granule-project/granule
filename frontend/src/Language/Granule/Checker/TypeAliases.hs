@@ -27,8 +27,8 @@ replaceInDataConstr (DataConstrNonIndexed s v types) =
   DataConstrNonIndexed s v (map replaceInType types)
 
 replaceInDef :: Def v a -> Def v a
-replaceInDef (Def s i b eqs tySch) =
-  Def s i b (replaceInEquations eqs) (replaceInTypeScheme tySch)
+replaceInDef (Def s i b spec eqs tySch) =
+  Def s i b spec (replaceInEquations eqs) (replaceInTypeScheme tySch)
 
 replaceInEquations :: EquationList v a -> EquationList v a
 replaceInEquations (EquationList s v b eqs) =

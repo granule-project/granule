@@ -40,7 +40,8 @@ import Language.Granule.Utils
 -- | Check the kind of a definition
 -- Currently we expec t that a type scheme has kind ktype
 kindCheckDef :: (?globals :: Globals) => Def v t -> Checker (Def v t)
-kindCheckDef (Def s id rf eqs (Forall s' quantifiedVariables constraints ty)) = do
+kindCheckDef (Def s id rf spec eqs (Forall s' quantifiedVariables constraints ty)) = do
+
   let localTyVarContext = universify quantifiedVariables
 
   -- Set up the quantified variables in the type variable context
@@ -55,7 +56,7 @@ kindCheckDef (Def s id rf eqs (Forall s' quantifiedVariables constraints ty)) = 
   modify (\st -> st { tyVarContext = [] })
 
   -- Update the def with the resolved quantifications
-  return (Def s id rf eqs (Forall s' qVars constraints tyElaborated))
+  return (Def s id rf spec eqs (Forall s' qVars constraints tyElaborated))
 
 -- Replace any constructor IDs with their top-element
 -- (i.e., IO gets replaces with the set of all effects as an alias)

@@ -54,6 +54,7 @@ import Language.Granule.Utils hiding (mkSpan)
     then  { TokenThen _ }
     else  { TokenElse _ }
     case  { TokenCase _ }
+    spec  { TokenSpec _ }
     of    { TokenOf _ }
     try    { TokenTry _ }
     as    { TokenAs _ }
@@ -168,16 +169,42 @@ Import :: { Import }
                               }
 
 Def :: { Def () () }
-  : Sig NL Bindings
-    {% let name = fst3 $1
-       in case $3 of
-          (nameB, _) | not (nameB == name) ->
-            error $ "Name for equation `" <> nameB <> "` does not match the signature head `" <> name <> "`"
+  : Sig NL SpecList Bindings
+      {%  let name = fst3 $1 in 
+          let (exs, auxs) = $3 in 
+          let spec = if null exs && null auxs then Nothing else Just $ Spec nullSpanNoFile exs auxs
+          in case $4 of
+            (nameB, _) | not (nameB == name) ->
+              error $ "Name for equation `" <> nameB <> "` does not match the signature head `" <> name <> "`"
 
-          (_, bindings) -> do
-            span <- mkSpan (thd3 $1, endPos $ getSpan $ last (equations bindings))
-            return $ Def span (mkId name) False bindings (snd3 $1)
-    }
+            (_, bindings) -> do
+              span <- mkSpan (thd3 $1, endPos $ getSpan $ last (equations bindings))
+              return $ Def span (mkId name) False spec bindings (snd3 $1)
+      }
+  
+
+SpecList :: { ([Example () ()], [(Id, Maybe Type)]) }
+  : spec Example NL SpecList            { let (exs, auxs) = $4 
+                                           in ($2 : exs, auxs) }  
+  | spec Components NL SpecList        { let (exs, auxs) = $4 
+                                           in (exs, $2 ++ auxs) }
+  | {- empty -}                         { ([], []) }
+
+Example :: { Example () () }
+  : VAR ExprList '=' Expr { let inputExpr = foldr (\expr acc -> 
+                                App nullSpanNoFile () False acc expr) (Val nullSpanNoFile () False (Var () (mkId $ symString $1))) $2 
+                            in 
+                            Example inputExpr $4 }
+
+ExprList :: { [Expr () ()] }
+  : Expr ExprList { $1 : $2 }
+
+Components :: { [(Id, Maybe Type)] }
+  : VAR                                   {% return [(mkId $ symString $1, Nothing)] }
+  | VAR '[' Coeffect ']'                  {% return [(mkId $ symString $1, Just $3 )] }
+  | VAR ',' Components                   { (mkId $ symString $1, Nothing) : $3 }
+  | VAR '[' Coeffect ']' ',' Components  { (mkId $ symString $1, Just $3 ) : $6 }
+  | {- empty -}                           {% return [] }
 
 DataDecl :: { DataDecl }
   : data CONSTR TyVars KindAnn where DataConstrs
@@ -328,14 +355,13 @@ Vars1 :: { [String] }
   : VAR                       { [symString $1] }
   | VAR Vars1                 { symString $1 : $2 }
 
-Hint :: { [Hint] }
-  : '-' VAR                      { parseHint $ (symString $2, Nothing, []) } 
-  | '-' VAR INT                  { let TokenInt _ x  = $3 in (parseHint (symString $2, Just x, [])) }
-  | '-' VAR Vars1                { parseHint $ (symString $2, Nothing, (map mkId $3)) }
+Hint :: { (String, Int) }
+  : '-' VAR                      { (symString $2, 0) } 
+  | '-' VAR INT                  { let TokenInt _ x  = $3 in (symString $2, x) }
 
-Hints :: { [Hint] } 
-  : Hint                      { $1 }
-  | Hint Hints                { $1 ++ $2 }
+Hints :: { [(String, Int)] } 
+  : Hint                      { [$1] }
+  | Hint Hints                { $1 : $2 }
 
 Kind :: { Kind }
   : Type                           { $1 }

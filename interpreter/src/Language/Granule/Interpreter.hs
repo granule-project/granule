@@ -345,6 +345,15 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             , show solverTimeoutMillis <> "ms."
             ]
 
+        globalsExampleLimit <-
+          (optional . option (auto @Int))
+            $ long "example-limit"
+            <> (help . unwords)
+            [ "Limit to the number of times synthed terms should be tried on examples before giving up"
+            , "Defaults to"
+            , show exampleLimit <> ""
+            ]
+
         globalsIncludePath <-
           optional $ strOption
             $ long "include-path"
@@ -448,6 +457,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsTimestamp
               , globalsTesting = Nothing
               , globalsSolverTimeoutMillis
+              , globalsExampleLimit
               , globalsIncludePath
               , globalsSourceFilePath = Nothing
               , globalsEntryPoint

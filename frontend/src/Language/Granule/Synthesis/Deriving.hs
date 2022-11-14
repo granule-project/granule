@@ -76,7 +76,7 @@ derivePush s ty = do
                     , tyVarContext = tyVarContext st0
                     , predicateStack = predicateStack st0 } )
   return $
-    (tyS, Def s name True
+    (tyS, Def s name True Nothing
             (EquationList s name True
                [Equation s name () True [] expr]) tyS)
 
@@ -287,7 +287,7 @@ derivePull s ty = do
   let name = mkId $ "pull@" ++ pretty ty
 
   return $
-    (tyS, Def s name True
+    (tyS, Def s name True Nothing
         (EquationList s name True
             [Equation s name () True [] expr]) tyS)
 
@@ -574,7 +574,7 @@ deriveCopyShape s ty = do
               (FunTy Nothing Nothing baseTy (ProdTy shapeTy returnTy))
   let expr = Val s () True $ Abs () (PVar s () True z) Nothing bodyExpr
   let name = mkId $ "copyShape@" ++ pretty ty
-  let def = Def s name True (EquationList s name True [Equation s name () True [] expr]) tyS
+  let def = Def s name True Nothing (EquationList s name True [Equation s name () True [] expr]) tyS
   debugM "copyShape expr" (pretty expr)
   modify (\st -> st { derivedDefinitions = deleteVar' (mkId "copyShape", ty) (derivedDefinitions st)
                     -- Restore type variables and predicate stack
@@ -758,7 +758,7 @@ deriveDrop s ty = do
               (FunTy Nothing Nothing baseTy returnTy)
   let expr = Val s () True $ Abs () (PVar s () True z) Nothing bodyExpr
   let name = mkId $ "drop@" ++ pretty ty
-  let def = Def s name True (EquationList s name True [Equation s name () True [] expr]) tyS
+  let def = Def s name True Nothing (EquationList s name True [Equation s name () True [] expr]) tyS
   modify (\st -> st { derivedDefinitions = deleteVar' (mkId "drop", ty) (derivedDefinitions st)
                     -- Restore type variables and predicate stack
                     , tyVarContext = tyVarContext st0

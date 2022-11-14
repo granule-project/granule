@@ -197,10 +197,20 @@ instance Pretty v => Pretty (AST v a) where
       pretty' = intercalate "\n\n" . map pretty
 
 instance Pretty v => Pretty (Def v a) where
-    pretty (Def _ v _ eqs (Forall _ [] [] t))
+    pretty (Def _ v _ (Just spec) eqs (Forall _ [] [] t))
+      = pretty v <> " : " <> pretty t <> "\n" <> pretty spec <> "\n" <> pretty eqs
+    pretty (Def _ v _ _ eqs (Forall _ [] [] t))
       = pretty v <> " : " <> pretty t <> "\n" <> pretty eqs
-    pretty (Def _ v _ eqs tySch)
+    pretty (Def _ v _ (Just spec) eqs tySch)
+      = pretty v <> " : " <> pretty tySch <> "\n" <> pretty spec <> "\n" <> pretty eqs
+    pretty (Def _ v _ _ eqs tySch)
       = pretty v <> " : " <> pretty tySch <> "\n" <> pretty eqs
+
+instance Pretty v => Pretty (Spec v a) where
+    pretty (Spec _ exs auxs) = "spec" <> "\n" <> (intercalate "\n" $ map pretty exs)
+
+instance Pretty v => Pretty (Example v a) where
+    pretty (Example input output) = pretty input <> " = " <> pretty output
 
 instance Pretty v => Pretty (EquationList v a) where
   pretty (EquationList _ v _ eqs) = intercalate ";\n" $ map pretty eqs

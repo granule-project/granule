@@ -288,15 +288,18 @@ checkDef :: (?globals :: Globals)
          => Ctxt TypeScheme  -- context of top-level definitions
          -> Def () ()        -- definition
          -> Checker (Def () Type)
-checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
+checkDef defCtxt (Def s defName rf spec el@(EquationList _ _ _ equations)
                  tys@(Forall s_t foralls constraints ty)) = do
     -- duplicate forall bindings
     case duplicates (map (sourceName . fst) foralls) of
       [] -> pure ()
       (d:ds) -> throwError $ fmap (DuplicateBindingError s_t) (d :| ds)
+   
+    _ <- checkSpec defCtxt spec ty
 
     -- Clean up knowledge shared between equations of a definition
-    modify (\st -> st { guardPredicates = [[]]
+    modify (\st -> st { currentDef = (Just defName, spec)
+                      , guardPredicates = [[]]
                       , patternConsumption = initialisePatternConsumptions equations } )
 
     elaboratedEquations :: [Equation () Type] <- runAll elaborateEquation equations
@@ -304,7 +307,7 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
     checkGuardsForImpossibility s defName
     checkGuardsForExhaustivity s defName ty equations
     let el' = el { equations = elaboratedEquations }
-    pure $ Def s defName rf el' tys
+    pure $ Def s defName rf Nothing el' tys
   where
     elaborateEquation :: Equation () () -> Checker (Equation () Type)
     elaborateEquation equation = do
@@ -334,6 +337,34 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
 
         debugM "elaborateEquation" "solveEq done"
         pure elaboratedEq
+
+checkSpec :: (?globals :: Globals) => 
+     Ctxt TypeScheme 
+  -> Maybe (Spec () ())
+  -> Type
+  -> Checker (Maybe (Spec () Type))
+checkSpec defCtxt Nothing defTy = return Nothing
+checkSpec defCtxt (Just (Spec span examples components)) defTy = do 
+
+  elaboratedExamples :: [Example () Type] <- runAll elaborateExample examples
+
+  forM_ components (\(ident, _) -> do 
+      case lookup ident defCtxt of 
+          Just _ -> return ()
+          _ -> throw UnboundVariableError{ errLoc = span, errId = ident}) 
+
+  return (Just (Spec span elaboratedExamples components))
+
+  where
+    elaborateExample :: Example () () -> Checker (Example () Type)
+    elaborateExample (Example input output) = do 
+      (_, _, elaboratedInput) <- checkExpr defCtxt [] Positive True (resultType defTy) input
+      (_, _, elaboratedOutput) <- checkExpr defCtxt [] Positive True (resultType defTy) output
+      return (Example elaboratedInput elaboratedOutput)
+
+
+  
+
 
 checkEquation :: (?globals :: Globals) =>
      Ctxt TypeScheme -- context of top-level definitions

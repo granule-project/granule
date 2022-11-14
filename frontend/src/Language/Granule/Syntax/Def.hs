@@ -53,6 +53,7 @@ data Def v a = Def
   { defSpan :: Span
   , defId :: Id
   , defRefactored :: Bool
+  , defSpec :: Maybe (Spec v a)
   , defEquations :: EquationList v a
   , defTypeScheme :: TypeScheme
   }
@@ -115,6 +116,35 @@ instance Rp.Refactorable (Equation v a) where
 definitionType :: Def v a -> Type
 definitionType Def { defTypeScheme = ts } =
     ty where (Forall _ _ _ ty) = ts
+
+
+data Spec v a = 
+  Spec { 
+    specSpan          :: Span,
+    specExamples      :: [Example v a],
+    specComponents    :: [(Id, Maybe Type)]
+  }
+  deriving (Generic)
+
+data Example v a = 
+  Example {
+    input  :: Expr v a,
+    output :: Expr v a
+  }
+  deriving (Generic)
+
+
+deriving instance (Eq v, Eq a) => Eq (Spec v a)
+deriving instance (Show v, Show a) => Show (Spec v a)
+deriving instance (Data (ExprFix2 ValueF ExprF v a), Data v, Data a) => Data (Spec v a)
+
+deriving instance (Eq v, Eq a) => Eq (Example v a)
+deriving instance (Show v, Show a) => Show (Example v a)
+deriving instance (Data (ExprFix2 ValueF ExprF v a), Data v, Data a) => Data (Example v a)
+
+instance FirstParameter (Spec v a) Span
+instance FirstParameter (Example v a) Span
+
 
 -- | Data type declarations
 data DataDecl = DataDecl
@@ -201,11 +231,11 @@ instance Monad m => Freshenable m (EquationList v a) where
 
 -- | Alpha-convert all bound variables of a definition to unique names.
 instance Monad m => Freshenable m (Def v a) where
-  freshen (Def s var rf eqs t) = do
+  freshen (Def s var rf sp eqs t) = do
     t  <- freshen t
     equations' <- mapM freshen (equations eqs)
     let eqs' = eqs { equations = equations' }
-    return (Def s var rf eqs' t)
+    return (Def s var rf sp eqs' t)
 
 instance Term (EquationList v a) where
   freeVars (EquationList _ name _ eqs) =
@@ -216,5 +246,5 @@ instance Term (Equation v a) where
       freeVars body \\ concatMap boundVars binders
 
 instance Term (Def v a) where
-  freeVars (Def _ name _ equations _) =
+  freeVars (Def _ name _ _ equations _) =
     delete name (freeVars equations)

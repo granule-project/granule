@@ -52,6 +52,7 @@ tokens :-
   then                          { \p s -> TokenThen p }
   else                          { \p s -> TokenElse p }
   case                          { \p s -> TokenCase p }
+  spec                          { \p s -> TokenSpec p }
   of                            { \p s -> TokenOf p }
   try                           { \p s -> TokenTry p }
   as                            { \p s -> TokenAs p }
@@ -133,6 +134,7 @@ data Token
   | TokenModule AlexPosn
   | TokenHiding AlexPosn
   | TokenCase   AlexPosn
+  | TokenSpec   AlexPosn
   | TokenOf     AlexPosn
   | TokenTry    AlexPosn
   | TokenAs     AlexPosn
