@@ -1577,17 +1577,40 @@ synthesise resourceScheme gamma (Focused omega) depth grade goal = do
 
 -- Run from the checker
 synthesiseProgram :: (?globals :: Globals)
-           => [Hint]
-           -> Ctxt TypeScheme      
-           -> Maybe Id 
-           -> ResourceScheme PruningScheme       -- whether the synthesis is in additive mode or not
+           => Maybe Hints
+           -> Int -- index
+           -> Ctxt TypeScheme  -- Unrestricted Defs 
+           -> Ctxt (TypeScheme, Type) -- Restricted Defs
+           -> Id
            -> Ctxt Assumption    -- (unfocused) free variables
            -> TypeScheme           -- type from which to synthesise
            -> CheckerState
-           -> IO [Expr () Type]
-synthesiseProgram hints defs currentDef resourceScheme gamma goalTy checkerState = do
+           -> IO [Expr () ()]
+synthesiseProgram hints index unrComps rComps defId ctxt goalTy checkerState = do
 
   start <- liftIO $ Clock.getTime Clock.Monotonic
+
+  let (timeoutLim, index, gradeOnRule, resourceScheme) =
+         case hints of 
+            Just hints' -> ( case (hTimeout hints', hNoTimeout hints') of 
+                                  (_, True) -> -1
+                                  (Just lim, _) -> lim * 1000,
+                            index + (fromMaybe 0 $ hIndex hints'),
+                            hGradeOnRule hints' || fromMaybe False (globalsGradeOnRule ?globals),
+                            let mode = if (hPruning hints' || alternateSynthesisMode) then Pruning else NonPruning
+                            in 
+                            if (hSubtractive hints' || subtractiveSynthesisMode) then Subtractive else Additive mode 
+                          )
+            Nothing ->    ( -1,
+                            index, 
+                            fromMaybe False (globalsGradeOnRule ?globals), 
+                            let mode = if alternateSynthesisMode then Pruning else NonPruning
+                            in 
+                            if subtractiveSynthesisMode then Subtractive else Additive mode)
+
+  let gamma = map (\(v, a)  -> (v, (SVar a $ Just NonDecreasing))) ctxt ++ 
+              map (\(v, (Forall _ _ _ ty, grade)) -> (v, (SVar (Discharged ty grade) $ Just NonDecreasing))) rComps
+  let initialGrade = if gradeOnRule then Just (TyGrade Nothing 1)  else Nothing
 
   let initialState = SynthesisData {
                          smtCallsCount= 0 
@@ -1597,36 +1620,17 @@ synthesiseProgram hints defs currentDef resourceScheme gamma goalTy checkerState
                       ,  pathsExplored= 0 
                       ,  startTime=start 
                       ,  constructors=[] 
-                      ,  currDef = (maybeToList currentDef)
+                      ,  currDef = [defId]
                       ,  depthReached = False
                       }
 
-
-
-  let gradeOnRule = (fromMaybe False (globalsGradeOnRule ?globals) || HGradeOnRule `elem` hints)
-  let initialGrade = if gradeOnRule then Just (TyGrade Nothing 1)  else Nothing
-
-  let timeoutLim = fromMaybe 1000 $ hasTimeoutHint hints
-  let timeoutLim' = if HSynNoTimeout `elem` hints then negate timeoutLim else (timeoutLim * 1000)
-  let index = fromMaybe 1 $ hasSynthIndex hints
-
-  -- let (hintELim, hintILim) = case (hasElimHint hints, hasIntroHint hints) of 
+  let (hintELim, hintILim) = (1, 1) -- case (hasElimHint hints, hasIntroHint hints) of 
   --           (Just e, Just i)   -> (e, i)
   --           (Just e, Nothing)  -> (e, 1)
   --           (Nothing, Just i)  -> (1, i)
   --           (Nothing, Nothing) -> (1, 1)
-        
-  let gamma' = map (\(v, a) -> (v, (SVar a NonDecreasing))) gamma
 
-  -- Only use the defs that are specified in the hint (or all defs if this hint is specified)
-  let defs' = if HUseAllDefs `elem` hints then map (\(x, ty) -> (x, (SDef ty))) defs 
-              else case hasDefsHint hints of 
-                        Just ids -> foldr (\(id, ty) acc -> if id `elem` ids then (id, (SDef ty)):acc else acc) [] defs
-                        Nothing -> if HUseRec `elem` hints then foldr (\(id, ty) acc -> if id `elem` (maybeToList currentDef) then (id, (SDef ty)):acc else acc) [] defs else []
-
-
-
-  result <- liftIO $ System.Timeout.timeout timeoutLim' $ loop (hintELim, hintILim) index defs' initialGrade gamma' initialState
+  result <- liftIO $ System.Timeout.timeout timeoutLim $ loop resourceScheme (hintELim, hintILim) index unrComps initialGrade gamma initialState
   fin <- case result of 
     Just (synthResults, aggregate) ->  do
       let results = nub $ map fst3 $ rights (map fst synthResults)
@@ -1673,18 +1677,16 @@ synthesiseProgram hints defs currentDef resourceScheme gamma goalTy checkerState
           putStrLn $ "Total synth time (ms) = "  ++ show (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double))
           putStrLn $ "Mean theoremSize   = " ++ show ((if smtCallsCount aggregate == 0 then 0 else fromInteger $ theoremSizeTotal aggregate) / fromInteger (smtCallsCount aggregate))
       -- </benchmarking-output>
-      return results
+      return (map unannotateExpr results)
     _ -> do
       end    <- liftIO $ Clock.getTime Clock.Monotonic
       printInfo $ "No programs synthesised - Timeout after: " <> (show timeoutLim  <> "ms")
       return []
   return fin
   
-
-
   where
 
-      loop (elimMax, introMax) index defs grade gamma agg = do 
+      loop resourceScheme (elimMax, introMax) index defs grade gamma agg = do 
 
 --      Diagonal search
         -- let diagonal = runOmega $ liftM2 (,) (each [0..elimMax]) (each [0..introMax]) 
@@ -1703,46 +1705,61 @@ synthesiseProgram hints defs currentDef resourceScheme gamma goalTy checkerState
             (Just res, agg') -> return (Just res, agg')
             (Nothing, agg')  -> do 
               putStrLn $  "elim: " <> (show elim) <> " intro: " <> (show intro)   
-              let synRes = synthesise resourceScheme gamma (Focused []) (Depth elim 0 intro) grade (Goal goalTy NonDecreasing)
+              let synRes = synthesise resourceScheme gamma (Focused []) (Depth elim 0 intro) grade (Goal goalTy $ Just NonDecreasing)
               (res, agg'') <- runStateT (runSynthesiser index synRes checkerState) (resetState agg')
               if (not $ solved res) && (depthReached agg'') then return (Nothing, agg'') else return (Just res, agg'')
           ) (Nothing, agg) lims
         case pRes of 
-          (Just finRes, finAgg) -> return (finRes, finAgg)
-          (Nothing, finAgg) -> loop (elimMax, introMax) index defs grade gamma finAgg 
+          (Just finRes, finAgg) -> do 
+            return (finRes, finAgg)
+          (Nothing, finAgg) -> loop resourceScheme (elimMax, introMax) index defs grade gamma finAgg 
  
 
       solved res = case res of ((Right (expr, _, _), _):_) -> True ; _ -> False
       resetState st = st { depthReached = False }
 
-
-
-      hasTimeoutHint ((HSynTimeout x):hints) = Just x
-      hasTimeoutHint (_:hints) = hasTimeoutHint hints
-      hasTimeoutHint [] = Nothing
-
-      hasSynthIndex ((HSynIndex x):hints) = Just x
-      hasSynthIndex (_:hints) = hasSynthIndex hints
-      hasSynthIndex [] = Nothing
-
-      hasDefsHint ((HUseDefs ids):hints) = Just ids
-      hasDefsHint (_:hints) = hasDefsHint hints
-      hasDefsHint [] = Nothing
-
-      -- hasElimHint ((HMaxElim x):hints) = Just x
-      -- hasElimHint ((HNoMaxElim):hints) = Just 9999 
-      -- hasElimHint (_:hints) = hasElimHint hints
-      -- hasElimHint [] = Nothing
-
-      -- hasIntroHint ((HMaxIntro x):hints) = Just x
-      -- hasIntroHint ((HNoMaxIntro):hints) = Just 9999 
-      -- hasIntroHint (_:hints) = hasIntroHint hints
-      -- hasIntroHint [] = Nothing
-
       fst3 (x, y, z) = x
 
-      
-        
+
+      -- eval takes an unnanotaed AST, so we need to strip out annotations in order to stitch our synthed expr back into
+      -- the original AST. Why do we not synthesise unannotated exprs directly? It's possible we may want to use the type
+      -- info in the future.
+      unannotateExpr :: Expr () Type -> Expr () ()
+      unannotateExpr (App s a rf e1 e2)             = App s () rf (unannotateExpr e1) $ unannotateExpr e2
+      unannotateExpr (AppTy s a rf e1 t)            = AppTy s () rf (unannotateExpr e1) t
+      unannotateExpr (Binop s a b op e1 e2)         = Binop s () b op (unannotateExpr e1) $ unannotateExpr e2
+      unannotateExpr (LetDiamond s a b ps mt e1 e2) = LetDiamond s () b (unannotatePat ps) mt (unannotateExpr e1) $ unannotateExpr e2
+      unannotateExpr (TryCatch s a b e p mt e1 e2)  = TryCatch s () b (unannotateExpr e) (unannotatePat p) mt (unannotateExpr e1)  $ unannotateExpr e2
+      unannotateExpr (Val s a b val)                = Val s () b (unannotateVal val)
+      unannotateExpr (Case s a b expr pats)         = Case s () b (unannotateExpr expr) $ map (\(p, e) -> (unannotatePat p, unannotateExpr e)) pats
+      unannotateExpr (Hole s a b ids hints)         = Hole s () b ids hints
+
+    
+      unannotateVal :: Value () Type -> Value () ()
+      unannotateVal (Abs a p mt e)        = Abs () (unannotatePat p) mt $ unannotateExpr e
+      unannotateVal (Promote a e)         = Promote () $ unannotateExpr e
+      unannotateVal (Pure a e)            = Pure () $ unannotateExpr e
+      unannotateVal (Nec a e)             = Nec () $ unannotateExpr e
+      unannotateVal (Constr a ident vals) = Constr () ident $ map unannotateVal vals
+      unannotateVal (Var a idv)           = Var () idv
+      unannotateVal (Ext a ev)            = Ext () ev
+      unannotateVal (NumInt n)            = NumInt n
+      unannotateVal (NumFloat n)          = NumFloat n
+      unannotateVal (CharLiteral c)       = CharLiteral c
+      unannotateVal (StringLiteral s)     = StringLiteral s
+
+
+      unannotatePat :: Pattern Type -> Pattern ()
+      unannotatePat (PVar s a rf nm)         = PVar s () rf nm
+      unannotatePat (PWild s a rf)           = PWild s () rf
+      unannotatePat (PBox s a rf p)          = PBox s () rf $ unannotatePat p
+      unannotatePat (PInt s a rf int)        = PInt s () rf int
+      unannotatePat (PFloat s a rf doub)     = PFloat s () rf doub
+      unannotatePat (PConstr s a rf nm pats) = PConstr s () rf nm $ map unannotatePat pats
+
+
+  
+
 useBinderNameOrFreshen :: Maybe Id -> Synthesiser Id
 useBinderNameOrFreshen Nothing = freshIdentifier
 useBinderNameOrFreshen (Just n) = return n
