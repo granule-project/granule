@@ -13,7 +13,7 @@ dependencies:
 - mtl >=2.2.1
 - optparse-applicative
 - text
-- logict == 0.7.1.0
+- logict >= 0.7.1.0
 - clock
 - array
 - haskell-src-exts

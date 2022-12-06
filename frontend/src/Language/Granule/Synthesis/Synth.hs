@@ -15,7 +15,6 @@ import Data.List (sortBy)
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Identifiers
-import Control.Monad.Logic
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Span

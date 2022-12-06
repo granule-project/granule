@@ -59,13 +59,13 @@ freeSNatX nm = do
 
 existsSNatX :: String -> Symbolic SNatX
 existsSNatX nm = do
-  v <- exists $ nm <> "_xVal"
+  v <- sbvExists $ nm <> "_xVal"
   constrain $ representationConstraint v
   return $ SNatX v
 
 forallSNatX :: String -> Symbolic SNatX
 forallSNatX nm = do
-  v <- forall $ nm <> "_xVal"
+  v <- sbvForall $ nm <> "_xVal"
   constrain $ representationConstraint v
   return $ SNatX v
 

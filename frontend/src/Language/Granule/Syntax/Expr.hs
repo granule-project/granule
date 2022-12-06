@@ -73,16 +73,37 @@ $(deriveBitraversable ''ValueF)
 type Value = ExprFix2 ValueF ExprF
 type UnfixedValue ev a = UnExprFix2 ValueF ExprF ev a
 
+pattern Abs :: a -> Pattern a -> Maybe Type -> ExprFix2 g ValueF ev a -> ExprFix2 ValueF g ev a
 pattern Abs a arg mty ex = (ExprFix2 (AbsF a arg mty ex))
+
+pattern Promote :: a -> ExprFix2 g ValueF ev a -> ExprFix2 ValueF g ev a
 pattern Promote a ex = (ExprFix2 (PromoteF a ex))
+
+pattern Pure :: a -> ExprFix2 g ValueF ev a -> ExprFix2 ValueF g ev a
 pattern Pure a ex = (ExprFix2 (PureF a ex))
+
+pattern Nec :: a -> ExprFix2 g ValueF ev a -> ExprFix2 ValueF g ev a
 pattern Nec a ex = (ExprFix2 (NecF a ex))
+
+pattern Constr :: a -> Id -> [ExprFix2 ValueF g ev a] -> ExprFix2 ValueF g ev a
 pattern Constr a ident vals = (ExprFix2 (ConstrF a ident vals))
+
+pattern Var :: a -> Id -> ExprFix2 ValueF g ev a
 pattern Var a ident = (ExprFix2 (VarF a ident))
+
+pattern NumInt :: Int -> ExprFix2 ValueF g ev a
 pattern NumInt n = (ExprFix2 (NumIntF n))
+
+pattern NumFloat :: Double -> ExprFix2 ValueF g ev a
 pattern NumFloat n = (ExprFix2 (NumFloatF n))
+
+pattern CharLiteral :: Char -> ExprFix2 ValueF g ev a
 pattern CharLiteral ch = (ExprFix2 (CharLiteralF ch))
+
+pattern StringLiteral :: Text -> ExprFix2 ValueF g ev a
 pattern StringLiteral str = (ExprFix2 (StringLiteralF str))
+
+pattern Ext :: a -> ev -> ExprFix2 ValueF g ev a
 pattern Ext a extv = (ExprFix2 (ExtF a extv))
 {-# COMPLETE Abs, Promote, Pure, Constr, Var, NumInt,
              NumFloat, CharLiteral, StringLiteral, Ext #-}
@@ -128,13 +149,66 @@ $(deriveBitraversable ''ExprF)
 type Expr = ExprFix2 ExprF ValueF
 type UnfixedExpr ev a = UnExprFix2 ExprF ValueF ev a
 
+pattern App :: Span
+               -> a
+               -> Bool
+               -> ExprFix2 ExprF g ev a
+               -> ExprFix2 ExprF g ev a
+               -> ExprFix2 ExprF g ev a
 pattern App sp a rf fexp argexp = (ExprFix2 (AppF sp a rf fexp argexp))
+
+pattern AppTy :: Span
+                 -> a
+                 -> Bool
+                 -> ExprFix2 ExprF g ev a
+                 -> Type
+                 -> ExprFix2 ExprF g ev a
 pattern AppTy sp a rf fexp ty = (ExprFix2 (AppTyF sp a rf fexp ty))
+
+pattern Binop :: Span
+                 -> a
+                 -> Bool
+                 -> Operator
+                 -> ExprFix2 ExprF g ev a
+                 -> ExprFix2 ExprF g ev a
+                 -> ExprFix2 ExprF g ev a
 pattern Binop sp a rf op lhs rhs = (ExprFix2 (BinopF sp a rf op lhs rhs))
+
+pattern LetDiamond :: Span
+                      -> a
+                      -> Bool
+                      -> Pattern a
+                      -> Maybe Type
+                      -> ExprFix2 ExprF g ev a
+                      -> ExprFix2 ExprF g ev a
+                      -> ExprFix2 ExprF g ev a
 pattern LetDiamond sp a rf pat mty nowexp nextexp = (ExprFix2 (LetDiamondF sp a rf pat mty nowexp nextexp))
+
+pattern TryCatch :: Span
+                    -> a
+                    -> Bool
+                    -> ExprFix2 ExprF g ev a
+                    -> Pattern a
+                    -> Maybe Type
+                    -> ExprFix2 ExprF g ev a
+                    -> ExprFix2 ExprF g ev a
+                    -> ExprFix2 ExprF g ev a
 pattern TryCatch sp a rf t1 pat mty t2 t3 = (ExprFix2 (TryCatchF sp a rf t1 pat mty t2 t3))
+
+pattern Val :: Span -> a -> Bool -> ExprFix2 g ExprF ev a -> ExprFix2 ExprF g ev a
 pattern Val sp a rf val = (ExprFix2 (ValF sp a rf val))
+
+pattern Case :: --forall {g :: * -> * -> * -> * -> *} {ev} {a}.
+                Span
+                -> a
+                -> Bool
+                -> ExprFix2 ExprF g ev a
+                -> [(Pattern a, ExprFix2 ExprF g ev a)]
+                -> ExprFix2 ExprF g ev a
 pattern Case sp a rf swexp arms = (ExprFix2 (CaseF sp a rf swexp arms))
+
+pattern Hole :: --forall {g :: * -> * -> * -> * -> *} {ev} {a}.
+                Span -> a -> Bool -> [Id] -> ExprFix2 ExprF g ev a
 pattern Hole sp a rf vs = ExprFix2 (HoleF sp a rf vs)
 {-# COMPLETE App, Binop, LetDiamond, TryCatch, Val, Case, Hole #-}
 

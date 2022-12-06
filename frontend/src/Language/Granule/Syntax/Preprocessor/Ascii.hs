@@ -6,17 +6,25 @@ module Language.Granule.Syntax.Preprocessor.Ascii
   , asciiUnicodeTableMarkdown
   ) where
 
-import Control.Arrow (first, second)
 import Data.String (fromString)
+import Data.Text.Lazy (pack, unpack)
 import Text.Replace (Replace(..), replaceWithList)
 
 asciiToUnicode :: String -> String
-asciiToUnicode = replaceWithList $ map (uncurry Replace . first fromString) asciiUnicodeTable
+asciiToUnicode = unpack . (replaceWithList (asciiUnicodeTableReplacements id)) . pack
 
 unicodeToAscii :: String -> String
-unicodeToAscii = replaceWithList $ map (uncurry (flip Replace) . second fromString) asciiUnicodeTable
+unicodeToAscii = unpack . (replaceWithList (asciiUnicodeTableReplacements swap)) . pack
+  where swap (a, b) = (b, a)
 
 -- NOTE: Update the documentation with 'asciiUnicodeTableMarkdown' if you touch this.
+asciiUnicodeTableReplacements :: ((String, String) -> (String, String)) -> [Replace]
+asciiUnicodeTableReplacements transformer =
+  flip map asciiUnicodeTable
+    (\(to, from) -> let (to', from') = transformer (to, from)
+                    in Replace (fromString to') (fromString from'))
+
+
 asciiUnicodeTable :: [(String,String)]
 asciiUnicodeTable =
     [ ("forall" , "∀")
