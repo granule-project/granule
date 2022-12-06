@@ -1,0 +1,48 @@
+name: granule-runtime
+version: '0.1.0.0'
+author: Michael Vollmer
+
+dependencies:
+- base >=4.10 && <5
+- directory
+- extra
+- filepath
+- gitrev
+- Glob
+- granule-frontend
+- mtl >=2.2.1
+- optparse-applicative
+- text
+- logict >= 0.7.1.0
+- clock
+- array
+- haskell-src-exts
+- containers
+- criterion
+- time
+- silently
+
+default-extensions:
+- LambdaCase
+- RecordWildCards
+- ImplicitParams
+- ScopedTypeVariables
+- OverloadedStrings
+- FlexibleContexts
+- ConstraintKinds
+
+ghc-options:
+- -Wall
+- -Werror
+- -Wcompat
+- -Wincomplete-record-updates
+- -Wincomplete-uni-patterns
+- -Wredundant-constraints
+- -Wno-unused-matches
+- -Wno-name-shadowing
+- -Wno-type-defaults
+
+library:
+  source-dirs: src
+  exposed-modules:
+  - Language.Granule.Runtime

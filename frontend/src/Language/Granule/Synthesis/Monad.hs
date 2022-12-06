@@ -52,7 +52,7 @@ newtype Synthesiser a = Synthesiser
 
 -- Synthesiser always uses fair bind from LogicT
 instance Monad Synthesiser where
-  return = Synthesiser . return
+  return = pure
   k >>= f =
     Synthesiser $ ExceptT (StateT
        (\s -> unSynth k s >>- (\(eb, s) ->

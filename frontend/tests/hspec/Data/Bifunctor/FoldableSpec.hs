@@ -19,9 +19,16 @@ $(deriveBifunctor ''ExprF)
 
 type Expr = Fix2 ExprF ValueF
 
+pattern And :: Fix2 ExprF g -> Fix2 ExprF g -> Fix2 ExprF g
 pattern And l r = (Fix2 (AndF l r))
+
+pattern Or :: Fix2 ExprF g -> Fix2 ExprF g -> Fix2 ExprF g
 pattern Or l r = (Fix2 (OrF l r))
+
+pattern Not :: Fix2 ExprF g -> Fix2 ExprF g
 pattern Not v = (Fix2 (NotF v))
+
+pattern Val :: Fix2 g ExprF -> Fix2 ExprF g
 pattern Val v = (Fix2 (ValF v))
 
 data ValueF val expr =
@@ -32,7 +39,10 @@ $(deriveBifunctor ''ValueF)
 
 type Value = Fix2 ValueF ExprF
 
+pattern Lit :: Bool -> Fix2 ValueF g
 pattern Lit b = (Fix2 (LitF b))
+
+pattern Ignore :: Fix2 g ValueF -> Bool -> Fix2 ValueF g
 pattern Ignore e b = (Fix2 (IgnoreF e b))
 
 spec :: Test.Spec

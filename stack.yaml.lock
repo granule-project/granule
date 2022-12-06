@@ -7,41 +7,48 @@ packages:
 - completed:
     hackage: ConfigFile-1.1.4@sha256:ca56261e1deae6ef958a337b03812987bfd94ab37b047e27f262bc3137813165,2056
     pantry-tree:
-      size: 1016
       sha256: 58c2dbae1878d8f5bcac2848712ccfe90391bb1e6b719f43d044ead6c496f748
+      size: 1016
   original:
     hackage: ConfigFile-1.1.4
 - completed:
-    hackage: text-replace-0.0.0.6@sha256:1da9fd389da635594e65671499c045b48bc3fdd985e18a5c69cc9c9a02ad5fac,2209
+    hackage: text-replace-0.1.0.2@sha256:7dde41ab31a3c029398ea0529a14c35c49c9232917e4dc5a1c6d125fa06b9e9f,1769
     pantry-tree:
-      size: 293
-      sha256: 7f7c3a17cb3a926eabdca7581e705974046137c1147c5196b72681e9477b5593
+      sha256: fabbbc5ac3b70c3750b70222ee4fcefb7361b16e0e31ae46a292ed13b990ff3c
+      size: 342
   original:
-    hackage: text-replace-0.0.0.6
-- completed:
-    hackage: sbv-8.5@sha256:62217ddd7a29e14e75286cba4b406187f37df63fd48f356a6639e3f9c82a18c0,19781
-    pantry-tree:
-      size: 54393
-      sha256: c80e3c0b08211b163b5b540e9356ffc77f3e69a4e7b08e3c6b21cb3bfe22ebbe
-  original:
-    hackage: sbv-8.5
+    hackage: text-replace-0.1.0.2
 - completed:
     hackage: syz-0.2.0.0@sha256:7307acb8f6ae7720e7e235c974281ecee912703c1394ebcac19caf83d70bb492,2345
     pantry-tree:
-      size: 256
       sha256: a5438cf5c8f701d8e2aa6543ca3d591224b83dcc379063da5ed68727da0bb1ad
+      size: 256
   original:
     hackage: syz-0.2.0.0@sha256:7307acb8f6ae7720e7e235c974281ecee912703c1394ebcac19caf83d70bb492,2345
 - completed:
-    hackage: clock-0.8@sha256:b4ae207e2d3761450060a0d0feb873269233898039c76fceef9cc1a544067767,4113
+    hackage: clock-0.8.3@sha256:a692159828c2cd278eaec317b3a7e9fb6d7b787c8a19f086004d15d9fa1fd72c,4601
     pantry-tree:
-      size: 446
-      sha256: d9ac8ce6a19812fe74cb1e74228e6e624eda19021ff4d12e24611f88abacd38a
+      sha256: 3e62393d5c7671b21d8aa84ef9ee0550334053711c80b5beeca295466a6615c7
+      size: 499
   original:
-    hackage: clock-0.8
+    hackage: clock-0.8.3
+- completed:
+    hackage: lsp-1.6.0.0@sha256:2b95e406cc85ffa95406ae8ad7d16b82283a6ca2fcb7ea5308a4ef3e6d6e68e6,4397
+    pantry-tree:
+      sha256: 43a82c501ec3074d888f2bf4960e4b447028c1537abbca4cf65e74944604bf62
+      size: 1044
+  original:
+    hackage: lsp-1.6.0.0
+- completed:
+    hackage: co-log-core-0.3.1.0@sha256:9794bdedd1391decd0e22bdfe2b11abcb42e6cff7a4531e1f8882890828f4e63,3816
+    pantry-tree:
+      sha256: d4cc089c40c5052ee02f91eafa567e0a239908aabc561dfa6080ba3bfc8c25bd
+      size: 584
+  original:
+    hackage: co-log-core-0.3.1.0
 snapshots:
 - completed:
-    size: 496112
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/15/13.yaml
-    sha256: 75a1a0f870e1876898b117b0e443f911b3fa2985bfabb53158c81ab5765beda5
-  original: lts-15.13
+    sha256: a2cbcd2f37010a64c4ef74c21fd7e55982a07b49840d2bed306f9bac9981a9c3
+    size: 648420
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/20/0.yaml
+  original: lts-20.0

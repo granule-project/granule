@@ -7,9 +7,6 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
 
--- GHC really wants this...
-{-# OPTIONS_GHC -fmax-pmcheck-iterations=30000000 #-}
-
 -- | Kind checking and inference algorithms
 module Language.Granule.Checker.Kinding where
 

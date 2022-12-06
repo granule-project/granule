@@ -2,8 +2,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 
-{-# OPTIONS_GHC -fmax-pmcheck-iterations=30000000 #-}
-
 -- | Deals with interactions between coeffect resource algebras
 module Language.Granule.Checker.Flatten where
 

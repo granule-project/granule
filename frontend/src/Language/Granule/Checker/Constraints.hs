@@ -275,20 +275,20 @@ class QuantifiableScoped a where
   existentialScoped :: String -> (SBV a -> Symbolic SBool) -> Symbolic SBool
 
 instance QuantifiableScoped Integer where
-  universalScoped v = forAll [v]
-  existentialScoped v = forSome [v]
+  universalScoped v = universal [v]
+  existentialScoped v = existential [v]
 
 instance QuantifiableScoped Bool where
-  universalScoped v = forAll [v]
-  existentialScoped v = forSome [v]
+  universalScoped v = universal [v]
+  existentialScoped v = existential [v]
 
 instance QuantifiableScoped Float where
-  universalScoped v = forAll [v]
-  existentialScoped v = forSome [v]
+  universalScoped v = universal [v]
+  existentialScoped v = existential [v]
 
 instance QuantifiableScoped (RCSet SSetElem) where
-  universalScoped v = forAll [v]
-  existentialScoped v = forSome [v]
+  universalScoped v = universal [v]
+  existentialScoped v = existential [v]
 
 
 -- Compile a constraint into a symbolic bool (SBV predicate)
