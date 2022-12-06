@@ -24,4 +24,16 @@ readUntilEnd h =
             (h, str) <- readUntilEnd h
         in pure (h, stringCons c str)
 
+auxiliaryWriteFile : Handle W -> String -> (Handle W) <{Write, IOExcept}>
+auxiliaryWriteFile h rest =
+  case stringUncons rest of
+    None -> pure h;
+    Some (c, rest) -> let
+      h <- writeChar h c
+      in auxiliaryWriteFile h rest
 
+writeFile : String -> String -> () <{Open, Write, Close, IOExcept}>
+writeFile fileName fileData = let
+  h <- openHandle WriteMode fileName;
+  h <- auxiliaryWriteFile h fileData
+  in closeHandle h

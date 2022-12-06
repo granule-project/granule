@@ -28,6 +28,11 @@ typeAliases =
   where
     ioElems = ["Stdout", "Stdin", "Stderr", "Open", "Read", "Write", "IOExcept", "Close"]
 
+capabilities :: [(Id, Type)]
+capabilities =
+   [(mkId "Console", funTy (tyCon "String") (tyCon "()"))
+  , (mkId "TimeDate", funTy (tyCon "()") (tyCon "String"))]
+
 -- Associates type constuctors names to their:
 --    * kind
 --    * list of (finite) matchable constructor names (but not the actual set of constructor names which could be infinite)
@@ -36,48 +41,57 @@ typeConstructors :: [(Id, (Type, [Id], Bool))]
 typeConstructors =
     [ (mkId "Coeffect",  (Type 0, [], False))
     , (mkId "Effect",    (Type 0, [], False))
+    , (mkId "Guarantee", (Type 0, [], False))
     , (mkId "Predicate", (Type 0, [], False))
     , (mkId "->",     (funTy (Type 0) (funTy (Type 0) (Type 0)), [], False))
     , (mkId ",,",     (funTy kcoeffect (funTy kcoeffect kcoeffect), [mkId ",,"], False))
+    , (mkId "ExactSemiring", (funTy (tyCon "Semiring") (tyCon "Predicate"), [], True))
     , (mkId "Int",    (Type 0, [], False))
     , (mkId "Float",  (Type 0, [], False))
+    , (mkId "DFloat",  (Type 0, [], False)) -- special floats that can be tracked for sensitivty
     , (mkId "Char",   (Type 0, [], False))
     , (mkId "String", (Type 0, [], False))
-    , (mkId "Protocol", (Type 0, [], False))
     , (mkId "Inverse", ((funTy (Type 0) (Type 0)), [], False))
+    -- Session type related things
+    , (mkId "Protocol", (Type 0, [], False))
+    , (mkId "SingleAction", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], True))
+    , (mkId "ReceivePrefix", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], True))
+    , (mkId "Sends", (funTy (tyCon "Nat") (funTy (tyCon "Protocol") (tyCon "Predicate")), [], True))
+    , (mkId "Graded", (funTy (tyCon "Nat") (funTy (tyCon "Protocol") (tyCon "Protocol")), [], True))
+
     -- # Coeffect types
     , (mkId "Nat",      (kcoeffect, [], False))
     , (mkId "Q",        (kcoeffect, [], False)) -- Rationals
     , (mkId "OOZ",      (kcoeffect, [], False)) -- 1 + 1 = 0
     , (mkId "LNL",      (kcoeffect, [], False)) -- Linear vs Non-linear semiring
     -- LNL members
-    , (mkId "Zero",        (tyCon "LNL", [], False))
-    , (mkId "One",     (tyCon "LNL", [], False))
+    , (mkId "Zero",     (tyCon "LNL", [], False))
+    , (mkId "One",      (tyCon "LNL", [], False))
     , (mkId "Many",     (tyCon "LNL", [], False))
-    -- Borrowing
-    , (mkId "Borrowing", (kcoeffect, [], False))
-    , (mkId "One",       (tyCon "Borrowing", [], False))
-    , (mkId "Beta",      (tyCon "Borrowing", [], False))
-    , (mkId "Omega",     (tyCon "Borrowing", [], False))
     -- Security levels
     , (mkId "Level",    (kcoeffect, [], False)) -- Security level
     , (mkId "Private",  (tyCon "Level", [], False))
     , (mkId "Public",   (tyCon "Level", [], False))
     , (mkId "Unused",   (tyCon "Level", [], False))
+    , (mkId "Dunno",    (tyCon "Level", [], False))
     -- Alternate security levels (a la Gaboardi et al. 2016 and Abel-Bernardy 2020)
     , (mkId "Sec",  (kcoeffect, [], False))
     , (mkId "Hi",    (tyCon "Sec", [], False))
     , (mkId "Lo",    (tyCon "Sec", [], False))
     -- Uniqueness
-    , (mkId "Uniqueness", (kcoeffect, [], False))
+    , (mkId "Uniqueness", (kguarantee, [], False))
     , (mkId "Unique", (tyCon "Uniqueness", [], False))
+    -- Integrity
+    , (mkId "Integrity", (kguarantee, [], False))
+    , (mkId "Trusted", (tyCon "Integrity", [], False))
     -- Other coeffect constructors
-    , (mkId "Infinity", ((tyCon "Ext") .@ (tyCon "Nat"), [], False))
     , (mkId "Interval", (kcoeffect .-> kcoeffect, [], False))
     -- Channels and protocol types
     , (mkId "Send", (funTy (Type 0) (funTy protocol protocol), [], False))
     , (mkId "Recv", (funTy (Type 0) (funTy protocol protocol), [], False))
     , (mkId "End" , (protocol, [], False))
+    , (mkId "Select" , (funTy protocol (funTy protocol protocol), [], False))
+    , (mkId "Offer" , (funTy protocol (funTy protocol protocol), [], False))
     , (mkId "Chan", (funTy protocol (Type 0), [], True))
     , (mkId "LChan", (funTy protocol (Type 0), [], True))
     , (mkId "Dual", (funTy protocol protocol, [], True))
@@ -97,6 +111,9 @@ typeConstructors =
 
     -- Arrays
     , (mkId "FloatArray", (Type 0, [], False))
+
+    -- Capability related things
+    , (mkId "CapabilityType", (funTy (tyCon "Capability") (Type 0), [], True))
     ]
 
 -- Various predicates and functions on type operators
@@ -110,6 +127,7 @@ closedOperation =
     TyOpMeet -> True
     TyOpJoin -> True
     TyOpInterval -> True
+    TyOpConverge -> True
     _        -> False
 
 coeffectResourceAlgebraOps :: TypeOperator -> Bool
@@ -139,10 +157,11 @@ tyOps = \case
     TyOpMeet -> (kNat, kNat, kNat)
     TyOpJoin -> (kNat, kNat, kNat)
     TyOpInterval -> (tyVar "k", tyVar "k", tyVar "k")
+    TyOpConverge -> (kNat, kNat, kNat)
 
 dataTypes :: [DataDecl]
 dataTypes =
-    -- Special built-in for products (which cannot be parsed)
+    -- Special built-ins for products (which cannot be parsed)
     [ DataDecl
       { dataDeclSpan = nullSpanBuiltin
       , dataDeclId   = mkId ","
@@ -152,6 +171,17 @@ dataTypes =
         DataConstrNonIndexed
           { dataConstrSpan = nullSpanBuiltin
           , dataConstrId = mkId ","
+          , dataConstrParams = [TyVar (mkId "a"), TyVar (mkId "b")]
+         }]}
+    ] ++ [ DataDecl
+      { dataDeclSpan = nullSpanBuiltin
+      , dataDeclId   = mkId "&"
+      , dataDeclTyVarCtxt = [((mkId "a"), Type 0),((mkId "b"), Type 0)]
+      , dataDeclKindAnn = Just (Type 0)
+      , dataDeclDataConstrs = [
+        DataConstrNonIndexed
+          { dataConstrSpan = nullSpanBuiltin
+          , dataConstrId = mkId "&"
           , dataConstrParams = [TyVar (mkId "a"), TyVar (mkId "b")]
          }]}
     ] ++ builtinDataTypesParsed
@@ -175,27 +205,28 @@ binaryOperators = \case
     OpEq ->
       funTy (TyCon $ mkId "Int") (funTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
       :| [funTy (TyCon $ mkId "Float") (funTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))
-        , funTy (TyCon $ mkId "DFloat") (funTy (TyCon $ mkId "DFloat") (TyCon $ mkId "DFloat"))]
+        , funTy (TyCon $ mkId "Char") (funTy (TyCon $ mkId "Char") (TyCon $ mkId "Bool"))
+        , funTy (TyCon $ mkId "DFloat") (funTy (TyCon $ mkId "DFloat") (TyCon $ mkId "Bool"))]
     OpNotEq ->
       funTy (TyCon $ mkId "Int") (funTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
       :| [funTy (TyCon $ mkId "Float") (funTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))
-        , funTy (TyCon $ mkId "DFloat") (funTy (TyCon $ mkId "DFloat") (TyCon $ mkId "DFloat"))]
+        , funTy (TyCon $ mkId "DFloat") (funTy (TyCon $ mkId "DFloat") (TyCon $ mkId "Bool"))]
     OpLesserEq ->
       funTy (TyCon $ mkId "Int") (funTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
       :| [funTy (TyCon $ mkId "Float") (funTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))
-        , funTy (TyCon $ mkId "DFloat") (funTy (TyCon $ mkId "DFloat") (TyCon $ mkId "DFloat"))]
+        , funTy (TyCon $ mkId "DFloat") (funTy (TyCon $ mkId "DFloat") (TyCon $ mkId "Bool"))]
     OpLesser ->
       funTy (TyCon $ mkId "Int") (funTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
       :| [funTy (TyCon $ mkId "Float") (funTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))
-        , funTy (TyCon $ mkId "DFloat") (funTy (TyCon $ mkId "DFloat") (TyCon $ mkId "DFloat"))]
+        , funTy (TyCon $ mkId "DFloat") (funTy (TyCon $ mkId "DFloat") (TyCon $ mkId "Bool"))]
     OpGreater ->
       funTy (TyCon $ mkId "Int") (funTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
       :| [funTy (TyCon $ mkId "Float") (funTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))
-        , funTy (TyCon $ mkId "DFloat") (funTy (TyCon $ mkId "DFloat") (TyCon $ mkId "DFloat"))]
+        , funTy (TyCon $ mkId "DFloat") (funTy (TyCon $ mkId "DFloat") (TyCon $ mkId "Bool"))]
     OpGreaterEq ->
       funTy (TyCon $ mkId "Int") (funTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
       :| [funTy (TyCon $ mkId "Float") (funTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))
-        , funTy (TyCon $ mkId "DFloat") (funTy (TyCon $ mkId "DFloat") (TyCon $ mkId "DFloat"))]
+        , funTy (TyCon $ mkId "DFloat") (funTy (TyCon $ mkId "DFloat") (TyCon $ mkId "Bool"))]
 
 -- TODO make a proper quasi quoter that parses this at compile time
 builtinSrc :: String
@@ -210,16 +241,8 @@ use = BUILTIN
 
 compose : forall {a : Type, b : Type, c : Type}
   . (b -> c) -> (a -> b) -> (a -> c)
-compose g f = \x -> g (f x)
-
-dropInt : Int -> ()
-dropInt = BUILTIN
-
-dropChar : Char -> ()
-dropChar = BUILTIN
-
-dropString : String -> ()
-dropString = BUILTIN
+compose = BUILTIN
+-- Defined in the interpreter as \g -> \f -> \x -> g (f x)
 
 --------------------------------------------------------------------------------
 -- Arithmetic
@@ -257,11 +280,8 @@ toStdout = BUILTIN
 toStderr : String -> () <{Stderr}>
 toStderr = BUILTIN
 
-readInt : Int <{Stdin}>
-readInt = BUILTIN
-
 --------------------------------------------------------------------------------
---Exceptions
+-- Exceptions
 --------------------------------------------------------------------------------
 
 throw : forall {a : Type, k : Coeffect} . (a [0 : k]) <MayFail>
@@ -280,13 +300,19 @@ intToFloat = BUILTIN
 showInt : Int -> String
 showInt = BUILTIN
 
+showFloat : Float -> String
+showFloat = BUILTIN
+
+readInt : String -> Int
+readInt = BUILTIN
+
 --------------------------------------------------------------------------------
 -- Thread / Sessions
 --------------------------------------------------------------------------------
 
 fork
   : forall {s : Protocol, k : Coeffect, c : k}
-  . ((Chan s) [c] -> () <Session>) -> ((Chan (Dual s)) [c]) <Session>
+  . {SingleAction s, ExactSemiring k} => ((Chan s) [c] -> () <Session>) -> ((Chan (Dual s)) [c]) <Session>
 fork = BUILTIN
 
 forkLinear
@@ -312,6 +338,18 @@ recv = BUILTIN
 close : LChan End -> ()
 close = BUILTIN
 
+selectLeft : forall {p1 p2 : Protocol}
+          . LChan (Select p1 p2) -> LChan p1
+selectLeft = BUILTIN
+
+selectRight : forall {p1 p2 : Protocol}
+            . LChan (Select p1 p2) -> LChan p2
+selectRight = BUILTIN
+
+offer : forall {p1 p2 : Protocol, a : Type}
+      . (LChan p1 -> a) -> (LChan p2 -> a) -> LChan (Offer p1 p2) -> a
+offer = BUILTIN
+
 gsend
   : forall {a : Type, s : Protocol}
   . Chan (Send a s) -> a -> (Chan s) <Session>
@@ -327,6 +365,22 @@ gclose = BUILTIN
 
 -- trace : String -> () <>
 -- trace = BUILTIN
+
+forkNonLinear : forall {p : Protocol, s : Semiring, r : s}
+              . {SingleAction p, ExactSemiring s} => ((LChan p) [r] -> ()) -> (LChan (Dual p)) [r]
+forkNonLinear = BUILTIN
+
+forkMulticast : forall {p : Protocol, n : Nat}
+              . {Sends p} => (LChan (Graded n p) -> ()) -> N n -> Vec n (LChan (Dual p))
+forkMulticast = BUILTIN
+
+forkReplicate : forall {p : Protocol, n : Nat} . {ReceivePrefix p}
+              => (LChan p -> ()) [0..n] -> N n -> Vec n ((LChan (Dual p)) [0..1])
+forkReplicate = BUILTIN
+
+forkReplicateExactly : forall {p : Protocol, n : Nat} . {ReceivePrefix p}
+                  => (LChan p -> ()) [n] ->  N n -> Vec n (LChan (Dual p))
+forkReplicateExactly = BUILTIN
 
 --------------------------------------------------------------------------------
 -- File Handles
@@ -388,7 +442,16 @@ charToInt = BUILTIN
 charFromInt : Int -> Char
 charFromInt = BUILTIN
 
+-- Moves
 
+moveChar : Char -> Char []
+moveChar = BUILTIN
+
+moveInt : Int -> Int []
+moveInt = BUILTIN
+
+moveString : String -> String []
+moveString = BUILTIN
 
 --------------------------------------------------------------------------------
 -- String manipulation
@@ -450,11 +513,11 @@ swap
   → a × ArrayStack cap (maxIndex + 1) a
 swap = BUILTIN
 
-copy
+copyArray
   : ∀ {a : Type, cap : Nat, maxIndex : Nat}
   . ArrayStack cap maxIndex (a [2])
   → ArrayStack cap maxIndex a × ArrayStack cap maxIndex a
-copy = BUILTIN
+copyArray = BUILTIN
 
 --------------------------------------------------------------------------------
 -- Cost
@@ -500,29 +563,102 @@ tick = BUILTIN
 
 uniqueReturn
   : forall {a : Type}
-  . a [Unique] -> a []
+  . *a -> !a
 uniqueReturn = BUILTIN
 
 uniqueBind
-  : forall {a b : Type, k : Coeffect, c : k}
-  . (a [Unique] -> b [c]) -> a [c] -> b [c]
+  : forall {a b : Type}
+  . (*a -> !b) -> !a -> !b
 uniqueBind = BUILTIN
+
+uniquePush 
+  : forall {a b : Type} 
+  . *(a, b)  -> (*a, *b)
+uniquePush = BUILTIN
+
+uniquePull 
+  : forall {a b : Type} 
+  . (*a, *b) -> *(a, b)
+uniquePull = BUILTIN
+
+trustedReturn
+  : forall {a : Type}
+  . [Trusted] a -> a [Lo]
+trustedReturn = BUILTIN
+
+trustedBind
+  : forall {a b : Type}
+  . ([Trusted] a -> b [Lo]) -> a [Lo] -> b [Lo]
+trustedBind = BUILTIN
 
 --------------------------------------------------------------------------------
 -- Mutable arrays
 --------------------------------------------------------------------------------
 
-newFloatArray : Int -> FloatArray [Unique]
+newFloatArray : Int -> *FloatArray
 newFloatArray = BUILTIN
 
-readFloatArray : FloatArray [Unique] -> Int -> (Float, FloatArray [Unique])
+newFloatArrayI : Int -> FloatArray
+newFloatArrayI = BUILTIN
+
+readFloatArray : *FloatArray -> Int -> (Float, *FloatArray)
 readFloatArray = BUILTIN
 
-writeFloatArray : FloatArray [Unique] -> Int -> Float -> FloatArray [Unique]
+readFloatArrayI : FloatArray -> Int -> (Float, FloatArray)
+readFloatArrayI = BUILTIN
+
+writeFloatArray : *FloatArray -> Int -> Float -> *FloatArray
 writeFloatArray = BUILTIN
 
-lengthFloatArray : FloatArray [Unique] -> (Int, FloatArray [Unique])
+writeFloatArrayI : FloatArray -> Int -> Float -> FloatArray
+writeFloatArrayI = BUILTIN
+
+lengthFloatArray : *FloatArray -> (Int, *FloatArray)
 lengthFloatArray = BUILTIN
+
+lengthFloatArrayI : FloatArray -> (Int, FloatArray)
+lengthFloatArrayI = BUILTIN
+
+deleteFloatArray : *FloatArray -> ()
+deleteFloatArray = BUILTIN
+
+--------------------------------------------------------------------------------
+-- Benchmarking
+--------------------------------------------------------------------------------
+
+data BenchList where BenchGroup String BenchList BenchList ; Bench Int String (Int [] -> () <{Stdout}>) BenchList; Done
+
+mkIOBenchMain : BenchList -> () <>
+mkIOBenchMain = BUILTIN
+
+---------------------
+
+scale : (k : Float) -> DFloat [k] -> DFloat
+scale = BUILTIN
+
+
+--------------------------------------------------------------------------------
+-- Capabilities
+--------------------------------------------------------------------------------
+
+data Capability = Console | TimeDate
+
+cap : (c : Capability) -> () [{c}] -> CapabilityType c
+cap = BUILTIN
+
+--------------------------------------------------------------------------------
+-- Additive conjunction (linear logic)
+--------------------------------------------------------------------------------
+
+with : forall {a b : Type} . a [0..1] -> b [0..1] -> a & b
+with = BUILTIN
+
+projL : forall {a b : Type} . a & b -> a
+projL = BUILTIN
+
+projR : forall {a b : Type} . a & b -> b
+projR = BUILTIN
+
 |]
 
 
@@ -537,3 +673,8 @@ builtins :: [(Id, TypeScheme)]
 
       unDef :: Def () () -> (Id, TypeScheme)
       unDef (Def _ name _ _ (Forall _ bs cs t)) = (name, Forall nullSpanBuiltin bs cs t)
+
+-- List of primitives that can't be promoted in CBV
+unpromotables :: [String]
+unpromotables = ["newFloatArray", "forkLinear", "forkLinear'", "forkMulticast", "forkReplicate", "forkReplicateExactly"]
+

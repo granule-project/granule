@@ -60,6 +60,7 @@ import Language.Granule.Utils hiding (mkSpan)
     catch    { TokenCatch _ }
     import { TokenImport _ _ }
     language { TokenPragma _ _ }
+    clone { TokenCopy _ }
     INT   { TokenInt _ _ }
     FLOAT  { TokenFloat _ _}
     VAR    { TokenSym _ _ }
@@ -107,6 +108,8 @@ import Language.Granule.Utils hiding (mkSpan)
     '!}'  { TokenHoleEnd _ }
     '@'   { TokenAt _ }
     '!'   { TokenBang _ }
+    '&'   { TokenBorrow _ }
+    '#'   { TokenHash _ }
 
 %right '∘'
 %right in
@@ -116,6 +119,7 @@ import Language.Granule.Utils hiding (mkSpan)
 %left '..'
 %left '+' '-'
 %left '*'
+%left '&'
 %left '^'
 %left '|'
 %left '.'
@@ -265,6 +269,9 @@ PAtom :: { Pattern () }
   | '[' PAtom ']'
        {% (mkSpan (getPos $1, getPos $3)) >>= \sp -> return $ PBox sp () False $2 }
 
+  | '!' PAtom
+       {% (mkSpan (getPos $1, getPos $1)) >>= \sp -> return $ PBox sp () False $2 }
+
   | '[' NAryConstr ']'
        {% (mkSpan (getPos $1, getPos $3)) >>= \sp -> return $ PBox sp () False $2 }
 
@@ -325,11 +332,15 @@ Type :: { Type }
   : '(' VAR ':' Type ')' '->' Type              { FunTy (Just . mkId . symString $ $2) Nothing $4 $7 }
   | '(' VAR ':' Type ')' '^' Coeffect '->' Type { FunTy (Just . mkId . symString $ $2) (Just $7) $4 $9 } 
   | TyJuxt                                      { $1 }
-  | '!' TyAtom                                  { Box (TyCon $ mkId "NonLin") $2 }
+  | '!' TyAtom                                  { Box (TyCon $ mkId "Many") $2 }
+  | '*' TyAtom                                  { Star (TyCon $ mkId "Unique") $2 }
   | Type '->' Type                              { FunTy Nothing Nothing $1 $3 }
   | Type '^' Coeffect '->' Type                 { FunTy Nothing (Just $3) $1 $5 }
   | Type '×' Type                               { TyApp (TyApp (TyCon $ mkId ",") $1) $3 }
+  | Type '&' Type                               { TyApp (TyApp (TyCon $ mkId "&") $1) $3 }
   | TyAtom '[' Coeffect ']'                     { Box $3 $1 }
+  | TyAtom '*' '[' Guarantee ']'                { Star $4 $1 }
+  | '[' Guarantee ']' TyAtom                    { Star $2 $4 }
   | TyAtom '[' ']'                              { Box (TyInfix TyOpInterval (TyGrade (Just extendedNat) 0) infinity) $1 }
   | TyAtom '<' Effect '>'                       { Diamond $3 $1 }
   | case Type of TyCases                        { TyCase $2 $4 }
@@ -360,7 +371,8 @@ TyCase :: { (Type, Type) }
   : Type '->' Type           { ($1, $3) }
 
 Constraint :: { Type }
-  : TyAtom '>' TyAtom         { TyInfix TyOpGreaterNat $1 $3 }
+  : TyJuxt TyAtom             { TyApp $1 $2 }
+  | TyAtom '>' TyAtom         { TyInfix TyOpGreaterNat $1 $3 }
   | TyAtom '<' TyAtom         { TyInfix TyOpLesserNat $1 $3 }
   | TyAtom '<=' TyAtom        { TyInfix TyOpLesserEq $1 $3 }
   | TyAtom '.' '<=' TyAtom    { TyInfix TyOpLesserEqNat $1 $4 }
@@ -368,7 +380,6 @@ Constraint :: { Type }
   | TyAtom '.' '>=' TyAtom    { TyInfix TyOpGreaterEqNat $1 $4 }
   | TyAtom '==' TyAtom        { TyInfix TyOpEq $1 $3 }
   | TyAtom '/=' TyAtom        { TyInfix TyOpNotEq $1 $3 }
-
 
 TyAtom :: { Type }
   : CONSTR                    { case constrString $1 of
@@ -378,6 +389,7 @@ TyAtom :: { Type }
   | '(' ',' ')'               { TyCon $ mkId "," }
   | VAR                       { TyVar (mkId $ symString $1) }
   | INT                       { let TokenInt _ x = $1 in TyGrade Nothing x }
+  | FLOAT                     { let TokenFloat _ x = $1 in TyRational $ myReadFloat x }
   -- | '.' INT                   { let TokenInt _ x = $2 in TyInt x }
   | '(' Type ')'              { $2 }
   | '(' Type ',' Type ')'     { TyApp (TyApp (TyCon $ mkId ",") $2) $4 }
@@ -423,6 +435,7 @@ CoeffSetElems :: { [Type] }
 
 CoeffSetElem :: { Type }
   : CONSTR      { TyCon $ mkId $ constrString $1 }
+  | VAR         { TyVar $ mkId $ symString $1 }
 
 
 Effect :: { Type }
@@ -435,6 +448,9 @@ EffSet :: { [Type] }
   | Eff                    { [$1] }
 
 Eff :: { Type }
+  : CONSTR                  { TyCon $ mkId $ constrString $1 }
+
+Guarantee :: { Type }
   : CONSTR                  { TyCon $ mkId $ constrString $1 }
 
 Expr :: { Expr () () }
@@ -480,6 +496,13 @@ Expr :: { Expr () () }
                   [(PConstr span2 () False (mkId "True") [], $4),
                      (PConstr span3 () False (mkId "False") [], $6)] }
 
+  | clone Expr as CopyBind in Expr
+    {% let t1 = $2; (_, pat, mt) = $4; t2 = $6 
+      in (mkSpan (getPos $1, getEnd $6)) >>=
+        \sp -> return $ App sp () False (App sp () False 
+          (Val sp () False (Var () (mkId "uniqueBind"))) 
+          (Val sp () False (Abs () pat mt t2))) t1 }
+
   | Form
     { $1 }
 
@@ -492,6 +515,12 @@ LetBind :: { (Pos, Pattern (), Maybe Type, Expr () ()) }
       { (getStart $1, $1, Just $3, $5) }
   | NAryConstr '=' Expr
       { (getStart $1, $1, Nothing, $3) }
+
+CopyBind :: { (Pos, Pattern (), Maybe Type) }
+  : PAtom ':' Type
+    { (getStart $1, $1, Just $3) }
+  | PAtom
+    { (getStart $1, $1, Nothing) }
 
 MultiLet :: { Expr () () }
 MultiLet
@@ -567,7 +596,14 @@ Atom :: { Expr () () }
   | VAR                       {% (mkSpan $ getPosToSpan $1)  >>= \sp -> return $ Val sp () False $ Var () (mkId $ symString $1) }
 
   | '[' Expr ']'              {% (mkSpan (getPos $1, getPos $3)) >>= \sp -> return $ Val sp () False $ Promote () $2 }
+  | '#' INT                   {% let (TokenInt _ x) = $2
+                                 in (mkSpan $ getPosToSpan $1)
+                                    >>= \sp -> return $ Val sp () False $ Nec () (Val sp () False $ NumInt x) }
+  | '#' FLOAT                 {% let (TokenFloat _ x) = $2
+                                 in (mkSpan $ getPosToSpan $1)
+                                    >>= \sp -> return $ Val sp () False $ Nec () (Val sp () False $ NumFloat $ read x) }                                                                                           
   | CONSTR                    {% (mkSpan $ getPosToSpan $1)  >>= \sp -> return $ Val sp () False $ Constr () (mkId $ constrString $1) [] }
+  | '#' CONSTR                {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Val sp () False $ Nec () (Val sp () False $ Constr () (mkId $ constrString $2) [])}
   | '(' Expr ',' Expr ')'     {% do
                                     span1 <- (mkSpan (getPos $1, getPos $5))
                                     span2 <- (mkSpan (getPos $1, getPos $3))
@@ -582,7 +618,14 @@ Atom :: { Expr () () }
   | STRING                    {% (mkSpan $ getPosToSpan $1) >>= \sp ->
                                   return $ Val sp () False $
                                       case $1 of (TokenStringLiteral _ c) -> StringLiteral c }
+  | '#' CHAR                  {% (mkSpan $ getPosToSpan $1) >>= \sp ->
+                                  return $ Val sp () False $
+                                     case $2 of (TokenCharLiteral _ c) -> Nec () (Val sp () False $ CharLiteral c) }
+  | '#' STRING                {% (mkSpan $ getPosToSpan $1) >>= \sp ->
+                                  return $ Val sp () False $
+                                     case $2 of (TokenStringLiteral _ c) -> Nec () (Val sp () False $ StringLiteral c) }                              
   | Hole                      { $1 }
+  | '&' Expr                  {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ App sp () False (Val sp () False (Var () (mkId "uniqueReturn"))) $2 }
 
 {
 

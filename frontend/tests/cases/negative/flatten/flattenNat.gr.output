@@ -1,4 +1,7 @@
 Type checking failed: 
 Counter example: frontend/tests/cases/negative/flatten/flattenNat.gr:2:1:
-The following theorem associated with `flattenNat` is falsifiable:
-	(m + n = n * m)
+  When checking `flattenNat`, expected n * m uses, but instead there are m + n actual uses.
+
+Counter-example:
+  n = 14 :: Integer
+  m = 14 :: Integer

@@ -175,11 +175,14 @@ checkKind s t@(TySet p elems) (TyApp (TyCon setConstructor) elemTy)
 checkKind s (TySig t k) k' = do
   join <- joinTypes s k k'
   case join of
-    Just (jk, subst, inj) ->
+    Just (jk, subst, inj) -> do
+      -- Now actually do the check of kind on the inner part of the ty sig
+      (subst', t') <- checkKind s t jk
+      subst2 <- combineSubstitutions s subst subst'
       case inj of
-        Nothing           -> return (subst, TySig t jk)
+        Nothing           -> return (subst2, TySig t' jk)
         -- Apply the left injection
-        Just (inj1, inj2) -> return (subst, TySig (inj1 t) jk)
+        Just (inj1, inj2) -> return (subst2, TySig (inj1 t') jk)
     Nothing -> throw KindMismatch { errLoc = s, tyActualK = Just t, kExpected = k, kActual = k' }
 
 -- KChck_Nat
@@ -191,12 +194,15 @@ checkKind s t@(TyCon (internalName -> "Nat")) (TyCon (internalName -> "Effect"))
 checkKind s t@(TyCon (internalName -> "Nat")) (Type 0) =
   return ([], t)
 
+checkKind s t@(TyCon (internalName -> "Infinity")) (TyApp (TyCon (internalName -> "Ext")) _) =
+  return ([], t)
+
 -- Fall through to synthesis if checking can not be done.
 checkKind s t k = do
   -- Synth
   (k', subst1, t') <- synthKind s t
   -- See if we can do a join (equality+) on the synthed kind and the one coming as specification here.
-  join <- joinTypes s k k'
+  join <- joinTypesNoMGU s k k'
   case join of
     Just (_, subst2, _) -> do
       substFinal <- combineSubstitutions s subst1 subst2
@@ -340,6 +346,13 @@ synthKindWithConfiguration s _ (Diamond e t) = do
   subst <- combineManySubstitutions s [subst1, subst2, subst3]
   return (ktype, subst, Diamond e' t')
 
+synthKindWithConfiguration s _ (Star g t) = do
+  (guaranTy, subst0, g') <- synthKindWithConfiguration s (defaultResolutionBehaviour g) g
+  (subst1, _) <- checkKind s guaranTy kguarantee
+  (subst2, t') <- checkKind s t ktype
+  subst <- combineManySubstitutions s [subst0, subst1, subst2]
+  return (ktype, subst, Star g' t')
+
 synthKindWithConfiguration s _ t@(TyCon (internalName -> "Pure")) = do
   -- Create a fresh type variable
   var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") keffect
@@ -348,6 +361,10 @@ synthKindWithConfiguration s _ t@(TyCon (internalName -> "Pure")) = do
 synthKindWithConfiguration s _ t@(TyCon (internalName -> "Handled")) = do
   var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") keffect
   return $ ((FunTy Nothing Nothing (TyVar var) (TyVar var)), [], t)
+
+synthKindWithConfiguration s _ t@(TyCon (internalName -> "Infinity")) = do
+  var <- freshTyVarInContext (mkId $ "s") kcoeffect
+  return (TyApp (TyCon $ mkId "Ext") (TyVar var), [], t)
 
 -- KChkS_con
 synthKindWithConfiguration s _ t@(TyCon id) = do
@@ -408,6 +425,10 @@ synthKindWithConfiguration s config (TyCase t branches) | length branches > 0 = 
   --
   return (kind, substFinal, TyCase t' branches')
 
+-- Type-level rationals, live in Q (rationals)
+synthKindWithConfiguration s config t@(TyRational _) = do
+  return (TyCon $ mkId "Q", [], t)
+
 synthKindWithConfiguration s _ t =
   throw ImpossibleKindSynthesis { errLoc = s, errTy = t }
 
@@ -453,6 +474,11 @@ closedOperatorAtKind _ op (TyCon (internalName -> "Nat")) =
 -- Expontentiation on effects also allowed
 closedOperatorAtKind s TyOpExpon t = do
   _ <- checkKind s t keffect
+  return $ Just []
+
+-- TODO: ghost variables, do we need to worry about substitution?
+closedOperatorAtKind s TyOpConverge t = do
+  _ <- checkKind s t kcoeffect
   return $ Just []
 
 -- * case
@@ -617,6 +643,53 @@ joinTypes'' s t1 t2 rel = do
       -- Fall through
       fail "No upper bound"
 
+-- | Compute the join of two types, if it exists
+-- | (without using most general unifier for coeffects)
+joinTypesNoMGU :: (?globals :: Globals)
+          => Span
+          -> Type
+          -> Type
+          -> Checker (Maybe (Type, Substitution, Maybe Injections))
+joinTypesNoMGU s t1 t2 = runMaybeT (joinTypesNoMGU' s t1 t2)
+
+
+-- Wrapper over `jointTypesNoMGU'` that uses approximation
+joinTypesNoMGU' :: (?globals :: Globals)
+          => Span
+          -> Type
+          -> Type
+          -> MaybeT Checker (Type, Substitution, Maybe Injections)
+joinTypesNoMGU' s t t' = joinTypesNoMGU'' s t t' ApproximatedBy
+
+joinTypesNoMGU'' :: (?globals :: Globals)
+          => Span
+          -> Type
+          -> Type
+          -> (Span -> Type -> Type -> Type -> Constraint) -- how to build a constraint for grades
+          -> MaybeT Checker (Type, Substitution, Maybe Injections)
+joinTypesNoMGU'' s t t' rel | t == t' = return (t, [], Nothing)
+
+joinTypesNoMGU'' s (FunTy id mc t1 t2) (FunTy x mc' t1' t2') rel =
+  joinTypes'' s (FunTy id mc t1 t2) (FunTy x mc' t1' t2') rel
+
+joinTypesNoMGU'' s (Diamond ef1 t1) (Diamond ef2 t2) rel =
+  joinTypes'' s (Diamond ef1 t1) (Diamond ef2 t2) rel
+
+joinTypesNoMGU'' s (Box c t) (Box c' t') rel =
+  joinTypes'' s (Box c t) (Box c' t') rel
+
+joinTypesNoMGU'' s (TyVar v) t rel =
+  joinTypes'' s (TyVar v) t rel
+
+joinTypesNoMGU'' s t1 t2@(TyVar _) rel =
+  joinTypes'' s t1 t2 rel
+
+joinTypesNoMGU'' s (TyApp t1 t2) (TyApp t1' t2') rel =
+  joinTypes'' s (TyApp t1 t2) (TyApp t1' t2') rel
+
+joinTypesNoMGU'' s t1 t2 rel = do
+  fail "No upper bound"
+
 -- Universally quantifies everything in a context.
 universify :: Ctxt Kind -> Ctxt (Type, Quantifier)
 universify = map (second (\k -> (k, ForallQ)))
@@ -624,6 +697,9 @@ universify = map (second (\k -> (k, ForallQ)))
 synthKindAssumption :: (?globals :: Globals) => Span -> Assumption -> Checker (Maybe Type, Substitution)
 synthKindAssumption _ (Linear _) = return (Nothing, [])
 synthKindAssumption s (Discharged _ c) = do
+  (t, subst, _) <- synthKind s c
+  return (Just t, subst)
+synthKindAssumption s (Ghost c) = do
   (t, subst, _) <- synthKind s c
   return (Just t, subst)
 

@@ -1,9 +1,11 @@
+language SecurityLevels
+
 data Bool where
   True : Bool;
   False : Bool
 
-okay : Bool [Private] → Bool [Private]
-okay x =
+leak' : Bool [Private] → Bool [Public]
+leak' x =
       case x of
         [True]  →  [True];
         [False] →  [False]

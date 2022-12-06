@@ -1,7 +1,10 @@
 -- gr --no-eval
 
+readInt' : Int <{Stdin}>
+readInt' = let x <- fromStdin in pure (readInt x)
+
 dubInput : () <{Stdout, Stdin}>
-dubInput = let x ← readInt in toStdout (showInt (x * 2))
+dubInput = let x ← readInt' in toStdout (showInt (x * 2))
 
 main : () <{Stdout, Stdin}>
 main = dubInput

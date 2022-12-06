@@ -1,0 +1,2 @@
+main : Int
+main = compose (\x -> x + 3) (\x -> x * 5) 10

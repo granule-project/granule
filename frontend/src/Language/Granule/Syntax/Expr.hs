@@ -52,6 +52,7 @@ data ValueF ev a value expr =
       AbsF a (Pattern a) (Maybe Type) expr
     | PromoteF a expr
     | PureF a expr
+    | NecF a expr
     | ConstrF a Id [value]
     | VarF a Id
     | NumIntF Int
@@ -72,15 +73,37 @@ $(deriveBitraversable ''ValueF)
 type Value = ExprFix2 ValueF ExprF
 type UnfixedValue ev a = UnExprFix2 ValueF ExprF ev a
 
+pattern Abs :: a -> Pattern a -> Maybe Type -> ExprFix2 g ValueF ev a -> ExprFix2 ValueF g ev a
 pattern Abs a arg mty ex = (ExprFix2 (AbsF a arg mty ex))
+
+pattern Promote :: a -> ExprFix2 g ValueF ev a -> ExprFix2 ValueF g ev a
 pattern Promote a ex = (ExprFix2 (PromoteF a ex))
+
+pattern Pure :: a -> ExprFix2 g ValueF ev a -> ExprFix2 ValueF g ev a
 pattern Pure a ex = (ExprFix2 (PureF a ex))
+
+pattern Nec :: a -> ExprFix2 g ValueF ev a -> ExprFix2 ValueF g ev a
+pattern Nec a ex = (ExprFix2 (NecF a ex))
+
+pattern Constr :: a -> Id -> [ExprFix2 ValueF g ev a] -> ExprFix2 ValueF g ev a
 pattern Constr a ident vals = (ExprFix2 (ConstrF a ident vals))
+
+pattern Var :: a -> Id -> ExprFix2 ValueF g ev a
 pattern Var a ident = (ExprFix2 (VarF a ident))
+
+pattern NumInt :: Int -> ExprFix2 ValueF g ev a
 pattern NumInt n = (ExprFix2 (NumIntF n))
+
+pattern NumFloat :: Double -> ExprFix2 ValueF g ev a
 pattern NumFloat n = (ExprFix2 (NumFloatF n))
+
+pattern CharLiteral :: Char -> ExprFix2 ValueF g ev a
 pattern CharLiteral ch = (ExprFix2 (CharLiteralF ch))
+
+pattern StringLiteral :: Text -> ExprFix2 ValueF g ev a
 pattern StringLiteral str = (ExprFix2 (StringLiteralF str))
+
+pattern Ext :: a -> ev -> ExprFix2 ValueF g ev a
 pattern Ext a extv = (ExprFix2 (ExtF a extv))
 {-# COMPLETE Abs, Promote, Pure, Constr, Var, NumInt,
              NumFloat, CharLiteral, StringLiteral, Ext #-}
@@ -126,13 +149,66 @@ $(deriveBitraversable ''ExprF)
 type Expr = ExprFix2 ExprF ValueF
 type UnfixedExpr ev a = UnExprFix2 ExprF ValueF ev a
 
+pattern App :: Span
+               -> a
+               -> Bool
+               -> ExprFix2 ExprF g ev a
+               -> ExprFix2 ExprF g ev a
+               -> ExprFix2 ExprF g ev a
 pattern App sp a rf fexp argexp = (ExprFix2 (AppF sp a rf fexp argexp))
+
+pattern AppTy :: Span
+                 -> a
+                 -> Bool
+                 -> ExprFix2 ExprF g ev a
+                 -> Type
+                 -> ExprFix2 ExprF g ev a
 pattern AppTy sp a rf fexp ty = (ExprFix2 (AppTyF sp a rf fexp ty))
+
+pattern Binop :: Span
+                 -> a
+                 -> Bool
+                 -> Operator
+                 -> ExprFix2 ExprF g ev a
+                 -> ExprFix2 ExprF g ev a
+                 -> ExprFix2 ExprF g ev a
 pattern Binop sp a rf op lhs rhs = (ExprFix2 (BinopF sp a rf op lhs rhs))
+
+pattern LetDiamond :: Span
+                      -> a
+                      -> Bool
+                      -> Pattern a
+                      -> Maybe Type
+                      -> ExprFix2 ExprF g ev a
+                      -> ExprFix2 ExprF g ev a
+                      -> ExprFix2 ExprF g ev a
 pattern LetDiamond sp a rf pat mty nowexp nextexp = (ExprFix2 (LetDiamondF sp a rf pat mty nowexp nextexp))
+
+pattern TryCatch :: Span
+                    -> a
+                    -> Bool
+                    -> ExprFix2 ExprF g ev a
+                    -> Pattern a
+                    -> Maybe Type
+                    -> ExprFix2 ExprF g ev a
+                    -> ExprFix2 ExprF g ev a
+                    -> ExprFix2 ExprF g ev a
 pattern TryCatch sp a rf t1 pat mty t2 t3 = (ExprFix2 (TryCatchF sp a rf t1 pat mty t2 t3))
+
+pattern Val :: Span -> a -> Bool -> ExprFix2 g ExprF ev a -> ExprFix2 ExprF g ev a
 pattern Val sp a rf val = (ExprFix2 (ValF sp a rf val))
+
+pattern Case :: --forall {g :: * -> * -> * -> * -> *} {ev} {a}.
+                Span
+                -> a
+                -> Bool
+                -> ExprFix2 ExprF g ev a
+                -> [(Pattern a, ExprFix2 ExprF g ev a)]
+                -> ExprFix2 ExprF g ev a
 pattern Case sp a rf swexp arms = (ExprFix2 (CaseF sp a rf swexp arms))
+
+pattern Hole :: --forall {g :: * -> * -> * -> * -> *} {ev} {a}.
+                Span -> a -> Bool -> [Id] -> ExprFix2 ExprF g ev a
 pattern Hole sp a rf vs = ExprFix2 (HoleF sp a rf vs)
 {-# COMPLETE App, Binop, LetDiamond, TryCatch, Val, Case, Hole #-}
 
@@ -141,6 +217,7 @@ instance Functor (Value ev) where
   fmap f (Abs a pats mt e) = Abs (f a) (fmap f pats) mt (fmap f e)
   fmap f (Promote a e)     = Promote (f a) (fmap f e)
   fmap f (Pure a e)        = Pure (f a) (fmap f e)
+  fmap f (Nec a e)         = Nec (f a) (fmap f e)
   fmap f (Constr a idv vals) = Constr (f a) idv (map (fmap f) vals)
   fmap f (Var a idv)       = Var (f a) idv
   fmap f (Ext a ev)        = Ext (f a) ev
@@ -236,6 +313,7 @@ instance Term (Value ev a) where
     freeVars (Var _ x)     = [x]
     freeVars (Pure _ e)    = freeVars e
     freeVars (Promote _ e) = freeVars e
+    freeVars (Nec _ e)    = freeVars e
     freeVars NumInt{}        = []
     freeVars NumFloat{}      = []
     freeVars Constr{}        = []
@@ -246,6 +324,7 @@ instance Term (Value ev a) where
     hasHole (Abs _ _ _ e) = hasHole e
     hasHole (Pure _ e)    = hasHole e
     hasHole (Promote _ e) = hasHole e
+    hasHole (Nec _ e)    = hasHole e
     hasHole _             = False
 
     isLexicallyAtomic Abs{} = False
@@ -256,6 +335,7 @@ instance Substitutable Value where
     subst es v (Abs a w t e)      = Val (nullSpanInFile $ getSpan es) a False $ Abs a w t (subst es v e)
     subst es v (Pure a e)         = Val (nullSpanInFile $ getSpan es) a False $ Pure a (subst es v e)
     subst es v (Promote a e)      = Val (nullSpanInFile $ getSpan es) a False $ Promote a (subst es v e)
+    subst es v (Nec a e)          = Val (nullSpanInFile $ getSpan es) a False $ Nec a (subst es v e)
     subst es v (Var a w) | v == w = es
     subst es _ v@NumInt{}        = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) False v
     subst es _ v@NumFloat{}      = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) False v
@@ -282,6 +362,10 @@ instance Monad m => Freshenable m (Value v a) where
     freshen (Promote a e) = do
       e' <- freshen e
       return $ Promote a e'
+
+    freshen (Nec a e) = do
+      e' <- freshen e
+      return $ Nec a e'
 
     freshen (Var a v) = do
       v' <- lookupVar ValueL v
@@ -408,3 +492,21 @@ instance Monad m => Freshenable m (Expr v a) where
       vars' <- mapM freshenId vars
       return $ Hole s a rf vars'
 
+-- If an expression is a right-nested application tree on a contructor then
+-- extract the head constructor and the list of parameters
+constructorApplicationSpine :: Expr e a -> Maybe (Id, [Expr e a])
+
+constructorApplicationSpine (Val s' a' b' (Constr _ c vs)) =
+  Just (c, map (Val s' a' b') vs)
+
+constructorApplicationSpine (App _ _ _ (Val s' a' b' (Constr _ c vs)) e) =
+  -- Left-most constructor application found
+  Just (c, map (Val s' a' b') vs ++ [e])
+
+constructorApplicationSpine (App _ _ _ e1 e2) = do
+  -- Node
+  (cname, args) <- constructorApplicationSpine e1
+  Just (cname, args ++ [e2])
+
+constructorApplicationSpine _ =
+  Nothing

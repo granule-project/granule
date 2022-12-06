@@ -26,7 +26,7 @@ $fruit = [\127815-\127827] -- 🍇🍈🍉🍊🍋🍌🍍🍎🍏🍐🍑🍒�
 @constr = ($upper ($alphanum | \')* | \(\))
 @float   = \-? $digit+ \. $digit+
 @int    = \-? $digit+
-@charLiteral = \' ([\\.]|[^\']| . ) \'
+@charLiteral = \' (\\.|[^\']| . ) \'
 @stringLiteral = \"(\\.|[^\"]|\n)*\"
 @importFilePath = ($alphanum | \' | \.)*
 
@@ -56,6 +56,7 @@ tokens :-
   try                           { \p s -> TokenTry p }
   as                            { \p s -> TokenAs p }
   catch                         { \p s -> TokenCatch p }
+  clone                          { \p s -> TokenCopy p }
   ∞                             { \p s -> TokenInfinity p }
   @float                        { \p s -> TokenFloat p s }
   @int                          { \p s -> TokenInt p $ read s }
@@ -111,6 +112,9 @@ tokens :-
   "{!"                          { \p _ -> TokenHoleStart p }
   "!}"                          { \p _ -> TokenHoleEnd p}
   "!"                           { \p _ -> TokenBang p}
+  "&"                           { \p _ -> TokenBorrow p}
+  "#"                           { \p _ -> TokenHash p }
+  "⊸"                           { \p _ -> TokenArrow p }
 
 {
 
@@ -182,6 +186,9 @@ data Token
   | TokenHoleEnd AlexPosn
   | TokenAt AlexPosn
   | TokenBang AlexPosn
+  | TokenBorrow AlexPosn
+  | TokenCopy AlexPosn
+  | TokenHash AlexPosn
 
   deriving (Eq, Show, Generic)
 

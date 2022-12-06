@@ -12,9 +12,9 @@ Found a goal: frontend/tests/cases/negative/hole2.gr:11:40:
      n0 : Nat
      b0 : Type
      a0 : Type
-     t11.0 : Nat
-     t10.0 : Type
-     t9.0 : Type
+     t13.0 : Nat
+     t12.0 : Type
+     t11.0 : Type
      n0.0 : Nat
      a : Type
      b : Type

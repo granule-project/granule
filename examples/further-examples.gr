@@ -4,7 +4,7 @@
 -- $ grepl
 -- > :l examples/further-examples.gr
 
-pushPair : forall {a : Type, b : Type, k : Coeffect, c : k} . (a × b) [c] -> a [c] × b [c]
+pushPair : forall {a : Type, b : Type, c : Nat} . (a × b) [c] -> a [c] × b [c]
 pushPair [(x, y)] = ([x], [y])
 
 pullPair : forall {a : Type, b : Type, k : Coeffect, c : k} . a [c] × b [c] -> (a × b) [c]

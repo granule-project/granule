@@ -1,5 +1,5 @@
 {-# LANGUAGE ImplicitParams #-}
-{-# LANGUAGE ViewPatterns #-}
+
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 
@@ -12,15 +12,18 @@ import Control.Monad.Except (throwError)
 import Control.Monad.State.Strict
 import Data.List.NonEmpty (NonEmpty(..))
 
+import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Types (equalTypesRelatedCoeffectsAndUnify, SpecIndicator(..))
 import Language.Granule.Checker.Flatten
+import Language.Granule.Checker.Ghost
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Kinding
 import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Variables
+import Language.Granule.Checker.Normalise
 
 import Language.Granule.Context
 import Language.Granule.Syntax.Identifiers
@@ -29,6 +32,7 @@ import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Utils
+import qualified Data.Functor
 
 -- | Creates a constraint when a definition unification has occured under
 --   a box pattern (or many nested box patterns)
@@ -190,16 +194,16 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
     Just (tySch, coercions) -> do
 
       case outerBoxTy of
-        Just (coeff, coeffTy) -> do
+        -- Hsup if you only have more than one premise (and have an enclosing grade)
+        Just (coeff, coeffTy) | length ps > 1 ->
           addConstraint (Hsup s coeff coeff coeffTy)
-        Nothing -> return ()
+        _ -> return ()
 
       (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, constraints, coercions') <-
           freshPolymorphicInstance BoundQ True tySch coercions
 
-      mapM_ (\ty -> do
-        pred <- compileTypeConstraintToConstraint s ty
-        addPredicate pred) constraints
+      otherTypeConstraints <- enforceConstraints s constraints
+      registerWantedTypeConstraints otherTypeConstraints
 
       -- Debugging
       debugM "ctxt" $ "### DATA CONSTRUCTOR (" <> pretty dataC <> ")"
@@ -237,7 +241,7 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
           debugM "ctxt" $ "### drewrit = " <> show dataConstructorIndexRewritten
           debugM "ctxt" $ "### drewritAndSpec = " <> show dataConstructorIndexRewrittenAndSpecialised <> "\n"
 
-          (as, _, bs, us, elabPs, consumptionsOut) <-
+          (bindingContexts, _, bs, us, elabPs, consumptionsOut) <-
             ctxtFromTypedPatterns' outerBoxTy s pos dataConstructorIndexRewrittenAndSpecialised ps (replicate (length ps) cons)
           let consumptionOut = foldr meetConsumption Full consumptionsOut
 
@@ -251,7 +255,29 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
           -- (ctxtSubbed, ctxtUnsubbed) <- substCtxt subst as
 
           let elabP = PConstr s ty rf dataC elabPs
-          return (as, -- ctxtSubbed <> ctxtUnsubbed,     -- concatenate the contexts
+
+          -- Level tracking
+          -- GHOST variable made from coeff added to assumptions
+          ghostCtxt <-
+                case outerBoxTy of
+                  Nothing -> do
+                    -- Linear context so return ghost used as 1
+                    debugM "ctxtFromTypedPattern no ghost" $ "ty: " <> show ty <> "\t" <> pretty ty <> "\nPConstr: " <> pretty dataC
+                    return usedGhostVariableContext
+                  Just (coeff, _) -> do
+                    isLevely <- isLevelKinded s coeff
+                    debugM "ctxtFromTypedPattern outerBoxTy" $ "ty: " <> pretty outerBoxTy <> "\n" <> pretty (Ghost coeff) <> "\n" <> "isLevely: " <> show isLevely
+                    if SecurityLevels `elem` globalsExtensions ?globals
+                    then return [(mkId ghostName, Ghost coeff) | isLevely] -- [(mkId ".var.ghost.pattern", Ghost defaultGhost)]
+                    else return []
+
+
+          debugM "context in ctxtFromTypedPattern' PConstr" $ show (bindingContexts <> ghostCtxt)
+
+          -- Apply context converge # of all the inner binding contexts and the local ghost context here
+          outputContext <- ghostVariableContextMeet (bindingContexts <> ghostCtxt)
+
+          return (outputContext, -- ctxtSubbed <> ctxtUnsubbed,     -- concatenate the contexts
                   freshTyVarsCtxt <> bs,          -- concat the context of new type variables
                   subst,                          -- returned the combined substitution
                   elabP,                          -- elaborated pattern
@@ -268,7 +294,9 @@ ctxtFromTypedPattern' _ s _ t p _ = do
   st <- get
   debugM "ctxtFromTypedPattern" $ "Type: " <> show t <> "\nPat: " <> show p
   debugM "dataConstructors in checker state" $ show $ dataConstructors st
-  throw PatternTypingError{ errLoc = s, errPat = p, tyExpected = t }
+  case t of
+    (Star _ t') -> throw $ UniquenessError { errLoc = s, uniquenessMismatch = UniquePromotion t'}
+    otherwise -> throw $ PatternTypingError { errLoc = s, errPat = p, tyExpected = t }
 
 ctxtFromTypedPatterns :: (?globals :: Globals)
   => Span
@@ -287,7 +315,7 @@ ctxtFromTypedPatterns' :: (?globals :: Globals)
   -> [Pattern ()]
   -> [Consumption]
   -> Checker (Ctxt Assumption, Type, Ctxt Kind, Substitution, [Pattern Type], [Consumption])
-ctxtFromTypedPatterns' _ sp _ ty [] _ = do
+ctxtFromTypedPatterns' _ sp _ ty [] _ =
   return ([], ty, [], [], [], [])
 
 ctxtFromTypedPatterns' outerCoeff s pos (FunTy _ _ t1 t2) (pat:pats) (cons:consumptionsIn) = do
@@ -300,11 +328,13 @@ ctxtFromTypedPatterns' outerCoeff s pos (FunTy _ _ t1 t2) (pat:pats) (cons:consu
 
   -- Match the rest
   (localGam', ty, eVars', substs, elabPs, consumptions) <-
-      ctxtFromTypedPatterns' outerCoeff s pos t2' pats consumptionsIn
+      ctxtFromTypedPatterns' outerCoeff s pos (normaliseType t2') pats consumptionsIn
 
   -- Combine the results
   substs' <- combineSubstitutions s subst substs
-  return (localGam <> localGam', ty, eVars ++ eVars', substs', elabP : elabPs, consumption : consumptions)
+  -- TODO: probably you can make the first part of this component be calculated more efficiently
+  newLocalGam <- ghostVariableContextMeet $ localGam <> localGam'
+  return (newLocalGam, ty, eVars ++ eVars', substs', elabP : elabPs, consumption : consumptions)
 
 ctxtFromTypedPatterns' _ s _ ty (p:ps) _ = do
   -- This means we have patterns left over, but the type is not a
@@ -313,7 +343,7 @@ ctxtFromTypedPatterns' _ s _ ty (p:ps) _ = do
   -- First build a representation of what the type would look like
   -- if this was well typed, i.e., if we have two patterns left we get
   -- p0 -> p1 -> ?
-  psTyVars <- mapM (\_ -> freshIdentifierBase "?" >>= return . TyVar . mkId) ps
+  psTyVars <- mapM (\_ -> freshIdentifierBase "?" Data.Functor.<&> (TyVar . mkId)) ps
   let spuriousType = foldr (FunTy Nothing Nothing) (TyVar $ mkId "?") psTyVars
   throw TooManyPatternsError
     { errLoc = s, errPats = p :| ps, tyExpected = ty, tyActual = spuriousType }

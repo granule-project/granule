@@ -8,9 +8,9 @@ Found a goal: frontend/tests/cases/negative/splitting/nested.gr:10:17:
      xs : Vec n0.0 N
 
    Type context:
-     t11.0 : Nat
-     t10.0 : Type
-     t9.0 : Type
+     t13.0 : Nat
+     t12.0 : Type
+     t11.0 : Type
      n0.0 : Nat
      n : Nat
 
@@ -25,7 +25,7 @@ Found a goal: frontend/tests/cases/negative/splitting/nested.gr:11:9:
    Expected type is: `Vec 0 N`
 
    Type context:
-     t8.0 : Nat
-     t7.0 : Type
-     t6.0 : Type
+     t10.0 : Nat
+     t9.0 : Type
+     t8.0 : Type
      n : Nat

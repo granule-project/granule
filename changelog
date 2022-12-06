@@ -1,3 +1,35 @@
+  # 0.9.0.1
+   - Bug fixes to pretty printer
+   - forkNonLinear can only work over semirings with exact equality for soundess
+   - Tweaks to the way type-level float equality works
+
+  # 0.9.0.0
+  - Major features:
+      - Uniqueness modality and mutable arrays 
+        - https://granule-project.github.io/papers/esop22-paper.pdf
+      - Session types with non-linear behaviours
+        - https://arxiv.org/abs/2203.12875
+      - Granule -> Haskell compiler (grc)
+      - language-server protocol
+  
+  - New graded modalities / improvements
+    - LNL semiring (Zero, One, Many) recovers linear logic via new `hsup` operation
+       to control 'push' behaviour on tensors. See: https://granule-project.github.io/papers/tlla_2021_paper11.pdf
+  
+    - Any semiring can now be lifted to a top-completed semiring with Ext (previously only allowed for Nat)
+
+  - Language extensions and pragmas: See: https://github.com/granule-project/granule/wiki/Language-Extensions
+    - Includes CBN interpreter as an option
+
+  - Bug fixes:
+    - Bug fixes related to sensitivity analysis
+    - Bug fixes relating to derived operation copyShape
+    - Improved interpreter
+
+  - Tons of minor improvements
+    - Error messages are sometimes more intuitive
+    - Various additional primitives
+
   # 0.8.1.0
   - New semirings: `Sec` and `Set t` for some type `t` (and `SetOp t`)
   - Bug fixes related to session types

@@ -108,11 +108,18 @@ instance Pretty Type where
       let pt1 = case t1 of FunTy{} -> "(" <> pretty t1 <> ")"; _ -> pretty t1
       in  "(" <> pretty id <> " : " <> pt1 <> ") ^ " <> pretty coeffect <> " -> " <> pretty t2
 
-    pretty (Box c t)      =
-      prettyNested t <> " [" <> pretty c <> "]"
+    pretty (Box c t) =
+      case c of
+        (TyCon (Id "Many" "Many")) -> "!" <> prettyNested t
+        otherwise -> prettyNested t <> " [" <> pretty c <> "]"
 
     pretty (Diamond e t) =
       prettyNested t <> " <" <> pretty e <> ">"
+
+    pretty (Star g t) =
+      case g of
+        (TyCon (Id "Unique" "Unique")) -> "*" <> prettyNested t
+        otherwise -> prettyNested t <> " *" <> pretty g
 
     pretty (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "," =
       "(" <> pretty t1 <> ", " <> pretty t2 <> ")"
@@ -123,6 +130,9 @@ instance Pretty Type where
     pretty (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == ",," =
       "(" <> pretty t1 <> " × " <> pretty t2 <> ")"
 
+    pretty (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "&" =
+      pretty t1 <> " & " <> pretty t2
+      
     pretty (TyApp t1 t2)  =
       pretty t1 <> " " <> prettyNested t2
 
@@ -162,6 +172,7 @@ instance Pretty TypeOperator where
    TyOpMeet            -> "∧"
    TyOpJoin            -> "∨"
    TyOpInterval        -> ".."
+   TyOpConverge        -> "#"
 
 instance Pretty v => Pretty (AST v a) where
   pretty (AST dataDecls defs imprts hidden name) =
@@ -212,7 +223,7 @@ instance Pretty (Pattern a) where
     pretty (PBox _ _ _ p)     = "[" <> prettyNested p <> "]"
     pretty (PInt _ _ _ n)     = show n
     pretty (PFloat _ _ _ n)   = show n
-    pretty (PConstr _ _ _ name args) | internalName name == "," = intercalate ", " (map prettyNested args)
+    pretty (PConstr _ _ _ name args) | internalName name == "," = "(" <> intercalate ", " (map prettyNested args) <> ")"
     pretty (PConstr _ _ _ name args) = unwords (pretty name : map prettyNested args)
 
 instance {-# OVERLAPS #-} Pretty [Pattern a] where
@@ -224,10 +235,12 @@ instance Pretty t => Pretty (Maybe t) where
     pretty (Just x) = pretty x
 
 instance Pretty v => Pretty (Value v a) where
+    pretty (Abs _ x Nothing e) = "\\" <> pretty x <> " -> " <> pretty e
     pretty (Abs _ x t e) = "\\(" <> pretty x <> " : " <> pretty t
                                  <> ") -> " <> pretty e
     pretty (Promote _ e) = "[" <> pretty e <> "]"
     pretty (Pure _ e)    = "<" <> pretty e <> ">"
+    pretty (Nec _ e)     = "*" <> pretty e
     pretty (Var _ x)     = pretty x
     pretty (NumInt n)    = show n
     pretty (NumFloat n)  = show n

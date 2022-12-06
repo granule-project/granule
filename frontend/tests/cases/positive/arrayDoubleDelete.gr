@@ -1,0 +1,11 @@
+language CBN
+
+example : *FloatArray
+example =
+   let [x] : ((*FloatArray) [3]) = [newFloatArray 1] in
+   let () = deleteFloatArray x in
+   let () = deleteFloatArray x in
+   writeFloatArray x 0 1.0
+
+main : (Float, *FloatArray)
+main = readFloatArray example 0

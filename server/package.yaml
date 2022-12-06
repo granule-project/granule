@@ -1,0 +1,30 @@
+name: granule-language-server
+version: '0.9.0.1'
+synopsis: The Granule language server (grls)
+author: Daniel Marshall
+
+executables:
+  grls:
+    main: Language/Granule/Server.hs
+    source-dirs: app
+    ghc-options: -O3 -W -Werror -Wno-unused-matches -main-is Language.Granule.Server
+    # exposed-modules:
+    # - Language.Granule.Queue
+    # - Language.Granule.ReplError
+    # - Language.Granule.ReplParser
+    dependencies:
+    - base
+    - containers
+    - data-default
+    - granule-interpreter
+    - granule-frontend
+    - Glob
+    - directory
+    - filepath
+    - lens
+    - mtl >=2.2.1
+    - split
+    - text
+    - transformers
+    - clock >= 0.8
+    - lsp

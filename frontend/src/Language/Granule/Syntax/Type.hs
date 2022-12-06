@@ -36,6 +36,7 @@ Example: `List n Int` in Granule
 -- Aliases that can be useful in some places as documentation
 type Coeffect = Type
 type Effect   = Type
+type Guarantee = Type
 type Kind     = Type
 
 -- Represents polairty information for lattices
@@ -50,6 +51,7 @@ data Type where
     TyCon   :: Id -> Type                           -- ^ Type constructor
     Box     :: Coeffect -> Type -> Type             -- ^ Graded modal necessity
     Diamond :: Effect   -> Type -> Type             -- ^ Graded modal possibility
+    Star    :: Guarantee -> Type -> Type
     TyVar   :: Id -> Type                           -- ^ Type variable
     TyApp   :: Type -> Type -> Type                 -- ^ Type application
     TyInt   :: Int -> Type                          -- ^ Type-level Int
@@ -85,6 +87,7 @@ data TypeOperator
   | TyOpMeet
   | TyOpJoin
   | TyOpInterval
+  | TyOpConverge
   deriving (Eq, Ord, Show, Data)
 
 -- ## Type schemes
@@ -140,6 +143,9 @@ kcoeffect = tyCon "Coeffect"
 keffect :: Type
 keffect = tyCon "Effect"
 
+kguarantee :: Type
+kguarantee = tyCon "Guarantee"
+
 kpredicate :: Type
 kpredicate = tyCon "Predicate"
 
@@ -163,6 +169,10 @@ uniqueness = tyCon "Uniqueness"
 isInterval :: Type -> Maybe Type
 isInterval (TyApp (TyCon c) t) | internalName c == "Interval" = Just t
 isInterval _ = Nothing
+
+isExt :: Type -> Maybe Type
+isExt (TyApp (TyCon c) t) | internalName c == "Ext" = Just t
+isExt _ = Nothing
 
 isSet :: Type -> Maybe (Type, Polarity)
 isSet (TyApp (TyCon c) t) | internalName c == "Set"   = Just (t, Normal)
@@ -204,6 +214,7 @@ containsTypeSig =
       , tfTyCon = \_ -> return False
       , tfBox = \x y -> return (x || y)
       , tfDiamond = \x y -> return $ (x || y)
+      , tfStar = \x y -> return $ (x || y)
       , tfTyVar = \_ -> return False
       , tfTyApp = \x y -> return (x || y)
       , tfTyInt = \_ -> return False
@@ -257,6 +268,8 @@ mBox :: Monad m => Coeffect -> Type -> m Type
 mBox c y     = return (Box c y)
 mDiamond :: Monad m => Type -> Type -> m Type
 mDiamond e y = return (Diamond e y)
+mStar :: Monad m => Guarantee -> Type -> m Type
+mStar g y    = return (Star g y)
 mTyVar :: Monad m => Id -> m Type
 mTyVar       = return . TyVar
 mTyApp :: Monad m => Type -> Type -> m Type
@@ -283,6 +296,7 @@ data TypeFold m a = TypeFold
   , tfTyCon   :: Id                 -> m a
   , tfBox     :: a -> a             -> m a
   , tfDiamond :: a -> a             -> m a
+  , tfStar    :: a -> a             -> m a
   , tfTyVar   :: Id                 -> m a
   , tfTyApp   :: a -> a             -> m a
   , tfTyInt   :: Int                -> m a
@@ -297,7 +311,7 @@ data TypeFold m a = TypeFold
 -- Base monadic algebra
 baseTypeFold :: Monad m => TypeFold m Type --Type
 baseTypeFold =
-  TypeFold mTy mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mTyRational mTyGrade mTyInfix mTySet mTyCase mTySig
+  TypeFold mTy mFunTy mTyCon mBox mDiamond mStar mTyVar mTyApp mTyInt mTyRational mTyGrade mTyInfix mTySet mTyCase mTySig
 
 -- | Monadic fold on a `Type` value
 typeFoldM :: forall m a . Monad m => TypeFold m a -> Type -> m a
@@ -318,6 +332,10 @@ typeFoldM algebra = go
      t' <- go t
      e' <- go e
      (tfDiamond algebra) e' t'
+   go (Star g t) = do
+     t' <- go t
+     g' <- go g
+     (tfStar algebra) g' t'
    go (TyVar v) = (tfTyVar algebra) v
    go (TyApp t1 t2) = do
      t1' <- go t1
@@ -362,6 +380,7 @@ instance Term Type where
       , tfTyCon   = \_ -> return (Const []) -- or: const (return [])
       , tfBox     = \(Const c) (Const t) -> return $ Const (c <> t)
       , tfDiamond = \(Const e) (Const t) -> return $ Const (e <> t)
+      , tfStar    = \(Const g) (Const t) -> return $ Const (g <> t)
       , tfTyVar   = \v -> return $ Const [v] -- or: return . return
       , tfTyApp   = \(Const x) (Const y) -> return $ Const (x <> y)
       , tfTyInt   = \_ -> return (Const [])
@@ -416,7 +435,7 @@ instance Freshenable m Type where
 
       freshenTySig t' _ k = do
         k' <- freshen k
-        return $TySig t' k'
+        return $ TySig t' k'
 
       freshenTyVar v = do
         v' <- lookupVar TypeL v
@@ -434,18 +453,23 @@ instance Freshenable m Type where
 --   None of this is stricly necessary but it improves type errors
 --   and speeds up some constarint solving.
 normalise :: Type -> Type
-normalise (TyInfix TyOpPlus (TyApp (TyCon (internalName -> "Level")) n) (TyApp (TyCon (internalName -> "Level")) m)) = TyApp (TyCon (mkId "Level")) (n `max` m)
-normalise (TyInfix TyOpTimes (TyApp (TyCon (internalName -> "Level")) n) (TyApp (TyCon (internalName -> "Level")) m)) = TyApp (TyCon (mkId "Level")) (n `min` m)
 normalise (TyInfix TyOpPlus (TyRational n) (TyRational m)) = TyRational (n + m)
 normalise (TyInfix TyOpTimes (TyRational n) (TyRational m)) = TyRational (n * m)
-normalise (TyInfix TyOpPlus (TyGrade k n) (TyGrade k' m)) | k == k' = TyGrade k (n + m)
 
+-- exempt Uniquness from multiplicative unit
+normalise g@(TyInfix TyOpTimes r (TyGrade (Just (TyCon (internalName -> "Uniqueness"))) 1)) = g
+normalise g@(TyInfix TyOpTimes (TyGrade (Just (TyCon (internalName -> "Uniqueness"))) 1) r) = g
+-- exempt Level from multiplicative unit
+normalise g@(TyInfix TyOpTimes r (TyGrade (Just (TyCon (internalName -> "Level"))) 1)) = g
+normalise g@(TyInfix TyOpTimes (TyGrade (Just (TyCon (internalName -> "Level"))) 1) r) = g
 -- simple units
 normalise (TyInfix TyOpTimes r (TyGrade _ 1)) = r
 normalise (TyInfix TyOpTimes (TyGrade _ 1) r) = r
 normalise (TyInfix TyOpPlus r (TyGrade _ 0)) = r
 normalise (TyInfix TyOpPlus (TyGrade _ 0) r) = r
 
+normalise (TyInfix TyOpPlus (TyGrade nat@(Just (TyCon (internalName -> "Nat"))) n)
+                            (TyGrade (Just (TyCon (internalName -> "Nat"))) m)) = TyGrade nat (n + m)
 normalise (TyInfix TyOpPlus (TyInt n) (TyInt m)) = TyInt (n + m)
 normalise (TyInfix TyOpTimes (TyInt n) (TyInt m)) = TyInt (n * m)
 normalise (TyInfix TyOpPlus n m) =

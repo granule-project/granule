@@ -1,8 +1,6 @@
 Type checking failed: 
 Falsifiable theorem: frontend/tests/cases/negative/sets-ordering.gr:19:1:
-The following theorem associated with `bad1` is falsifiable:
-	((1 : Set X) ⊆ {B, C})
+  When checking `bad1`, (1 : Set X) is not approximatable by {B, C} for type Set X
 
 Falsifiable theorem: frontend/tests/cases/negative/sets-ordering.gr:22:1:
-The following theorem associated with `bad2` is falsifiable:
-	((1 : Set X) ⊆ ({} : Set X))
+  When checking `bad2`, (1 : Set X) is not approximatable by ({} : Set X) for type Set X

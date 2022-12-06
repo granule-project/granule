@@ -1,8 +1,8 @@
-copy : ∀ {a : Type} . a [Many] -> (a, a [Many])
-copy [x] = (x, [x])
+copyMany : ∀ {a : Type} . a [Many] -> (a, a [Many])
+copyMany [x] = (x, [x])
 
-drop : forall {a : Type} . a [Many] -> a
-drop [x] = x
+dropMany : forall {a : Type} . a [Many] -> a
+dropMany [x] = x
 
-extract : forall {a : Type} . a [One] -> a
-extract [x] = x
+extractOne : forall {a : Type} . a [One] -> a
+extractOne [x] = x

@@ -1,6 +1,11 @@
+language SecurityLevels
+
 data Bool where
   True : Bool;
   False : Bool
 
 notALeak : (Bool [Private]) [0] → Bool [Public]
 notALeak [x] = [True]
+
+notALeak' : Bool [Private] → Bool [Public]
+notALeak' [x] = [True]

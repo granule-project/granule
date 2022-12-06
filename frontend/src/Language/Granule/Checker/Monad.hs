@@ -84,19 +84,26 @@ runAll f xs = do
 data Assumption
   = Linear     Type
   | Discharged Type Coeffect
+  | Ghost      Coeffect
     deriving (Eq, Show)
+
+ghostType :: Type
+ghostType = tyCon ".ghost"
 
 getAssumptionType :: Assumption -> Type
 getAssumptionType (Linear t) = t
 getAssumptionType (Discharged t _) = t
+getAssumptionType (Ghost c) = ghostType
 
 instance Term Assumption where
   freeVars (Linear t) = freeVars t
   freeVars (Discharged t c) = freeVars t ++ freeVars c
+  freeVars (Ghost c) = freeVars c
 
 instance Pretty Assumption where
     pretty (Linear ty) = pretty ty
     pretty (Discharged t c) = ".[" <> pretty t <> "]. " <> prettyNested c
+    pretty (Ghost c) = "ghost(" <> pretty c <> ")"
 
 instance {-# OVERLAPS #-} Pretty (Id, Assumption) where
    pretty (a, b) = pretty a <> " : " <> pretty b
@@ -175,12 +182,15 @@ data CheckerState = CS
 
             -- The type of the current equation.
             , equationTy :: Maybe Type
+            , equationName :: Maybe Id
 
             -- Definitions that have been triggered during type checking
             -- by the auto deriver (so we know we need them in the interpreter)
             , derivedDefinitions :: [((Id, Type), (TypeScheme, Def () ()))]
             -- Warning accumulator
             -- , warnings :: [Warning]
+
+            , wantedTypeConstraints :: [Type]
 
             -- flag to find out if constraints got added
             , addedConstraints :: Bool
@@ -202,7 +212,9 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , derivStack = []
                , allHiddenNames = M.empty
                , equationTy = Nothing
+               , equationName = Nothing
                , derivedDefinitions = []
+               , wantedTypeConstraints = []
                , addedConstraints = False
                }
 
@@ -448,6 +460,10 @@ throw = throwError . pure
 illLinearityMismatch :: Span -> NonEmpty LinearityMismatch -> Checker a
 illLinearityMismatch sp ms = throwError $ fmap (LinearityError sp) ms
 
+registerWantedTypeConstraints :: [Type] -> Checker ()
+registerWantedTypeConstraints ts =
+  modify (\st -> st { wantedTypeConstraints = ts ++ wantedTypeConstraints st })
+
 {- Helpers for error messages and checker control flow -}
 data CheckerError
   = HoleMessage
@@ -479,6 +495,10 @@ data CheckerError
     { errLoc :: Span, errTy1 :: Type, errTy2 :: Type }
   | LinearityError
     { errLoc :: Span, linearityMismatch :: LinearityMismatch }
+  | UniquenessError
+    { errLoc :: Span, uniquenessMismatch :: UniquenessMismatch }
+  | UnpromotableError
+    { errLoc :: Span, errTy :: Type }
   | PatternTypingError
     { errLoc :: Span, errPat :: Pattern (), tyExpected :: Type }
   | PatternTypingMismatch
@@ -546,7 +566,7 @@ data CheckerError
   | NeedTypeSignature
     { errLoc :: Span, errExpr :: Expr () () }
   | SolverErrorCounterExample
-    { errLoc :: Span, errDefId :: Id, errPred :: Pred }
+    { errLoc :: Span, errDefId :: Id, errPred :: Pred, message :: String }
   | SolverErrorFalsifiableTheorem
     { errLoc :: Span, errDefId :: Id, errPred :: Pred }
   | SolverError
@@ -583,6 +603,10 @@ data CheckerError
     { errLoc :: Span, errTy :: Type }
   | NaturalNumberAtWrongKind
     { errLoc :: Span, errTy :: Type, errK :: Kind }
+  | InvalidPromotionError
+    { errLoc :: Span, errTy :: Type }
+  | TypeConstraintNotSatisfied
+    { errLoc :: Span, errTy :: Type }
   deriving (Show)
 
 instance UserMsg CheckerError where
@@ -599,6 +623,8 @@ instance UserMsg CheckerError where
   title KindsNotEqual{} = "Kind error"
   title IntervalGradeKindError{} = "Interval kind error"
   title LinearityError{} = "Linearity error"
+  title UniquenessError{} = "Uniqueness error"
+  title UnpromotableError{} = "Unpromotable error"
   title PatternTypingError{} = "Pattern typing error"
   title PatternTypingMismatch{} = "Pattern typing mismatch"
   title PatternArityError{} = "Pattern arity error"
@@ -651,6 +677,8 @@ instance UserMsg CheckerError where
   title WrongLevel{} = "Type error"
   title ImpossibleKindSynthesis{} = "Kind error"
   title NaturalNumberAtWrongKind{} = "Kind error"
+  title InvalidPromotionError{} = "Type error"
+  title TypeConstraintNotSatisfied{} = "Type constraint error"
 
   msg HoleMessage{..} =
     "\n   Expected type is: `" <> pretty holeTy <> "`"
@@ -737,6 +765,14 @@ instance UserMsg CheckerError where
       "Wildcard pattern `_` allowing a value to be discarded"
     HandlerLinearityMismatch ->
       "Linearity of Handler clauses does not match"
+
+  msg UniquenessError{..} = case uniquenessMismatch of
+    NonUniqueUsedUniquely t ->
+      "Cannot guarantee uniqueness of reference to value of type `" <> pretty t <> "`."
+    UniquePromotion t ->
+      "Cannot promote non-unique value of type `" <> pretty t <> "` to unique, since uniqueness is not a coeffect."
+
+  msg UnpromotableError{..} = "Cannot promote a value of type `" <> pretty errTy <> "` in call-by-value mode."
 
   msg PatternTypingError{..}
     = "Pattern match `"
@@ -885,14 +921,11 @@ instance UserMsg CheckerError where
     <> pretty errExpr <> "`"
 
   msg SolverErrorCounterExample{..}
-    =  "The following theorem associated with `" <> pretty errDefId
-    <> "` is falsifiable:\n\t"
-    <> pretty errPred
+    =  prettyNegPred errDefId errPred
+    <> (if null message then "" else "\n\n" <> message)
 
   msg SolverErrorFalsifiableTheorem{..}
-    =  "The following theorem associated with `" <> pretty errDefId
-    <> "` is falsifiable:\n\t"
-    <> pretty errPred
+    =  prettyNegPred errDefId errPred
 
   msg SolverError{..} = errMsg <> " for theorem:\n\t" <> pretty errPred
 
@@ -957,6 +990,12 @@ instance UserMsg CheckerError where
   msg NaturalNumberAtWrongKind{ errTy, errK }
     = "Natural number `" <> pretty errTy <> "` is not a member of `" <> pretty errK <> "`"
 
+  msg InvalidPromotionError{ errTy }
+    = "Invalid promotion of closed term to `" <> pretty errTy <> "`"
+
+  msg TypeConstraintNotSatisfied{ errTy }
+    = "Constraint `" <> pretty errTy <> "` does not hold or is not provided by the type constraint assumptions here."
+
   color HoleMessage{} = Blue
   color _ = Red
 
@@ -968,6 +1007,11 @@ data LinearityMismatch
   | LinearUsedMoreThanOnce Id
   | HandlerLinearityMismatch
   deriving (Eq, Show) -- for debugging
+
+data UniquenessMismatch
+  = NonUniqueUsedUniquely Type
+  | UniquePromotion Type
+  deriving (Eq, Show)
 
 freshenPred :: Pred -> Checker Pred
 freshenPred pred = do

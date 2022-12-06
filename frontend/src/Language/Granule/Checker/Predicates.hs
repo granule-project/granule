@@ -23,6 +23,10 @@ import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 
+import Language.Granule.Utils
+
+import Data.Char (toLower)
+
 data Quantifier =
     -- | Universally quantification, e.g. polymorphic
     ForallQ
@@ -114,14 +118,28 @@ instance Monad m => Freshenable m Constraint where
   freshen (LtEq s c1 c2) = LtEq s <$> freshen c1 <*> freshen c2
   freshen (GtEq s c1 c2) = GtEq s <$> freshen c1 <*> freshen c2
 
-  freshen (Hsup s c1 c2 t) = do 
+  freshen (Hsup s c1 c2 t) = do
     c1 <- freshen c1
     c2 <- freshen c2
     return $ Hsup s c1 c2 t
-   
+
 -- Used to negate constraints
 newtype Neg a = Neg a
   deriving (Eq, Show)
+
+-- Used for pretty printing error messages with predicates in them
+prettyNegPred :: (?globals :: Globals) => Id -> Pred -> String
+-- Shorter message
+prettyNegPred defId (Con c) =
+    "  When checking `" <> pretty defId <> "`, " <> message
+  where
+    message = toLower (head msg) : (tail msg)
+    msg = pretty (Neg c)
+-- Long-winded message
+prettyNegPred defId p =
+    "  The following constraint associated with `"
+  <> pretty defId <> "` is false:\n\t  "
+  <> pretty p
 
 instance Pretty (Neg Constraint) where
     pretty (Neg (Neq _ c1 c2 _)) =
@@ -154,7 +172,7 @@ instance Pretty (Neg Constraint) where
 
     pretty (Neg (GtEq _ c1 c2)) =
       "Trying to prove false statement: (" <> pretty c1 <> " ≥ " <> pretty c2 <> ")"
-      
+
     pretty (Neg (Hsup _ c1 c2 t)) =
       "Trying to prove false statement: (" <> pretty c1 <> " ⨱ " <> pretty c2 <> ")"
 
@@ -237,7 +255,7 @@ boundVars (NegPred p) = boundVars p
 boundVars (Exists x _ p) = x : boundVars p
 boundVars (Con _) = []
 
-instance (Monad m, MonadFail m) => Freshenable m Pred where
+instance (MonadFail m) => Freshenable m Pred where
   freshen (Conj ps) = do
     ps' <- mapM freshen ps
     return $ Conj ps'

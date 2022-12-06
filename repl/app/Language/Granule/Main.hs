@@ -13,7 +13,7 @@ import System.Exit (die)
 import System.FilePath
 import System.Directory
 
-import Data.List (nub)
+import Data.List (nub, intercalate)
 
 import qualified Data.Map as M
 import qualified Data.List.NonEmpty as NonEmpty (NonEmpty, filter, fromList)
@@ -23,7 +23,6 @@ import Control.Monad.State
 import Control.Monad.Trans.Reader
 import qualified Control.Monad.Except as Ex
 import System.Console.Haskeline
-import System.Console.Haskeline.MonadException()
 
 import "Glob" System.FilePath.Glob (glob)
 import Language.Granule.Utils
@@ -37,6 +36,7 @@ import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Lexer
 import Language.Granule.Syntax.Span
 import Language.Granule.Checker.Checker
+import Language.Granule.Checker.TypeAliases
 import Language.Granule.Interpreter.Eval
 import qualified Language.Granule.Interpreter as Interpreter
 
@@ -58,6 +58,7 @@ data ReplState =
     , files :: [FilePath]
     , defns  :: M.Map String (Def () (), [String])
     , ignoreHolesMode :: Bool
+    , furtherExtensions :: [Extension]
     }
 
 showHolesREPL :: REPLStateIO ()
@@ -67,7 +68,7 @@ ignoreHolesREPL :: REPLStateIO ()
 ignoreHolesREPL = modify (\state -> state {ignoreHolesMode = True})
 
 initialState :: ReplState
-initialState = ReplState 0 [] [] M.empty True
+initialState = ReplState 0 [] [] M.empty True []
 
 type REPLStateIO a = StateT ReplState (Ex.ExceptT ReplError IO) a
 
@@ -92,6 +93,12 @@ main = do
         Nothing -> return ()
         Just [] -> loop st
         Just input
+          | input == ":ext" -> do
+            if null (globalsExtensions ?globals)
+              then liftIO $ putStrLn $ "Extensions loaded: (none)"
+              else liftIO $ putStrLn $ "Extensions loaded: " ++ intercalate ", " (map show $ globalsExtensions ?globals)
+            loop st
+
           | input == ":q" || input == ":quit" ->
             liftIO (putStrLn "Leaving Granule interactive.")
 
@@ -102,7 +109,10 @@ main = do
 
             r <- liftIO $ Ex.runExceptT (runStateT (handleCMD input) st)
             case r of
-              Right (_, st') -> loop st'
+              Right (_, st') ->
+                -- update the extensions if they were changed by the command
+                let ?globals = ?globals { globalsExtensions = furtherExtensions st' }
+                in loop st'
               Left err -> do
                 liftIO $ print err
                 -- And leave a space
@@ -129,6 +139,7 @@ helpMenu = unlines
       ,":holes                    ()    Show goal information"
       ,":module <filepath>        (:m)  Add file/module to the current context"
       ,":reload                   (:r)  Reload last file loaded into REPL"
+      ,":ext                      ()    Show which language extensions are loaded"
       ,"-----------------------------------------------------------------------------------"
       ]
 
@@ -149,17 +160,20 @@ handleCMD s =
       pexp <- liftIO' $ try $ either die return $ runReaderT (evalStateT (expr $ scanTokens str) []) "interactive"
       case pexp of
         Right ast -> liftIO $ print ast
+
         Left e -> do
           liftIO $ putStrLn "Input not an expression, checking for TypeScheme"
           pts <- liftIO' $ try $ either die return $ runReaderT (evalStateT (tscheme $ scanTokens str) []) "interactive"
           case pts of
-            Right ts -> liftIO $ print ts
+            Right ts ->
+              liftIO $ print ts
+
             Left err -> do
               st <- get
               Ex.throwError (ParseError err (files st))
               Ex.throwError (ParseError e (files st))
 
-    handleLine (RunLexer str) = do
+    handleLine (RunLexer str) =
       liftIO $ print (scanTokens str)
 
     handleLine (ShowDef term) = do
@@ -206,26 +220,36 @@ handleCMD s =
       ignoreHolesREPL
 
     handleLine (CheckType exprString) = do
+      st <- get
       expr <- parseExpression exprString
-      ty <- synthTypeFromInputExpr expr
+
+      let fv = freeVars expr
+      let defs = buildRelevantASTdefinitions fv (defns st)
+
+      ty <- synthTypeFromInputExpr defs expr
       let exprString' = if elem ' ' exprString && head exprString /= '(' && last exprString /= ')' then "(" <> exprString <> ")" else exprString
-      liftIO $ putStrLn $ "  \ESC[1m" <> exprString' <> "\ESC[0m : " <> (either pretty pretty ty)
+      liftIO $ putStrLn $ "  \ESC[1m" <> exprString' <> "\ESC[0m : " <> (either (pretty . fst) pretty ty)
 
     handleLine (Eval exprString) = do
       expr <- parseExpression exprString
-      ty <- synthTypeFromInputExpr expr
+      
+      -- Build surrounding AST of dependencies
+      let fv = freeVars expr
+      st <- get
+      let defs = buildRelevantASTdefinitions fv (defns st)
+      -- Infer type of this expression in the context of its definitions
+      ty <- synthTypeFromInputExpr defs expr
+
       case ty of
         -- Well-typed, with `tyScheme`
-        Left tyScheme -> do
+        Left (tyScheme, derivedDefs) -> do
           st <- get
           let ndef = buildDef (freeVarCounter st) tyScheme expr
           -- Update the free var counter
           modify (\st -> st { freeVarCounter = freeVarCounter st + 1 })
 
-          let fv = freeVars expr
-          let ast = buildRelevantASTdefinitions fv (defns st)
-          let astNew = AST (currentADTs st) (ast <> [ndef]) mempty mempty Nothing
-          result <- liftIO' $ try $ replEval (freeVarCounter st) astNew
+          let astNew = AST (currentADTs st) (defs <> [ndef]) mempty mempty Nothing
+          result <- liftIO' $ try $ replEval (freeVarCounter st) (extendASTWith derivedDefs astNew)
           case result of
               Left e -> Ex.throwError (EvalError e)
               Right Nothing -> liftIO $ print "if here fix"
@@ -241,37 +265,18 @@ parseExpression exprString = do
     Left err -> Ex.throwError (ParseError' err)
     Right exprAst -> return exprAst
 
-synthTypeFromInputExpr :: (?globals::Globals) => Expr () () -> REPLStateIO (Either TypeScheme Type)
-synthTypeFromInputExpr exprAst = do
+synthTypeFromInputExpr :: (?globals::Globals) => [Def () ()] -> Expr () () -> REPLStateIO (Either (TypeScheme, [Def () ()]) Type)
+synthTypeFromInputExpr defs expr = do
   st <- get
-  -- Build the AST and then try to synth the type
-  let ast = buildRelevantASTdefinitions (freeVars exprAst) (defns st)
-  let astRest = AST (currentADTs st) ast mempty mempty Nothing
+  let astContext = replaceTypeAliases $ AST (currentADTs st) defs mempty mempty Nothing
 
-  checkerResult <- liftIO' $ synthExprInIsolation astRest exprAst
+  checkerResult <- liftIO' $ synthExprInIsolation astContext expr
   case checkerResult of
     Right res -> return res
     Left err -> Ex.throwError (TypeCheckerError err (files st))
 
--- Exceptions behaviour
-instance MonadException m => MonadException (StateT ReplState m) where
-  controlIO f = StateT $ \s -> controlIO $ \(RunIO run) -> let
-                  run' = RunIO (fmap (StateT . const) . run . flip runStateT s)
-                  in fmap (flip runStateT s) $ f run'
-
-instance MonadException m => MonadException (Ex.ExceptT e m) where
-  controlIO f = Ex.ExceptT $ controlIO $ \(RunIO run) -> let
-                  run' = RunIO (fmap Ex.ExceptT . run . Ex.runExceptT)
-                  in fmap Ex.runExceptT $ f run'
-
 replEval :: (?globals :: Globals) => Int -> AST () () -> IO (Maybe RValue)
-replEval val (AST dataDecls defs _ _ _) = do
-    bindings <- evalDefs builtIns (map toRuntimeRep defs)
-    case lookup (mkId (" repl" <> show val)) bindings of
-      Nothing -> return Nothing
-      Just (Pure _ e)    -> fmap Just (evalIn bindings e)
-      Just (Promote _ e) -> fmap Just (evalIn bindings e)
-      Just val           -> return $ Just val
+replEval val = evalAtEntryPoint (mkId (" repl" <> show val))
 
 liftIO' :: IO a -> REPLStateIO a
 liftIO' = lift.lift
@@ -299,6 +304,7 @@ readToQueue path = let ?globals = ?globals{ globalsSourceFilePath = Just path } 
                   forM_ def $ \idef -> loadInQueue idef
                   modify (\st -> st { currentADTs = dd <> currentADTs st })
                   liftIO $ printInfo $ green $ path <> ", checked."
+                  modify (\st -> st { furtherExtensions = extensions })
 
                 Left errs -> do
                   st <- get
@@ -325,11 +331,12 @@ relevantMessages :: Bool -> NonEmpty.NonEmpty Checker.CheckerError -> [Checker.C
 relevantMessages ignoreHoles es =
   NonEmpty.filter (\ e -> case e of Checker.HoleMessage{} -> not ignoreHoles; _ -> True) es
 
+-- Adds a definition into the context (unless it is already there)
 loadInQueue :: (?globals::Globals) => Def () () -> REPLStateIO  ()
 loadInQueue def@(Def _ id _ _ _) = do
   st <- get
   if M.member (pretty id) (defns st)
-    then Ex.throwError (TermInContext (pretty id))
+    then return ()
     else put $ st { defns = M.insert (pretty id) (def, nub $ extractFreeVars id (freeVars def)) (defns st) }
 
 dumpStateAux :: (?globals::Globals) => M.Map String (Def () (), [String]) -> [String]
@@ -346,17 +353,23 @@ extractFreeVars i (x:xs) =
     then sourceName x : extractFreeVars i xs
     else extractFreeVars i xs
 
-buildAST :: M.Map String (Def () (), [String]) -> String -> [Def () ()]
-buildAST m var =
-  case M.lookup var m  of
+buildAST :: M.Map String (Def () (), [String]) -> [(Id, Def () ())] -> [String] -> [Def () ()]
+
+buildAST defMap acc [] = map snd acc
+buildAST defMap acc (var:vars) =
+  case M.lookup var defMap of
     -- Nothing case indicates a primitive so we don't need to pull in the local def here
-    Nothing -> []
+    -- and can return the accumulator (without the labels)
+    Nothing -> buildAST defMap acc vars
     -- Otherwise, recursively pull in the necessary definitions
     Just (def, dependencies) ->
-      def : concatMap (buildAST m) dependencies
+      case lookup (defId def) acc of
+        -- already present so we can traverse up the dependencies
+        Just _  -> buildAST defMap acc vars
+        Nothing -> buildAST defMap ((defId def, def) : acc) (vars ++ dependencies)
 
 buildRelevantASTdefinitions :: [Id] -> M.Map String (Def () (), [String]) -> [Def () ()]
-buildRelevantASTdefinitions vars m = reverse . concatMap (buildAST m . sourceName) $ vars
+buildRelevantASTdefinitions vars defMap = buildAST defMap [] (map sourceName vars)
 
 buildCheckerState :: (?globals::Globals) => [DataDecl] -> Checker.Checker ()
 buildCheckerState dataDecls = do

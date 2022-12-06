@@ -55,14 +55,3 @@ main =
   in pure (xs, a)
 
 --------------------------------
--- More complex example relating to showing
--- map g . map f = map (g . f)
-
-foo : forall {a b c : Type, n : Nat} . (LChan (Send String End)) [2*n] -> (a -> b) [n] -> (b -> c) [n] -> Vec n a -> Vec n c
-foo [c] [f] [g] xs =
-  map [\x -> let c' = send c "World" in (let () = close c' in g x)]
-    (map [\x -> let c' = send c "Hello" in (let () = close c' in f x)] xs)
-
-useFoo : forall {a b c : Type, n : Nat} . (a -> b) [n] -> (b -> c) [n] -> Vec n a -> Vec n c
-useFoo f g xs =
-  let c = [forkLinear (\c -> let (s, c) = recv c in let () = close c in dropString s)] in foo c f g xs

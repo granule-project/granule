@@ -15,6 +15,18 @@ bar = foo
 weak : forall {a : Type} . a [{} : Set Foo] -> ()
 weak [x] = ()
 
+-------------------
+data Bool = True | False
+
 -- 1 grade is the universal set
 extract : forall {a : Type} . a [{FooA, FooB, FooC}] -> a
 extract [x] = x
+
+foo' : Int [{FooA} : SetOp Foo] -> (Int [{FooA,FooB} : SetOp Foo],  Int[{FooA} : SetOp Foo])
+foo' [x] = ([x], [x])
+
+bar' : Int [{FooA} : SetOp Foo] -> (Int [{FooA} : SetOp Foo])
+bar' [x] = [x]
+
+foobar' : Int[{FooA}: SetOp Foo] -> (Int [{FooA,FooB} : SetOp Foo],  Int[{FooA} : SetOp Foo])
+foobar' x = foo' (bar' x)

@@ -1,0 +1,10 @@
+copyShapeInt : Int -> ((), Int)
+copyShapeInt = copyShape @Int
+
+data Maybe a = Just a | Nothing
+
+copyShapeMaybe : forall {a : Type} . Maybe a -> (Maybe (), Maybe a)
+copyShapeMaybe = copyShape @Maybe
+
+main : (Maybe (), Maybe Int)
+main = copyShape @Maybe (Just 42)

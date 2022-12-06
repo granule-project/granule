@@ -1,4 +1,7 @@
 Type checking failed: 
 Counter example: frontend/tests/cases/negative/flatten/flattenLevel.gr:2:1:
-The following theorem associated with `flattenLevel` is falsifiable:
-	(k ∨ l ≤ l ∧ k)
+  When checking `flattenLevel`, l ∧ k value cannot be moved to level (k ∨ l) * (1 : Level)
+
+Counter-example:
+  l = Private :: Level
+  k = Public :: Level

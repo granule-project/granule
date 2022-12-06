@@ -1,4 +1,11 @@
 Type checking failed: 
+Counter example: frontend/tests/cases/negative/security.gr:12:1:
+  When checking `hash`, l value cannot be moved to level l * ((1 : Level) + (1 : Level))
+
+Counter-example:
+  l = 0 :: Level
+
+
 Falsifiable theorem: frontend/tests/cases/negative/security.gr:17:1:
-The following theorem associated with `main` is falsifiable:
-	(Public ≤ l0) ∧ (l0 ≤ Private)
+  The following constraint associated with `main` is false:
+	  (Public ≤ l0) ∧ (l0 ≤ Private)

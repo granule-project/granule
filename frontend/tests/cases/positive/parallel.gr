@@ -1,0 +1,12 @@
+import Parallel
+
+foo : () -> Int
+foo () = 5
+
+bar : () -> Int
+bar () = 10
+
+main : Int <{Stdout}>
+main =
+  let (v1,v2) = par foo bar
+  in pure (v1+v2)
