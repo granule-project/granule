@@ -153,6 +153,11 @@ makeCase ty id exprPats goal grade =
         Case s goal False  (Val s (Box ty grade') False (Promote (Box ty grade') (Val s ty False (Var ty id)))) exprPats'
   where s = nullSpanNoFile 
 
+
+makeCaseUntyped :: Id -> [(Pattern (), Expr () ())] -> Expr () ()
+makeCaseUntyped id exprPats = Case s () False (Val s () False (Var () id)) exprPats
+  where s = nullSpanNoFile 
+
 makeBoxCase :: Type -> Type -> Id -> [(Pattern Type, Expr () Type)] -> Type -> Expr () Type
 makeBoxCase ty grade id exprPats goal = 
   Case s goal False (Val s (Box ty grade) False (Promote (Box ty grade) (Val s ty False (Var ty id)))) exprPats
@@ -170,6 +175,16 @@ makeConstr terms name goal = buildTerm (reverse terms)
         buildTerm ((e, ty):es) =
           let e' = buildTerm es in
             App s ty False e' e
+
+
+
+makeConstrUntyped :: [(Expr () ())] -> Id -> Expr () ()
+makeConstrUntyped terms name = buildTerm (reverse terms)
+  where s = nullSpanNoFile
+        buildTerm [] = Val s () False (Constr () name [])
+        buildTerm (e:es) =
+          let e' = buildTerm es in
+            App s () False e' e
 
 makeUnitElim :: Id -> Expr () Type -> TypeScheme -> Expr () Type
 makeUnitElim name e tyS = makeUnitElimP id

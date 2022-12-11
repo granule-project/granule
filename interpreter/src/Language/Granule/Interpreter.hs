@@ -143,7 +143,14 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
                 case (globalsRewriteHoles ?globals, holeErrors) of
                   (Just True, holes@(_:_)) ->
                     runHoleSplitter input config errs holes
-                  _ -> return . Left $ CheckerError errs
+                  _ -> 
+                    -- Temporary until GradedBase type checks - just synth for every hole with a fixed synth ctxt
+                    case (GradedBase `elem` globalsExtensions ?globals) of 
+                      True -> do 
+                        synRes <- synthGradedBase [] (TyVar $ mkId "hello")
+                        _ <- error ("result: " <> pretty synRes) 
+                        undefined
+                      _ -> return . Left $ CheckerError errs
           Right (Right (ast', derivedDefs, synthContext)) -> do
             astWithSynthedHoles <- handleSynth synthContext (extendASTWith derivedDefs ast) 
             if noEval then do

@@ -422,7 +422,7 @@ checkConstructor :: (?globals::Globals)
       -> TypeScheme       -- Type of data type definition 
       -> Type             -- Type of assumption
       -> Substitution     
-      -> Synthesiser (Bool, Type, [Type], Substitution, Substitution)
+      -> Synthesiser (Bool, Type, [(Type, Maybe Coeffect)], Substitution, Substitution)
 checkConstructor impossibility con@(Forall  _ binders constraints conTy) assumptionTy subst = do
     conv $ resetAddedConstraintsFlag -- reset the flag that says if any constraints were added
     (conTyFresh, tyVarsFreshD, substFromFreshening, constraints', coercions) <- conv $ freshPolymorphicInstance InstanceQ True con subst []
@@ -475,9 +475,9 @@ checkConstructor impossibility con@(Forall  _ binders constraints conTy) assumpt
 
   where 
   -- | Get the right most of a function type and collect its arguments in a list
-  rightMostFunTy :: Type -> (Type, [Type])
-  rightMostFunTy (FunTy _ arg t) = let (t', args) = rightMostFunTy t in (t', arg : args)
-  rightMostFunTy t = (t, [])
+  collectTyAndArgs :: Type -> (Type, [(Type, Maybe Coeffect)])
+  collectTyAndArgs (FunTy _ coeff arg t) = let (t', args) = collectTyAndArgs t in (t', ((arg, coeff) : args))
+  collectTyAndArgs t = (t, [])
 
 compareArity :: (Id, (TypeScheme, Substitution)) -> (Id, (TypeScheme, Substitution)) -> Ordering
 compareArity con1@(_, (Forall _ _ _ ty1, _)) con2@(_, (Forall _ _ _ ty2, _)) = compare (arity ty1) (arity ty2)
@@ -1204,7 +1204,7 @@ constrElimHelper gamma (Focused left) (Focused (var@(x, assumption):right)) mode
                     modifyPred pred'
 
                     -- Calculate assumptions
-                    assumptions <- mapM (\ arg -> do
+                    assumptions <- mapM (\ (arg, _) -> do
                       y <- freshIdentifier 
                       arg' <- conv $ substitute conSubst' arg
                       let assumptionType = case assumptionGrade of {Nothing -> Linear arg'; Just grade_r -> Discharged arg' grade_r}
@@ -1718,7 +1718,6 @@ synthesiseProgram hints index unrComps rComps defId ctxt goalTy checkerState = d
       solved res = case res of ((Right (expr, _, _), _):_) -> True ; _ -> False
       resetState st = st { depthReached = False }
 
-      fst3 (x, y, z) = x
 
 
       -- eval takes an unnanotaed AST, so we need to strip out annotations in order to stitch our synthed expr back into
@@ -1812,3 +1811,427 @@ sizeOfCoeffect (TyGrade _ _) = 0
 sizeOfCoeffect (TyInt _) = 0
 sizeOfCoeffect (TyVar _) = 0
 sizeOfCoeffect _ = 0
+
+fst3 :: (a, b, c) -> a
+fst3 (x, y, z) = x
+
+
+
+
+
+
+
+
+
+
+
+synthGradedBase :: (?globals :: Globals) => Ctxt Assumption -> Type -> IO [Expr () ()]
+synthGradedBase ctxt goal = do
+
+  start <- liftIO $ Clock.getTime Clock.Monotonic
+  let checkerState = initState
+  let synthState = SynthesisData {
+                         smtCallsCount= 0 
+                      ,  smtTime= 0 
+                      ,  proverTime= 0 
+                      ,  theoremSizeTotal= 0 
+                      ,  pathsExplored= 0 
+                      ,  startTime=start 
+                      ,  constructors=[] 
+                      ,  currDef = []
+                      ,  depthReached = False
+                      }
+
+
+  let goalTy = FunTy Nothing (Just $ TyGrade Nothing 1) (TyVar $ mkId "a") (TyVar $ mkId "a")
+
+  let initRes = gSynthInner RightAsync [] (Focused []) goalTy
+  result <- liftIO $ do 
+    (res, agg) <- runStateT (runSynthesiser 1 initRes checkerState) synthState 
+    return (res, agg)
+
+  
+
+  fin <- case result of 
+      (synthResult, _) -> do
+        let programs = nub $ map fst3 $ rights (map fst synthResult)
+        return programs
+  return fin
+
+
+
+gSynthInner :: (?globals :: Globals) => FocusPhase -> Ctxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution)
+gSynthInner focusPhase gamma (Focused omega) goal = do
+
+  conv $ modify (\st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- [(mkId "a", ktype)]] }) 
+
+  case (focusPhase, omega) of 
+    (RightAsync, _) -> do
+      varRule [] (Focused []) (Focused (gamma ++ omega)) goal
+      `try`
+      absRule RightAsync gamma (Focused omega) goal
+      `try`
+      transitionToLeftAsync gamma omega goal 
+
+    (LeftAsync, (_:_)) -> do 
+      varRule gamma (Focused []) (Focused omega) goal
+      `try`
+      unboxRule LeftAsync gamma (Focused []) (Focused omega) goal
+
+    -- Focus / shift to Sync phases 
+    (LeftAsync, []) -> do 
+      foc goal gamma $ isRAsync goal
+
+    (RightSync, []) -> 
+      if isRSync goal then do
+        varRule gamma (Focused []) (Focused omega) goal
+        `try`
+        boxRule RightSync gamma goal
+      else do
+        gSynthInner RightAsync gamma (Focused []) goal
+    
+    (LeftSync, var@(x, SVar (Discharged ty g) _):[]) -> do 
+      if (not $ isLSync ty) && (not $ isAtomic ty) then do 
+        gSynthInner LeftAsync gamma (Focused [var]) goal
+      else do
+        varRule gamma (Focused []) (Focused omega) goal
+        `try`
+        appRule LeftSync gamma (Focused []) (Focused omega) goal
+    
+    (LeftSync, []) -> 
+      gSynthInner RightAsync gamma (Focused []) goal
+
+  where 
+
+    foc goal gamma True = 
+      focRight gamma goal 
+      `try`
+      focLeft [] gamma goal
+    foc goal gamma False = 
+      focLeft [] gamma goal 
+
+    focRight gamma goal = 
+      gSynthInner RightSync gamma (Focused []) goal 
+
+    focLeft _ [] goal = none 
+    focLeft left (var:right) goal = 
+      focLeft (var:left) right goal 
+      `try`
+      gSynthInner LeftSync (left ++ right) (Focused [var]) goal
+
+    transitionToLeftAsync _ _ (FunTy{}) = none
+    transitionToLeftAsync gamma omega goal = gSynthInner LeftAsync gamma (Focused omega) goal
+
+
+
+
+useGradedVar :: (?globals :: Globals) => (Id, SAssumption) -> Ctxt SAssumption -> Synthesiser (Ctxt SAssumption)
+useGradedVar (name, SVar (Discharged t grade) sInfo) ctxt = do
+  (kind, _, _) <- conv $ synthKind ns grade
+  ctxt' <- ctxtMultByCoeffect (TyGrade (Just kind) 0) ctxt
+  return $ (name, SVar (Discharged t (TyGrade (Just kind) 1)) sInfo):ctxt'
+
+
+{- 
+
+--------------------------------- Var
+Γ, x :ᵣ A ⊢ A => x | 0·Γ, x :₁ A
+
+-}
+varRule :: (?globals :: Globals) => Ctxt SAssumption -> FocusedCtxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution)
+varRule _ _ (Focused []) _ = none
+varRule gamma (Focused left) (Focused (var@(name, SVar (Discharged t grade) sInfo) : right)) goal = do
+  varRule gamma (Focused (var:left)) (Focused right) goal `try` do
+    conv $ resetAddedConstraintsFlag 
+    (success, _, subst) <- conv $ equalTypes ns t goal 
+
+    cs <- conv $ get
+    modifyPred $ addPredicateViaConjunction (Conj $ predicateStack cs) (predicateContext cs)
+    conv $ modify (\s -> s { predicateStack = []}) 
+
+    if success then do 
+      solved <- if addedConstraints cs
+                then solve
+                else return True
+      -- now to do check we can actually use it
+      if solved then do
+        delta <- useGradedVar var (left ++ right ++ gamma) 
+        return (Val ns () False (Var () name), delta, subst)
+      else none
+    else none
+varRule _ _ _ _ = none
+
+
+{- 
+
+Γ, x :ᵣ A ⊢ B => t | Δ, x :ᵣ A      r ⊑ q
+--------------------------------------- Abs
+Γ ⊢ Aʳ → B => λᵣx.t | Δ 
+
+-}
+absRule :: (?globals :: Globals) => FocusPhase -> Ctxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution)
+absRule focusPhase gamma (Focused omega) (FunTy name (Just grade) tyA tyB) = do
+
+  x <-  useBinderNameOrFreshen name
+
+  let (gamma', omega') = bindToContext (x, SVar (Discharged tyA grade) (Just NonDecreasing)) gamma omega (isLAsync tyA)
+
+  (t, delta, subst) <- gSynthInner focusPhase gamma' (Focused omega') tyB
+
+  case lookupAndCutout x delta of 
+    Just (delta', SVar (Discharged _ grade_r) _) -> do 
+      cs <- conv $ get
+      (kind, _, _) <- conv $ synthKind nullSpan grade_r
+      modifyPred $ addConstraintViaConjunction (ApproximatedBy ns grade_r grade kind) (predicateContext cs)
+      res <- solve
+      boolToSynthesiser res (Val ns () False (Abs () (PVar ns () False x) Nothing t), delta', subst)
+    Nothing -> none
+
+absRule _ _ _ _ = none
+
+
+
+
+appRule :: (?globals :: Globals) => FocusPhase -> Ctxt SAssumption -> FocusedCtxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution)
+appRule _ _ _ (Focused []) _ = none
+appRule focusPhase gamma (Focused left) (Focused (var@(x1, SVar (Discharged (FunTy bName (Just q) tyA tyB) r) sInfo) : right)) goal = 
+  appRule focusPhase gamma (Focused (var : left)) (Focused right) goal `try` do 
+
+    let omega = var:(left ++ right)
+    x2 <- freshIdentifier
+
+    let (gamma', omega') = bindToContext (x2, SVar (Discharged tyB r) Nothing) gamma omega (isLAsync tyB)
+
+    (t1, delta1, subst1) <- gSynthInner focusPhase gamma' (Focused omega') goal
+
+    case lookupAndCutout x2 delta1 of 
+      Just (delta1', SVar (Discharged _ s2) _) -> 
+        case lookupAndCutout x1 delta1' of 
+          Just (delta1'', SVar (Discharged _ s1) _) ->
+            do
+              (t2, delta2, subst2) <- gSynthInner RightSync gamma (Focused omega) tyA
+              case lookupAndCutout x1 delta2 of 
+                Just (delta2', SVar (Discharged _ s3) _) -> do
+                  -- let outputDelta = delta1'' `ctxtAdd` (s2 `ctxtMultByCoeffect` (q `ctxtMultByCoeffect` delta2))
+                  outputDelta2 <- (s2 `ctxtMultByCoeffect` delta2) >>= (\delta2' -> (q `ctxtMultByCoeffect` delta2')) 
+                  let outputGrade = s2 `gPlus` s1 `gPlus` (s2 `gTimes` q `gTimes` s3) 
+                  case ctxtAdd delta1'' outputDelta2 of 
+                    Just delta3 -> do 
+                      
+                      substOut <- conv $ combineSubstitutions ns subst1 subst2
+                      let appExpr = App ns () False (Val ns () False (Var () x1)) t2
+                      return (Language.Granule.Syntax.Expr.subst appExpr x2 t1, (x1, SVar (Discharged (FunTy bName (Just q) tyA tyB) outputGrade) sInfo):delta3, substOut)
+                    _ -> none                    
+                    -- s2 + s1 + (s2 * q * s3)
+
+appRule _ _ _ _ _ = none
+
+
+boxRule :: (?globals :: Globals) => FocusPhase -> Ctxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution)
+boxRule focusPhase gamma (Box grade_r goal) = do 
+  (t, delta, subst) <- gSynthInner focusPhase gamma (Focused []) goal
+  delta' <- ctxtMultByCoeffect grade_r delta
+  let boxExpr = Val ns () False (Promote () t)
+  return (boxExpr, delta', subst)
+boxRule _ _ _ = none
+
+unboxRule :: (?globals :: Globals) => FocusPhase -> Ctxt SAssumption -> FocusedCtxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution) 
+unboxRule _ _ _ (Focused []) _ = none
+unboxRule focusPhase gamma (Focused left) (Focused (var_x@(x, SVar (Discharged (Box grade_q ty) grade_r) sInfo):right)) goal = 
+  unboxRule focusPhase gamma (Focused (var_x:left)) (Focused right) goal `try` do 
+
+    let omega = var_x:(left ++ right)
+    y <- freshIdentifier 
+
+    let (gamma', omega') = bindToContext (y, SVar (Discharged ty (grade_r `gTimes` grade_q)) Nothing) gamma omega (isLAsync ty)
+
+    (t, delta, subst) <- gSynthInner focusPhase gamma' (Focused omega') goal 
+
+    case lookupAndCutout y delta of 
+      Just (delta', SVar (Discharged _ grade_s1) _) -> 
+        case lookupAndCutout x delta' of 
+          Just (delta'', SVar (Discharged _ grade_s2) _) -> do
+            cs <- conv get
+
+            grade_id_s3 <- freshIdentifier 
+            (kind, _, _) <- conv $ synthKind nullSpan grade_s1
+            conv $ existentialTopLevel grade_id_s3 kind
+
+            let grade_s3 = TyVar grade_id_s3
+            -- ∃s3 . s1 ⊑ s3 · q ⊑ r · q
+            modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (grade_s3 `gTimes` grade_q) (grade_r `gTimes` grade_q) kind) (predicateContext cs)
+            modifyPred $ addConstraintViaConjunction (ApproximatedBy ns grade_s1 (grade_s3 `gTimes` grade_q) kind) (predicateContext cs)
+            
+            res <- solve 
+
+            let var_x' = (x, SVar (Discharged (Box grade_q ty) (grade_s3 `gPlus` grade_s2)) sInfo)
+
+            boolToSynthesiser res ((makeUnboxUntyped y (makeVarUntyped x) t), var_x':delta'', subst)
+          _ -> none
+      _ -> none
+
+
+
+constrRule :: (?globals :: Globals) => FocusPhase -> Ctxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution)
+constrRule focusPhase gamma goal = 
+  case isADTorGADT goal of 
+    Just datatypeName -> do 
+      synthState <- getSynthState 
+      let (_, datacons) = relevantConstructors datatypeName $ constructors synthState
+      let datacons' = sortBy compareArity datacons
+
+      tryDatacons datatypeName [] datacons' goal
+
+  
+  where 
+    tryDatacons dtName _ [] _ = none
+    tryDatacons dtName right (con@(cName, (tySc@(Forall s bs cs cTy), cSubst)):left) goal = 
+      tryDatacons dtName (con:right) left goal `try` do
+        result <- checkConstructor False tySc goal cSubst 
+        case result of 
+          (True, specTy, _, _, _) -> do
+            case dataconArgs specTy of 
+              -- Nullary constructor 
+              Just [] -> return (Val ns () False (Constr () cName []), [], [])
+              -- N-ary constructor
+              Just args -> do 
+                (ts, delta, subst) <- synthArgs args 
+                return (makeConstrUntyped ts dtName, delta, subst)
+          _ -> none
+
+    synthArgs [] = return ([], [], [])
+    synthArgs ((ty, mGrade_q):args) = do 
+      (ts, deltas, substs) <- synthArgs args
+      (t, delta, subst) <- gSynthInner RightAsync gamma (Focused []) goal
+      delta' <- maybeToSynthesiser $ ctxtAdd deltas delta
+      substs' <- conv $ combineSubstitutions ns substs subst
+      delta'' <- case mGrade_q of 
+        Just grade_q -> ctxtMultByCoeffect grade_q delta'
+        _ -> return delta' 
+      return (t:ts, delta'', substs')
+
+    dataconArgs (TyCon _) = Just []
+    dataconArgs (TyApp _ _) = Just []
+    dataconArgs (FunTy _ mGrade_q tyA tyB) = do 
+      res <- dataconArgs tyB
+      return $ (tyA, mGrade_q) : res 
+    dataconArgs _ = Nothing 
+
+
+
+caseRule :: (?globals :: Globals) => FocusPhase -> Ctxt SAssumption -> FocusedCtxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution)
+caseRule _ _ _ (Focused []) _ = none
+caseRule focusPhase gamma (Focused left) (Focused (var@(x, SVar (Discharged ty grade_r) sInfo):right)) goal = 
+  caseRule focusPhase gamma (Focused (var : left)) (Focused right) goal `try` do
+    case isADTorGADT ty of 
+      Just datatypeName -> do
+        let omega = var:(left ++ right)
+        synthState <- getSynthState
+
+        let (_, nonRecCons) = relevantConstructors datatypeName (constructors synthState)
+        let datacons = sortBy compareArity nonRecCons
+
+        (patExprs, delta, subst, grade_r_out, grade_s_out, _) <- foldM (\ (exprs, deltas, substs, mGrade_r_out, mGrade_s_out, index) con@(cName, (tySc@(Forall s bs cs cTy), cSubst)) -> do
+
+          cs <- conv get
+          let pred = newImplication [] (predicateContext cs)
+
+          result <- checkConstructor True tySc ty cSubst 
+          let predSucceeded = moveToConsequent pred
+
+          case (result, predSucceeded) of 
+            ((True, specTy, args, _, _), Right pred'@(ImplConsequent ctxt p path)) -> do 
+              modifyPred pred'
+
+              (gamma', omega', varsAndGrades) <- foldM (\(gamma, omega, vars) (arg, mGrade_q) -> do 
+                  y <- freshIdentifier
+                  let grade_rq = case mGrade_q of 
+                        Just grade_q -> grade_r `gTimes` grade_q
+                        Nothing -> grade_r
+
+                  let assumption = (y, SVar (Discharged arg grade_rq) Nothing)
+                  let (gamma', omega') = bindToContext assumption gamma omega (isLAsync arg)
+                  return (gamma', omega', (y, grade_rq):vars)
+                ) (gamma, omega, []) args
+              let (vars, _) = unzip varsAndGrades
+              let constrPat = PConstr ns () False cName (map (PVar ns () False) vars)
+
+              (t, delta, subst) <- gSynthInner focusPhase gamma' (Focused omega') goal 
+
+              (delta', grade_si) <- foldM (\(delta', mGrade) dVar@(dName, SVar (Discharged ty grade_s) dSInfo) -> 
+                case lookup dName varsAndGrades of 
+                  Just grade_rq -> do 
+                    cs <- conv get 
+
+                    grade_id_s' <- freshIdentifier 
+                    (kind, _, _) <- conv $ synthKind ns grade_s 
+                    conv $ existentialTopLevel grade_id_s' kind
+                    let grade_s' = TyVar grade_id_s'
+
+                    -- ∃s'_ij . s_ij ⊑ s'_ij · q_ij ⊑ r · q_ij
+                    modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (grade_s' `gTimes` grade_rq) (grade_r `gTimes` grade_r) kind) (predicateContext cs)
+                    modifyPred $ addConstraintViaConjunction (ApproximatedBy ns grade_s (grade_s' `gTimes` grade_rq) kind) (predicateContext cs)
+
+                    res <- solve
+
+                    -- s' \/ ...
+                    let grade_si = case mGrade of 
+                            Just s -> s `gJoin` grade_s'
+                            Nothing -> grade_s'
+
+                    return (delta', Just grade_si)
+                  _ -> return (dVar:delta', mGrade)
+                ) ([], Nothing) delta
+
+              case (lookupAndCutout x delta', grade_si) of 
+                (Just (delta'', (SVar (Discharged _ grade_r') sInfo)), Just grade_si') -> do
+
+                  returnDelta <- if index == 0 then return delta' else ctxtMerge (TyInfix TyOpJoin) deltas delta' 
+                  returnSubst <- conv $ combineSubstitutions ns subst substs
+
+                  modifyPred $ moveToNewConjunct (predicateContext cs)
+
+                  let grade_r_out' = case mGrade_r_out of 
+                        Just g -> g `gJoin` grade_r'
+                        Nothing -> grade_r'
+
+                  let grade_s_out' = case mGrade_s_out of 
+                        Just s -> s `gJoin` grade_si'
+                        Nothing -> grade_si'
+
+                  return ((constrPat, t):exprs, returnDelta, returnSubst, Just grade_r_out', Just grade_s_out', index+1)
+
+                _ -> do 
+                  modifyPred $ moveToNewConjunct (predicateContext cs)
+                  return (exprs, deltas, substs, mGrade_r_out, mGrade_s_out, index)
+            _ -> do 
+              modifyPred $ moveToNewConjunct (predicateContext cs)
+              return (exprs, deltas, substs, mGrade_r_out, mGrade_s_out, index)
+          ) ([], [], [], Nothing, Nothing, 0) datacons 
+
+        case (patExprs, grade_r_out, grade_s_out) of 
+          ((_:_), Just grade_r_out', Just grade_s_out') -> do 
+            let var_x_out = (x, SVar (Discharged ty (grade_r_out' `gPlus` grade_s_out')) sInfo)
+            return (makeCaseUntyped x patExprs, var_x_out:delta, subst)
+          _ -> none
+      _ -> none
+
+
+
+
+
+caseRule _ _ _ _ _ = none
+
+
+
+gPlus :: Type -> Type -> Type
+gPlus g1 g2 = TyInfix TyOpPlus g1 g2
+
+gTimes :: Type -> Type -> Type
+gTimes g1 g2 = TyInfix TyOpTimes g1 g2
+
+gJoin :: Type -> Type -> Type
+gJoin g1 g2 = TyInfix TyOpJoin g1 g2
+
+
+
