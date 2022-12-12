@@ -1,17 +1,8 @@
 fooa : Int [Lo] → Int [Hi]
 fooa [_] = [42]
 
-foob : Int [Public] → Int [Private]
-foob [_] = [42]
+bad : Int [Private] → Int [Public]
+bad [x] = [x]
 
-fooc : Int [Private] → Int [Public]
-fooc [_] = [42]
-
-test : Int [Private]
-test = fooc [42]
-
-extract : Int [Public] -> Int
+extract : Int [Private] -> Int
 extract [x] = x
-
-extract' : Int [Lo] -> Int
-extract' [x] = x

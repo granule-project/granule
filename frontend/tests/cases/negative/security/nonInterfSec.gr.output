@@ -1,4 +1,7 @@
-Fatal error: 
-Cannot compile "Public" as a Sec semiring
-CallStack (from HasCallStack):
-  error, called at src/Language/Granule/Checker/Constraints.hs:377:13 in granule-frontend-0.9.0.1-4hcJs59Vqm74We0NdKUegb:Language.Granule.Checker.Constraints
+[1;1m[31;1mType checking failed: [0m[0mfrontend/tests/cases/negative/security/nonInterfSec.gr:
+[1;1m[31;1mGrading error: [0m[0mfrontend/tests/cases/negative/security/nonInterfSec.gr:5:1:
+Public is not approximatable by Private for type Sec
+
+[1;1m[31;1mFalsifiable theorem: [0m[0mfrontend/tests/cases/negative/security/nonInterfSec.gr:8:1:
+  When checking `extract`, (1 : Sec) is not approximatable by Private for type Sec
+
