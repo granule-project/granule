@@ -6,6 +6,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ImplicitParams #-}
 
 {-# options_ghc -fno-warn-incomplete-uni-patterns #-}
 
@@ -198,7 +199,7 @@ data CheckerState = CS
   deriving (Eq, Show) -- for debugging
 
 -- | Initial checker context state
-initState :: CheckerState
+initState :: (?globals :: Globals) => CheckerState
 initState = CS { uniqueVarIdCounterMap = M.empty
                , uniqueVarIdCounter = 0
                , predicateStack = []

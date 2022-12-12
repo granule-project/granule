@@ -1,7 +1,9 @@
 -- Provides all the type information for built-ins
+
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE ImplicitParams #-}
 
 -- | Primitive data types and type constructors
 module Language.Granule.Checker.Primitives where
@@ -15,6 +17,7 @@ import Language.Granule.Syntax.Parser (parseDefs)
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Expr (Operator(..))
+import Language.Granule.Utils
 
 nullSpanBuiltin :: Span
 nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
@@ -33,12 +36,20 @@ capabilities =
    [(mkId "Console", funTy (tyCon "String") (tyCon "()"))
   , (mkId "TimeDate", funTy (tyCon "()") (tyCon "String"))]
 
+    
+
 -- Associates type constuctors names to their:
 --    * kind
 --    * list of (finite) matchable constructor names (but not the actual set of constructor names which could be infinite)
 --    * boolean flag on whether they are indexed types or not
-typeConstructors :: [(Id, (Type, [Id], Bool))]
+typeConstructors :: (?globals :: Globals) => [(Id, (Type, [Id], Bool))]
 typeConstructors =
+  -- If we have the security levels extension turned on then include these things
+  (extensionDependent [(SecurityLevels, [(mkId "Level",    (kcoeffect, [], False))
+                                       , (mkId "Unused",   (tyCon "Level", [], False))
+                                      , (mkId "Dunno",    (tyCon "Level", [], False))])] [])
+ ++
+  -- Everything else is always in scope
     [ (mkId "Coeffect",  (Type 0, [], False))
     , (mkId "Effect",    (Type 0, [], False))
     , (mkId "Guarantee", (Type 0, [], False))
@@ -69,11 +80,11 @@ typeConstructors =
     , (mkId "One",      (tyCon "LNL", [], False))
     , (mkId "Many",     (tyCon "LNL", [], False))
     -- Security levels
-    , (mkId "Level",    (kcoeffect, [], False)) -- Security level
-    , (mkId "Private",  (tyCon "Level", [], False))
-    , (mkId "Public",   (tyCon "Level", [], False))
-    , (mkId "Unused",   (tyCon "Level", [], False))
-    , (mkId "Dunno",    (tyCon "Level", [], False))
+    
+    -- Note that Private/Public can be members of Sec (and map to Hi/Lo) or if 'SecurityLevels' is
+    -- turned on then they are part of the 'Level' semiring
+    , (mkId "Private",  (extensionDependent [(SecurityLevels, tyCon "Level")] (tyCon "Sec"), [], False))
+    , (mkId "Public",   (extensionDependent [(SecurityLevels, tyCon "Level")] (tyCon "Sec"), [], False))
     -- Alternate security levels (a la Gaboardi et al. 2016 and Abel-Bernardy 2020)
     , (mkId "Sec",  (kcoeffect, [], False))
     , (mkId "Hi",    (tyCon "Sec", [], False))

@@ -1,8 +1,8 @@
 Type checking failed: 
-Falsifiable theorem: frontend/tests/cases/negative/level_neg6.gr:8:1:
+Falsifiable theorem: frontend/tests/cases/negative/security/level_neg6.gr:8:1:
   The following constraint associated with `notALeak` is false:
 	  (Public * (1 : Level) ≤ Dunno) ∧ ((0 : Nat) = 0)
 
-Falsifiable theorem: frontend/tests/cases/negative/level_neg6.gr:11:1:
+Falsifiable theorem: frontend/tests/cases/negative/security/level_neg6.gr:11:1:
   The following constraint associated with `notALeak'` is false:
 	  (Public * (1 : Level) ≤ Dunno) ∧ ((0 : Level) ≤ Private)

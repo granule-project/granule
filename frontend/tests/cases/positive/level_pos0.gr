@@ -1,8 +1,0 @@
-language SecurityLevels
-
-data Bool where
-  True : Bool;
-  False : Bool
-
-const : Bool [Private]
-const = [True]

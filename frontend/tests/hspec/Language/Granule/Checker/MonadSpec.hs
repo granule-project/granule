@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE ImplicitParams #-}
 
 module Language.Granule.Checker.MonadSpec where
 
@@ -9,6 +10,7 @@ import Language.Granule.Syntax.Type
 
 import Language.Granule.Checker.Monad
 import Control.Monad.State.Strict
+import Language.Granule.Utils()
 
 import Data.Maybe (fromJust)
 import qualified Data.Map as M
@@ -37,9 +39,9 @@ peekCheckerSpec = do
         localState `shouldBe` (transformState endStateExpectation)
 
   where
-    endStateExpectation = initState { uniqueVarIdCounterMap = M.insert "x" 10 (M.empty) }
+    endStateExpectation = let ?globals = mempty in initState { uniqueVarIdCounterMap = M.insert "x" 10 (M.empty) }
     localising :: IO (CheckerResult (CheckerResult String, Checker ()), CheckerState)
-    localising = runChecker initState $ do
+    localising = let ?globals = mempty in runChecker initState $ do
       state <- get
       put (state { uniqueVarIdCounterMap = M.insert "x" 10 (M.empty) })
       peekChecker $ do
