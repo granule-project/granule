@@ -1,0 +1,17 @@
+fooa : Int [Hi] → Int [Lo]
+fooa [_] = [42]
+
+foob : Int [Private] → Int [Public]
+foob [_] = [42]
+
+hash : forall {l : Sec} . Int [l] -> Int [l]
+hash [x] = [x * x * x]
+
+test : Int [Public]
+test = hash [42]
+
+pin : Int [Private]
+pin = [1234]
+
+ok : Int [Public]
+ok = fooa pin

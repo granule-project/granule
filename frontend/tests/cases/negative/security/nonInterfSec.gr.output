@@ -1,0 +1,4 @@
+Fatal error: 
+Cannot compile "Public" as a Sec semiring
+CallStack (from HasCallStack):
+  error, called at src/Language/Granule/Checker/Constraints.hs:377:13 in granule-frontend-0.9.0.1-4hcJs59Vqm74We0NdKUegb:Language.Granule.Checker.Constraints
