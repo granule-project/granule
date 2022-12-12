@@ -29,6 +29,7 @@ import Language.Granule.Utils
 data SAssumption = 
       SVar Assumption (Maybe StructInfo) 
     | SDef TypeScheme (Maybe Coeffect)
+  deriving (Show)
 
 
 

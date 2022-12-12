@@ -1829,7 +1829,7 @@ synthGradedBase :: (?globals :: Globals) => Ctxt Assumption -> Type -> IO [Expr 
 synthGradedBase ctxt goal = do
 
   start <- liftIO $ Clock.getTime Clock.Monotonic
-  let checkerState = initState
+  let checkerState = initState { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- [(mkId "a", ktype), (mkId "b", ktype)]] }
   let synthState = SynthesisData {
                          smtCallsCount= 0 
                       ,  smtTime= 0 
@@ -1843,7 +1843,15 @@ synthGradedBase ctxt goal = do
                       }
 
 
-  let goalTy = FunTy Nothing (Just $ TyGrade Nothing 1) (TyVar $ mkId "a") (TyVar $ mkId "a")
+  {-
+
+  f :: a ^ 1 -> (a ^ 1 -> b) -> b)
+  
+  -}
+
+  -- let goalTy = FunTy Nothing (Just $ TyGrade Nothing 1) (TyVar $ mkId "a") (TyVar $ mkId "a")
+  let goalTy = FunTy Nothing (Just $ TyGrade Nothing 1) (TyVar $ mkId "a") (FunTy Nothing (Just $ TyGrade Nothing 1) (FunTy Nothing (Just $ TyGrade Nothing 1) (TyVar $ mkId "a") (TyVar $ mkId "b")) (TyVar $ mkId "b"))
+
 
   let initRes = gSynthInner RightAsync [] (Focused []) goalTy
   result <- liftIO $ do 
@@ -1863,7 +1871,8 @@ synthGradedBase ctxt goal = do
 gSynthInner :: (?globals :: Globals) => FocusPhase -> Ctxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution)
 gSynthInner focusPhase gamma (Focused omega) goal = do
 
-  conv $ modify (\st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- [(mkId "a", ktype)]] }) 
+  debugM "reached here" (show gamma)
+
 
   case (focusPhase, omega) of 
     (RightAsync, _) -> do
@@ -1925,13 +1934,6 @@ gSynthInner focusPhase gamma (Focused omega) goal = do
 
 
 
-useGradedVar :: (?globals :: Globals) => (Id, SAssumption) -> Ctxt SAssumption -> Synthesiser (Ctxt SAssumption)
-useGradedVar (name, SVar (Discharged t grade) sInfo) ctxt = do
-  (kind, _, _) <- conv $ synthKind ns grade
-  ctxt' <- ctxtMultByCoeffect (TyGrade (Just kind) 0) ctxt
-  return $ (name, SVar (Discharged t (TyGrade (Just kind) 1)) sInfo):ctxt'
-
-
 {- 
 
 --------------------------------- Var
@@ -1955,8 +1957,10 @@ varRule gamma (Focused left) (Focused (var@(name, SVar (Discharged t grade) sInf
                 else return True
       -- now to do check we can actually use it
       if solved then do
-        delta <- useGradedVar var (left ++ right ++ gamma) 
-        return (Val ns () False (Var () name), delta, subst)
+        (kind, _, _) <- conv $ synthKind ns grade
+        delta <- ctxtMultByCoeffect (TyGrade (Just kind) 0) (left ++ right ++ gamma) 
+        let singleUse = (name, SVar (Discharged t (TyGrade (Just kind) 1)) sInfo)
+        return (Val ns () False (Var () name), singleUse:delta, subst)
       else none
     else none
 varRule _ _ _ _ = none
@@ -1965,7 +1969,7 @@ varRule _ _ _ _ = none
 {- 
 
 Γ, x :ᵣ A ⊢ B => t | Δ, x :ᵣ A      r ⊑ q
---------------------------------------- Abs
+-------------------------------------------- Abs
 Γ ⊢ Aʳ → B => λᵣx.t | Δ 
 
 -}
@@ -1990,17 +1994,25 @@ absRule focusPhase gamma (Focused omega) (FunTy name (Just grade) tyA tyB) = do
 absRule _ _ _ _ = none
 
 
+{- 
 
+Γ, x :_r1 A^q → B, y :_r2 B ⊢ C => t₁ | Δ₁, x :_s1 A^q → B, y :_s2 B
+Γ, x :_r1 A^q → B ⊢ A => t₂ | Δ₂, x :_s3 : A^q → B
+----------------------------------------------------------------------------------------------:: app
+Γ, x : A → B ⊢ C => [(x t₂) / y] t₁ | (Δ₁ + s2 · q · Δ₂), x :_s2 + s1 + (s2 · q · s3) A^q → B
 
+-}
 appRule :: (?globals :: Globals) => FocusPhase -> Ctxt SAssumption -> FocusedCtxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution)
 appRule _ _ _ (Focused []) _ = none
 appRule focusPhase gamma (Focused left) (Focused (var@(x1, SVar (Discharged (FunTy bName (Just q) tyA tyB) r) sInfo) : right)) goal = 
   appRule focusPhase gamma (Focused (var : left)) (Focused right) goal `try` do 
 
-    let omega = var:(left ++ right)
+    debugM "reached" (show x1)
+
+    let omega = (left ++ right)
     x2 <- freshIdentifier
 
-    let (gamma', omega') = bindToContext (x2, SVar (Discharged tyB r) Nothing) gamma omega (isLAsync tyB)
+    let (gamma', omega') = bindToContext (x2, SVar (Discharged tyB r) Nothing) (var:gamma) omega (isLAsync tyB)
 
     (t1, delta1, subst1) <- gSynthInner focusPhase gamma' (Focused omega') goal
 
@@ -2009,7 +2021,7 @@ appRule focusPhase gamma (Focused left) (Focused (var@(x1, SVar (Discharged (Fun
         case lookupAndCutout x1 delta1' of 
           Just (delta1'', SVar (Discharged _ s1) _) ->
             do
-              (t2, delta2, subst2) <- gSynthInner RightSync gamma (Focused omega) tyA
+              (t2, delta2, subst2) <- gSynthInner RightSync (var:gamma) (Focused omega) tyA
               case lookupAndCutout x1 delta2 of 
                 Just (delta2', SVar (Discharged _ s3) _) -> do
                   -- let outputDelta = delta1'' `ctxtAdd` (s2 `ctxtMultByCoeffect` (q `ctxtMultByCoeffect` delta2))
@@ -2023,10 +2035,19 @@ appRule focusPhase gamma (Focused left) (Focused (var@(x1, SVar (Discharged (Fun
                       return (Language.Granule.Syntax.Expr.subst appExpr x2 t1, (x1, SVar (Discharged (FunTy bName (Just q) tyA tyB) outputGrade) sInfo):delta3, substOut)
                     _ -> none                    
                     -- s2 + s1 + (s2 * q * s3)
+          _ -> none
+      _ -> none
 
 appRule _ _ _ _ _ = none
 
+{-
 
+
+Γ ⊢ A => t | Δ
+------------------------ :: box
+Γ ⊢ □ᵣA => [t] | r · Δ
+
+-}
 boxRule :: (?globals :: Globals) => FocusPhase -> Ctxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution)
 boxRule focusPhase gamma (Box grade_r goal) = do 
   (t, delta, subst) <- gSynthInner focusPhase gamma (Focused []) goal
@@ -2035,15 +2056,24 @@ boxRule focusPhase gamma (Box grade_r goal) = do
   return (boxExpr, delta', subst)
 boxRule _ _ _ = none
 
+
+{-
+
+Γ, y :_r·q A, x :_r □q A ⊢ B => t | Δ, y : [A] s1, x :_s2 □q A 
+∃s3 . s1 ⊑ s3 · q ⊑ r · q
+---------------------------------------------------------------- :: unbox
+Γ, x :_r □q A ⊢ B => case x of [y] -> t | Δ, x :_s3+s2 □q A
+
+-}
 unboxRule :: (?globals :: Globals) => FocusPhase -> Ctxt SAssumption -> FocusedCtxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution) 
 unboxRule _ _ _ (Focused []) _ = none
 unboxRule focusPhase gamma (Focused left) (Focused (var_x@(x, SVar (Discharged (Box grade_q ty) grade_r) sInfo):right)) goal = 
   unboxRule focusPhase gamma (Focused (var_x:left)) (Focused right) goal `try` do 
 
-    let omega = var_x:(left ++ right)
+    let omega = (left ++ right)
     y <- freshIdentifier 
 
-    let (gamma', omega') = bindToContext (y, SVar (Discharged ty (grade_r `gTimes` grade_q)) Nothing) gamma omega (isLAsync ty)
+    let (gamma', omega') = bindToContext (y, SVar (Discharged ty (grade_r `gTimes` grade_q)) Nothing) (var_x:gamma) omega (isLAsync ty)
 
     (t, delta, subst) <- gSynthInner focusPhase gamma' (Focused omega') goal 
 
@@ -2072,6 +2102,14 @@ unboxRule focusPhase gamma (Focused left) (Focused (var_x@(x, SVar (Discharged (
 
 
 
+{-
+
+(C: B₁^q₁ → ... → Bₙ^qₙ → K A ∈ D)
+Γ ⊢ Bᵢ => tᵢ | Δᵢ
+----------------------------------------------------:: constr
+Γ ⊢ K A => C t₁ ... tₙ | (q₁ · Δ₁) + ... + (qₙ · Δₙ)
+
+-}
 constrRule :: (?globals :: Globals) => FocusPhase -> Ctxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution)
 constrRule focusPhase gamma goal = 
   case isADTorGADT goal of 
@@ -2118,14 +2156,23 @@ constrRule focusPhase gamma goal =
     dataconArgs _ = Nothing 
 
 
+{-
 
+(C: B₁^q₁ → ... → Bₙ^qₙ → K A ∈ D)
+Γ, x :ᵣ K A, y₁ⁱ :_q₁ B₁ ... yₙⁱ :_qₙ Bₙ ⊢ B => tᵢ | Δᵢ, x :_rᵢ K A, y₁ⁱ :_s₁ⁱ B₁ ... yₙⁱ :_sₙⁱ Bₙ
+∃s'ⱼⁱ . sⱼⁱ ⊑ s'ⱼⁱ · qⱼⁱ ⊑ r · qⱼⁱ
+sᵢ = s'₁ⁱ ⊔ ... ⊔ s'ₙⁱ
+--------------------------------------------------------------------------------------------------------:: case (v1)
+Γ, x :ᵣ K A ⊢ B => case x of cᵢ y₁ⁱ ... yₙⁱ -> tᵢ | (Δ₁ ⊔ ... ⊔ Δₙ), x :_(r₁ ⊔ ... ⊔ rₙ)+(s₁ ⊔ ... ⊔ sₙ)
+
+-}
 caseRule :: (?globals :: Globals) => FocusPhase -> Ctxt SAssumption -> FocusedCtxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution)
 caseRule _ _ _ (Focused []) _ = none
 caseRule focusPhase gamma (Focused left) (Focused (var@(x, SVar (Discharged ty grade_r) sInfo):right)) goal = 
   caseRule focusPhase gamma (Focused (var : left)) (Focused right) goal `try` do
     case isADTorGADT ty of 
       Just datatypeName -> do
-        let omega = var:(left ++ right)
+        let omega = left ++ right
         synthState <- getSynthState
 
         let (_, nonRecCons) = relevantConstructors datatypeName (constructors synthState)
@@ -2156,7 +2203,7 @@ caseRule focusPhase gamma (Focused left) (Focused (var@(x, SVar (Discharged ty g
               let (vars, _) = unzip varsAndGrades
               let constrPat = PConstr ns () False cName (map (PVar ns () False) vars)
 
-              (t, delta, subst) <- gSynthInner focusPhase gamma' (Focused omega') goal 
+              (t, delta, subst) <- gSynthInner focusPhase (var:gamma') (Focused omega') goal 
 
               (delta', grade_si) <- foldM (\(delta', mGrade) dVar@(dName, SVar (Discharged ty grade_s) dSInfo) -> 
                 case lookup dName varsAndGrades of 
