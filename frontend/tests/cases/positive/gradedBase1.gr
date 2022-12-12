@@ -1,7 +1,7 @@
 language GradedBase
 
-id : forall {a : Type} . a ^ 1 -> a
+id : forall {a : Type} . a % 1 -> a
 id x = x
 
-copy : forall {a : Type} . a ^ 2 -> (a, a)
+copy : forall {a : Type} . a % 2 -> (a, a)
 copy x = (x, x)

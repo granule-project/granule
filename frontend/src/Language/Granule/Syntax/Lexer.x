@@ -115,6 +115,7 @@ tokens :-
   "&"                           { \p _ -> TokenBorrow p}
   "#"                           { \p _ -> TokenHash p }
   "⊸"                           { \p _ -> TokenArrow p }
+  "%"                           { \p _ -> TokenPercent p }
 
 {
 
@@ -189,6 +190,7 @@ data Token
   | TokenBorrow AlexPosn
   | TokenCopy AlexPosn
   | TokenHash AlexPosn
+  | TokenPercent AlexPosn
 
   deriving (Eq, Show, Generic)
 

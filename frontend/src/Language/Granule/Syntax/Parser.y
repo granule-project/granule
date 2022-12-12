@@ -99,6 +99,7 @@ import Language.Granule.Utils hiding (mkSpan)
     '.'   { TokenPeriod _ }
     '`'   { TokenBackTick _ }
     '^'   { TokenCaret _ }
+    '%'   { TokenPercent _ }
     '..'  { TokenDotDot _ }
     "\\/" { TokenJoin _ }
     "/\\" { TokenMeet _ }
@@ -330,12 +331,12 @@ Kind :: { Kind }
 
 Type :: { Type }
   : '(' VAR ':' Type ')' '->' Type              { FunTy (Just . mkId . symString $ $2) Nothing $4 $7 }
-  | '(' VAR ':' Type ')' '^' Coeffect '->' Type { FunTy (Just . mkId . symString $ $2) (Just $7) $4 $9 } 
+  | '(' VAR ':' Type ')' '%' Coeffect '->' Type { FunTy (Just . mkId . symString $ $2) (Just $7) $4 $9 } 
   | TyJuxt                                      { $1 }
   | '!' TyAtom                                  { Box (TyCon $ mkId "Many") $2 }
   | '*' TyAtom                                  { Star (TyCon $ mkId "Unique") $2 }
   | Type '->' Type                              { FunTy Nothing Nothing $1 $3 }
-  | Type '^' Coeffect '->' Type                 { FunTy Nothing (Just $3) $1 $5 }
+  | Type '%' Coeffect '->' Type                 { FunTy Nothing (Just $3) $1 $5 }
   | Type '×' Type                               { TyApp (TyApp (TyCon $ mkId ",") $1) $3 }
   | Type '&' Type                               { TyApp (TyApp (TyCon $ mkId "&") $1) $3 }
   | TyAtom '[' Coeffect ']'                     { Box $3 $1 }
