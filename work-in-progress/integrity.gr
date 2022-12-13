@@ -4,7 +4,7 @@ import Bool
 -- all work fine with Levels but I don't know how the theory will change
 -- from using something that isn't strictly a semiring!
 
-private : Int [Hi]
+private : Int [Private]
 private = [1337]
 
 -- as usual, we can hash values of any security level as long as they stay
@@ -13,16 +13,16 @@ private = [1337]
 hash : forall {l : Sec} . Int [l] -> Int [l]
 hash [x] = [x * x * x]
 
-safe : Int [Hi]
+safe : Int [Private]
 safe = hash private
 
 -- but we can't use a high security value in a low security context, so we
 -- can't do the following:
 
-    -- leak : Int [Hi] -> Int [Lo]
+    -- leak : Int [Private] -> Int [Public]
     -- leak [s] = [s]
 
-    -- bad : Int [Lo]
+    -- bad : Int [Public]
     -- bad = leak (hash private)
 
 -- this all relates to the information flow security concept of CONFIDENTIALITY.
@@ -50,39 +50,39 @@ safe = hash private
 --          (1) Who can write to the data. 
 --          (2) Where the data is derived from (in the past, the history of the data)."]
 
-secret : [Trusted] Int
+secret : Int *[Trusted]
 secret = #8675309
 
 -- we can declassify a piece of trusted information at any time, though we can no
 -- longer assure its integrity. this is the 'return' of the relative monad
 
-reveal : [Trusted] Int -> Int [Lo]
-reveal = trustedReturn
+-- reveal : Int *[Trusted] -> Int [Public]
+-- reveal secret : Int [Public]
 
 -- so data being 'trusted' doesn't tell us anything about how it may be used in
 -- the future: it can be Lo or Hi later on - it only tells us it has never been
 -- used in a Lo way, like a Unique thing has never been used in a Many way
 
-ok : Int [Lo]
+ok : Int [Public]
 ok = hash (reveal secret)
 
-alsoOk : Int [Hi]
+alsoOk : Int [Private]
 alsoOk = hash (reveal secret)
 
 -- say we have a function that takes a piece of secure data and checks if
 -- some property holds on it (this one clearly doesn't need to require that
 -- its input is trusted, but we can use our imagination for now)
 
-compare : [Trusted] Int -> Bool [Lo]
+compare : Int *[Trusted] -> Bool [Public]
 compare x = let [y] = reveal x in
     if y == 8675309 then [True] else [False]
 
-easy : Bool [Lo]
+easy : Bool [Public]
 easy = compare secret
 
 -- but what if we can't verify our data has always been trusted?
 
-public : Int [Lo]
+public : Int [Public]
 public = [1234567]
 
 -- much like with uniqueness, we can make a copy of the data which we can
@@ -90,5 +90,5 @@ public = [1234567]
 -- the property we know holds is that no one with low security clearance
 -- has modified the data from the time that the copy was created!
 
-dupe : Bool [Lo]
-dupe = trustedBind compare public
+dupe : Bool [Public]
+dupe = endorse public as x in compare x

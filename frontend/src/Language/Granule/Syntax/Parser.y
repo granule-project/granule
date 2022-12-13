@@ -61,6 +61,7 @@ import Language.Granule.Utils hiding (mkSpan)
     import { TokenImport _ _ }
     language { TokenPragma _ _ }
     clone { TokenCopy _ }
+    endorse { TokenEndorse _ }
     INT   { TokenInt _ _ }
     FLOAT  { TokenFloat _ _}
     VAR    { TokenSym _ _ }
@@ -499,6 +500,13 @@ Expr :: { Expr () () }
       in (mkSpan (getPos $1, getEnd $6)) >>=
         \sp -> return $ App sp () False (App sp () False 
           (Val sp () False (Var () (mkId "uniqueBind"))) 
+          (Val sp () False (Abs () pat mt t2))) t1 }
+
+  | endorse Expr as CopyBind in Expr
+    {% let t1 = $2; (_, pat, mt) = $4; t2 = $6 
+      in (mkSpan (getPos $1, getEnd $6)) >>=
+        \sp -> return $ App sp () False (App sp () False 
+          (Val sp () False (Var () (mkId "trustedBind"))) 
           (Val sp () False (Abs () pat mt t2))) t1 }
 
   | Form

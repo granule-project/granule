@@ -592,14 +592,14 @@ uniquePull
   . (*a, *b) -> *(a, b)
 uniquePull = BUILTIN
 
-trustedReturn
+reveal
   : forall {a : Type}
-  . [Trusted] a -> a [Lo]
-trustedReturn = BUILTIN
+  . a *[Trusted] -> a [Lo]
+reveal = BUILTIN
 
 trustedBind
   : forall {a b : Type}
-  . ([Trusted] a -> b [Lo]) -> a [Lo] -> b [Lo]
+  . (a *[Trusted] -> b [Lo]) -> a [Lo] -> b [Lo]
 trustedBind = BUILTIN
 
 --------------------------------------------------------------------------------
