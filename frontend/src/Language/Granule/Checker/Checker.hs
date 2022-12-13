@@ -487,20 +487,18 @@ checkExpr :: (?globals :: Globals)
 -- Hit an unfilled hole
 checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
   debugM "checkExpr[Hole]" (pretty s <> " : " <> pretty t)
-  st <- get
 
-  let getIdName (Id n _) = n
-  let boundVariables = map fst $ filter (\ (id, _) -> getIdName id `elem` map getIdName vars) ctxt
+  let boundVariables = map fst $ filter (\ (id, _) -> sourceName id `elem` map sourceName vars) ctxt
   let unboundVariables = filter (\ x -> isNothing (lookup x ctxt)) vars
 
   -- elaborated hole
   let hexpr = Hole s t False vars
 
-
   case unboundVariables of
     (v:_) -> throw UnboundVariableError{ errLoc = s, errId = v }
     [] -> do
 
+      -- Running in synthesis mode
       case globalsSynthesise ?globals of
         Just True -> do
           synthedExpr <- do
@@ -515,13 +513,12 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
                     -- This is not a hole we want to synth on
                     else  return hexpr
 
+          st <- get
           let holeVars = map (\id -> (id, id `elem` boundVariables)) (map fst ctxt)
           throw $ HoleMessage s t ctxt (tyVarContext st) holeVars [([], synthedExpr)]
 
         _ -> do
-          case globalsRewriteHoles ?globals of
-            Just True -> do
-              let snd3 (a, b, c) = b
+              st <- get
               let pats = map (second snd3) (typeConstructors st)
               constructors <- mapM (\ (a, b) -> do
                   dc <- mapM (lookupDataConstructor s) b
@@ -675,11 +672,11 @@ checkExpr defs gam pol topLevel tau (App s _ rf e1 e2) = do
 checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
     debugM "checkExpr[Box]" (pretty s <> " : " <> pretty ty)
 
-    unpr <-  
+    unpr <-
       if (CBN `elem` globalsExtensions ?globals)
         then return False
         else case e of
-        App _ _ _ (Val _ _ _ (Var _ i)) _ -> 
+        App _ _ _ (Val _ _ _ (Var _ i)) _ ->
           return $ internalName i `elem` Primitives.unpromotables
         otherwise -> return False
     when unpr (throw $ UnpromotableError{errLoc = s, errTy = ty})
@@ -1221,11 +1218,11 @@ synthExpr defs gam pol (Val s _ rf (Promote _ e)) = do
    -- Synth type of promoted expression
    (t, gam', subst, elaboratedE) <- synthExpr defs gam pol e
 
-   unpr <-  
+   unpr <-
       if (CBN `elem` globalsExtensions ?globals)
         then return False
         else case e of
-        App _ _ _ (Val _ _ _ (Var _ i)) _ -> 
+        App _ _ _ (Val _ _ _ (Var _ i)) _ ->
           return $ internalName i `elem` Primitives.unpromotables
         otherwise -> return False
    when unpr (throw $ UnpromotableError{errLoc = s, errTy = t})
@@ -1239,11 +1236,11 @@ synthExpr defs gam pol (Val s _ rf (Promote _ e)) = do
    let elaborated = Val s finalTy rf (Promote t elaboratedE)
    return (finalTy, gam'', substFinal, elaborated)
 
-{- Necessitation 
+{- Necessitation
 
-. |- e : T 
+. |- e : T
 -----------
-[G] |- *e : *T 
+[G] |- *e : *T
 
 -}
 
@@ -1694,7 +1691,6 @@ joinCtxts s ctxt1 ctxt2 = do
     -- Return the common upper-bound context of ctxt1 and ctxt2
     return (varCtxt, tyVars'')
   where
-    fst3 (a, _, _) = a
     generalise t1 t2 = fst3 <$> mguCoeffectTypes s t1 t2
 
     zipWith3M_ :: Monad m => (a -> b -> c -> m d) -> [a] -> [b] -> [c] -> m [d]

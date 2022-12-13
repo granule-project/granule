@@ -238,7 +238,6 @@ lookupDataConstructor sp constrName = do
 
 lookupPatternMatches :: Span -> Id -> Checker (Maybe [Id])
 lookupPatternMatches sp constrName = do
-  let snd3 (a, b, c) = b
   st <- get
   return $ snd3 <$> lookup constrName (typeConstructors st)
 

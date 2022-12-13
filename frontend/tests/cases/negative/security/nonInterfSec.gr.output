@@ -1,7 +1,6 @@
-[1;1m[31;1mType checking failed: [0m[0mfrontend/tests/cases/negative/security/nonInterfSec.gr:
-[1;1m[31;1mGrading error: [0m[0mfrontend/tests/cases/negative/security/nonInterfSec.gr:5:1:
+Type checking failed: 
+Grading error: frontend/tests/cases/negative/security/nonInterfSec.gr:5:1:
 Public is not approximatable by Private for type Sec
 
-[1;1m[31;1mFalsifiable theorem: [0m[0mfrontend/tests/cases/negative/security/nonInterfSec.gr:8:1:
+Falsifiable theorem: frontend/tests/cases/negative/security/nonInterfSec.gr:8:1:
   When checking `extract`, (1 : Sec) is not approximatable by Private for type Sec
-

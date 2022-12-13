@@ -703,7 +703,4 @@ myReadFloat str =
       ((n, []):_) -> n
       _ -> error "Invalid number"
 
-fst3 (a, b, c) = a
-snd3 (a, b, c) = b
-thd3 (a, b, c) = c
 }
