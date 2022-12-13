@@ -328,7 +328,7 @@ instance Term (Value ev a) where
     hasHole _             = False
 
     isLexicallyAtomic Abs{} = False
-    isLexicallyAtomic (Constr _ _ xs) = null xs
+    isLexicallyAtomic (Constr _ s xs) = null xs || internalName s == ","
     isLexicallyAtomic _     = True
 
 instance Substitutable Value where
@@ -412,6 +412,7 @@ instance Term (Expr v a) where
     hasHole Hole{} = True
 
     isLexicallyAtomic (Val _ _ _ e) = isLexicallyAtomic e
+    isLexicallyAtomic (App _ _ _ (App _ _ _ (Val _ _ _ (Constr _ x _)) t1) t2) = sourceName x == ","
     isLexicallyAtomic _ = False
 
 instance Substitutable Expr where
