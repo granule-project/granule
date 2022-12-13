@@ -116,6 +116,7 @@ tokens :-
   "&"                           { \p _ -> TokenBorrow p}
   "#"                           { \p _ -> TokenHash p }
   "⊸"                           { \p _ -> TokenArrow p }
+  "*{"                          { \p _ -> TokenStar p }
 
 {
 
@@ -191,6 +192,7 @@ data Token
   | TokenCopy AlexPosn
   | TokenEndorse AlexPosn
   | TokenHash AlexPosn
+  | TokenStar AlexPosn
 
   deriving (Eq, Show, Generic)
 

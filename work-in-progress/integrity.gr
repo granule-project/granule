@@ -1,4 +1,4 @@
-import Bool
+data Bool = True | False
 
 -- we're using the Sec semiring here for simplicity - this would probably
 -- all work fine with Levels but I don't know how the theory will change
@@ -50,13 +50,13 @@ safe = hash private
 --          (1) Who can write to the data. 
 --          (2) Where the data is derived from (in the past, the history of the data)."]
 
-secret : Int *[Trusted]
+secret : Int *{Trusted}
 secret = #8675309
 
 -- we can declassify a piece of trusted information at any time, though we can no
 -- longer assure its integrity. this is the 'return' of the relative monad
 
--- reveal : Int *[Trusted] -> Int [Public]
+-- reveal : Int *{Trusted} -> Int [Public]
 -- reveal secret : Int [Public]
 
 -- so data being 'trusted' doesn't tell us anything about how it may be used in
@@ -73,7 +73,7 @@ alsoOk = hash (reveal secret)
 -- some property holds on it (this one clearly doesn't need to require that
 -- its input is trusted, but we can use our imagination for now)
 
-compare : Int *[Trusted] -> Bool [Public]
+compare : Int *{Trusted} -> Bool [Public]
 compare x = let [y] = reveal x in
     if y == 8675309 then [True] else [False]
 

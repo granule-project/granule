@@ -111,6 +111,7 @@ import Language.Granule.Utils hiding (mkSpan)
     '!'   { TokenBang _ }
     '&'   { TokenBorrow _ }
     '#'   { TokenHash _ }
+    '*{'  { TokenStar _ }
 
 %right '∘'
 %right in
@@ -338,8 +339,7 @@ Type :: { Type }
   | Type '×' Type                  { TyApp (TyApp (TyCon $ mkId ",") $1) $3 }
   | Type '&' Type                  { TyApp (TyApp (TyCon $ mkId "&") $1) $3 }
   | TyAtom '[' Coeffect ']'        { Box $3 $1 }
-  | TyAtom '*' '[' Guarantee ']'   { Star $4 $1 }
-  | '[' Guarantee ']' TyAtom       { Star $2 $4 }
+  | TyAtom '*{' Guarantee '}'      { Star $3 $1 }
   | TyAtom '[' ']'                 { Box (TyInfix TyOpInterval (TyGrade (Just extendedNat) 0) infinity) $1 }
   | TyAtom '<' Effect '>'          { Diamond $3 $1 }
   | case Type of TyCases { TyCase $2 $4 }

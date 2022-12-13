@@ -594,12 +594,12 @@ uniquePull = BUILTIN
 
 reveal
   : forall {a : Type}
-  . a *[Trusted] -> a [Lo]
+  . a *{Trusted} -> a [Lo]
 reveal = BUILTIN
 
 trustedBind
   : forall {a b : Type}
-  . (a *[Trusted] -> b [Lo]) -> a [Lo] -> b [Lo]
+  . (a *{Trusted} -> b [Lo]) -> a [Lo] -> b [Lo]
 trustedBind = BUILTIN
 
 --------------------------------------------------------------------------------
