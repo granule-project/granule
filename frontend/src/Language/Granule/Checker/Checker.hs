@@ -524,7 +524,7 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
                   dc <- mapM (lookupDataConstructor s) b
                   let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
                   return (a, sd)) pats
-              (_, cases) <- generateCases s constructors ctxt boundVariables 
+              (_, cases) <- generateCases s constructors ctxt boundVariables
 
               -- If we are in synthesise mode, also try to synthesise a
               -- term for each case split goal *if* this is also a hole
@@ -533,9 +533,7 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
 
               let holeVars = map (\id -> (id, id `elem` boundVariables)) (map fst ctxt)
               throw $ HoleMessage s t ctxt (tyVarContext st) holeVars casesWithHoles
-            _ -> do
-              let holeVars = map (\id -> (id, id `elem` boundVariables)) (map fst ctxt)
-              throw $ HoleMessage s t ctxt (tyVarContext st) holeVars [([], hexpr)]
+
 
 -- Checking of constants
 checkExpr _ _ _ _ ty@(TyCon c) (Val s _ rf (NumInt n))   | internalName c == "Int" = do
