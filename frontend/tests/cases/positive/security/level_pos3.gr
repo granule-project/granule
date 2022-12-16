@@ -1,0 +1,9 @@
+language SecurityLevels
+
+data List a where
+  Nil : List a;
+  Cons : a → List a → List a
+
+incr : ∀ { l : Level } . Int [l] → List (Int [l]) → List (Int [l])
+incr [i] Nil = Nil;
+incr [i] (Cons [car] cdr) = Cons [car + i] (incr [i] cdr)
