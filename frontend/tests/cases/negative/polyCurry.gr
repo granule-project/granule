@@ -1,0 +1,4 @@
+--- curry converts an uncurried function to a curried function
+curry : forall {a : Type, b : Type, c : Type} .
+        (a × b -> c) -> a -> b -> c
+curry f x y = f (y, x)
