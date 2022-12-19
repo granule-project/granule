@@ -1,2 +1,2 @@
 and1 : forall {a : Type, b : Type} .  (a, b [0]) -> a
-and1 (y, [u]) = y
+and1 (x1, [u]) = x1
