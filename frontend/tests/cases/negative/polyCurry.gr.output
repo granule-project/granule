@@ -1,3 +1,4 @@
-Type checking failed: 
-Unification failed: frontend/tests/cases/negative/polyCurry.gr:4:15:
-Cannot unify universally quantified type variable `b` of kind `Type` with `a`
+Checking frontend/tests/cases/negative/polyCurry.gr...
+Type checking failed: frontend/tests/cases/negative/polyCurry.gr:
+Type error: frontend/tests/cases/negative/polyCurry.gr:4:15:
+Expected `(b, a) -> c` but got `(a, b) -> c`

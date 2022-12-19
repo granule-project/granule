@@ -1,3 +1,4 @@
-Type checking failed: 
+Checking frontend/tests/cases/negative/multirefinement.gr...
+Type checking failed: frontend/tests/cases/negative/multirefinement.gr:
 Impossible pattern match: frontend/tests/cases/negative/multirefinement.gr:2:1:
 Pattern match in an equation of `foo` is impossible as it implies the unsatisfiable condition (0 > 0)
