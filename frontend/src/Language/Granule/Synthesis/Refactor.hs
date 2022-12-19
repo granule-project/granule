@@ -40,6 +40,9 @@ bubbleUpPatterns gradedVars (App s a b (Val s' a' b' (Abs s'' p mt e)) (Val s3 a
   in
     (pats', App s a b (Val s' a' b' (Abs s'' p mt e')) (Val s3 a3 b3 (Var a4 x)))
 
+-- Fold away case expressions
+bubbleUpPatterns gradedVars (Case _ _ _ (Val _ _ _ (Var _ name)) [(p, expr)]) pats =
+  bubbleUpPatterns gradedVars expr (replaceInPats pats name p)
 
 bubbleUpPatterns _ e pats = (pats, e)
 
