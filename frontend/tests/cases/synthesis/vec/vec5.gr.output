@@ -1,2 +1,2 @@
 vec5 : forall {a : Type, b : Type} . (a -> b) [5] -> ((((a, a), a), a), a) -> ((((b, b), b), b), b)
-vec5 [z] ((((x9, x10), x8), p), v) = ((((z x10, z v), z p), z x8), z x9)
+vec5 [z] ((((x9, x10), x8), x6), x4) = ((((z x9, z x8), z x6), z x4), z x10)
