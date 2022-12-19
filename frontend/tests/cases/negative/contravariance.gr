@@ -1,3 +1,6 @@
 cofmap : forall {a : Type, b : Type, c : Type} .
          (a -> b) -> (b -> c) -> (a -> c)
 cofmap f g = f . g
+-- f : a -> b
+-- g : b -> c
+-- therefore we should not be able to do `g . f`
