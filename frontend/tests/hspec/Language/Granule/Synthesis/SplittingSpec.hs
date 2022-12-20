@@ -25,19 +25,19 @@ spec = let ?globals = mempty in do
     -- not : Bool → Bool
     -- not x = {! x !}
     it "Boolean not function" $ do
-      res <- runSplitter (FunTy Nothing (TyCon boolId) (TyCon boolId)) boolDataCons boolTyCons []  [(xId, Linear (TyCon boolId))] [xId]
+      res <- runSplitter (FunTy Nothing Nothing (TyCon boolId) (TyCon boolId)) boolDataCons boolTyCons []  [(xId, Linear (TyCon boolId))] [xId]
       res `shouldBe` ([xId], [[PConstr nullSpan () False falseId []], [PConstr nullSpan () False trueId []]])
 
     -- not : Bool → Bool
     -- not x = {! x !}
     it "Empty hole" $ do
-      res <- runSplitter (FunTy Nothing (TyCon boolId) (TyCon boolId)) boolDataCons boolTyCons []  [(xId, Linear (TyCon boolId))] []
+      res <- runSplitter (FunTy Nothing Nothing (TyCon boolId) (TyCon boolId)) boolDataCons boolTyCons []  [(xId, Linear (TyCon boolId))] []
       res `shouldBe` ([xId], [[PVar nullSpan () False xId]])
 
     -- i : ∀ { a : Type } . a → a
     -- i x = {! x !}
     it "Polymorphic identity" $ do
-      res <- runSplitter (FunTy Nothing (TyVar aId) (TyVar aId)) [] [] [] [(xId, Linear (TyVar aId))] [xId]
+      res <- runSplitter (FunTy Nothing Nothing (TyVar aId) (TyVar aId)) [] [] [] [(xId, Linear (TyVar aId))] [xId]
       res `shouldBe` ([xId], [[PVar nullSpan () False xId]])
 
 boolId, xId, aId, trueId, falseId :: Id

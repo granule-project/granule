@@ -374,6 +374,12 @@ compileCoeffect (TyCon name) (TyCon (internalName -> "Sec")) _ = do
   case internalName name of
     "Hi" -> return (SSec hiRepresentation, sTrue)
     "Lo" -> return (SSec loRepresentation, sTrue)
+    "Private" -> if not (SecurityLevels `elem` globalsExtensions ?globals)
+                   then return (SSec hiRepresentation, sTrue)
+                   else error $ "Cannot compile Private as a Sec semiring"
+    "Public" -> if not (SecurityLevels `elem` globalsExtensions ?globals)
+                   then return (SSec loRepresentation, sTrue)
+                   else error $ "Cannot compile Public as a Sec semiring"
     c    -> error $ "Cannot compile " <> show c <> " as a Sec semiring"
 
 -- TODO: I think the following two cases are deprecatd: (DAO 12/08/2019)

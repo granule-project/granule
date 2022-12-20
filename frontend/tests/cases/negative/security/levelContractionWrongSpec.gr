@@ -1,3 +1,4 @@
+language SecurityLevels
 -- Should fail because Private + Public = Public
 
 foo : Int [Private] → Int

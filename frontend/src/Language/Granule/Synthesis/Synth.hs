@@ -1244,7 +1244,6 @@ synthesise defs resourceScheme gamma omega goalTy = do
   let gradeOnRule = fromMaybe False (globalsGradeOnRule ?globals)
   let initialGrade = if gradeOnRule then Just (TyGrade Nothing 1)  else Nothing
   relevantConstructors <- do
-      let snd3 (a, b, c) = b
       st <- get
       let pats = map (second snd3) (typeConstructors st)
       mapM (\ (a, b) -> do

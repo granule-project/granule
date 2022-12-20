@@ -735,7 +735,7 @@ builtIns =
   , (mkId "uniqueBind",    Ext () $ PrimitiveClosure uniqueBind)
   , (mkId "uniquePush",    Ext () $ Primitive uniquePush)
   , (mkId "uniquePull",    Ext () $ Primitive uniquePull)
-  , (mkId "trustedReturn",  Ext () $ Primitive trustedReturn)
+  , (mkId "reveal",  Ext () $ Primitive reveal)
   , (mkId "trustedBind",    Ext () $ PrimitiveClosure trustedBind)
   , (mkId "newFloatArray",  Ext () $ Primitive newFloatArray)
   , (mkId "lengthFloatArray",  Ext () $ Primitive lengthFloatArray)
@@ -863,9 +863,9 @@ builtIns =
              (Val nullSpan () False f)
              (Val nullSpan () False (Nec () v)))
 
-    trustedReturn :: RValue -> IO RValue
-    trustedReturn (Nec () v) = return $ Promote () v
-    trustedReturn v = error $ "Bug in Granule. Can't reveal a public: " <> prettyDebug v
+    reveal :: RValue -> IO RValue
+    reveal (Nec () v) = return $ Promote () v
+    reveal v = error $ "Bug in Granule. Can't reveal a public: " <> prettyDebug v
 
     trustedBind :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
     trustedBind ctxt f = return $ Ext () $ Primitive $ \(Promote () v) -> return $

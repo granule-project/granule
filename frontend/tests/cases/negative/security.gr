@@ -8,7 +8,7 @@ notALeak [x] = [0]
 secret : Int [Private]
 secret = [1234]
 
-hash : ∀ {l : Level} . Int [l] → Int [l]
+hash : ∀ {l : Sec} . Int [l] → Int [l]
 hash [x] = [x + x]
 
 -- If `main` was of type `Int [Public]`, this wouldn't type check, i.e. the secret

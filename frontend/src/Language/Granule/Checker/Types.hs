@@ -10,7 +10,7 @@
 module Language.Granule.Checker.Types where
 
 import Control.Monad.State.Strict
-import Data.List (sortBy)
+import Data.List (sortBy, sort)
 
 import Language.Granule.Checker.Effects
 import Language.Granule.Checker.Monad
@@ -144,7 +144,16 @@ equalTypesRelatedCoeffectsInner s rel fTy1@(FunTy _ _ t1 t2) fTy2@(FunTy _ _ t1'
 
 equalTypesRelatedCoeffectsInner _ _ (TyCon con1) (TyCon con2) _ _ _
   | internalName con1 /= "Pure" && internalName con2 /= "Pure" =
-  return (con1 == con2, [])
+
+    -- Some slightly ad-hoc type synonym work here:
+    -- if SecurityLevels is off then Lo = Public and Hi = Private
+    if not (SecurityLevels `elem` globalsExtensions ?globals)
+      then if sort [internalName con1, internalName con2] == ["Lo", "Public"]
+            || sort [internalName con1, internalName con2] == ["Hi", "Private"]
+            then return (True, [])
+            else return (con1 == con2, [])
+    else
+      return (con1 == con2, [])
 
 equalTypesRelatedCoeffectsInner s rel (Diamond ef1 t1) (Diamond ef2 t2) _ sp Types = do
   debugM "equalTypesRelatedCoeffectsInner (diamond)" $ "grades " <> show ef1 <> " and " <> show ef2

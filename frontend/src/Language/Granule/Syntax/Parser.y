@@ -61,6 +61,7 @@ import Language.Granule.Utils hiding (mkSpan)
     import { TokenImport _ _ }
     language { TokenPragma _ _ }
     clone { TokenCopy _ }
+    endorse { TokenEndorse _ }
     INT   { TokenInt _ _ }
     FLOAT  { TokenFloat _ _}
     VAR    { TokenSym _ _ }
@@ -111,6 +112,7 @@ import Language.Granule.Utils hiding (mkSpan)
     '!'   { TokenBang _ }
     '&'   { TokenBorrow _ }
     '#'   { TokenHash _ }
+    '*{'  { TokenStar _ }
 
 %right '∘'
 %right in
@@ -330,21 +332,20 @@ Kind :: { Kind }
   : Type                           { $1 }
 
 Type :: { Type }
-  : '(' VAR ':' Type ')' '->' Type              { FunTy (Just . mkId . symString $ $2) Nothing $4 $7 }
+  : '(' VAR ':' Type ')' '->' Type { FunTy (Just . mkId . symString $ $2) Nothing $4 $7 }
   | '(' VAR ':' Type ')' '%' Coeffect '->' Type { FunTy (Just . mkId . symString $ $2) (Just $7) $4 $9 } 
-  | TyJuxt                                      { $1 }
-  | '!' TyAtom                                  { Box (TyCon $ mkId "Many") $2 }
-  | '*' TyAtom                                  { Star (TyCon $ mkId "Unique") $2 }
-  | Type '->' Type                              { FunTy Nothing Nothing $1 $3 }
-  | Type '%' Coeffect '->' Type                 { FunTy Nothing (Just $3) $1 $5 }
-  | Type '×' Type                               { TyApp (TyApp (TyCon $ mkId ",") $1) $3 }
-  | Type '&' Type                               { TyApp (TyApp (TyCon $ mkId "&") $1) $3 }
-  | TyAtom '[' Coeffect ']'                     { Box $3 $1 }
-  | TyAtom '*' '[' Guarantee ']'                { Star $4 $1 }
-  | '[' Guarantee ']' TyAtom                    { Star $2 $4 }
-  | TyAtom '[' ']'                              { Box (TyInfix TyOpInterval (TyGrade (Just extendedNat) 0) infinity) $1 }
-  | TyAtom '<' Effect '>'                       { Diamond $3 $1 }
-  | case Type of TyCases                        { TyCase $2 $4 }
+  | TyJuxt                         { $1 }
+  | '!' TyAtom                     { Box (TyCon $ mkId "Many") $2 }
+  | '*' TyAtom                     { Star (TyCon $ mkId "Unique") $2 }
+  | Type '->' Type                 { FunTy Nothing Nothing $1 $3 }
+  | Type '%' Coeffect '->' Type    { FunTy Nothing (Just $3) $1 $5 }
+  | Type '×' Type                  { TyApp (TyApp (TyCon $ mkId ",") $1) $3 }
+  | Type '&' Type                  { TyApp (TyApp (TyCon $ mkId "&") $1) $3 }
+  | TyAtom '[' Coeffect ']'        { Box $3 $1 }
+  | TyAtom '*{' Guarantee '}'      { Star $3 $1 }
+  | TyAtom '[' ']'                 { Box (TyInfix TyOpInterval (TyGrade (Just extendedNat) 0) infinity) $1 }
+  | TyAtom '<' Effect '>'          { Diamond $3 $1 }
+  | case Type of TyCases { TyCase $2 $4 }
 
 TyApp :: { Type }
  : TyJuxt TyAtom              { TyApp $1 $2 }
@@ -502,6 +503,13 @@ Expr :: { Expr () () }
       in (mkSpan (getPos $1, getEnd $6)) >>=
         \sp -> return $ App sp () False (App sp () False 
           (Val sp () False (Var () (mkId "uniqueBind"))) 
+          (Val sp () False (Abs () pat mt t2))) t1 }
+
+  | endorse Expr as CopyBind in Expr
+    {% let t1 = $2; (_, pat, mt) = $4; t2 = $6 
+      in (mkSpan (getPos $1, getEnd $6)) >>=
+        \sp -> return $ App sp () False (App sp () False 
+          (Val sp () False (Var () (mkId "trustedBind"))) 
           (Val sp () False (Abs () pat mt t2))) t1 }
 
   | Form
@@ -698,7 +706,4 @@ myReadFloat str =
       ((n, []):_) -> n
       _ -> error "Invalid number"
 
-fst3 (a, b, c) = a
-snd3 (a, b, c) = b
-thd3 (a, b, c) = c
 }
