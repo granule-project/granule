@@ -650,8 +650,37 @@ checkExpr defs gam pol topLevel tau
 
 -- Application checking
 checkExpr defs gam pol topLevel tau (App s _ rf e1 e2) | (usingExtension GradedBase) = do
-  -- TODO
-  fail "TODO implement checkExpr App in GradedBase mode"
+-- GRADED BASE
+--
+--      G1 |- e1 : a %r -> b    G2 |- e2 : a
+--  -------------------------------------------- app
+--      G1 + r * G2 |- e1 e2 : b
+--
+
+  debugM "checkExpr[App]-gradedBase" (pretty s <> " : " <> pretty tau)
+
+  -- Firsst check whether `e2` can be promoted
+  unpr <-
+      if (CBN `elem` globalsExtensions ?globals)
+        then return False
+        else case e2 of
+        App _ _ _ (Val _ _ _ (Var _ i)) _ ->
+          return $ internalName i `elem` Primitives.unpromotables
+        otherwise -> return False
+  when unpr (throw $ UnpromotableError{errLoc = s, errTy = ty})
+
+
+  (argTy, gam2, subst2, elaboratedR) <- synthExpr defs gam pol e2
+
+  funTy <- substitute subst2 (FunTy Nothing Nothing argTy tau)
+  (gam1, subst1, elaboratedL) <- checkExpr defs gam pol topLevel funTy e1
+
+  gam <- ctxtPlus s gam1 gam2
+
+  subst <- combineSubstitutions s subst1 subst2
+
+  let elaborated = App s tau rf elaboratedL elaboratedR
+  return (gam, subst, elaborated)
 
 checkExpr defs gam pol topLevel tau (App s _ rf e1 e2) | not (usingExtension GradedBase) = do
     debugM "checkExpr[App]" (pretty s <> " : " <> pretty tau)
