@@ -117,6 +117,7 @@ tokens :-
   "#"                           { \p _ -> TokenHash p }
   "⊸"                           { \p _ -> TokenArrow p }
   "*{"                          { \p _ -> TokenStar p }
+  "%"                           { \p _ -> TokenPercent p }
 
 {
 
