@@ -650,37 +650,52 @@ checkExpr defs gam pol topLevel tau
 
 -- Application checking
 checkExpr defs gam pol topLevel tau (App s _ rf e1 e2) | (usingExtension GradedBase) = do
--- GRADED BASE
---
---      G1 |- e1 : a %r -> b    G2 |- e2 : a
---  -------------------------------------------- app
---      G1 + r * G2 |- e1 e2 : b
---
-
   debugM "checkExpr[App]-gradedBase" (pretty s <> " : " <> pretty tau)
 
-  -- Firsst check whether `e2` can be promoted
-  unpr <-
-      if (CBN `elem` globalsExtensions ?globals)
+-- GRADED BASE
+--
+--      G1 |- e1 => a %r -> b    G2 |- e2 <= a
+--  -------------------------------------------- app
+--      G1 + r * G2 |- e1 e2 <= b
+--
+--  The moding here, with synthesis for e1, is because we need
+--  to know the grade `r`.
+  
+  -- Syntheise type of function
+  (funTy, gam1, subst1, elab_e1) <- synthExpr defs gam pol e1
+
+  case funTy of
+    FunTy _ grade sig tau' -> do
+      -- Check whether `e2` can be promoted (implicitly by this rule)
+      unpr <-
+        if (CBN `elem` globalsExtensions ?globals)
         then return False
-        else case e2 of
-        App _ _ _ (Val _ _ _ (Var _ i)) _ ->
-          return $ internalName i `elem` Primitives.unpromotables
-        otherwise -> return False
-  when unpr (throw $ UnpromotableError{errLoc = s, errTy = ty})
+        else return $ not (resourceAllocator e2)
+      when unpr (throw $ UnpromotableError{errLoc = s, errTy = sig })
 
+      -- Check the return types match
+      (eqT, _, substTy) <- equalTypes s tau tau'
+      unless eqT $ throw TypeError{ errLoc = s, tyExpected = tau, tyActual = tau' }
 
-  (argTy, gam2, subst2, elaboratedR) <- synthExpr defs gam pol e2
+      -- Check the argument against `sig`
+      (gam2, subst2, elab_e2) <- checkExpr defs gam pol topLevel sig e1
 
-  funTy <- substitute subst2 (FunTy Nothing Nothing argTy tau)
-  (gam1, subst1, elaboratedL) <- checkExpr defs gam pol topLevel funTy e1
+      let r = case grade of
+                Just r  -> r
+                -- No grade so implicitly 1 of any semiring
+                Nothing -> TyGrade Nothing 1
 
-  gam <- ctxtPlus s gam1 gam2
+      -- Multiply the context
+      (scaled_gam2, subst2') <- ctxtMult s r gam2
+      gam_out <- ctxtPlus s gam1 scaled_gam2
 
-  subst <- combineSubstitutions s subst1 subst2
+      -- Output
+      substFinal <- combineManySubstitutions s [subst1, substTy, subst2, subst2']
+      let elaborated = App s tau rf elab_e1 elab_e2
+      return (gam_out, substFinal, elaborated)
 
-  let elaborated = App s tau rf elaboratedL elaboratedR
-  return (gam, subst, elaborated)
+    _ -> throw LhsOfApplicationNotAFunction{ errLoc = s, errTy = funTy }
+
 
 checkExpr defs gam pol topLevel tau (App s _ rf e1 e2) | not (usingExtension GradedBase) = do
     debugM "checkExpr[App]" (pretty s <> " : " <> pretty tau)
@@ -1226,7 +1241,7 @@ synthExpr defs gam pol (App s _ rf e e') = do
          let elaborated = App s tau rf elaboratedL elaboratedR
          return (tau, gamNew, subst, elaborated)
 
-      -- 
+      -- TODO: Graded base, complete here
       -- Taking this out for now 
       -- (FunTy _ grade sig tau) | usingExtension GradedBase -> do
 
