@@ -673,7 +673,7 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
     unpr <-
       if (CBN `elem` globalsExtensions ?globals)
         then return False
-        else return $ not (resourceAllocator e)
+        else return $ resourceAllocator e
     when unpr (throw $ UnpromotableError{errLoc = s, errTy = ty})
 
     -- Checker the expression being promoted
