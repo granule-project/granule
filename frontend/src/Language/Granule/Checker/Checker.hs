@@ -649,7 +649,7 @@ checkExpr defs gam pol topLevel tau
         throw $ TypeError { errLoc = s, tyExpected = TyCon $ mkId "DFloat", tyActual = tau }
 
 -- Application checking
-checkExpr defs gam pol topLevel tau (App s _ rf e1 e2) | (usingExtension GradedBase) = do
+checkExpr defs gam pol topLevel tau (App s a rf e1 e2) | (usingExtension GradedBase) = do
   debugM "checkExpr[App]-gradedBase" (pretty s <> " : " <> pretty tau)
 
 -- GRADED BASE
@@ -662,40 +662,12 @@ checkExpr defs gam pol topLevel tau (App s _ rf e1 e2) | (usingExtension GradedB
 --  to know the grade `r`.
   
   -- Syntheise type of function
-  (funTy, gam1, subst1, elab_e1) <- synthExpr defs gam pol e1
+  (tau', gam, subst, elab) <- synthExpr defs gam pol (App s a rf e1 e2) 
+  -- Check the return types match
+  (eqT, _, substTy) <- equalTypes s tau tau'
+  unless eqT $ throw TypeError{ errLoc = s, tyExpected = tau, tyActual = tau' }
 
-  case funTy of
-    FunTy _ grade sig tau' -> do
-      -- Check whether `e2` can be promoted (implicitly by this rule)
-      unpr <-
-        if (CBN `elem` globalsExtensions ?globals)
-        then return False
-        else return $ not (resourceAllocator e2)
-      when unpr (throw $ UnpromotableError{errLoc = s, errTy = sig })
-
-      -- Check the return types match
-      (eqT, _, substTy) <- equalTypes s tau tau'
-      unless eqT $ throw TypeError{ errLoc = s, tyExpected = tau, tyActual = tau' }
-
-      -- Check the argument against `sig`
-      (gam2, subst2, elab_e2) <- checkExpr defs gam pol topLevel sig e1
-
-      let r = case grade of
-                Just r  -> r
-                -- No grade so implicitly 1 of any semiring
-                Nothing -> TyGrade Nothing 1
-
-      -- Multiply the context
-      (scaled_gam2, subst2') <- ctxtMult s r gam2
-      gam_out <- ctxtPlus s gam1 scaled_gam2
-
-      -- Output
-      substFinal <- combineManySubstitutions s [subst1, substTy, subst2, subst2']
-      let elaborated = App s tau rf elab_e1 elab_e2
-      return (gam_out, substFinal, elaborated)
-
-    _ -> throw LhsOfApplicationNotAFunction{ errLoc = s, errTy = funTy }
-
+  return (gam, subst, elab)
 
 checkExpr defs gam pol topLevel tau (App s _ rf e1 e2) | not (usingExtension GradedBase) = do
     debugM "checkExpr[App]" (pretty s <> " : " <> pretty tau)
@@ -726,7 +698,7 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
     unpr <-
       if (CBN `elem` globalsExtensions ?globals)
         then return False
-        else return $ not (resourceAllocator e)
+        else return $ resourceAllocator e
     when unpr (throw $ UnpromotableError{errLoc = s, errTy = ty})
 
     -- Checker the expression being promoted
@@ -1223,13 +1195,13 @@ synthExpr defs gam pol
   return (scaleTyApplied, weakenedGhostVariableContext, [], elab)
 
 -- Application
-synthExpr defs gam pol (App s _ rf e e') = do
+synthExpr defs gam pol (App s _ rf e e') | not (usingExtension GradedBase) = do
     debugM "synthExpr[App]" (pretty s)
     (fTy, gam1, subst1, elaboratedL) <- synthExpr defs gam pol e
 
     case fTy of
       -- Got a function type for the left-hand side of application
-      (FunTy _ grade sig tau) | not (usingExtension GradedBase) -> do
+      (FunTy _ _ sig tau) -> do
          (gam2, subst2, elaboratedR) <- checkExpr defs gam (flipPol pol) False sig e'
          gamNew <- ctxtPlus s gam1 gam2
 
@@ -1241,13 +1213,50 @@ synthExpr defs gam pol (App s _ rf e e') = do
          let elaborated = App s tau rf elaboratedL elaboratedR
          return (tau, gamNew, subst, elaborated)
 
-      -- TODO: Graded base, complete here
-      -- Taking this out for now 
-      -- (FunTy _ grade sig tau) | usingExtension GradedBase -> do
-
          -- Not a function type
       t -> throw LhsOfApplicationNotAFunction{ errLoc = s, errTy = fTy }
 
+-- Application 
+-- GRADED BASE
+
+synthExpr defs gam pol (App s _ rf e1 e2) | usingExtension GradedBase = do
+  debugM "synthExpr[App-graded-base]" (pretty s)
+
+--
+--      G1 |- e1 => a %r -> b    G2 |- e2 <= a
+--  -------------------------------------------- app
+--      G1 + r * G2 |- e1 e2 => b
+--
+  -- Syntheise type of function
+  (funTy, gam1, subst1, elab_e1) <- synthExpr defs gam pol e1
+
+  case funTy of
+    FunTy _ grade sig tau -> do
+      -- Check whether `e2` can be promoted (implicitly by this rule)
+      unpr <-
+        if (CBN `elem` globalsExtensions ?globals)
+        then return False
+        else return $ resourceAllocator e2
+      when unpr (throw $ UnpromotableError{errLoc = s, errTy = sig })
+
+      -- Check the argument against `sig`
+      (gam2, subst2, elab_e2) <- checkExpr defs gam (flipPol pol) False sig e1
+
+      let r = case grade of
+                Just r  -> r
+                -- No grade so implicitly 1 of any semiring
+                Nothing -> TyGrade Nothing 1
+
+      -- Multiply the context
+      (scaled_gam2, subst2') <- ctxtMult s r gam2
+      gam_out <- ctxtPlus s gam1 scaled_gam2
+
+      -- Output
+      substFinal <- combineManySubstitutions s [subst1, subst2, subst2']
+      let elaborated = App s tau rf elab_e1 elab_e2
+      return (tau, gam_out, substFinal, elaborated)
+
+    _ -> throw LhsOfApplicationNotAFunction{ errLoc = s, errTy = funTy }
 
 {- Promotion
 
