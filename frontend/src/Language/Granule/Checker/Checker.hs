@@ -711,10 +711,7 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
     unpr <-
       if (CBN `elem` globalsExtensions ?globals)
         then return False
-        else case e of
-        App _ _ _ (Val _ _ _ (Var _ i)) _ ->
-          return $ internalName i `elem` Primitives.unpromotables
-        otherwise -> return False
+        else return $ not (resourceAllocator e)
     when unpr (throw $ UnpromotableError{errLoc = s, errTy = ty})
 
     -- Checker the expression being promoted
@@ -2090,3 +2087,21 @@ programSynthesise ctxt vars ty = do
     ((_, _, _):_) ->
       case last synRes of
         (t, _, _) -> return t
+
+-- Classified those expressions which are resource allocators
+resourceAllocator :: Expr a t -> Bool
+resourceAllocator (Val _ _ _ (Var _ p)) =
+    internalName p `elem` Primitives.unpromotables
+resourceAllocator (Val _ _ _ (Promote _ e)) =
+    resourceAllocator e
+resourceAllocator (App _ _ _ e1 e2) =
+    resourceAllocator e1 || resourceAllocator e2
+resourceAllocator (AppTy _ _ _ e _) =
+    resourceAllocator e
+resourceAllocator (Binop _ _ _ _ e1 e2) =
+    resourceAllocator e1 || resourceAllocator e2
+resourceAllocator (Case _ _ _ eg cases) =
+    resourceAllocator eg || any (resourceAllocator . snd) cases
+resourceAllocator (TryCatch _ _ _ e1 _ _ e2 e3) =
+    resourceAllocator e1 || resourceAllocator e2 || resourceAllocator e3
+resourceAllocator _ = False
