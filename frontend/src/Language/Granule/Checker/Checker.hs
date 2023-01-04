@@ -1240,7 +1240,7 @@ synthExpr defs gam pol (App s _ rf e1 e2) | usingExtension GradedBase = do
       when unpr (throw $ UnpromotableError{errLoc = s, errTy = sig })
 
       -- Check the argument against `sig`
-      (gam2, subst2, elab_e2) <- checkExpr defs gam (flipPol pol) False sig e1
+      (gam2, subst2, elab_e2) <- checkExpr defs gam (flipPol pol) False sig e2
 
       let r = case grade of
                 Just r  -> r
