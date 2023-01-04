@@ -149,7 +149,7 @@ checkTyCon d@(DataDecl sp name tyVars kindAnn ds)
     ids = map dataConstrId ds -- the IDs of data constructors
     tyConKind = mkKind (map snd tyVars)
     mkKind [] = case kindAnn of Just k -> k; Nothing -> Type 0 -- default to `Type`
-    mkKind (v:vs) = FunTy Nothing (Just (TyGrade Nothing 1)) v (mkKind vs)
+    mkKind (v:vs) = FunTy Nothing Nothing v (mkKind vs)
 
 checkDataCons :: (?globals :: Globals) => DataDecl -> Checker ()
 checkDataCons (DataDecl sp name tyVars k dataConstrs) = do
@@ -553,8 +553,56 @@ checkExpr _ _ _ _ ty@(TyCon c) (Val s _ rf (NumFloat n)) | internalName c == "DF
   return (usedGhostVariableContext, [], elaborated)
 
 checkExpr defs gam pol _ ty@(FunTy _ grade sig tau) (Val s _ rf (Abs _ p t e)) | usingExtension GradedBase = do
-  -- TODO:
-  fail "checkExpr FunTy not implemented for graded base"
+  debugM "checkExpr[FunTy-graded base]" (pretty s <> " : " <> pretty ty)
+  -- If an explicit signature on the lambda was given, then check
+  -- it confirms with the type being checked here
+
+  (tau', subst1) <- case t of
+    Nothing -> return (tau, [])
+    Just t' -> do
+      (eqT, unifiedType, subst) <- equalTypes s sig t'
+      unless eqT $ throw TypeError{ errLoc = s, tyExpected = sig, tyActual = t' }
+      return (tau, subst)
+
+  newConjunct
+
+  -- Get the type of the grade (if there is a grade)
+  (gradeAndType, subst0) <-
+      case grade of
+          Nothing -> do
+            one <- generatePolymorphicGrade1 s
+            return (Just one, [])
+          Just r -> do
+            (t, subst0, _) <- synthKind s r
+            return (Just (r, t), subst0)
+
+  (bindings, localVars, subst, elaboratedP, _) <- ctxtFromTypedPattern' gradeAndType s InCase sig p NotFull
+  debugM "binding from lam" $ pretty bindings
+
+  pIrrefutable <- isIrrefutable s sig p
+  if pIrrefutable then do
+    -- Check the body in the extended context
+    tau'' <- substitute subst tau'
+
+    newConjunct
+
+    (gam', subst2, elaboratedE) <- checkExpr defs (bindings <> gam) pol False tau'' e
+    -- Check linearity of locally bound variables
+    case checkLinearity bindings gam' of
+       [] -> do
+          subst <- combineManySubstitutions s [subst, subst0, subst1, subst2]
+
+          -- Locally we should have this property (as we are under a binder)
+          ctxtApprox s (gam' `intersectCtxts` bindings) bindings
+
+          concludeImplication s localVars
+
+          let elaborated = Val s ty rf (Abs ty elaboratedP t elaboratedE)
+
+          return (gam' `subtractCtxt` bindings, subst, elaborated)
+
+       (p:ps) -> illLinearityMismatch s (p:|ps)
+  else throw RefutablePatternError{ errLoc = s, errPat = p }
 
 checkExpr defs gam pol _ ty@(FunTy _ Nothing sig tau) (Val s _ rf (Abs _ p t e)) = do
   debugM "checkExpr[FunTy]" (pretty s <> " : " <> pretty ty)

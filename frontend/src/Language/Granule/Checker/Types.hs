@@ -53,6 +53,38 @@ data SpecIndicator = FstIsSpec | SndIsSpec | PatternCtxt
 
 data Mode = Types | Effects deriving Show
 
+-- Abstracted equality/relation on grades
+relGrades :: (?globals :: Globals)
+  => Span -> Coeffect -> Coeffect
+  -- Explain how coeffects should be related by a solver constraint
+  -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
+  -> Checker Substitution
+relGrades s c c' rel = do
+  -- Unify the coeffect kinds of the two coeffects
+  (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c c'
+
+  -- Add constraint for the coeffect (using ^op for the ordering compared with the order of equality)
+  c' <- substitute subst c'
+  c  <- substitute subst c
+  kind <- substitute subst kind
+  addConstraint (rel s (inj2 c') (inj1 c) kind)
+
+  -- Create a substitution if we can (i.e., if this is an equality and one grade is a variable)
+  -- as this typically greatly improves error messages and repl interaction
+  let substExtra =
+       if isEq (rel s undefined undefined undefined)
+          then
+            case c of
+              TyVar v -> [(v, SubstT c')]
+              _ -> case c' of
+                    TyVar v -> [(v, SubstT c)]
+                    _       -> []
+          else
+            []
+  
+  substFinal <- combineManySubstitutions s [subst, substExtra]
+  return substFinal
+
 {- | Check whether two types are equal, and at the same time
      generate (in)equality constraints and perform unification.
 
@@ -130,16 +162,28 @@ equalTypesRelatedCoeffectsInner :: (?globals :: Globals)
 equalTypesRelatedCoeffectsInner s rel t1 t2 _ _ _ | t1 == t2 =
   return (True, [])
 
-equalTypesRelatedCoeffectsInner s rel fTy1@(FunTy _ _ t1 t2) fTy2@(FunTy _ _ t1' t2') _ sp mode = do
+equalTypesRelatedCoeffectsInner s rel fTy1@(FunTy _ grade t1 t2) fTy2@(FunTy _ grade' t1' t2') _ sp mode = do
   debugM "equalTypesRelatedCoeffectsInner (funTy left)" ""
   -- contravariant position (always approximate)
   (eq1, u1) <- equalTypesRelatedCoeffects s ApproximatedBy t1' t1 (flipIndicator sp) mode
+  
    -- covariant position (depends: is not always over approximated)
   t2 <- substitute u1 t2
   t2' <- substitute u1 t2'
   debugM "equalTypesRelatedCoeffectsInner (funTy right)" (pretty t2 <> " == " <> pretty t2')
   (eq2, u2) <- equalTypesRelatedCoeffects s rel t2 t2' sp mode
-  unifiers <- combineSubstitutions s u1 u2
+
+  -- grade relation if in GradedBase
+  subst <- 
+    if (usingExtension GradedBase) then
+      case (grade, grade') of
+        (Just r, Just r')  -> relGrades s r r' rel
+        (Nothing, Just r') -> relGrades s (TyGrade Nothing 1) r' rel
+        (Just r, Nothing)  -> relGrades s r (TyGrade Nothing 1) rel
+        (Nothing, Nothing) -> return []
+      else return []
+
+  unifiers <- combineManySubstitutions s [u1, u2, subst]
   return (eq1 && eq2, unifiers)
 
 equalTypesRelatedCoeffectsInner _ _ (TyCon con1) (TyCon con2) _ _ _
@@ -172,31 +216,13 @@ equalTypesRelatedCoeffectsInner s rel x@(Box c t) y@(Box c' t') k sp Types = do
   -- Debugging messages
   debugM "equalTypesRelatedCoeffectsInner (box)" $ "grades " <> show c <> " and " <> show c' <> ""
 
-  -- Unify the coeffect kinds of the two coeffects
-  (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c c'
-
-  -- Add constraint for the coeffect (using ^op for the ordering compared with the order of equality)
-  c' <- substitute subst c'
-  c  <- substitute subst c
-  kind <- substitute subst kind
-  addConstraint (rel s (inj2 c') (inj1 c) kind)
-
-  -- Create a substitution if we can (i.e., if this is an equality and one grade is a variable)
-  -- as this typically greatly improves error messages and repl interaction
-  let substExtra =
-       if isEq (rel s undefined undefined undefined)
-          then
-            case c of
-              TyVar v -> [(v, SubstT c')]
-              _ -> case c' of
-                    TyVar v -> [(v, SubstT c)]
-                    _       -> []
-          else
-            []
-
+  -- Related the grades
+  subst <- relGrades s c c' rel
+  
+  -- Equailty on the inner types
   (eq, subst') <- equalTypesRelatedCoeffects s rel t t' sp Types
 
-  substU <- combineManySubstitutions s [subst, subst', substExtra]
+  substU <- combineManySubstitutions s [subst, subst']
   return (eq, substU)
 
 equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) _ _ mode | n == m = do

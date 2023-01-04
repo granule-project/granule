@@ -113,7 +113,7 @@ ctxtFromTypedPattern' outerCoeff _ pos t (PWild s _ rf) cons =
 
     --case cons of
       -- Full consumption is allowed here
-    --  Full -> do
+  --  Full -> do
 
         -- If the wildcard appears under one or more [ ] pattern then we must
         -- add a constraint that 0 approaximates the effect of the enclosing
@@ -289,6 +289,10 @@ ctxtFromTypedPattern' _ s _ t p _ = do
     otherwise -> throw $ PatternTypingError { errLoc = s, errPat = p, tyExpected = t }
 
 flattenCoeffects :: (?globals :: Globals) => Span -> Maybe (Coeffect, Type) -> Maybe (Coeffect, Type) -> Checker (Maybe (Coeffect, Type), Substitution)
+flattenCoeffects s Nothing Nothing | usingExtension GradedBase = do
+  one <- generatePolymorphicGrade1 s
+  return (Just one, [])
+  
 flattenCoeffects _ Nothing r = return (r, [])
 flattenCoeffects _ r Nothing = return (r, [])
 flattenCoeffects s (Just (outerCoeff, outerCoeffTy)) (Just (innerCoeff, innerCoeffTy)) = do
