@@ -292,7 +292,7 @@ mTySig t _ k      = return (TySig t k)
 -- Monadic algebra for types
 data TypeFold m a = TypeFold
   { tfTy      :: Int                -> m a
-  , tfFunTy   :: Maybe Id -> Maybe Coeffect -> a -> a -> m a
+  , tfFunTy   :: Maybe Id -> Maybe a -> a -> a -> m a
   , tfTyCon   :: Id                 -> m a
   , tfBox     :: a -> a             -> m a
   , tfDiamond :: a -> a             -> m a
@@ -322,7 +322,8 @@ typeFoldM algebra = go
    go (FunTy v coeff t1 t2) = do
      t1' <- go t1
      t2' <- go t2
-     (tfFunTy algebra) v coeff t1' t2'
+     coeff' <- maybe (return Nothing) (\coeff -> Just <$> go coeff) coeff
+     (tfFunTy algebra) v coeff' t1' t2'
    go (TyCon s) = (tfTyCon algebra) s
    go (Box c t) = do
      c' <- go c
