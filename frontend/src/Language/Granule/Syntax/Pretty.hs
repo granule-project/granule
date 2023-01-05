@@ -312,7 +312,7 @@ instance Pretty Operator where
 ticks :: String -> String
 ticks x = "`" <> x <> "`"
 
-instance Pretty Int where
+instance {-# OVERLAPPABLE #-} Show a => Pretty a where
   pretty = show
 
 instance Pretty Span where
