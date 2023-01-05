@@ -147,9 +147,9 @@ checkTyCon d@(DataDecl sp name tyVars kindAnn ds)
       st{ typeConstructors = (name, (tyConKind, ids, isIndexedDataType d)) : typeConstructors st }
   where
     ids = map dataConstrId ds -- the IDs of data constructors
-    tyConKind = mkKind (map snd tyVars)
+    tyConKind = mkKind tyVars
     mkKind [] = case kindAnn of Just k -> k; Nothing -> Type 0 -- default to `Type`
-    mkKind (v:vs) = FunTy Nothing Nothing v (mkKind vs)
+    mkKind ((id,v):vs) = FunTy (Just id) Nothing v (mkKind vs)
 
 checkDataCons :: (?globals :: Globals) => DataDecl -> Checker ()
 checkDataCons (DataDecl sp name tyVars k dataConstrs) = do
