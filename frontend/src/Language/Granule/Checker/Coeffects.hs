@@ -105,6 +105,8 @@ generatePolymorphicGrade1 s = do
     semiringVarStr <- freshIdentifierBase $ "s[" <> prettyTrace (startPos s) <> "]"
     let semiringVar = mkId semiringVarStr
     -- remember this new kind variable in the kind environment
-    modify (\st -> st { tyVarContext = (semiringVar, (kcoeffect, ForallQ)) : tyVarContext st })
+    -- TODO: [UNIFY/SUBST] Check whether this should really be InstanceQ and not ForallQ
+    -- My understand here is that we want this to be a unification variable.
+    modify (\st -> st { tyVarContext = (semiringVar, (kcoeffect, InstanceQ)) : tyVarContext st })
     -- return the 1 : semiringVar information
     return (TyGrade (Just (TyVar semiringVar)) 1, TyVar semiringVar)
