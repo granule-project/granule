@@ -284,10 +284,14 @@ synthKindWithConfiguration s config (TyApp (TyCon (internalName -> "Set")) t) = 
 synthKindWithConfiguration s config (TyApp t1 t2) = do
   (funK, subst1, t1') <- synthKindWithConfiguration s config t1
   case funK of
-    (FunTy _ _ k1 k2) -> do
+    (FunTy name _ k1 k2) -> do
       (subst2, t2') <- checkKind s t2 k1
-      subst <- combineSubstitutions s subst1 subst2
-      return (k2, subst, TyApp t1' t2')
+      -- Create and apply substitution of t2 for name if there is a name
+      let subst3 = case name of Nothing -> []; Just id -> [(id, SubstT t2)]
+      k2' <- substitute subst3 k2
+      -- Construct output substitution and (specialised) result
+      subst <- combineManySubstitutions s [subst1, subst2, subst3]
+      return (k2', subst, TyApp t1' t2')
     _ -> throw KindError { errLoc = s, errTy = t1, errKL = funK }
 
 -- KChkS_interval
