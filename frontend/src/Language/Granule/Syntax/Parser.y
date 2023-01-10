@@ -61,6 +61,7 @@ import Language.Granule.Utils hiding (mkSpan)
     import { TokenImport _ _ }
     language { TokenPragma _ _ }
     clone { TokenCopy _ }
+    endorse { TokenEndorse _ }
     INT   { TokenInt _ _ }
     FLOAT  { TokenFloat _ _}
     VAR    { TokenSym _ _ }
@@ -110,6 +111,7 @@ import Language.Granule.Utils hiding (mkSpan)
     '!'   { TokenBang _ }
     '&'   { TokenBorrow _ }
     '#'   { TokenHash _ }
+    '*{'  { TokenStar _ }
 
 %right '∘'
 %right in
@@ -337,8 +339,7 @@ Type :: { Type }
   | Type '×' Type                  { TyApp (TyApp (TyCon $ mkId ",") $1) $3 }
   | Type '&' Type                  { TyApp (TyApp (TyCon $ mkId "&") $1) $3 }
   | TyAtom '[' Coeffect ']'        { Box $3 $1 }
-  | TyAtom '*' '[' Guarantee ']'   { Star $4 $1 }
-  | '[' Guarantee ']' TyAtom       { Star $2 $4 }
+  | TyAtom '*{' Guarantee '}'      { Star $3 $1 }
   | TyAtom '[' ']'                 { Box (TyInfix TyOpInterval (TyGrade (Just extendedNat) 0) infinity) $1 }
   | TyAtom '<' Effect '>'          { Diamond $3 $1 }
   | case Type of TyCases { TyCase $2 $4 }
@@ -499,6 +500,13 @@ Expr :: { Expr () () }
       in (mkSpan (getPos $1, getEnd $6)) >>=
         \sp -> return $ App sp () False (App sp () False 
           (Val sp () False (Var () (mkId "uniqueBind"))) 
+          (Val sp () False (Abs () pat mt t2))) t1 }
+
+  | endorse Expr as CopyBind in Expr
+    {% let t1 = $2; (_, pat, mt) = $4; t2 = $6 
+      in (mkSpan (getPos $1, getEnd $6)) >>=
+        \sp -> return $ App sp () False (App sp () False 
+          (Val sp () False (Var () (mkId "trustedBind"))) 
           (Val sp () False (Abs () pat mt t2))) t1 }
 
   | Form
@@ -695,7 +703,4 @@ myReadFloat str =
       ((n, []):_) -> n
       _ -> error "Invalid number"
 
-fst3 (a, b, c) = a
-snd3 (a, b, c) = b
-thd3 (a, b, c) = c
 }

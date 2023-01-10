@@ -1,0 +1,8 @@
+fooa : Int [Lo] → Int [Hi]
+fooa [_] = [42]
+
+bad : Int [Private] → Int [Public]
+bad [x] = [x]
+
+extract : Int [Private] -> Int
+extract [x] = x

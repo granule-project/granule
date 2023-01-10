@@ -1,0 +1,4 @@
+Type checking failed: 
+Falsifiable theorem: frontend/tests/cases/negative/security/levelContractionWrongSpec.gr:5:1:
+  The following constraint associated with `foo` is false:
+	  ((0 : Level) ∨ (Private ∨ (Public * (1 : Level))) ≤ Dunno) ∧ (Public * (1 : Level) ≤ Private)

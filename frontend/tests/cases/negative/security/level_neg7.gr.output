@@ -1,4 +1,4 @@
 Type checking failed: 
-Falsifiable theorem: frontend/tests/cases/negative/level_neg7.gr:4:1:
+Falsifiable theorem: frontend/tests/cases/negative/security/level_neg7.gr:4:1:
   The following constraint associated with `fooa` is false:
 	  ((((0 : Level) ≤ Private)) -> (Public * (1 : Level) ≤ Dunno))

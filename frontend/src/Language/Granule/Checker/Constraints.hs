@@ -263,20 +263,20 @@ class QuantifiableScoped a where
   existentialScoped :: String -> (SBV a -> Symbolic SBool) -> Symbolic SBool
 
 instance QuantifiableScoped Integer where
-  universalScoped v = forAll [v]
-  existentialScoped v = forSome [v]
+  universalScoped v = universal [v]
+  existentialScoped v = existential [v]
 
 instance QuantifiableScoped Bool where
-  universalScoped v = forAll [v]
-  existentialScoped v = forSome [v]
+  universalScoped v = universal [v]
+  existentialScoped v = existential [v]
 
 instance QuantifiableScoped Float where
-  universalScoped v = forAll [v]
-  existentialScoped v = forSome [v]
+  universalScoped v = universal [v]
+  existentialScoped v = existential [v]
 
 instance QuantifiableScoped (RCSet SSetElem) where
-  universalScoped v = forAll [v]
-  existentialScoped v = forSome [v]
+  universalScoped v = universal [v]
+  existentialScoped v = existential [v]
 
 
 -- Compile a constraint into a symbolic bool (SBV predicate)
@@ -374,6 +374,12 @@ compileCoeffect (TyCon name) (TyCon (internalName -> "Sec")) _ = do
   case internalName name of
     "Hi" -> return (SSec hiRepresentation, sTrue)
     "Lo" -> return (SSec loRepresentation, sTrue)
+    "Private" -> if not (SecurityLevels `elem` globalsExtensions ?globals)
+                   then return (SSec hiRepresentation, sTrue)
+                   else error $ "Cannot compile Private as a Sec semiring"
+    "Public" -> if not (SecurityLevels `elem` globalsExtensions ?globals)
+                   then return (SSec loRepresentation, sTrue)
+                   else error $ "Cannot compile Public as a Sec semiring"
     c    -> error $ "Cannot compile " <> show c <> " as a Sec semiring"
 
 -- TODO: I think the following two cases are deprecatd: (DAO 12/08/2019)

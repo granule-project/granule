@@ -1,4 +1,4 @@
 data Either a b = Left a | Right b
 or3 : forall {a b c : Type} . (a -> c) [0..1] -> (b -> c) [0..1] -> (Either a b) -> c
-or3 [u] [v] (Left w) = u w;
-or3 [u] [v] (Right p) = v p
+or3 [u] [v] (Right x6) = v x6;
+or3 [u] [v] (Left x5) = u x5

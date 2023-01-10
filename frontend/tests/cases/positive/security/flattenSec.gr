@@ -1,0 +1,8 @@
+flatten : ∀ {k : Sec, l : Sec} . (Int [k]) [l] → Int [k ∧ l]
+flatten [[x]] = [x]
+
+xbb : (Int [Lo]) [Hi]
+xbb = [[1337]]
+
+xb : Int [Hi]
+xb = flatten [[1337]]

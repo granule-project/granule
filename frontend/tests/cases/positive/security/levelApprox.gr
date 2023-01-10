@@ -1,8 +1,8 @@
+language SecurityLevels
+
 castLevel : ∀ {a : Type} . a [Public] → a [Private]
 castLevel [x] = [x]
 
+-- In the SecuritLevels version of Private, we can do this
 ok : Int [Private] -> Int
 ok [x] = x
-
-approxOk : Int [Public] -> Int
-approxOk = ok

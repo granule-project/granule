@@ -255,7 +255,7 @@ boundVars (NegPred p) = boundVars p
 boundVars (Exists x _ p) = x : boundVars p
 boundVars (Con _) = []
 
-instance (Monad m, MonadFail m) => Freshenable m Pred where
+instance (MonadFail m) => Freshenable m Pred where
   freshen (Conj ps) = do
     ps' <- mapM freshen ps
     return $ Conj ps'

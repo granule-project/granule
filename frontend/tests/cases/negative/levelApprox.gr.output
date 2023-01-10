@@ -1,3 +1,0 @@
-Type checking failed: 
-Falsifiable theorem: frontend/tests/cases/negative/levelApprox.gr:3:1:
-  When checking `castLevel`, private value cannot be moved to level Public * (1 : Level)

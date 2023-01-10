@@ -59,6 +59,19 @@ data Globals = Globals
 data Extension = Base | CBN | NoTopLevelApprox | SecurityLevels
  deriving (Eq, Read, Show)
 
+-- | Given a map from `Extension`s to `a` pick the first
+-- | `a` that matches with an extension in scope. Otherwise
+-- | if there is none give the second parameter as the default
+extensionDependent :: (?globals :: Globals) => [(Extension, a)] -> a -> a
+extensionDependent emap def =
+    aux (globalsExtensions ?globals)
+  where
+    aux [] = def
+    aux (e:es) =
+      case lookup e emap of
+        Just a -> a
+        Nothing -> aux es
+
 -- | Parse valid extension names
 parseExtensions :: String -> Maybe Extension
 parseExtensions xs =
@@ -353,3 +366,13 @@ writeSrcFile file keepOldFile contents = do
       hClose tempHd
       removeFile tempFile
       throwIO e
+
+-- Projections of triples
+fst3 :: (a, b, c) -> a
+fst3 (x, _, _) =  x
+
+snd3 :: (a, b, c) -> b
+snd3 (_, x, _) = x
+
+thd3 :: (a, b, c) -> c
+thd3 (_, _, x) = x

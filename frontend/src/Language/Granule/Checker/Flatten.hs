@@ -208,6 +208,7 @@ flattenable t1 t2
 
     TyCon (internalName -> "Nat")   -> return $ Just (TyInfix TyOpTimes, [], t1)
     TyCon (internalName -> "Level") -> return $ Just (TyInfix TyOpMeet, [], t1)
+    TyCon (internalName -> "Sec") -> return $ Just (TyInfix TyOpMeet, [], t1)
 
     TyApp (TyCon (internalName -> "Interval")) t ->  flattenable t t
 

@@ -6,6 +6,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ImplicitParams #-}
 
 {-# options_ghc -fno-warn-incomplete-uni-patterns #-}
 
@@ -198,7 +199,7 @@ data CheckerState = CS
   deriving (Eq, Show) -- for debugging
 
 -- | Initial checker context state
-initState :: CheckerState
+initState :: (?globals :: Globals) => CheckerState
 initState = CS { uniqueVarIdCounterMap = M.empty
                , uniqueVarIdCounter = 0
                , predicateStack = []
@@ -237,7 +238,6 @@ lookupDataConstructor sp constrName = do
 
 lookupPatternMatches :: Span -> Id -> Checker (Maybe [Id])
 lookupPatternMatches sp constrName = do
-  let snd3 (a, b, c) = b
   st <- get
   return $ snd3 <$> lookup constrName (typeConstructors st)
 

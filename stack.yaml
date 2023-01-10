@@ -1,4 +1,4 @@
-resolver: lts-19.25
+resolver: lts-20.0
 packages:
 - frontend/
 - interpreter/
@@ -11,14 +11,11 @@ packages:
 # (e.g., acme-missiles-0.3)
 extra-deps:
 - ConfigFile-1.1.4
-- text-replace-0.0.0.8
-- sbv-8.17
+- text-replace-0.1.0.2
 - syz-0.2.0.0@sha256:7307acb8f6ae7720e7e235c974281ecee912703c1394ebcac19caf83d70bb492,2345
 - clock-0.8.3
-- optparse-applicative-0.15.1.0
 # Dependencies for language server
 - lsp-1.6.0.0
-- lsp-types-1.6.0.0
 - co-log-core-0.3.1.0
 
 # Override default flag values for local packages and extra-deps
@@ -39,8 +36,14 @@ extra-package-dbs: []
 # arch: x86_64
 #
 # Extra directories used by stack for building
-# extra-include-dirs: [/path/to/dir]
+
+extra-include-dirs:
+- /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/ffi
+
 # extra-lib-dirs: [/path/to/dir]
-#
+
+
+
+
 # Allow a newer minor version of GHC than the snapshot specifies
 # compiler-check: newer-minor

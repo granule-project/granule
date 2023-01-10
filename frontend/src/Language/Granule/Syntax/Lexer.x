@@ -56,7 +56,8 @@ tokens :-
   try                           { \p s -> TokenTry p }
   as                            { \p s -> TokenAs p }
   catch                         { \p s -> TokenCatch p }
-  clone                          { \p s -> TokenCopy p }
+  clone                         { \p s -> TokenCopy p }
+  endorse                       { \p s -> TokenEndorse p }
   ∞                             { \p s -> TokenInfinity p }
   @float                        { \p s -> TokenFloat p s }
   @int                          { \p s -> TokenInt p $ read s }
@@ -115,6 +116,7 @@ tokens :-
   "&"                           { \p _ -> TokenBorrow p}
   "#"                           { \p _ -> TokenHash p }
   "⊸"                           { \p _ -> TokenArrow p }
+  "*{"                          { \p _ -> TokenStar p }
 
 {
 
@@ -188,7 +190,9 @@ data Token
   | TokenBang AlexPosn
   | TokenBorrow AlexPosn
   | TokenCopy AlexPosn
+  | TokenEndorse AlexPosn
   | TokenHash AlexPosn
+  | TokenStar AlexPosn
 
   deriving (Eq, Show, Generic)
 

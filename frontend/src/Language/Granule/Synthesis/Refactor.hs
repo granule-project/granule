@@ -4,23 +4,15 @@ module Language.Granule.Synthesis.Refactor where
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Pattern
-import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Identifiers
 
--- Refactors a definition which contains abstractions in its equations
+-- Refactors an equation which contains abstractions in its equations
 -- by pushing these abstractions into equation patterns
-refactorDef :: Def () Type -> Def () Type
-refactorDef (Def sp id ref (EquationList sp' id' ref' eqns) tyS) =
-  Def sp id ref (EquationList sp' id' ref' (map refactorEqn eqns)) tyS
-
 refactorEqn :: Equation v a -> Equation v a
 refactorEqn (Equation sp name ref annotation pats body) =
   Equation sp name ref annotation newPats newBody
     where
       (newPats, newBody) = bubbleUpPatterns [] body pats
-
-replaceInPats :: [Pattern a] -> Id -> Pattern a -> [Pattern a]
-replaceInPats pats var pat' = map (\pat -> refactorPattern pat var pat') pats
 
 -- Collect patterns and rewrite beta-redexes into richer patterns
 -- (first parameter is used to remember which variables originated from a box and therefore
@@ -47,6 +39,9 @@ bubbleUpPatterns gradedVars (App s a b (Val s' a' b' (Abs s'' p mt e)) (Val s3 a
   in
     (pats', App s a b (Val s' a' b' (Abs s'' p mt e')) (Val s3 a3 b3 (Var a4 x)))
 
+-- Fold away case expressions
+bubbleUpPatterns gradedVars (Case _ _ _ (Val _ _ _ (Var _ name)) [(p, expr)]) pats =
+  bubbleUpPatterns gradedVars expr (replaceInPats pats name p)
 
 bubbleUpPatterns _ e pats = (pats, e)
 
@@ -65,6 +60,8 @@ refactorCaseEqn (Equation sp name ref ant pats body) =
 
 -- Refactors a pattern by traversing to the rewritten variable and replacing
 -- -- the variable with the subpattern.
+replaceInPats :: [Pattern a] -> Id -> Pattern a -> [Pattern a]
+replaceInPats pats var pat' = map (\pat -> refactorPattern pat var pat') pats
 
 -- refactorPattern p v p' replaces the pattern p' for every occurence of v inside of p
 refactorPattern :: Pattern a -> Id -> Pattern a -> Pattern a

@@ -435,7 +435,7 @@ instance Freshenable m Type where
 
       freshenTySig t' _ k = do
         k' <- freshen k
-        return $TySig t' k'
+        return $ TySig t' k'
 
       freshenTyVar v = do
         v' <- lookupVar TypeL v

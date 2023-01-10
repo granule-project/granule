@@ -23,6 +23,11 @@ import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Utils
 
+-- Version of pretty that assumes the default Globals so as not to
+-- propagate globals information around
+prettyTrace :: Pretty t => t -> String
+prettyTrace = let ?globals = mempty in pretty
+
 prettyDebug :: (?globals :: Globals) => Pretty t => t -> String
 prettyDebug x =
   let ?globals = ?globals { globalsDebugging = Just True }
@@ -123,7 +128,7 @@ instance Pretty Type where
 
     pretty (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "&" =
       pretty t1 <> " & " <> pretty t2
-      
+
     pretty (TyApp t1 t2)  =
       pretty t1 <> " " <> prettyNested t2
 
@@ -257,6 +262,9 @@ instance Pretty Id where
 instance Pretty (Value v a) => Pretty (Expr v a) where
   pretty (App _ _ _ (App _ _ _ (Val _ _ _ (Constr _ x _)) t1) t2) | sourceName x == "," =
     "(" <> pretty t1 <> ", " <> pretty t2 <> ")"
+
+  pretty (App _ _ _ (Val _ _ _ (Abs _ x _ e1)) e2) =
+    "let " <> pretty x <> " = " <> pretty e2 <> " in " <> pretty e1
 
   pretty (App _ _ _ e1 e2) =
     prettyNested e1 <> " " <> prettyNested e2

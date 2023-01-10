@@ -1,0 +1,3 @@
+Type checking failed: 
+Type error: frontend/tests/cases/negative/polyCurry.gr:4:15:
+Expected `(b, a) -> c` but got `(a, b) -> c`
