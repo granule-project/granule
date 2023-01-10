@@ -276,7 +276,7 @@ bindToContext :: (Id, (Assumption, Structure Id)) -> Ctxt (Assumption, Structure
 bindToContext var gamma omega True = (gamma, omega ++ [var])
 bindToContext var gamma omega False = (gamma ++ [var], omega)
 
-isDecreasing :: Structure Id -> Bool 
+isDecreasing :: Structure Id -> Bool
 isDecreasing (Dec id) = True
 isDecreasing _ = False
 
@@ -286,7 +286,7 @@ useVar :: (?globals :: Globals)
   => (Id, (Assumption, Structure Id))
   -> Ctxt (Assumption, Structure Id)
   -> ResourceScheme AltOrDefault
-  -> Maybe Type -- Grade on rule style of synthesis 
+  -> Maybe Type -- Grade on rule style of synthesis
   -> Synthesiser (Bool, Ctxt (Assumption, Structure Id), Type)
 -- Subtractive
 useVar (name, (Linear t, _)) gamma Subtractive{} _ = return (True, gamma, t)
@@ -717,7 +717,7 @@ constrIntroHelper (True, allowDef) defs gamma mode grade goalTy@(Forall s binder
 
         (conTyFresh, tyVarsFreshD, substFromFreshening, constraints, coercions') <- freshPolymorphicInstance InstanceQ False con subst
 
-        -- Take the rightmost type of the function type, collecting the arguments along the way 
+        -- Take the rightmost type of the function type, collecting the arguments along the way
         let (conTy'', args) = rightMostFunTy conTyFresh
 
         conTy'' <- substitute coercions' conTy''
@@ -864,7 +864,7 @@ constrElimHelper (allowRSync, allowDef) defs left (var@(x, (a, structure)):right
 
         (conTyFresh, tyVarsFreshD, substFromFreshening, constraints, coercions') <- freshPolymorphicInstance InstanceQ False con subst
 
-        -- Take the rightmost type of the function type, collecting the arguments along the way 
+        -- Take the rightmost type of the function type, collecting the arguments along the way
         let (conTy'', args) = rightMostFunTy conTyFresh
 
         conTy'' <- substitute coercions' conTy''
@@ -898,15 +898,15 @@ constrElimHelper (allowRSync, allowDef) defs left (var@(x, (a, structure)):right
               var <- freshIdentifierBase "x"
               arg' <- substitute subst' arg
 
-        
+
               (structure, local) <- peekChecker $ do
                 (success, spec, subst') <- equalTypes nullSpanNoFile arg' assumptionTy
                 if success then return $ Dec topLevelDef else return $ Arg topLevelDef
 
-              let annotation = case structure of 
+              let annotation = case structure of
                     Right struct -> struct
                     Left _ -> Arg topLevelDef
-              
+
             --  let structure' = case structure of
             --        (Right struct, _) -> struct
             --        (Left _, _) -> Arg topLevelDef
@@ -931,8 +931,8 @@ constrElimHelper (allowRSync, allowDef) defs left (var@(x, (a, structure)):right
           _ ->
             return (False, False, (Nothing, [], []))
       case result of
-        Right (True, structDecr, (pat, assmps, subst)) -> do 
-          
+        Right (True, structDecr, (pat, assmps, subst)) -> do
+
           Synthesiser $ lift $ lift $ lift $ modify (\state ->
               state {
                 structurallyDecreasing = structDecr
@@ -1110,7 +1110,7 @@ defHelper left (def@(x, t):right) gamma  sub@Subtractive{} grade goalTy@(Forall 
       case lookup id delta1 of
         Nothing -> do
           (e2, delta2, sub2, bindings2, sd2) <- synthesiseInner (left++right) False sub delta1 [] grade (Forall nullSpanNoFile binders constraints t1) (False, False, False)
-          if sd2 then do 
+          if sd2 then do
             debugM "defhelper also made a: " (pretty e2)
             debugM "giving me a: " (pretty $ Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTy t) id e1)
             subst <- conv $ combineSubstitutions nullSpanNoFile sub1 sub2
@@ -1202,13 +1202,13 @@ synthesiseInner defs inDereliction resourceScheme gamma omega grade goalTy@(Fora
               `try`
               constrIntroHelper (allowRSync, allowDef) defs (gamma ++ omega) resourceScheme grade goalTy
               `try`
-              defHelper [] defs (gamma ++ omega) resourceScheme grade goalTy 
+              defHelper [] defs (gamma ++ omega) resourceScheme grade goalTy
               )
               `try`
               unboxHelper defs [] omega gamma resourceScheme grade goalTy
               `try`
               constrElimHelper (allowRSync, allowDef) defs [] omega gamma resourceScheme grade goalTy
-        else 
+        else
           unboxHelper defs [] omega gamma resourceScheme grade goalTy
           `try`
           constrElimHelper (allowRSync, allowDef) defs [] omega gamma resourceScheme grade goalTy
@@ -1223,7 +1223,7 @@ synthesiseInner defs inDereliction resourceScheme gamma omega grade goalTy@(Fora
               `try`
               constrIntroHelper (allowRSync, allowDef) defs (gamma ++ omega) resourceScheme grade goalTy
               `try`
-              defHelper [] defs (gamma ++ omega) resourceScheme grade goalTy 
+              defHelper [] defs (gamma ++ omega) resourceScheme grade goalTy
 
        --       `try`
        --       if allowDef then defHelper [] defs startTime (gamma ++ omega) resourceScheme goalTy else none
@@ -1294,7 +1294,7 @@ synthesise defs resourceScheme gamma omega goalTy = do
 -- Run from the checker
 synthesiseProgram :: (?globals :: Globals)
            => Ctxt Type -- Top level definitions to use in synthesis
-           -> Id        -- Top level definition of the current expression being synthesised 
+           -> Id        -- Top level definition of the current expression being synthesised
            -> ResourceScheme AltOrDefault       -- whether the synthesis is in additive mode or not
            -> Ctxt Assumption    -- (unfocused) free variables
            -> Ctxt Assumption    -- focused variables
