@@ -538,7 +538,7 @@ eqGradedProtocolFunction :: (?globals :: Globals)
   -> SpecIndicator
   -> Checker (Bool, Substitution)
 eqGradedProtocolFunction sp rel grad protocolType@(TyApp (TyApp (TyCon c) t) s) (TyApp (TyApp (TyCon c') t') s') ind
-  |  (internalName c == "Send" && internalName c == "Send")
+  |  (internalName c == "Send" && internalName c' == "Send")
   || (internalName c == "Recv" && internalName c' == "Recv") = do
   (eq1, u1) <- equalTypesRelatedCoeffects sp rel (Box grad t) t' ind Types
   s <- substitute u1 s
