@@ -2061,6 +2061,9 @@ checkGuardsForImpossibility s name refinementConstraints = do
   let guardPredicatesStack = head $ guardPredicates st
   debugM "guardPredicatesStack" (pretty $ guardPredicates st)
 
+  -- Convert all universal variables to existential
+  tyVars <- tyVarContextExistential >>= includeOnlyGradeVariables s
+
   -- For each guard predicate
   forM_ guardPredicatesStack $ \((ctxt, predicate), s) -> do
 
