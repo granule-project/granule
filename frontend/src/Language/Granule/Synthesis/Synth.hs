@@ -734,7 +734,7 @@ constrIntroHelper (True, allowDef) defs gamma mode grade goalTy@(Forall s binder
 
             debugM "pred: " (pretty predicate)
             let ctxtCk  = tyVarContext cs
-            coeffectVars <- justCoeffectTypes s ctxtCk
+            coeffectVars <- includeOnlyGradeVariables s ctxtCk
             coeffectVars <- return (coeffectVars `deleteVars` Language.Granule.Checker.Predicates.boundVars predicate)
             constructors <- allDataConstructorNames
             (_, result) <- liftIO $ provePredicate predicate coeffectVars constructors
@@ -881,7 +881,7 @@ constrElimHelper (allowRSync, allowDef) defs left (var@(x, (a, structure)):right
 
             debugM "pred: " (pretty predicate)
             let ctxtCk  = tyVarContext cs
-            coeffectVars <- justCoeffectTypes nullSpanNoFile ctxtCk
+            coeffectVars <- includeOnlyGradeVariables nullSpanNoFile ctxtCk
             coeffectVars <- return (coeffectVars `deleteVars` Language.Granule.Checker.Predicates.boundVars predicate)
             constructors <- allDataConstructorNames
             (_, result) <- liftIO $ provePredicate predicate coeffectVars constructors
