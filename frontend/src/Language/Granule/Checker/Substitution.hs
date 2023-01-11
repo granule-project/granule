@@ -83,6 +83,9 @@ instance Substitutable Type where
            Just (SubstT t) -> return t
            _               -> mTyVar v
 
+instance {-# OVERLAPPABLE #-} Substitutable t => Substitutable (Ctxt t) where
+  substitute subst = mapM (\(v, t) -> substitute subst t >>= (\t' -> return (v, t')))
+
 instance Substitutable t => Substitutable (Maybe t) where
   substitute s Nothing = return Nothing
   substitute s (Just t) = substitute s t >>= return . Just

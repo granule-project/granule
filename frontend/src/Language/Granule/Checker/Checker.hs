@@ -331,9 +331,6 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
         predicate <- substitute subst predicate
         solveConstraints predicate (getSpan equation) defName
 
-        let wantedTcs = wantedTypeConstraints checkerState
-        wantedTcs <- mapM (substitute subst) wantedTcs
-        dischargedTypeConstraints s providedTcs wantedTcs
         -- Apply the final substitution to head of the guard predicate stack too
         modifyM (\st ->
           case guardPredicates st of
@@ -344,6 +341,11 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
                   pred' <- substitute subst pred
                   return ((ctxt', pred'), sp)) guardPred
                 return (st { guardPredicates = (guardPred' : rest) }))
+
+        let wantedTcs = wantedTypeConstraints checkerState
+        wantedTcs <- mapM (substitute subst) wantedTcs
+        dischargedTypeConstraints s providedTcs wantedTcs
+        
 
         debugM "elaborateEquation" "solveEq done"
         pure elaboratedEq

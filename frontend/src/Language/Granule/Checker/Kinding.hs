@@ -169,7 +169,7 @@ checkKind s t@(TyInt n) k =
 -- KChk_effOne
 checkKind s t@(TyGrade mk n) k = do
   let k' = fromMaybe k mk
-  jK <- joinTypes s c k k'
+  jK <- joinTypes s k k'
   case jK of
     Just (k, subst, _) ->
       case n of
