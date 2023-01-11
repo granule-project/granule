@@ -140,8 +140,13 @@ equalTypesRelatedCoeffects s rel t1 t2 spec mode = do
   -- Infer kinds
   (k, subst, _) <- synthKind s t1'
   (subst', _) <- checkKind s t2' k
-  (eqT, subst'') <- equalTypesRelatedCoeffectsInner s rel t1 t2 k spec mode
-  substFinal <- combineManySubstitutions s [subst,subst',subst'']
+  substFromK <- combineManySubstitutions s [subst,subst']
+  -- apply substitutions before equality
+  t1'' <- substitute substFromK t1'
+  t2'' <- substitute substFromK t2'
+  -- main equality
+  (eqT, subst'') <- equalTypesRelatedCoeffectsInner s rel t1'' t2'' k spec mode
+  substFinal <- combineManySubstitutions s [substFromK, subst'']
   return (eqT, substFinal)
 
 -- Check if `t1 == t2` at kind `k`
