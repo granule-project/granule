@@ -234,7 +234,7 @@ checkDataCon
 
         registerDataConstructor tySch coercions typeIndices
 
-      (v:vs) -> (throwError . fmap mkTyVarNameClashErr) (v:|vs)  
+      (v:vs) -> (throwError . fmap mkTyVarNameClashErr) (v:|vs)
   where
     indexKinds (FunTy _ k1 k2) = k1 : indexKinds k2
     indexKinds k = []
@@ -353,7 +353,7 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
         let wantedTcs = wantedTypeConstraints checkerState
         wantedTcs <- mapM (substitute subst) wantedTcs
         dischargedTypeConstraints s providedTcs wantedTcs
-        
+
         -- Apply the final substitution to the outcoming predicate
         -- and run the solver
         let predicate = Conj $ predicateStack checkerState
