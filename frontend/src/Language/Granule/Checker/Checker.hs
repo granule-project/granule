@@ -424,11 +424,11 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
 
   -- The type of the equation, after substitution.
   equationTy' <- substitute subst ty
-  let splittingTy = calculateSplittingTy patternGam equationTy'
+  let equationTy = calculateequationTy patternGam equationTy'
 
   -- Store the equation type in the state in case it is needed when splitting
   -- on a hole.
-  modify (\st -> st { defName = Just id, defTy = Just equationTy', splittingTy = Just splittingTy})
+  modify (\st -> st { defName = Just id, defTy = Just equationTy', equationTy = Just equationTy})
 
   patternGam <- substitute subst patternGam
   debugM "context in checkEquation 1" $ (show patternGam)
@@ -487,8 +487,8 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
     -- and use these to build a function from these sub-patterns to
     -- the return type of our input type.
 
-    calculateSplittingTy :: [(Id, Assumption)] -> Type -> Type
-    calculateSplittingTy patternGam ty =
+    calculateequationTy :: [(Id, Assumption)] -> Type -> Type
+    calculateequationTy patternGam ty =
       case patternGam of
         [] -> ty
         (_:_) ->
@@ -542,7 +542,7 @@ checkExpr :: (?globals :: Globals)
           -> Checker (Ctxt Assumption, Substitution, Expr () Type)
 
 -- Hit an unfilled hole
-checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
+checkExpr defs ctxt _ _ t (Hole s _ _ vars) = do
   debugM "checkExpr[Hole]" (pretty s <> " : " <> pretty t)
 
   let boundVariables = map fst $ filter (\ (id, _) -> sourceName id `elem` map sourceName vars) ctxt
@@ -562,11 +562,11 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
               -- Check to see if this hole is something we are interested in
               case globalsHolePosition ?globals of
                 -- Synth everything mode
-                Nothing -> programSynthesise ctxt vars t
+                Nothing -> programSynthesise defs ctxt vars t
                 Just pos ->
                   if spanContains pos s
                     -- This is a hole we want to synth on
-                    then programSynthesise ctxt vars t
+                    then programSynthesise defs ctxt vars t
                     -- This is not a hole we want to synth on
                     else  return hexpr
 
@@ -2084,20 +2084,20 @@ freshenTySchemeForVar s rf id tyScheme = do
 
 -- Hook into the synthesis engine.
 programSynthesise :: (?globals :: Globals) =>
-  Ctxt Assumption -> [Id] -> Type -> Checker (Expr () Type)
-programSynthesise ctxt vars ty = do
+  Ctxt TypeScheme -> Ctxt Assumption -> [Id] -> Type -> Checker (Expr () Type)
+programSynthesise defs ctxt vars ty = do
   currentState <- get
-  debugM "equation Nameeee" (show $ equationName currentState)
   debugM "equation ctxt" (show $ ctxt)
 
-  let (currentDef, currentName) = case (defName currentState, defTy currentState) of
+  let (_, currentName) = case (defName currentState, defTy currentState) of
         (Just name, Just ty') -> ([(name, ty')], name)
         _ -> ([], mkId "")
 
   -- Run the synthesiser in this context
   let mode = if alternateSynthesisMode then Syn.Alternative else Syn.Default
   synRes <-
-      liftIO $ Syn.synthesiseProgram defs currentName
+  -- TODO: needs fixing, there is some part I am missing here for defs (which is now undefined)
+      liftIO $ Syn.synthesiseProgram undefined currentName
                   (if subtractiveSynthesisMode then (Syn.Subtractive mode) else (Syn.Additive mode))
                   ctxt [] (Forall nullSpan [] [] ty) currentState
 

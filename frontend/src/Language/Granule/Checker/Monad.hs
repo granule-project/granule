@@ -185,8 +185,9 @@ data CheckerState = CS
             , defTy :: Maybe Type
             , defName :: Maybe Id
 
-            -- Used by the case splitter
-            , splittingTy :: Maybe Type
+            -- The type of the current equation.
+            , equationTy :: Maybe Type
+            , equationName :: Maybe Id
 
             -- Definitions that have been triggered during type checking
             -- by the auto deriver (so we know we need them in the interpreter)
@@ -217,7 +218,8 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , allHiddenNames = M.empty
                , defTy = Nothing
                , defName = Nothing
-               , splittingTy = Nothing
+               , equationTy = Nothing
+               , equationName = Nothing
                , derivedDefinitions = []
                , wantedTypeConstraints = []
                , addedConstraints = False
@@ -256,7 +258,7 @@ allDataConstructorNamesForType ty = do
     st <- get
     return $ mapMaybe go (typeConstructors st)
   where
-    go :: (Id, (Type, a, Bool)) -> Maybe Id
+    go :: (Id, (Type, a, [Int])) -> Maybe Id
     go (con, (k, _, _)) = if k == ty then Just con else Nothing
 
 {- | Given a computation in the checker monad, peek the result without

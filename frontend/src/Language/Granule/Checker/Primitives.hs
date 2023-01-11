@@ -46,9 +46,9 @@ capabilities =
 typeConstructors :: (?globals :: Globals) => [(Id, (Type, [Id], [Int]))]
 typeConstructors =
   -- If we have the security levels extension turned on then include these things
-  (extensionDependent [(SecurityLevels, [(mkId "Level",    (kcoeffect, [], False))
-                                       , (mkId "Unused",   (tyCon "Level", [], False))
-                                      , (mkId "Dunno",    (tyCon "Level", [], False))])] [])
+  (extensionDependent [(SecurityLevels, [(mkId "Level",    (kcoeffect, [], []))
+                                       , (mkId "Unused",   (tyCon "Level", [], []))
+                                      , (mkId "Dunno",    (tyCon "Level", [], []))])] [])
  ++
   -- Everything else is always in scope
     [ (mkId "Coeffect",  (Type 2, [], []))
@@ -65,11 +65,11 @@ typeConstructors =
     , (mkId "String", (Type 0, [], []))
     , (mkId "Inverse", ((funTy (Type 0) (Type 0)), [], []))
     -- Session type related things
-    , (mkId "Protocol", (Type 0, [], False))
-    , (mkId "SingleAction", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], True))
-    , (mkId "ReceivePrefix", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], True))
-    , (mkId "Sends", (funTy (tyCon "Nat") (funTy (tyCon "Protocol") (tyCon "Predicate")), [], True))
-    , (mkId "Graded", (funTy (tyCon "Nat") (funTy (tyCon "Protocol") (tyCon "Protocol")), [], True))
+    , (mkId "Protocol", (Type 0, [], []))
+    , (mkId "SingleAction", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], [0]))
+    , (mkId "ReceivePrefix", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], [0]))
+    , (mkId "Sends", (funTy (tyCon "Nat") (funTy (tyCon "Protocol") (tyCon "Predicate")), [], [0]))
+    , (mkId "Graded", (funTy (tyCon "Nat") (funTy (tyCon "Protocol") (tyCon "Protocol")), [], [0]))
 
     -- # Coeffect types
     , (mkId "Nat",      (kcoeffect, [], []))
@@ -120,7 +120,7 @@ typeConstructors =
     , (mkId "Dual", (funTy protocol protocol, [], [0]))
     , (mkId "->", (funTy (Type 0) (funTy (Type 0) (Type 0)), [], []))
     -- Top completion on a coeffect, e.g., Ext Nat is extended naturals (with ∞)
-    , (mkId "Ext", (funTy kcoeffect kcoeffect, [], [1]))
+    , (mkId "Ext", (funTy kcoeffect kcoeffect, [], [0]))
     -- Effect grade types - Sessions
     , (mkId "Session",  (tyCon "Com", [], []))
     , (mkId "Com",      (keffect, [], []))
