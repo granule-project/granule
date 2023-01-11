@@ -323,6 +323,10 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
         tyVarContext' <- substitute subst (tyVarContext checkerState)
         put $ checkerState { tyVarContext = tyVarContext' }
 
+        -- Deal with additional constraints (due to session mostly)
+        let wantedTcs = wantedTypeConstraints checkerState
+        wantedTcs <- mapM (substitute subst) wantedTcs
+        dischargedTypeConstraints s providedTcs wantedTcs
         
         -- Apply the final substitution to the outcoming predicate
         -- and run the solver
@@ -341,11 +345,6 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
                   pred' <- substitute subst pred
                   return ((ctxt', pred'), sp)) guardPred
                 return (st { guardPredicates = (guardPred' : rest) }))
-
-        let wantedTcs = wantedTypeConstraints checkerState
-        wantedTcs <- mapM (substitute subst) wantedTcs
-        dischargedTypeConstraints s providedTcs wantedTcs
-        
 
         debugM "elaborateEquation" "solveEq done"
         pure elaboratedEq
