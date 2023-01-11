@@ -66,8 +66,9 @@ mult_r [n] Z = Z;
 mult_r [n] (S m') = add n (mult_r [n] m')
 
 --- Divide by two
-div2
-  : forall {n : Nat}
-  . N (2 * n) -> N n
-div2 Z = Z;
-div2 (S (S x)) = S (div2 x)
+-- TODO: should be allowed
+-- div2
+--   : forall {n : Nat}
+--   . N (2 * n) -> N n
+-- div2 Z = Z;
+-- div2 (S (S x)) = S (div2 x)
