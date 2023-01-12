@@ -36,4 +36,4 @@ tyVarContextExistential = do
       -- TODO: think about more
       -- BoundQ -> Nothing
       _ -> Just (v, (k, InstanceQ))
-      _      -> Just (v, (k, q))
+      -- _      -> Just (v, (k, q))
