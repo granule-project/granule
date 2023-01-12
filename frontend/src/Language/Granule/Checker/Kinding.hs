@@ -457,6 +457,10 @@ synthKindWithConfiguration s config (TyCase t branches) | length branches > 0 = 
 synthKindWithConfiguration s config t@(TyRational _) = do
   return (TyCon $ mkId "Q", [], t)
 
+-- Higher type universes
+synthKindWithConfiguration s config (Type i) = do
+  return (Type (i + 1), [], Type i)
+
 synthKindWithConfiguration s _ t =
   throw ImpossibleKindSynthesis { errLoc = s, errTy = t }
 
