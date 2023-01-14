@@ -1375,7 +1375,7 @@ synthExpr defs gam pol (Binop s _ rf op e1 e2) = do
                 Right returnType -> local >> return (returnType, gam1, gam2, subst1, subst2, elaboratedL, elaboratedR)
                 -- Seems no way to resolve this:
                 Left _ ->
-                  throw FailedOperatorResolution { errLoc = s, errOp = op, errTy = t1 .-> t2 .-> tyVar "..." }
+                  throw FailedOperatorResolution { errLoc = s, errOp = op, errTy = t1 .-> t2 .-> tyVar "?" }
 
     gamOut <- ctxtPlus s gam1 gam2
     subst <- combineSubstitutions s subst1 subst2
