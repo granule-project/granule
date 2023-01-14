@@ -626,21 +626,22 @@ checkExpr defs gam pol _ ty@(FunTy _ sig tau) (Val s _ rf (Abs _ p t e)) = do
 
   newConjunct
 
-  (bindings, localVars, subst, elaboratedP, _) <- ctxtFromTypedPattern s InCase sig p NotFull
+  (bindings, localVars, subst0, elaboratedP, _) <- ctxtFromTypedPattern s InCase sig p NotFull
   debugM "binding from lam" $ pretty bindings
 
   pIrrefutable <- isIrrefutable s sig p
   if pIrrefutable then do
     -- Check the body in the extended context
-    tau'' <- substitute subst tau'
+    tau'' <- substitute subst0 tau'
 
     newConjunct
 
+    debugM "checkExpr in funty bit" ""
     (gam', subst2, elaboratedE) <- checkExpr defs (bindings <> gam) pol False tau'' e
     -- Check linearity of locally bound variables
     case checkLinearity bindings gam' of
        [] -> do
-          subst <- combineSubstitutions s subst1 subst2
+          substFinal <- combineManySubstitutions s [subst0, subst1, subst2]
 
           -- Locally we should have this property (as we are under a binder)
           ctxtApprox s (gam' `intersectCtxts` bindings) bindings
@@ -649,7 +650,9 @@ checkExpr defs gam pol _ ty@(FunTy _ sig tau) (Val s _ rf (Abs _ p t e)) = do
 
           let elaborated = Val s ty rf (Abs ty elaboratedP t elaboratedE)
 
-          return (gam' `subtractCtxt` bindings, subst, elaborated)
+          debugM "checkExpr[FunTy] component subst" (pretty [subst0, subst1, subst2])
+          debugM "checkExpr[FunTy] final subst" (pretty substFinal)
+          return (gam' `subtractCtxt` bindings, substFinal, elaborated)
 
        (p:ps) -> illLinearityMismatch s (p:|ps)
   else throw RefutablePatternError{ errLoc = s, errPat = p }
@@ -814,8 +817,9 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
         -- Return the resulting computed context, without any of
         -- the variable bound in the pattern of this branch
         [] -> do
+           substFinal <- combineManySubstitutions s [subst, subst']
            return (localGam `subtractCtxt` patternGam
-                 , subst'
+                 , substFinal
                  , (elaborated_pat_i, elaborated_i))
 
         -- Anything that was bound in the pattern but not used correctly
@@ -950,7 +954,7 @@ synthExpr _ gam _ (Val s _ rf (Constr _ c [])) = do
       -- Freshen the constructor
       -- (discarding any fresh type variables, info not needed here)
 
-      (ty, _, _, constraints, coercions') <- freshPolymorphicInstance InstanceQ False tySch coercions []
+      (ty, _, subst, constraints, coercions') <- freshPolymorphicInstance InstanceQ False tySch coercions []
 
       otherTypeConstraints <- enforceConstraints s constraints
       registerWantedTypeConstraints otherTypeConstraints
@@ -960,7 +964,7 @@ synthExpr _ gam _ (Val s _ rf (Constr _ c [])) = do
 
       let elaborated = Val s ty rf (Constr ty c [])
           outputCtxt = usedGhostVariableContext
-      return (ty, outputCtxt, [], elaborated)
+      return (ty, outputCtxt, subst, elaborated)
 
     Nothing -> throw UnboundDataConstructor{ errLoc = s, errId = c }
 
@@ -1010,8 +1014,10 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
       case checkLinearity patternGam gamSoFar of
          -- Return the resulting computed context, without any of
          -- the variable bound in the pattern of this branch
-         [] -> return (tyCase
-                    , (localGam `subtractCtxt` patternGam, subst')
+         [] -> do
+           substFinal <- combineManySubstitutions s [subst, subst']
+           return (tyCase
+                    , (localGam `subtractCtxt` patternGam, substFinal)
                     , (elaborated_pat_i, elaborated_i))
          p:ps -> illLinearityMismatch s (p:|ps)
 
@@ -1213,7 +1219,7 @@ synthExpr defs gam pol
 
       -- elaborate just to a variable application
       let elab = Val s ty rf (Var ty (mkId $ "cap." <> internalName capName))
-      return (ty, outContext, [], elab)
+      return (ty, outContext, subst, elab)
 
 -- Specialised application for scale
 {- TODO: needs thought -}
@@ -1384,8 +1390,9 @@ synthExpr defs gam pol (Binop s _ rf op e1 e2) = do
     selectFirstByType t1 t2 ((FunTy _ opt1 (FunTy _ opt2 resultTy)):ops) = do
       -- Attempt to use this typing
       (result, local) <- peekChecker $ do
-         (eq1, _, _) <- equalTypes s t1 opt1
-         (eq2, _, _) <- equalTypes s t2 opt2
+         (eq1, substA, _) <- equalTypes s t1 opt1
+         (eq2, substB, _) <- equalTypes s t2 opt2
+         -- TODO: note substitutions getting discared here
          return (eq1 && eq2)
       -- If successful then return this local computation
       case result of
@@ -1452,9 +1459,9 @@ synthExpr defs gam pol (Val s _ rf (Abs _ p Nothing e)) = do
 
      concludeImplication s localVars
 
-     subst <- combineSubstitutions s substP subst
+     substFinal <- combineSubstitutions s substP subst
 
-     return (finalTy', gam'' `subtractCtxt` bindings, subst, elaborated)
+     return (finalTy', gam'' `subtractCtxt` bindings, substFinal, elaborated)
   else throw RefutablePatternError{ errLoc = s, errPat = p }
 
 -- Explicit type application
@@ -2076,13 +2083,13 @@ checkGuardsForImpossibility s name refinementConstraints = do
 --
 freshenTySchemeForVar :: (?globals :: Globals) => Span -> Bool -> Id -> TypeScheme -> Checker (Type, Ctxt Assumption, Substitution, Expr () Type)
 freshenTySchemeForVar s rf id tyScheme = do
-  (ty', _, _, constraints, []) <- freshPolymorphicInstance InstanceQ False tyScheme [] [] -- discard list of fresh type variables
+  (ty', _, subst, constraints, []) <- freshPolymorphicInstance InstanceQ False tyScheme [] [] -- discard list of fresh type variables
 
   otherTypeConstraints <- enforceConstraints s constraints
   registerWantedTypeConstraints otherTypeConstraints
 
   let elaborated = Val s ty' rf (Var ty' id)
-  return (ty', [], [], elaborated)
+  return (ty', [], subst, elaborated)
 
 
 -- Hook into the synthesis engine.
