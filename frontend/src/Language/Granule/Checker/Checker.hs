@@ -1458,7 +1458,7 @@ synthExpr defs gam pol (Val s _ rf (Abs _ p Nothing e)) = do
 
      concludeImplication s localVars
 
-     subst <- combineManySubstitutions s [subst0, substP, subst]
+     substFinal <- combineManySubstitutions s [subst0, substP, subst]
 
      return (finalTy', gam'' `subtractCtxt` bindings, substFinal, elaborated)
   else throw RefutablePatternError{ errLoc = s, errPat = p }
