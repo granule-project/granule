@@ -1,17 +1,17 @@
 Type checking failed: 
 Found a goal: frontend/tests/cases/negative/splitting/nested.gr:10:17:
 
-   Expected type is: `Vec (n0.0 + 1) N`
+   Expected type is: `Vec (n00 + 1) N`
 
    Context:
      x : N
-     xs : Vec n0.0 N
+     xs : Vec n00 N
 
    Type context:
-     t13.0 : Nat
-     t12.0 : Type
-     t11.0 : Type
-     n0.0 : Nat
+     t130 : Nat
+     t120 : Type
+     t110 : Type
+     n00 : Nat
      n : Nat
 
    Case splits for x, xs:

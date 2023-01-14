@@ -1,6 +1,9 @@
 Type checking failed: 
 Unification failed: frontend/tests/cases/negative/occurs.gr:12:26:
-Type variable `a1` cannot be unified with type `Lam a1` (occurs check failure; implies infinite type).
+Type variable `b00` cannot be unified with type `(a00, b00)` (occurs check failure; implies infinite type).
 
-Unification failed: frontend/tests/cases/negative/occurs.gr:13:33:
-Type variable `a4.0` cannot be unified with type `Lam a4.0` (occurs check failure; implies infinite type).
+Unification failed: frontend/tests/cases/negative/occurs.gr:13:19:
+Cannot unify universally quantified type variable `a` of kind `Type` with `t0 -> a0`
+
+Unification failed: frontend/tests/cases/negative/occurs.gr:14:20:
+Cannot unify universally quantified type variable `a` of kind `Type` with `a50`
