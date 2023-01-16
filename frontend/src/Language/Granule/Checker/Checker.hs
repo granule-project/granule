@@ -431,7 +431,7 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
 
   -- Store the equation type in the state in case it is needed when splitting
   -- on a hole.
-  modify (\st -> st { defName = Just id, defTy = Just equationTy', equationTy = Just equationTy})
+  modify (\st -> st { equationTy = Just equationTy})
 
   patternGam <- substitute subst patternGam
   debugM "context in checkEquation 1" $ (show patternGam)
@@ -2104,17 +2104,11 @@ programSynthesise :: (?globals :: Globals) =>
   Ctxt TypeScheme -> Ctxt Assumption -> [Id] -> Type -> Checker (Expr () Type)
 programSynthesise defs ctxt vars ty = do
   currentState <- get
-  debugM "equation ctxt" (show $ ctxt)
-
-  let (_, currentName) = case (defName currentState, defTy currentState) of
-        (Just name, Just ty') -> ([(name, ty')], name)
-        _ -> ([], mkId "")
-
   -- Run the synthesiser in this context
   let mode = if alternateSynthesisMode then Syn.Alternative else Syn.Default
   synRes <-
   -- TODO: needs fixing, there is some part I am missing here for defs (which is now undefined)
-      liftIO $ Syn.synthesiseProgram undefined currentName
+      liftIO $ Syn.synthesiseProgram undefined (mkId "")
                   (if subtractiveSynthesisMode then (Syn.Subtractive mode) else (Syn.Additive mode))
                   ctxt [] (Forall nullSpan [] [] ty) currentState
 

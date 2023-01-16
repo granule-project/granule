@@ -182,10 +182,6 @@ data CheckerState = CS
             -- Names from modules which are hidden
             , allHiddenNames :: M.Map Id Id
 
-            -- The type of the current definition being checked
-            , defTy :: Maybe Type
-            , defName :: Maybe Id
-
             -- The type of the current equation.
             , equationTy :: Maybe Type
             , equationName :: Maybe Id
@@ -218,8 +214,6 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , deriv = Nothing
                , derivStack = []
                , allHiddenNames = M.empty
-               , defTy = Nothing
-               , defName = Nothing
                , equationTy = Nothing
                , equationName = Nothing
                , derivedDefinitions = []
