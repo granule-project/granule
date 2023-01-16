@@ -154,17 +154,18 @@ typeIndices (DataDecl _ _ tyVars _ constrs) =
   where
     constructorIndices :: DataConstr -> (Id, [Int])
     constructorIndices dataConstr@(DataConstrNonIndexed _ id _) = (id, [])
-    constructorIndices dataConstr@(DataConstrIndexed _ id (Forall _ _ _ ty)) = (id, findIndices 0 (reverse tyVars) ty)
+    constructorIndices dataConstr@(DataConstrIndexed _ id (Forall _ _ _ ty)) =
+      (id, findIndices (reverse tyVars) (resultType ty))
 
-    findIndices :: Int -> Ctxt Kind -> Type -> [Int]
-    findIndices index ((v, _):tyVars) (TyApp t1 t2) =
+    findIndices :: Ctxt Kind -> Type -> [Int]
+    findIndices ((v, _):tyVars') (TyApp t1 t2) =
       case t2 of
-        TyVar v' | v == v' -> findIndices (index+1) tyVars t1
-        _                  -> index : findIndices (index+1) tyVars t1
-    findIndices index tyVars (FunTy _ _ t) = findIndices (index+1) tyVars t
-    findIndices _ [] (TyCon _) = []
+        TyVar v' | v == v' -> findIndices tyVars' t1
+        -- This is an index, and we can see its position by how many things we have left
+        _                  -> (length tyVars') : findIndices tyVars' t1
+    findIndices [] (TyCon _) = []
     -- Defaults to `empty` (acutally an ill-formed case for data types)
-    findIndices _ _ _ = []
+    findIndices _ _ = []
 
 {-| discriminateTypeIndicesOfDataType takes a data type definition, which has 0 or more
    type parameters, and splits those type parameters into two lists: the first being
