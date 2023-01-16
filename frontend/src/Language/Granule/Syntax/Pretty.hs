@@ -314,3 +314,6 @@ instance Pretty Span where
 
 instance Pretty Pos where
     pretty (l, c) = show l <> ":" <> show c
+
+instance {-# OVERLAPPABLE #-} Show a => Pretty a where
+    pretty = show
