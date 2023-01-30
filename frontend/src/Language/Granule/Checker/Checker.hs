@@ -2030,60 +2030,79 @@ checkGuardsForExhaustivity s name ty eqs = do
 
 checkGuardsForImpossibility :: (?globals :: Globals) => Span -> Id -> [Type] -> Checker ()
 checkGuardsForImpossibility s name refinementConstraints = do
+  -- Convert all universal variables to existential
+  {- for example, if we are looking at the following program:
+      from tests/cases/negative/impossibilityNat.gr
+
+      data N (n : Nat) where
+        Z : N 0;
+        S : N n -> N (n + 1)
+
+      pred : forall {n : Nat} . N (n + 1) -> N n
+      pred (S n) = n;
+      pred Z = Z
+
+  -- We want this to be disallowed because the last pattern match is always impossible
+  -- i.e., there exists no such `n` such that `n + 1 = 0`.
+  -- Thus, to do this check we first make every universally quantified variable into an
+  -- existential (a unification variable)
+  -}
+
+  tyVars <- tyVarContextExistential >>= includeOnlyGradeVariables s
+
   -- Get top of guard predicate stack
   st <- get
-  let ps = head $ guardPredicates st
+  let guardPredicatesStack = head $ guardPredicates st
   debugM "guardPredicatesStack" (pretty $ guardPredicates st)
 
-  -- Convert all universal variables to existential
-  tyVars <- --return (tyVarContext st)
-            --  >>= includeOnlyGradeVariables s --
-              tyVarContextExistential >>= includeOnlyGradeVariables s
-
   -- For each guard predicate
-  forM_ ps $ \((ctxt, p), s) -> do
+  forM_ guardPredicatesStack $ \((ctxt, predicate), s) -> do
 
     -- Existentially quantify those variables occuring in the pattern in scope
     -- TODO: Remvoe commented code
     -- constraints' <- mapM (compileTypeConstraintToConstraint nullSpanNoFile) refinementConstraints
-    let thm = foldr (uncurry Exists) p ctxt
-          -- foldr (Impl []) (foldr (uncurry Exists) p ctxt) constraints'
+    let theorem = foldr (uncurry Exists) predicate ctxt
 
-    debugM "impossibility" $ "about to try (" <> pretty tyVars <> ") . " <> pretty thm
+    debugM "impossibility" $ "about to try (" <> pretty tyVars <> ") . " <> pretty theorem
     -- Try to prove the theorem
     constructors <- allDataConstructorNames
-    (_, result) <- liftIO $ provePredicate thm tyVars constructors
-
-    p <- simplifyPred thm
+    (_, result) <- liftIO $ provePredicate theorem tyVars constructors
 
     case result of
       QED -> return ()
 
       -- Various kinds of error
       -- TODO make errors better
-      NotValid msg -> throw ImpossiblePatternMatch
-        { errLoc = s
-        , errId = name
-        , errPred = p
-        }
-      NotValidTrivial unsats -> throw ImpossiblePatternMatchTrivial
-        { errLoc = s
-        , errId = name
-        , errUnsats = unsats
-        }
-      Timeout -> throw SolverTimeout
-        { errLoc = s
-        , errDefId = name
-        , errSolverTimeoutMillis = solverTimeoutMillis
-        , errContext = "pattern match of an equation"
-        , errPred = p
-        }
+      NotValid msg -> do
+            theorem' <- simplifyPred theorem
+            throw ImpossiblePatternMatch
+                { errLoc = s
+                , errId = name
+                , errPred = theorem'
+                }
+      NotValidTrivial unsats ->
+        throw ImpossiblePatternMatchTrivial
+          { errLoc = s
+          , errId = name
+          , errUnsats = unsats
+          }
+      Timeout -> do
+            theorem' <- simplifyPred theorem
+            throw SolverTimeout
+              { errLoc = s
+              , errDefId = name
+              , errSolverTimeoutMillis = solverTimeoutMillis
+              , errContext = "pattern match of an equation"
+              , errPred = theorem'
+              }
 
-      OtherSolverError msg -> throw ImpossiblePatternMatch
-        { errLoc = s
-        , errId = name
-        , errPred = p
-        }
+      OtherSolverError msg -> do
+            theorem' <- simplifyPred theorem
+            throw ImpossiblePatternMatch
+                    { errLoc = s
+                    , errId = name
+                    , errPred = theorem'
+                    }
 
       SolverProofError msg -> error msg
 
