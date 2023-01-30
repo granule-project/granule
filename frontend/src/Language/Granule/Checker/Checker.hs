@@ -363,6 +363,8 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
         solveConstraints predicate (getSpan equation) defName
 
         -- Apply the final substitution to head of the guard predicate stack too
+        st <- get
+        debugM "guardPredicatePreSubst" (pretty (guardPredicates st))
         modifyM (\st ->
           case guardPredicates st of
             [] -> return st

@@ -192,11 +192,6 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
     Nothing -> throw UnboundDataConstructor{ errLoc = s, errId = dataC }
     Just (tySch, coercions, indices) -> do
 
-      debugM "patterns : tySch: " $ show tySch
-      debugM "patterns : coercions: " $ show coercions
-      debugM "patterns : constructorName: " $ show dataC
-      debugM "patterns : indices: " $ show indices
-
       case outerBoxTy of
         -- Hsup if you only have more than one premise (and have an enclosing grade)
         Just (coeff, coeffTy) | length ps > 1 ->
@@ -211,59 +206,93 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
       otherTypeConstraints <- enforceConstraints s constraints
       registerWantedTypeConstraints otherTypeConstraints
 
+      -- Running example:
+      -- tySch      = S : forall {n.0 : Nat, t.10 : Nat, t.11 : Type} . N a.3 n.0 -> N t.11 t.10
+      -- coercions = t.10 ~ n.0 + 1, t.11 ~ a.3
+      -- 0 is an index position
+
       -- Debugging
       debugM "ctxt" $ "### DATA CONSTRUCTOR (" <> pretty dataC <> ")"
                          <> "\n###\t tySch = " <> pretty tySch
-                         <> "\n###\t coercions =  " <> show coercions
-                         <> "\n###\n"
+                         <> "\n###\t coercions = " <> pretty coercions
+                         <> "\n###\t indices = " <> pretty indices <> "\n"
+
+      -- dataConstructorTypeFresh = N a.3.0 n.0.0 -> N t.11.0 t.10.0
+      -- freshTyVarSubst = a.3 ~> a.3.0, n.0 ~> n.0.0, t.10 ~> t.10.0, t.11 ~ t.11.0 [TODO: WRONG WAY ROUND!?]
+      -- coercions' = t.9.0 ~ n.0.0 + 1, t.11.0 ~ a.3.0
+
       debugM "ctxt" $ "\n### FRESH POLY ###\n####\t dConTyFresh = "
                       <> pretty dataConstructorTypeFresh
                       <> "\n###\t ctxt = " <> pretty freshTyVarsCtxt
                       <> "\n###\t freshTyVarSubst = " <> pretty freshTyVarSubst
                       <> "\n###\t coercions' =  " <> pretty coercions'
 
-      --
+      -- TODO: Maybe remove
       dataConstructorTypeFresh <- substitute (flipSubstitution coercions') dataConstructorTypeFresh
 
-      st <- get
-      debugM "ctxt" $ "### tyVarContext = " <> show (tyVarContext st)
-      debugM "ctxt" $ "\t### eqL (res dCfresh) = " <> show (resultType dataConstructorTypeFresh) <> "\n"
-      debugM "ctxt" $ "\t### eqR (ty) = " <> show ty <> "\n"
+      -- dataConstructorTypeFresh = N t.11.0 n.0.0 -> N t.11.0 t.10.0
 
-      debugM "Patterns.ctxtFromTypedPattern" $ pretty dataConstructorTypeFresh <> "\n" <> pretty ty
+      st <- get
+      debugM "ctxt" $ "### tyVarContext = " <> pretty (tyVarContext st)
+                    <> "\n\t### eqL (res dCfresh) = " <> pretty dataConstructorTypeFresh <> "\n"
+                    <> "\n\t### eqR (ty) = " <> show ty <> "\n"
+
+      -- Equality between N t.11.0 t.10.0 ~ N a`2 n`1
+      -- where a`2 and n`1 are \forall quantified
+
       areEq <- equalTypesRelatedCoeffectsAndUnify s Eq PatternCtxt (resultType dataConstructorTypeFresh) ty
       case areEq of
         (True, ty, unifiers) -> do
 
+          -- Predicate now says:
+          --    t.10.0 ~ n.0.0 + 1
+          --    t.11.0 ~ a.3.0
           -- Register coercions as equalities
           mapM_ (\(var, SubstT t) ->
                         equalTypesRelatedCoeffectsAndUnify s Eq PatternCtxt (TyVar var) t) coercions'
 
+          -- unifiers:   t.10.0 ~ n`1
+          --             t.11.0 ~ a`2
+          
           dataConstructorIndexRewritten <- substitute unifiers dataConstructorTypeFresh
+
+          -- dataConstructorFresh          = N t.11.0 n.0.0 -> N t.11.0 t.10.0
+          -- dataConstructorIndexRewritten = N a`2 n.0.0 -> N a`2 n`1
+
           dataConstructorIndexRewrittenAndSpecialised <- substitute coercions' dataConstructorIndexRewritten
 
+          -- dataConstructorIndexRewrittenAndSpecialised = N a`2 n.0.0 -> N a`2 n`1
+          
           -- Debugging
-          debugM "ctxt" $ "\n\t### unifiers = " <> show unifiers <> "\n"
-                        <> "\n\t### dfresh = " <> show dataConstructorTypeFresh
-                        <> "\n\t### drewrit = " <> show dataConstructorIndexRewritten
-                        <> "\n\t### drewritAndSpec = " <> show dataConstructorIndexRewrittenAndSpecialised <> "\n"
+          debugM "ctxt" $ "\n\t### unifiers = " <> pretty unifiers <> "\n"
+                        <> "\n\t### drewrit = " <> pretty dataConstructorIndexRewritten
+                        <> "\n\t### drewritAndSpec = " <> pretty dataConstructorIndexRewrittenAndSpecialised <> "\n"
 
           -- Recursively apply pattern matching on the internal patterns to the constructor pattern
           (bindingContexts, _, bs, us, elabPs, consumptionsOut) <-
             ctxtFromTypedPatterns' outerBoxTy s pos dataConstructorIndexRewrittenAndSpecialised ps (replicate (length ps) cons)
           let consumptionOut = foldr meetConsumption Full consumptionsOut
 
+          -- TODO: GO BACK TO THIS
           -- Apply the coercions to the type
           ty <- substitute coercions' ty
 
           -- Unifiers are only those things that include index variables
+
+          -- unifiers:   t.10.0 ~ n`1
+
           let unifiers' = filter (\(id, subst) -> case lookup id (tyVarContext st) of Just (_, BoundQ) -> True; _ -> False) unifiers
           debugM "ctxt" $ "unifiers': " <> show unifiers'
 
           -- Combine the substitutions
+          --     n`1 ~ t.10.0
           subst <- combineSubstitutions s (flipSubstitution unifiers') us
           subst <- combineSubstitutions s coercions' subst
           debugM "ctxt" $ "\n\t### outSubst = " <> show subst <> "\n"
+
+          -- ### outSubst = n`1 ~ n.0.0 + 1
+          --                t.11.0 ~ a.3.0
+          --                t.10.0 ~ n.0.0 + 1
 
           definiteUnification s pos outerBoxTy ty
           -- (ctxtSubbed, ctxtUnsubbed) <- substCtxt subst as
