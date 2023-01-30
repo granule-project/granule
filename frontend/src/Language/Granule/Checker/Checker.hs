@@ -366,12 +366,16 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
         modifyM (\st ->
           case guardPredicates st of
             [] -> return st
-            (guardPred : rest) -> do
+            [guardPred] -> do
                 guardPred' <- mapM (\((ctxt, pred), sp) -> do
                   ctxt' <- substitute subst ctxt
                   pred' <- substitute subst pred
                   return ((ctxt', pred'), sp)) guardPred
-                return (st { guardPredicates = (guardPred' : rest) }))
+                return (st { guardPredicates = [guardPred'] })
+            guardPred -> do
+              error $ "Granule internal bug: PLEASE REPORT!\n"
+                  ++  "Final guard predicate stack is not a singleton: "
+                  ++  show guardPred)
 
         debugM "elaborateEquation" "solveEq done"
 
