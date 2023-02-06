@@ -1,0 +1,13 @@
+language GradedBase 
+
+data Box (s : Semiring) (r : s) (a : Type) where
+  Box : a % (r : s) -> Box s r a
+
+idNat : forall {a : Type} . Box Nat 1 a -> a
+idNat (Box x) = x
+
+-- weak : forall {a : Type, s : Semiring} . Box s 0 a -> ()
+-- weak (Box _) = ()
+
+-- copy : forall {a : Type, s : Semiring} . Box s ((1 + 1) : s) a -> (a, a)
+-- copy (Box x) = (x, x)
