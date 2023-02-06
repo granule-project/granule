@@ -1,4 +1,4 @@
 Type checking failed: 
-Falsifiable theorem: frontend/tests/cases/negative/predicateFalseInUse.gr:9:1:
+Falsifiable theorem: frontend/tests/cases/negative/constraints/predicateFalseInUse.gr:9:1:
   The following constraint associated with `foo` is false:
 	  (0 = 0) ∧ (0..1 ≤ 0..1) ∧ (0 > 0)

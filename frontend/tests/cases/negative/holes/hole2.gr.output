@@ -1,5 +1,5 @@
 Type checking failed: 
-Found a goal: frontend/tests/cases/negative/hole2.gr:11:40:
+Found a goal: frontend/tests/cases/negative/holes/hole2.gr:11:40:
 
    Expected type is: `a0 -> b0`
 

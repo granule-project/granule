@@ -1,3 +1,8 @@
 Type checking failed: 
+<<<<<<< HEAD
 Operator resolution failed: frontend/tests/cases/negative/badPoly2.gr:2:10:
 Could not resolve operator `+` at type `a -> Int -> ?`
+=======
+Operator resolution failed: frontend/tests/cases/negative/polymorphism/badPoly2.gr:2:10:
+Could not resolve operator `+` at type `a -> Int -> ..`
+>>>>>>> a6f6940d (update negative outputs)
