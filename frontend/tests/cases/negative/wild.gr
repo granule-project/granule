@@ -1,6 +1,0 @@
-import Prelude
-import Vec
-
-isEmpty : ∀ {n : Nat} . Vec n Int → Bool
-isEmpty Nil        = True;
-isEmpty (Cons _ _) = False

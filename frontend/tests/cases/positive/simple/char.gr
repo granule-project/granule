@@ -1,4 +1,4 @@
-import List
+data List a where Empty; Next a (List a)
 
 main : List Char
 main = Next 'h' (Next 'i' Empty)

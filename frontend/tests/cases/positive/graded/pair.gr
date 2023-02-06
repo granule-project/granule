@@ -1,0 +1,13 @@
+--- Extract the left part of a pair
+fst : forall {a : Type, b : Type, s : Semiring} . a × b [0 : s] -> a
+fst (x, [_]) = x
+
+--- Extract the right part of a pair
+snd : forall {a : Type, b : Type, s : Semiring} . a [0 : s] × b -> b
+snd ([_], y) = y
+
+trip : Int [3] → (Int, (Int, Int))
+trip [x] = (x, (x, x))
+
+main : ((Int, Int),(Int, (Int, Int)))
+main = ((fst (1, [2]), snd ([1], 2)), trip [3])

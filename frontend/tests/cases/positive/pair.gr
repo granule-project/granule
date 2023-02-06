@@ -1,7 +1,0 @@
-import Prelude
-
-trip : Int [3] → (Int, (Int, Int))
-trip [x] = (x, (x, x))
-
-main : ((Int, Int),(Int, (Int, Int)))
-main = ((fst (1, [2]), snd ([1], 2)), trip [3])
