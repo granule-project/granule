@@ -1,3 +1,0 @@
-Type checking failed: 
-Unbound type constructor: frontend/tests/cases/negative/isEmpty.gr:3:1:
-`Vec`

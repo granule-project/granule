@@ -1,4 +1,4 @@
-import Prelude
+data Bool = True | False
 
 map : Int
 map = 0

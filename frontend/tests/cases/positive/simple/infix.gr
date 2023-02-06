@@ -1,4 +1,4 @@
-import Prelude
+import Bool
 
 answer : Int
 answer =

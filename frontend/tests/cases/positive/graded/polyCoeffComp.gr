@@ -1,0 +1,16 @@
+--- Coeffectful composition
+comp : forall {k : Coeffect, n : k, m : k, a : Type, b : Type, c : Type} .
+       (b [n] -> c) -> (a [m] -> b) [n] -> a [n * m] -> c
+comp g [f] = \[x] -> g [f [x]]
+
+test : Int [2] -> Int
+test [x] = x+x
+
+test2 : Int [3] -> Int
+test2 [x] = x+x+x
+
+test3 : Int [6] -> Int
+test3 = comp test [test2]
+
+main : Int
+main = test3 [10]
