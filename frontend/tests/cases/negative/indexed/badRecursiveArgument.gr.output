@@ -1,5 +1,5 @@
 Type checking failed: 
-Solver timeout: frontend/tests/cases/negative/badRecursiveArgument.gr:7:1:
+Solver timeout: frontend/tests/cases/negative/indexed/badRecursiveArgument.gr:7:1:
 Solver timed out with limit of 10000ms while checking the grading of definition `fibble` with the following theorem:
 ∀ n0.0 : Nat,t9.0 : Nat . (((n0.0 + 1 = (n0 + 1) + 1) ∧ (n0.0 + 1 = n0.0 + 1)) -> (n0 + 1 = (n0 + 1) + 1) ∧ (n0 + 1 = n0 + 1))
 You may want to increase the timeout (see --help).

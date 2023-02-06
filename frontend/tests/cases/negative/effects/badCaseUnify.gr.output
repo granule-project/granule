@@ -1,3 +1,3 @@
 Type checking failed: 
-Unification failed: frontend/tests/cases/negative/badCaseUnify.gr:7:27:
+Unification failed: frontend/tests/cases/negative/effects/badCaseUnify.gr:8:27:
 Type variable `a` cannot be unified with type `(a [0..1]) <MayFail>` (occurs check failure; implies infinite type).

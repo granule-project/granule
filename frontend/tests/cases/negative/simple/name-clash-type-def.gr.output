@@ -1,9 +1,9 @@
 Type checking failed: 
-Type constructor name clash: frontend/tests/cases/negative/name-clash-type-def.gr:3:1:
+Type constructor name clash: frontend/tests/cases/negative/simple/name-clash-type-def.gr:3:1:
 `A` already defined at
 	(location redacted)
 	(location redacted)
 
-Type constructor name clash: frontend/tests/cases/negative/name-clash-type-def.gr:9:1:
+Type constructor name clash: frontend/tests/cases/negative/simple/name-clash-type-def.gr:9:1:
 `B` already defined at
 	(location redacted)
