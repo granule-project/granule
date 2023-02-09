@@ -1,2 +1,3 @@
+-- gr --no-eval
 bad2 : forall {n : Nat, a : Type} . a [n] -> Int
 bad2 [_] = 42

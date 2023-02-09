@@ -8,4 +8,4 @@ vmap [f] (Cons x xs) = Cons (f x) (vmap [f] xs)
 
 main : Vec 3 Int
 -- Tests the approach for having fewer annotations on lambdas
-main = map [λx → x + 1] (Cons 1 (Cons 2 (Cons 3 Nil)))
+main = vmap [λx → x + 1] (Cons 1 (Cons 2 (Cons 3 Nil)))
