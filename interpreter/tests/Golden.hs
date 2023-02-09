@@ -64,7 +64,7 @@ main = do
       -- go into project root
       setCurrentDirectory "../"
       negative  <- goldenTestsNegative  config
-      positive  <- goldenTestsPositive  config 
+      positive  <- goldenTestsPositive  config
       rewrite   <- goldenTestsRewrite   config
       synthesis <- goldenTestsSynthesis config
 
@@ -193,7 +193,7 @@ goldenTestsSynthesis config = do
 
   return $ testGroup
     "Golden synthesis examples"
-    [testGroup 
+    [testGroup
        "Main: Additive" (map (grGolden' mainGlobals) files)
     -- Do extra tests, running additive pruning and subtractive on the hilbert benchmarks
    , testGroup
@@ -207,7 +207,8 @@ goldenTestsSynthesis config = do
         globalsSourceFilePath = Just fp,
         globalsSynthesise = Just True,
         globalsRewriteHoles = Just True,
-        globalsIncludePath = Just "StdLib" }
+        globalsIncludePath = Just "StdLib",
+        globalsSynthTimeoutMillis = Just 3000 }
 
     subtractiveGlobals :: FilePath -> Globals
     subtractiveGlobals fp = (mainGlobals fp) { globalsSubtractiveSynthesis = Just True }
