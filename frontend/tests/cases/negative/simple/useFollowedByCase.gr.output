@@ -1,0 +1,3 @@
+Type checking failed: 
+Linearity error: frontend/tests/cases/negative/simple/useFollowedByCase.gr:3:34:
+Linear variable `x` is never used.
