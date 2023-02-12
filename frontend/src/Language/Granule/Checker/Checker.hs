@@ -64,7 +64,7 @@ import Language.Granule.Utils
 -- Checking (top-level)
 check :: (?globals :: Globals)
   => AST () ()
-  -> IO (Either (NonEmpty CheckerError) (AST () Type, [Def () ()], SynthContext))
+  -> IO (Either (NonEmpty CheckerError) (AST () Type, [Def () ()]))
 check ast@(AST _ _ _ hidden _) = do
   evalChecker (initState { allHiddenNames = hidden }) $ (do
       ast@(AST dataDecls defs imports hidden name) <- return $ replaceTypeAliases ast
@@ -79,8 +79,7 @@ check ast@(AST _ _ _ hidden _) = do
       -- Add on any definitions computed by the type checker (derived)
       st <- get
       let derivedDefs = map (snd . snd) (derivedDefinitions st)
-      let holes = synthHoles st
-      pure $ (AST dataDecls defs' imports hidden name, derivedDefs, SynthContext defs holes st))
+      pure $ (AST dataDecls defs' imports hidden name, derivedDefs))
 
 -- Synthing the type of a single expression in the context of an asy
 synthExprInIsolation :: (?globals :: Globals)
@@ -539,7 +538,10 @@ checkExpr defs ctxt _ _ t (Hole s _ _ vars hints) = do
   let unboundVariables = filter (\ x -> isNothing (lookup x ctxt)) vars
 
   -- elaborated hole
-  let hexpr = Hole s t False vars hints
+  let hexpr = Hole s () False vars hints
+  let hindex = case hints of 
+        Just hints' -> fromMaybe 1 $ hIndex hints' 
+        _ -> 1 
 
   case unboundVariables of
     (v:_) -> throw UnboundVariableError{ errLoc = s, errId = v }
@@ -548,25 +550,21 @@ checkExpr defs ctxt _ _ t (Hole s _ _ vars hints) = do
       -- Running in synthesis mode
       case globalsSynthesise ?globals of
         Just True -> do
-          synthedExpr <- do
-              -- Check to see if this hole is something we are interested in
-              case globalsHolePosition ?globals of
-                -- Synth everything mode
-                Nothing -> do 
-                  put $ st { synthHoles = (hexpr, t, 0, ctxt, currentDef st):(synthHoles st) }
-                  return hexpr
-                Just pos ->
-                  if spanContains pos s
-                    -- This is a hole we want to synth on
-                    then do 
-                      put $ st { synthHoles = (hexpr, t, 0, ctxt, currentDef st):(synthHoles st) }
-                      return hexpr
-                    -- This is not a hole we want to synth on
-                    else  return hexpr
-
-          st <- get
           let holeVars = map (\id -> (id, id `elem` boundVariables)) (map fst ctxt)
-          throw $ HoleMessage s t ctxt (tyVarContext st) holeVars [([], synthedExpr)]
+          -- Check to see if this hole is something we are interested in
+          case globalsHolePosition ?globals of
+            -- Synth everything mode
+            Nothing -> do 
+              throw $ HoleMessage s t ctxt (tyVarContext st) holeVars (Just (st, defs, currentDef st, hindex, hints)) [([], hexpr)]
+            Just pos ->
+              if spanContains pos s
+              -- This is a hole we want to synth on
+              then do 
+                throw $ HoleMessage s t ctxt (tyVarContext st) holeVars (Just (st, defs, currentDef st, hindex, hints)) [([], hexpr)]
+                -- This is not a hole we want to synth on
+              else  
+                throw $ HoleMessage s t ctxt (tyVarContext st) holeVars Nothing [([], hexpr)]
+
 
         _ -> do
               st <- get
@@ -580,11 +578,13 @@ checkExpr defs ctxt _ _ t (Hole s _ _ vars hints) = do
               -- If we are in synthesise mode, also try to synthesise a
               -- term for each case split goal *if* this is also a hole
               -- of interest
-              let casesWithHoles = zip (map fst cases) (repeat (Hole s t True [] Nothing))
+              let casesWithHoles = zip (map fst cases) (repeat (Hole s () True [] Nothing))
 
               let holeVars = map (\id -> (id, id `elem` boundVariables)) (map fst ctxt)
-              throw $ HoleMessage s t ctxt (tyVarContext st) holeVars casesWithHoles
-
+              throw $ HoleMessage s t ctxt (tyVarContext st) holeVars Nothing casesWithHoles
+            _ -> do
+              let holeVars = map (\id -> (id, id `elem` boundVariables)) (map fst ctxt)
+              throw $ HoleMessage s t ctxt (tyVarContext st) holeVars Nothing [([], hexpr)]
 
 -- Checking of constants
 checkExpr _ _ _ _ ty@(TyCon c) (Val s _ rf (NumInt n))   | internalName c == "Int" = do

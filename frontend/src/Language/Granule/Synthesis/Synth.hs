@@ -1825,8 +1825,17 @@ fst3 (x, y, z) = x
 
 
 
-synthGradedBase :: (?globals :: Globals) => Ctxt Assumption -> Type -> IO [Expr () ()]
-synthGradedBase ctxt goal = do
+synthesiseGradedBase :: (?globals :: Globals) 
+  => Maybe Hints 
+  -> Int 
+  -> Ctxt TypeScheme  -- Unrestricted Defs 
+  -> Ctxt (TypeScheme, Type) -- Restricted Defs
+  -> Id
+  -> Ctxt Assumption    -- (unfocused) free variables
+  -> TypeScheme           -- type from which to synthesise
+  -> CheckerState
+  -> IO [Expr () ()]
+synthesiseGradedBase hints index unrestricted restricted currentDef ctxt goal cs = do
 
   start <- liftIO $ Clock.getTime Clock.Monotonic
   let checkerState = initState { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- [(mkId "a", ktype), (mkId "b", ktype)]] }
@@ -1851,6 +1860,8 @@ synthGradedBase ctxt goal = do
 
   -- let goalTy = FunTy Nothing (Just $ TyGrade Nothing 1) (TyVar $ mkId "a") (TyVar $ mkId "a")
   let goalTy = FunTy Nothing (Just $ TyGrade Nothing 1) (TyVar $ mkId "a") (FunTy Nothing (Just $ TyGrade Nothing 1) (FunTy Nothing (Just $ TyGrade Nothing 1) (TyVar $ mkId "a") (TyVar $ mkId "b")) (TyVar $ mkId "b"))
+
+  -- let datadecls = []
 
 
   let initRes = gSynthInner RightAsync [] (Focused []) goalTy
@@ -2282,3 +2293,22 @@ gJoin g1 g2 = TyInfix TyOpJoin g1 g2
 
 
 
+
+exprFold :: Span -> Expr () () -> Expr () () -> Expr () ()
+exprFold s newExpr (App s' a rf e1 e2) = (App s' a rf (exprFold s newExpr e1) (exprFold s newExpr e2))
+exprFold s newExpr (AppTy s' a rf e1 t) = (AppTy s' a rf (exprFold s newExpr e1) t)
+exprFold s newExpr (Binop s' a b op e1 e2) = (Binop s' a b op (exprFold s newExpr e1) (exprFold s newExpr e2))
+exprFold s newExpr (LetDiamond s' a b ps mt e1 e2) = (LetDiamond s' a b ps mt (exprFold s newExpr e1) (exprFold s newExpr e2))
+exprFold s newExpr (TryCatch s' a b e p mt e1 e2) = (TryCatch s' a b (exprFold s newExpr e) p mt (exprFold s newExpr e1) (exprFold s newExpr e2))
+exprFold s newExpr (Val s' a b val) = (Val s' a b (valueFold s newExpr val))
+exprFold s newExpr (Case s' a b expr pats) = (Case s' a b (exprFold s newExpr expr) pats)
+exprFold s newExpr (Hole s' a b ids hints) = if s == s' then newExpr else (Hole s' a b ids hints)
+
+    
+valueFold :: Span -> Expr () () -> Value () () -> Value () ()
+valueFold s newExpr (Abs a pats mt e) = (Abs a pats mt (exprFold s newExpr e))
+valueFold s newExpr (Promote a e) = (Promote a (exprFold s newExpr e))
+valueFold s newExpr (Pure a e) = (Pure a (exprFold s newExpr e))
+valueFold s newExpr (Nec a e) = (Nec a (exprFold s newExpr e))
+valueFold s newExpr (Constr a ident vals) = (Constr a ident $ map (valueFold s newExpr) vals)
+valueFold s newExpr v = v 

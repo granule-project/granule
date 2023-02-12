@@ -33,7 +33,7 @@ import qualified Language.Granule.Checker.Primitives as Primitives
 import Language.Granule.Context
 
 import Language.Granule.Syntax.Def
-import Language.Granule.Syntax.Expr (Operator, Expr)
+import Language.Granule.Syntax.Expr (Operator, Expr, Hints)
 import Language.Granule.Syntax.Helpers (FreshenerState(..), freshen, Term(..))
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
@@ -142,13 +142,6 @@ meetConsumption Empty Empty = Empty
 meetConsumption Empty Full = NotFull
 meetConsumption Full Empty = NotFull
 
-data SynthContext = SynthContext 
-            { 
-              defs :: [Def () ()]
-            , holes :: [(Expr () Type, Type, Int, Ctxt Assumption, (Maybe Id, Maybe (Spec () ())))]
-            , checkerState :: CheckerState
-            }
-
 data CheckerState = CS
             { -- Fresh variable id state
               uniqueVarIdCounterMap  :: M.Map String Int
@@ -197,7 +190,6 @@ data CheckerState = CS
             -- Warning accumulator
             -- , warnings :: [Warning]
 
-            , synthHoles :: [(Expr () Type, Type, Int, Ctxt Assumption, (Maybe Id, Maybe (Spec () ())))]
             , currentDef :: (Maybe Id, Maybe (Spec () ()))
 
             -- flag to find out if constraints got added
@@ -222,7 +214,6 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , allHiddenNames = M.empty
                , splittingTy = Nothing
                , derivedDefinitions = []
-               , synthHoles = []
                , currentDef = (Nothing, Nothing)
                , addedConstraints = False
                , predicateContext = Top
@@ -483,7 +474,8 @@ data CheckerError
       -- Tracks whether a variable is split
       holeVars :: Ctxt Bool,
       -- Used for synthesising programs
-      cases       :: [([Pattern ()], Expr () Type)] }
+      synthCtxt   :: Maybe (CheckerState, Ctxt TypeScheme, (Maybe Id, Maybe (Spec () ())), Int, Maybe Hints),
+      cases       :: [([Pattern ()], Expr () ())] }
   | TypeError
     { errLoc :: Span, tyExpected :: Type, tyActual :: Type }
   | TypeErrorAtLevel
