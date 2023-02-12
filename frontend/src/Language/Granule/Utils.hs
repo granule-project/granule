@@ -49,6 +49,7 @@ data Globals = Globals
   , globalsSubtractiveSynthesis   :: Maybe Bool
   , globalsAlternateSynthesisMode :: Maybe Bool
   , globalsGradeOnRule         :: Maybe Bool
+  , globalsHaskellSynth            :: Maybe Bool
   , globalsExampleLimit         :: Maybe Int
   , globalsExtensions           :: [Extension]
   } deriving (Read, Show)
@@ -83,7 +84,7 @@ usingExtension e = elem e $ globalsExtensions ?globals
 
 -- | Accessors for global flags with default values
 debugging, noColors, alternativeColors, noEval, suppressInfos, suppressErrors,
-  timestamp, testing, ignoreHoles, benchmarking, benchmarkingRawData, subtractiveSynthesisMode, alternateSynthesisMode, gradeOnRule :: (?globals :: Globals) => Bool
+  timestamp, testing, ignoreHoles, benchmarking, benchmarkingRawData, subtractiveSynthesisMode, alternateSynthesisMode, gradeOnRule, haskellSynth :: (?globals :: Globals) => Bool
 debugging         = fromMaybe False $ globalsDebugging ?globals
 noColors          = fromMaybe False $ globalsNoColors ?globals
 alternativeColors = fromMaybe False $ globalsAlternativeColors ?globals
@@ -98,6 +99,7 @@ benchmarkingRawData = fromMaybe False $ globalsBenchmarkRaw ?globals
 subtractiveSynthesisMode = fromMaybe False $ globalsSubtractiveSynthesis ?globals
 alternateSynthesisMode = fromMaybe False $ globalsAlternateSynthesisMode ?globals
 gradeOnRule = fromMaybe False $ globalsGradeOnRule ?globals
+haskellSynth = fromMaybe False $ globalsHaskellSynth ?globals
 
 -- | Accessor for the solver timeout with a default value
 solverTimeoutMillis :: (?globals :: Globals) => Integer
@@ -140,6 +142,7 @@ instance Semigroup Globals where
       , globalsSubtractiveSynthesis   = globalsSubtractiveSynthesis   g1 <|> globalsSubtractiveSynthesis   g2
       , globalsAlternateSynthesisMode = globalsAlternateSynthesisMode g1 <|> globalsAlternateSynthesisMode g2
       , globalsGradeOnRule = globalsGradeOnRule g1 <|> globalsGradeOnRule g2
+      , globalsHaskellSynth = globalsHaskellSynth g1 <|> globalsHaskellSynth g2
       , globalsExampleLimit = globalsExampleLimit g1 <|> globalsExampleLimit g2
       , globalsExtensions = nub (globalsExtensions g1 <> globalsExtensions g2)
       }
@@ -167,6 +170,7 @@ instance Monoid Globals where
     , globalsSubtractiveSynthesis   = Nothing
     , globalsAlternateSynthesisMode = Nothing
     , globalsGradeOnRule = Nothing
+    , globalsHaskellSynth = Nothing
     , globalsExampleLimit = Nothing
     , globalsExtensions = [Base]
     }

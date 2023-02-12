@@ -146,10 +146,11 @@ data Hints =
     hPruning     :: Bool,
     hNoTimeout   :: Bool,
     hGradeOnRule :: Bool,
+    hLinHaskell  :: Maybe Span, -- The location of the hole in the original Haskell file 
     hTimeout     :: Maybe Int, 
     hIndex       :: Maybe Int
   }
-  deriving (Generic, Eq, Ord, Show, Rp.Data)
+  deriving (Generic, Eq, Show, Rp.Data)
 
 
 deriving instance (Show ev, Show a, Show value, Show expr)

@@ -25,7 +25,7 @@ import Control.Monad ((<=<), forM)
 import Development.GitRev
 import Data.Char (isSpace)
 import Data.Either (isRight)
-import Data.List (intercalate, isPrefixOf, stripPrefix, find)
+import Data.List (intercalate, isPrefixOf, stripPrefix)
 import Data.List.Extra (breakOn)
 import Data.List.NonEmpty (NonEmpty, toList)
 import qualified Data.List.NonEmpty as NonEmpty (filter)
@@ -41,20 +41,18 @@ import Options.Applicative.Help.Pretty (string)
 
 import Language.Granule.Context
 import Language.Granule.Checker.Checker
-import Language.Granule.Checker.Monad (CheckerError(..), SynthContext(..), Assumption(..))
+import Language.Granule.Checker.Monad (CheckerError(..))
 import Language.Granule.Evaluator.Eval
 import Language.Granule.Syntax.Def 
-import Language.Granule.Syntax.Expr 
 import Language.Granule.Syntax.Type 
-import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Preprocessor
 import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Preprocessor.Ascii
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
-import Language.Granule.Synthesis.Builders
 import Language.Granule.Synthesis.RewriteHoles
 import Language.Granule.Synthesis.Synth
+import Language.Granule.Synthesis.LinearHaskell
 import Language.Granule.Utils
 import Paths_granule_interpreter (version)
 
@@ -83,14 +81,25 @@ runGrOnFiles globPatterns config = let ?globals = grGlobals config in do
           let fileName = if pwd `isPrefixOf` path then takeFileName path else path
           let ?globals = ?globals{ globalsSourceFilePath = Just fileName } in do
             printInfo $ "Checking " <> fileName <> "..."
-            src <- preprocess
-              (rewriter config)
-              (keepBackup config)
-              path
-              (literateEnvName config)
-            result <- run config src
-            printResult result
-            return result
+            case globalsHaskellSynth ?globals of
+              Just True -> do
+                (ast, hsSrc) <- processHaskell path
+                _ <- error $ show hsSrc
+                result <- synthesiseLinearHaskell ast hsSrc
+                case result of 
+                  Just srcModified -> do 
+                    writeHaskellToFile path srcModified
+                    return $ Right NoEval
+                  _ -> return $ Left $ FatalError "Couldn't synthesise Linear Haskell..."
+              _ -> do 
+                src <- preprocess
+                  (rewriter config)
+                  (keepBackup config)
+                  path
+                  (literateEnvName config)
+                result <- run config src
+                printResult result
+                return result
     if all isRight (concat results) then exitSuccess else exitFailure
 
 runGrOnStdIn :: GrConfig -> IO ()
@@ -607,7 +616,11 @@ parseGrConfig = info (go <**> helper) $ briefDesc
            $ long "gradeonrule"
             <> help "Use alternate grade-on-rule mode for synthesis"
 
-
+        globalsHaskellSynth <-
+          flag Nothing (Just True)
+           $ long "linear-haskell"
+            <> help "Synthesise Linear Haskell programs"
+            
         grRewriter
           <- flag'
             (Just asciiToUnicode)
@@ -667,6 +680,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsSubtractiveSynthesis
               , globalsAlternateSynthesisMode
               , globalsGradeOnRule
+              , globalsHaskellSynth
               , globalsExtensions = []
               }
             }

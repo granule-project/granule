@@ -7,7 +7,7 @@ module Language.Granule.Synthesis.Synth where
 
 import qualified Data.Map as M
 
-import Data.List (sortBy,nub)
+import Data.List (sortBy,nub) 
 
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Type

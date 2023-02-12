@@ -76,6 +76,7 @@ library:
   - Language.Granule.Syntax.Span
   - Language.Granule.Syntax.Type
   - Language.Granule.Synthesis.Builders
+  - Language.Granule.Synthesis.LinearHaskell
   - Language.Granule.Synthesis.Splitting
   - Language.Granule.Synthesis.Synth
   - Language.Granule.Synthesis.RewriteHoles
@@ -93,6 +94,7 @@ library:
   - Glob
   - filepath
   - bifunctors
+  - haskell-src-exts
   - raw-strings-qq
   - text-replace
   - directory

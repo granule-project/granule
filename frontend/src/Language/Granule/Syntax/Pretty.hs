@@ -338,7 +338,7 @@ instance Pretty Pos where
     pretty (l, c) = show l <> ":" <> show c
 
 instance Pretty Hints where
-    pretty (Hints hSub hPrun hNoTime hGOR hTime hIndex) = undefined
+    pretty (Hints hSub hPrun hNoTime hGOR hLin hTime hIndex) = ""
       --  \case 
 
       -- HSubtractive      -> " -s"
