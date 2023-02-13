@@ -127,7 +127,7 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
           tyVarContext' <- substitute subst (tyVarContext checkerState)
           put $ checkerState { tyVarContext = tyVarContext' }
           let predicate = Conj $ predicateStack checkerState
-          predicate <- substitute subst predicate
+          --predicate <- substitute subst predicate
           solveConstraints predicate (getSpan expr) (mkId "grepl")
 
 
