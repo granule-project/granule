@@ -27,10 +27,6 @@ Test subsets are defined by the directory they are in, within `frontend/tests/ca
 
 will run only those tests in directory with `name`` as a directory in the path.
 
-These can be stacked, e.g., 
-
-      stack test --ta "-p simple -p indexed"
-
 Alternatively, you can exlude subsets via a different mechanism, by adding
 those directories to a file `.excludes` in the top-level directory (one
 per line). For example if `.excludes` contains
