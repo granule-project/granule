@@ -11,7 +11,8 @@ import System.Directory (renameFile, setCurrentDirectory)
 import System.Exit (ExitCode)
 import System.FilePath (dropExtension, pathSeparator)
 import qualified System.IO.Strict as Strict (readFile)
-import System.Environment
+--import System.Environment
+import System.Directory (doesFileExist)
 
 import Language.Granule.Interpreter (InterpreterResult(..), InterpreterError(..))
 import qualified Language.Granule.Interpreter as Interpreter
@@ -21,48 +22,24 @@ import Language.Granule.Utils (Globals (..), formatError)
 data Config = IncludeAll Config | Include String Config | Exclude String Config | Nil
   deriving Show
 
-{-
--- e.g., aux "-p simple -p polymorphism -e simple"
---    == IncludeAll (Include "simple" (Include "polymorphism" (Exclude "simple" Nil)))
-parseArgsToConfig :: [String] -> Either String Config
--- Otherwise we need to parse the inclusions/exclusions
-parseArgsToConfig config = (postProcess False Nil) <$> (aux config)
-  where
-    -- The list of arguments has includes therefore we will start with no files and add
-    postProcess True  res Nil = res
-    -- The list of arguments has no includes, therefore include all
-    postProcess False res Nil = IncludeAll res
-    -- Induct
-    postProcess hasInclude res (Include p as) = postProcess True (Include p res) as
-    postProcess hasInclude res (Exclude p as) = postProcess hasInclude (Exclude p res) as
-    postProcess hasInclude res (IncludeAll c) = postProcess hasInclude (IncludeAll res) c
-
-    -- Any argument starting with `--` is not one we are recognising here
-    aux ("--all":zs)     = aux zs >>= return . IncludeAll
-    aux (('-':'-':_):zs) = aux zs
-    aux ("-a":zs) =
-      (aux zs) >>= (return . IncludeAll)
-    aux (('-':mode):pattern:zs) =
-      case mode of
-        "p" -> (aux zs) >>= (return . Include pattern)
-        "e" -> (aux zs) >>= (return . Exclude pattern)
-        _   -> Left $ "Unknown mode: " <> mode
-    aux (_:xs) = aux xs
-    aux []     = return Nil
--}
-
 main :: IO ()
 main = do
-  -- Get patterns from test arguments
-  -- e.g., stack test --ta '-p positive'
-  args <- getArgs
-  let configE = Right (IncludeAll Nil) -- parseArgsToConfig args
+  -- go into project root
+  setCurrentDirectory "../"
+  -- Get a list of excluded directories
+  -- from .excludes if it exists
+  excludesFileQuery <- doesFileExist ".excludes"
+  configE <-
+    if excludesFileQuery
+    then do
+        excludesData <- readFile ".excludes"
+        putStrLn $ "\nExcluding directories: " ++ show (lines excludesData) ++ "\n"
+        return $ Right $ IncludeAll (foldr Exclude Nil (lines excludesData))
+    else return $ Right (IncludeAll Nil)
   case configE of
     Left error -> do
       putStrLn $ "Error in test arguments: " <> error
     Right config -> do
-      -- go into project root
-      setCurrentDirectory "../"
       negative  <- goldenTestsNegative  config
       positive  <- goldenTestsPositive  config
       rewrite   <- goldenTestsRewrite   config
@@ -73,10 +50,10 @@ main = do
         (\(e :: ExitCode) -> do
           -- Move all of the backup files back to their original place.
           backupFiles <- findByExtension config [".bak"]  "frontend/tests/cases/rewrite"
-          _ <- mapM_ (\backup -> renameFile backup (dropExtension backup)) backupFiles
+          mapM_ (\backup -> renameFile backup (dropExtension backup)) backupFiles
           -- and for synthesis
           backupFiles <- findByExtension config [".bak"]  "frontend/tests/cases/synthesis"
-          _ <- mapM_ (\backup -> renameFile backup (dropExtension backup)) backupFiles
+          mapM_ (\backup -> renameFile backup (dropExtension backup)) backupFiles
           throwIO e
         )
 
