@@ -17,7 +17,7 @@ import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Data.Functor.Identity (runIdentity)
 import Data.Maybe (fromMaybe)
-import Data.List (isPrefixOf)
+import Data.List (isPrefixOf, sortBy)
 
 import Language.Granule.Context
 
@@ -883,15 +883,6 @@ mguCoeffectTypes' s coeffTy1 coeffTy2 = return Nothing
 cProduct :: Type -> Type -> Type
 cProduct x y = TyApp (TyApp (TyCon (mkId ",,")) x) y
 
---
-requiresSolver :: (?globals :: Globals) => Span -> Type -> Checker Bool
-requiresSolver s ty = do
-  (result, putChecker) <- peekChecker (checkKind s ty kcoeffect <|> checkKind s ty keffect)
-  case result of
-    -- Checking as coeffect or effect caused an error so ignore
-    Left _  -> return False
-    Right _ -> putChecker >> return True
-
 
 -- | Find out whether a coeffect if flattenable, and if so get the operation
 -- | used to represent flattening on the grades
@@ -999,7 +990,10 @@ unification s var1 typ2 rel = do
 
                           return (localSubst : subst)
 
-                    _ -> throw $ UnificationFail s var1 typ2 kind1 False
+                    _ -> do
+                      ifM (requiresSolver s kind1)
+                        (addConstraint (rel s (TyVar var1) (TyVar var2) kind1) >> return [])
+                        (throw $ UnificationFail s var1 typ2 kind1 False)
 
             -- Not a matching tyvar
             _ -> do
@@ -1039,3 +1033,182 @@ unification s var1 typ2 rel = do
           let localSubst = (var1, SubstT typ2)
           --subst <- combineSubstitutions s subst1 subst2
           return (localSubst : subst1)
+
+-- # Substitutions work
+
+combineManySubstitutions :: (?globals :: Globals)
+    => Span -> [Substitution] -> Checker Substitution
+combineManySubstitutions s [] = return []
+combineManySubstitutions s (subst:ss) = do
+  ss' <- combineManySubstitutions s ss
+  combineSubstitutions s subst ss'
+
+removeReflexivePairs :: Substitution -> Substitution
+removeReflexivePairs [] = []
+removeReflexivePairs ((v, SubstT (TyVar v')):subst) | v == v' = removeReflexivePairs subst
+removeReflexivePairs ((v, e):subst) = (v, e) : removeReflexivePairs subst
+
+-- | Combines substitutions which may fail if there are conflicting
+-- | substitutions
+combineSubstitutionsHere ::
+    (?globals :: Globals)
+    => Substitution -> Substitution -> Checker Substitution
+combineSubstitutionsHere = combineSubstitutions nullSpan
+
+-- | Combines substitutions which may fail if there are conflicting
+-- | substitutions
+combineSubstitutions ::
+    (?globals :: Globals)
+    => Span -> Substitution -> Substitution -> Checker Substitution
+combineSubstitutions sp [] u2 = return u2
+combineSubstitutions sp u1 [] = return u1
+combineSubstitutions sp u1 u2 = do
+      -- Remove any substitutions that say things like `a |-> a`. This leads to infite loops
+      u1 <- return $ removeReflexivePairs u1
+      u2 <- return $ removeReflexivePairs u2
+
+      -- For all things in the (possibly empty) intersection of contexts `u1` and `u2`,
+      -- check whether things can be unified, i.e. exactly
+      uss1 <- forM u1 $ \(v, s) ->
+        case lookupMany v u2 of
+          -- Unifier in u1 but not in u2
+          [] -> return [(v, s)]
+          -- Possible unifications in each part
+          alts -> do
+              unifs <-
+                forM alts $ \s' -> do
+                   --(us, t) <- unifiable v t t' t t'
+                   us <- unify s s'
+                   case us of
+                     Nothing -> throw UnificationFailGeneric { errLoc = sp, errSubst1 = s, errSubst2 = s' }
+                     Just us -> do
+                       sUnified <- substitute us s
+                       combineSubstitutions sp [(v, sUnified)] us
+
+              return $ concat unifs
+
+      -- Check we're not unifying two universals to the same substitutor
+      -- errs <- checkValid [] $ flipSubstitution $ concat uss1
+      -- case errs of
+      -- --  Just (v, v') -> throw $ UnificationDisallowed sp  v v' -- Change error
+      --   _ -> do
+      -- -- Any remaining unifiers that are in u2 but not u1
+      uss2 <- forM u2 $ \(v, s) ->
+          case lookup v u1 of
+              Nothing -> return [(v, s)]
+              _       -> return []
+      let uss = concat uss1 <> concat uss2
+      reduceByTransitivity sp uss
+
+-- checkValid :: [Id] -> Substitution -> Checker (Maybe (Type, Type))
+-- checkValid vars (sub1@(v, (SubstT (TyVar v'))):substs) = do
+--   st <- get
+--   case lookup v' (tyVarContext  st) of
+--     Just (_, ForallQ) ->
+--       if v `elem` vars then
+--         return $ Just (TyVar v, TyVar v')
+--       else
+--          checkValid (v : vars) substs
+--     _ -> checkValid vars substs
+-- checkValid vars (sub:substs) = checkValid vars substs
+-- checkValid _ []  = return $ Nothing
+
+reduceByTransitivity :: Span -> Substitution -> Checker Substitution
+reduceByTransitivity sp ctxt = reduceByTransitivity' [] ctxt
+ where
+   reduceByTransitivity' :: Substitution -> Substitution -> Checker Substitution
+   reduceByTransitivity' subst [] = return subst
+
+   reduceByTransitivity' substLeft (subst@(var, SubstT (TyVar var')):substRight) =
+     case lookupAndCutout var' (substLeft ++ substRight) of
+       Just (substRest, t) ->
+         case t of
+           SubstT (TyVar var') -> do
+             st <- get
+             case (lookup var (tyVarContext st), lookup var' (tyVarContext st)) of
+               (Just (vara, ForallQ), Just (varb, ForallQ)) | vara /= varb ->
+                 throw $ UnificationFailGeneric sp (SubstT (TyVar var)) (SubstT (TyVar var'))
+               _ -> do
+                 subst <- reduceByTransitivity sp ((var', t) : substRest)
+                 return ((var, t) : subst)
+           _ -> do
+              subst <- reduceByTransitivity sp ((var', t) : substRest)
+              return ((var, t) : subst)
+
+       Nothing             -> reduceByTransitivity' (subst : substLeft) substRight
+
+   reduceByTransitivity' substLeft (subst:substRight) =
+     reduceByTransitivity' (subst:substLeft) substRight
+
+class Unifiable t where
+    unify' :: (?globals :: Globals) => t -> t -> MaybeT Checker Substitution
+
+unify :: (?globals :: Globals, Unifiable t) => t -> t -> Checker (Maybe Substitution)
+unify x y = runMaybeT $ unify' x y
+
+
+requiresSolver :: (?globals :: Globals) => Span -> Type -> Checker Bool
+requiresSolver s ty = do
+  (result, putChecker) <- peekChecker (checkKind s ty kcoeffect <|> checkKind s ty keffect)
+  case result of
+    -- Checking as coeffect or effect caused an error so ignore
+    Left _  -> return False
+    Right _ -> putChecker >> return True
+
+instance Unifiable Substitutors where
+    unify' (SubstT t) (SubstT t') = unify' t t'
+
+instance Unifiable Type where
+    unify' t t' | t == t' = return []
+    unify' (TyVar v) t    = lift $ unification nullSpan v t Eq
+    unify' t (TyVar v)    = unify' (TyVar v) t
+    unify' (FunTy _ t1 t2) (FunTy _ t1' t2') = do
+        u1 <- unify' t1 t1'
+        u2 <- unify' t2 t2'
+        lift $ combineSubstitutionsHere u1 u2
+    unify' (Box c t) (Box c' t') = do
+        u1 <- unify' c c'
+        u2 <- unify' t t'
+        lift $ combineSubstitutionsHere u1 u2
+    unify' (Diamond e t) (Diamond e' t') = do
+        u1 <- unify' e e'
+        u2 <- unify' t t'
+        lift $ combineSubstitutionsHere u1 u2
+    unify' (TyApp t1 t2) (TyApp t1' t2') = do
+        u1 <- unify' t1 t1'
+        u2 <- unify' t2 t2'
+        lift $ combineSubstitutionsHere u1 u2
+    unify' t@(TyInfix o t1 t2) t'@(TyInfix o' t1' t2') | o == o' = do
+      u1 <- unify' t1 t1'
+      u2 <- unify' t2 t2'
+      lift $ combineSubstitutionsHere u1 u2
+
+    unify' (TyCase t branches) (TyCase t' branches') = do
+      u <- unify' t t'
+      let branches1 = sortBy (\x y -> compare (fst x) (fst y)) branches
+      let branches2 = sortBy (\x y -> compare (fst x) (fst y)) branches'
+      if map fst branches1 == map fst branches2
+        then do
+          us <- zipWithM unify' (map snd branches1) (map snd branches2)
+          lift $ combineManySubstitutions nullSpan (u : us)
+        else
+          -- patterns are different in a case
+          fail ""
+
+    unify' (TySig t k) (TySig t' k') = do
+      u  <- unify' t t'
+      u' <- unify' k k'
+      lift $ combineSubstitutionsHere u u'
+
+    -- No unification
+    unify' t t' = do
+      -- not ideal
+      var <- lift $ freshTyVarInContext (mkId $ "ku") kcoeffect
+      lift $ addConstraint (Eq nullSpan t t' (TyVar var))
+      return []
+
+instance Unifiable t => Unifiable (Maybe t) where
+    unify' Nothing _ = return []
+    unify' _ Nothing = return []
+    unify' (Just x) (Just y) = unify' x y
+
