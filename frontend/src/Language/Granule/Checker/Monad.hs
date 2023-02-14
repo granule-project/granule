@@ -191,6 +191,7 @@ data CheckerState = CS
             -- , warnings :: [Warning]
 
             , currentDef :: (Maybe Id, Maybe (Spec () ()))
+            , wantedTypeConstraints :: [Type]
 
             -- flag to find out if constraints got added
             , addedConstraints :: Bool
@@ -215,6 +216,7 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , splittingTy = Nothing
                , derivedDefinitions = []
                , currentDef = (Nothing, Nothing)
+               , wantedTypeConstraints = []
                , addedConstraints = False
                , predicateContext = Top
                }

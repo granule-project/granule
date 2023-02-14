@@ -42,7 +42,7 @@ import Options.Applicative.Help.Pretty (string)
 import Language.Granule.Context
 import Language.Granule.Checker.Checker
 import Language.Granule.Checker.Monad (CheckerError(..))
-import Language.Granule.Evaluator.Eval
+import Language.Granule.Interpreter.Eval
 import Language.Granule.Syntax.Def 
 import Language.Granule.Syntax.Type 
 import Language.Granule.Syntax.Preprocessor
@@ -648,7 +648,6 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsTimestamp
               , globalsTesting = Nothing
               , globalsSolverTimeoutMillis
-              , globalsExampleLimit
               , globalsIncludePath
               , globalsSourceFilePath = Nothing
               , globalsEntryPoint
@@ -661,6 +660,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsAlternateSynthesisMode
               , globalsGradeOnRule
               , globalsHaskellSynth
+              , globalsExampleLimit
               , globalsExtensions = []
               }
             }

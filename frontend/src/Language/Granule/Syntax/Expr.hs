@@ -220,6 +220,14 @@ pattern Case :: --forall {g :: * -> * -> * -> * -> *} {ev} {a}.
                 -> [(Pattern a, ExprFix2 ExprF g ev a)]
                 -> ExprFix2 ExprF g ev a
 pattern Case sp a rf swexp arms = (ExprFix2 (CaseF sp a rf swexp arms))
+
+pattern Hole :: -- forall {g :: * -> * -> * -> * -> *} {ev} {a}.
+                Span 
+                -> a 
+                -> Bool 
+                -> [Id] 
+                -> Maybe Hints 
+                -> ExprFix2 ExprF g ev a
 pattern Hole sp a rf vs hs = ExprFix2 (HoleF sp a rf vs hs)
 {-# COMPLETE App, Binop, LetDiamond, TryCatch, Val, Case, Hole #-}
 

@@ -62,7 +62,7 @@ generateCases span constructors ctxt toSplit = do
     Nothing -> return ([], [])
     Just ty -> do
       -- Filter the patterns if they are impossible.
-      patternsAndMaybeBinders <- mapM (caseFilter span eqTy) (snd cases)
+      patternsAndMaybeBinders <- mapM (caseFilter span ty) (snd cases)
       let validPatterns = catMaybes patternsAndMaybeBinders
       return (fst cases, validPatterns)
 

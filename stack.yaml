@@ -17,6 +17,8 @@ extra-deps:
 # Dependencies for language server
 - lsp-1.6.0.0
 - co-log-core-0.3.1.0
+- git: https://github.com/jackohughes/haskell-src-exts
+  commit: 5c2647fa0746bdac046897f5a6b7e4f5ef3afa79 
 
 # Override default flag values for local packages and extra-deps
 flags: {}

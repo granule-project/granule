@@ -18,7 +18,6 @@ import Control.Monad.State.Strict
 import Control.Monad.Except (throwError)
 import Data.List (isPrefixOf)
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.List (isPrefixOf, sort)
 import Data.List.Split (splitPlaces)
 import qualified Data.List.NonEmpty as NonEmpty (toList)
 import Data.Maybe
@@ -93,7 +92,7 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
       _    <- runAll checkDataCons (Primitives.dataTypes ++ dataDecls)
       defs <- runAll kindCheckDef defs
 
-      let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
+      let defCtxt = map (\(Def _ name _ _ _ tys) -> (name, tys)) defs
 
       -- also check the defs
       defs <- runAll (checkDef defCtxt) defs
@@ -494,9 +493,9 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
 
     replaceParameters :: [[Type]] -> Type -> Type
     replaceParameters [] ty = ty
-    replaceParameters ([]:tss) (FunTy id _ ty) = replaceParameters tss ty
+    replaceParameters ([]:tss) (FunTy id grade _ ty) = replaceParameters tss ty
     replaceParameters ((t:ts):tss) ty =
-      FunTy Nothing t (replaceParameters (ts:tss) ty)
+      FunTy Nothing Nothing t (replaceParameters (ts:tss) ty)
     replaceParameters _ t = error $ "Expecting function type: " <> pretty t
 
     -- Convert an id+assumption to a type.
@@ -534,6 +533,7 @@ checkExpr :: (?globals :: Globals)
 checkExpr defs ctxt _ _ t (Hole s _ _ vars hints) = do
   debugM "checkExpr[Hole]" (pretty s <> " : " <> pretty t)
 
+  st <- get
   let boundVariables = map fst $ filter (\ (id, _) -> sourceName id `elem` map sourceName vars) ctxt
   let unboundVariables = filter (\ x -> isNothing (lookup x ctxt)) vars
 
@@ -567,7 +567,6 @@ checkExpr defs ctxt _ _ t (Hole s _ _ vars hints) = do
 
 
         _ -> do
-              st <- get
               let pats = map (second snd3) (typeConstructors st)
               constructors <- mapM (\ (a, b) -> do
                   dc <- mapM (lookupDataConstructor s) b
@@ -582,9 +581,9 @@ checkExpr defs ctxt _ _ t (Hole s _ _ vars hints) = do
 
               let holeVars = map (\id -> (id, id `elem` boundVariables)) (map fst ctxt)
               throw $ HoleMessage s t ctxt (tyVarContext st) holeVars Nothing casesWithHoles
-            _ -> do
-              let holeVars = map (\id -> (id, id `elem` boundVariables)) (map fst ctxt)
-              throw $ HoleMessage s t ctxt (tyVarContext st) holeVars Nothing [([], hexpr)]
+            -- _ -> do
+            --   let holeVars = map (\id -> (id, id `elem` boundVariables)) (map fst ctxt)
+              -- throw $ HoleMessage s t ctxt (tyVarContext st) holeVars Nothing [([], hexpr)]
 
 -- Checking of constants
 checkExpr _ _ _ _ ty@(TyCon c) (Val s _ rf (NumInt n))   | internalName c == "Int" = do
@@ -2183,3 +2182,21 @@ freshenTySchemeForVar s rf id tyScheme = do
   let elaborated = Val s ty' rf (Var ty' id)
   return (ty', [], [], elaborated)
 
+
+-- Classified those expressions which are resource allocators
+resourceAllocator :: Expr a t -> Bool
+resourceAllocator (Val _ _ _ (Var _ p)) =
+    internalName p `elem` Primitives.unpromotables
+resourceAllocator (Val _ _ _ (Promote _ e)) =
+    resourceAllocator e
+resourceAllocator (App _ _ _ e1 e2) =
+    resourceAllocator e1 || resourceAllocator e2
+resourceAllocator (AppTy _ _ _ e _) =
+    resourceAllocator e
+resourceAllocator (Binop _ _ _ _ e1 e2) =
+    resourceAllocator e1 || resourceAllocator e2
+resourceAllocator (Case _ _ _ eg cases) =
+    resourceAllocator eg || any (resourceAllocator . snd) cases
+resourceAllocator (TryCatch _ _ _ e1 _ _ e2 e3) =
+    resourceAllocator e1 || resourceAllocator e2 || resourceAllocator e3
+resourceAllocator _ = False

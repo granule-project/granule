@@ -50,7 +50,7 @@ cgDefs (AST dd defs imports _ _) =
      return $ dd' ++ defs'
 
 cgDef :: Compiler m => Def () () -> m [Decl ()]
-cgDef (Def _ id _ EquationList{equations} typeschemes) = do
+cgDef (Def _ id _ _ EquationList{equations} typeschemes) = do
   scheme <- cgTypeScheme typeschemes
   let bodies = map equationBody     equations
       pats   = map equationPatterns equations
@@ -117,7 +117,7 @@ cgType (GrType.Type i) = return $ TyStar ()
 cgType (GrType.FunTy _ _ t1 t2) = do
   t1' <- cgType t1
   t2' <- cgType t2
-  return $ Hs.TyFun () t1' t2'
+  return $ Hs.TyFun () Nothing t1' t2'
 cgType (GrType.TyCon i) =
   return $ Hs.TyCon () $ UnQual () $ mkName i
 cgType (GrType.Box t t2) = cgType t2

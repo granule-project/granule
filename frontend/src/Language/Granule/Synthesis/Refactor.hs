@@ -8,7 +8,7 @@ import Language.Granule.Syntax.Identifiers
 
 -- Refactors an equation which contains abstractions in its equations
 -- by pushing these abstractions into equation patterns
-refactorDef :: Def () Type -> Def () Type
+refactorDef :: Def v a -> Def v a
 refactorDef (Def sp id ref spec (EquationList sp' id' ref' eqns) tyS) =
   Def sp id ref spec (EquationList sp' id' ref' (map refactorEqn eqns)) tyS
 

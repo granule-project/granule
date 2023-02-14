@@ -1053,7 +1053,7 @@ buildVec (c:cs) f = Constr () (mkId "Cons") [f $ Ext () $ Chan c, buildVec cs f]
 
 evalDefs :: (?globals :: Globals) => Ctxt RValue -> [Def (Runtime ()) ()] -> IO (Ctxt RValue)
 evalDefs ctxt [] = return ctxt
-evalDefs ctxt (Def _ var _ (EquationList _ _ _ [Equation _ _ _ rf [] e]) _ : defs) = do
+evalDefs ctxt (Def _ var _ _ (EquationList _ _ _ [Equation _ _ _ rf [] e]) _ : defs) = do
     val <- evalIn ctxt e
     case extend ctxt var val of
       Just ctxt -> evalDefs ctxt defs
@@ -1067,7 +1067,7 @@ class RuntimeRep t where
   toRuntimeRep :: t () () -> t (Runtime ()) ()
 
 instance RuntimeRep Def where
-  toRuntimeRep (Def s i rf eqs tys) = Def s i rf (toRuntimeRep eqs) tys
+  toRuntimeRep (Def s i rf spec eqs tys) = Def s i rf Nothing (toRuntimeRep eqs) tys
 
 instance RuntimeRep EquationList where
   toRuntimeRep (EquationList s i rf eqns) = EquationList s i rf (map toRuntimeRep eqns)
@@ -1122,5 +1122,5 @@ evalAtEntryPoint entryPoint (AST dataDecls defs _ _ _) = do
 isReducible :: Expr ev a -> Bool
 isReducible (Val _ _ _ (Var _ _)) = True
 isReducible (Val _ _ _ _)    = False
-isReducible (Hole _ _ _ _) = False
+isReducible (Hole _ _ _ _ _) = False
 isReducible _              = True

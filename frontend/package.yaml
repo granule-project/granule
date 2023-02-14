@@ -57,8 +57,6 @@ library:
   - Language.Granule.Checker.SubstitutionContexts
   - Language.Granule.Checker.TypeAliases
   - Language.Granule.Checker.Types
-  - Language.Granule.Evaluator.Desugar
-  - Language.Granule.Evaluator.Eval
   - Language.Granule.Syntax.Def
   - Language.Granule.Syntax.Expr
   - Language.Granule.Syntax.Helpers
