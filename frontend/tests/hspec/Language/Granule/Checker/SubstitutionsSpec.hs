@@ -6,7 +6,7 @@ import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Identifiers
 
 import Test.Hspec
-import Language.Granule.Checker.Substitution
+import Language.Granule.Checker.Kinding
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates

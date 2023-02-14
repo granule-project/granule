@@ -1,4 +1,4 @@
 Type checking failed: 
 Falsifiable theorem: frontend/tests/cases/negative/graded/twoBox.gr:9:1:
   The following constraint associated with `three` is false:
-	  ((3 : Nat) = 2) ∧ ((0 + 1) + 1 = 0) ∧ (((0 + 1) + 1) + 1 = 3) ∧ ((0 + 1) + 1 = (0 + 1) + 1) ∧ (0 = 0)
+	  ((3 : Nat) = 2) ∧ ((0 + 1) + 1 = 0) ∧ (((0 + 1) + 1) + 1 = 3) ∧ ((0 + 1) + 1 = (0 + 1) + 1) ∧ (0 + 1 = 0) ∧ (0 = 0)
