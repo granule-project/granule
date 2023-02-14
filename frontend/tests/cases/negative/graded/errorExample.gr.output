@@ -1,7 +1,7 @@
 Type checking failed: 
-Falsifiable theorem: frontend/tests/cases/negative/errorExample.gr:4:1:
+Falsifiable theorem: frontend/tests/cases/negative/graded/errorExample.gr:4:1:
   When checking `dub`, expected 1 uses, but instead there are (2 : Nat) actual uses.
 
-Falsifiable theorem: frontend/tests/cases/negative/errorExample.gr:13:1:
+Falsifiable theorem: frontend/tests/cases/negative/graded/errorExample.gr:13:1:
   The following constraint associated with `main` is false:
 	  (3 = c1) ∧ (1 = c1)

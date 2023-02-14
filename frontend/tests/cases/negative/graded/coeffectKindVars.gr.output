@@ -1,3 +1,3 @@
 Type checking failed: 
-Unification failed: frontend/tests/cases/negative/coeffectKindVars.gr:1:1:
+Unification failed: frontend/tests/cases/negative/graded/coeffectKindVars.gr:1:1:
 Cannot unify universally quantified type variable `k` of kind `Coeffect` with `k'`

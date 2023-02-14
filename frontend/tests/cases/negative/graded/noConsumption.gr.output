@@ -1,4 +1,4 @@
 Type checking failed: 
-Falsifiable theorem: frontend/tests/cases/negative/noConsumption.gr:4:1:
+Falsifiable theorem: frontend/tests/cases/negative/graded/noConsumption.gr:4:1:
   The following constraint associated with `and` is false:
 	  ((0 : Nat) = 1) ∧ ((0 : Nat) = 1)

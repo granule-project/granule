@@ -4,7 +4,7 @@ Found a goal: frontend/tests/cases/negative/holes/hole2.gr:11:40:
    Expected type is: `a0 -> b0`
 
    Context:
-     f : .[a -> b]. (n00 + 1)
+     f : .[a -> b]. n
      x : a
      xs : Vec n00 a
 
@@ -14,8 +14,8 @@ Found a goal: frontend/tests/cases/negative/holes/hole2.gr:11:40:
      a0 : Type
      t130 : Nat
      t120 : Type
-     t110 : Type
      n00 : Nat
+     t110 : Type
      a : Type
      b : Type
      n : Nat
