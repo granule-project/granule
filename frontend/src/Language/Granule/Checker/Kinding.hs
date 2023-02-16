@@ -1202,10 +1202,15 @@ instance Unifiable Type where
 
     -- No unification
     unify' t t' = do
-      -- not ideal
-      var <- lift $ freshTyVarInContext (mkId $ "ku") kcoeffect
-      lift $ addConstraint (Eq nullSpan t t' (TyVar var))
-      return []
+      -- But try to generate a constraint if its a solver thing
+      (k, _, _) <- lift $ synthKind nullSpan t
+      ifM (lift $ requiresSolver nullSpan k)
+        (do
+          var <- lift $ freshTyVarInContext (mkId $ "ku") kcoeffect
+          lift $ addConstraint (Eq nullSpan t t' (TyVar var))
+          return [])
+        -- Cannot ask the solver so fail
+        (fail "")
 
 instance Unifiable t => Unifiable (Maybe t) where
     unify' Nothing _ = return []

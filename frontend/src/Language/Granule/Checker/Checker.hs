@@ -722,7 +722,6 @@ checkExpr defs gam pol topLevel tau (App s _ rf e1 e2) = do
     gam <- ctxtPlus s gam1 gam2
 
     subst <- combineSubstitutions s subst1 subst2
-
     let elaborated = App s tau rf elaboratedL elaboratedR
     return (gam, subst, elaborated)
 
@@ -959,7 +958,7 @@ synthExpr _ gam _ (Val s _ rf (Constr _ c [])) = do
       -- Freshen the constructor
       -- (discarding any fresh type variables, info not needed here)
 
-      (ty, _, subst, constraints, coercions') <- freshPolymorphicInstance InstanceQ False tySch coercions []
+      (ty, _, _, constraints, coercions') <- freshPolymorphicInstance InstanceQ False tySch coercions []
 
       otherTypeConstraints <- enforceConstraints s constraints
       registerWantedTypeConstraints otherTypeConstraints
@@ -969,7 +968,7 @@ synthExpr _ gam _ (Val s _ rf (Constr _ c [])) = do
 
       let elaborated = Val s ty rf (Constr ty c [])
           outputCtxt = usedGhostVariableContext
-      return (ty, outputCtxt, subst, elaborated)
+      return (ty, outputCtxt, [], elaborated)
 
     Nothing -> throw UnboundDataConstructor{ errLoc = s, errId = c }
 
