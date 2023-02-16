@@ -1206,8 +1206,7 @@ instance Unifiable Type where
       (k, _, _) <- lift $ synthKind nullSpan t
       ifM (lift $ requiresSolver nullSpan k)
         (do
-          var <- lift $ freshTyVarInContext (mkId $ "ku") kcoeffect
-          lift $ addConstraint (Eq nullSpan t t' (TyVar var))
+          lift $ addConstraint (Eq nullSpan t t' k)
           return [])
         -- Cannot ask the solver so fail
         (fail "")
