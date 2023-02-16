@@ -963,7 +963,7 @@ synthExpr _ gam _ (Val s _ rf (Constr _ c [])) = do
       otherTypeConstraints <- enforceConstraints s constraints
       registerWantedTypeConstraints otherTypeConstraints
 
-      -- Apply coercions
+    -- Apply coercions
       ty <- substitute coercions' ty
 
       let elaborated = Val s ty rf (Constr ty c [])

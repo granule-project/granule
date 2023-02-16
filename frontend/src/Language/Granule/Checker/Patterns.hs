@@ -248,12 +248,12 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
           --    t.10.0 ~ n.0.0 + 1
           --    t.11.0 ~ a.3.0
           -- Register coercions as equalities
-          mapM_ (\(var, SubstT t) ->
-                        equalTypesRelatedCoeffectsAndUnify s Eq PatternCtxt (TyVar var) t) coercions'
+          --mapM_ (\(var, SubstT t) ->
+          --             equalTypesRelatedCoeffectsAndUnify s Eq PatternCtxt (TyVar var) t) coercions'
 
           -- unifiers:   t.10.0 ~ n`1
           --             t.11.0 ~ a`2
-          
+
           dataConstructorIndexRewritten <- substitute unifiers dataConstructorTypeFresh
 
           -- dataConstructorFresh          = N t.11.0 n.0.0 -> N t.11.0 t.10.0
