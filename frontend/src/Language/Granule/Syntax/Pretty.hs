@@ -207,7 +207,7 @@ instance Pretty v => Pretty (Def v a) where
       = pretty v <> " : " <> pretty tySch <> "\n" <> pretty eqs
 
 instance Pretty v => Pretty (Spec v a) where
-    pretty (Spec _ exs auxs) = "spec" <> "\n" <> (intercalate "\n" $ map pretty exs)
+    pretty (Spec _ _ exs comps) = "spec" <> "\n" <> (intercalate "\n\t" $ map pretty exs) <> "\t" <> (intercalate "," $ map prettyComp comps)
 
 instance Pretty v => Pretty (Example v a) where
     pretty (Example input output) = pretty input <> " = " <> pretty output
@@ -322,6 +322,10 @@ instance Pretty Operator where
 
 ticks :: String -> String
 ticks x = "`" <> x <> "`"
+
+prettyComp :: (?globals :: Globals) => (Id, Maybe Type) -> String
+prettyComp (var, Just ty) = pretty var <> " % " <> pretty ty
+prettyComp (var, Nothing) = pretty var 
 
 instance {-# OVERLAPPABLE #-} Show a => Pretty a where
   pretty = show

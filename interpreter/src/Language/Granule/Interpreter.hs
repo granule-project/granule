@@ -217,7 +217,7 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
     synthesiseHoles ((HoleMessage sp goal ctxt tyVars holeVars synthCtxt@(Just (cs, defs, (Just defId, spec), index, hints)) cases):holes) isGradedBase = do 
       rest <- synthesiseHoles holes isGradedBase
       let (unrestricted, restricted) = case spec of 
-            Just (Spec _ _ comps) -> 
+            Just (Spec _ _ _ comps) -> 
               foldr (\(id, compTy) (unres, res) -> 
                 case lookup id defs of 
                   Just tySch -> case compTy of 
@@ -226,7 +226,7 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
                   _ -> (unres, res)
                 ) ([], []) comps
             _ -> ([], [])
-      synRes <-  if isGradedBase 
+      synRes <-  if not isGradedBase 
                  then synthesiseProgram hints index unrestricted restricted defId ctxt (Forall nullSpan [] [] goal) cs 
                  else synthesiseGradedBase hints index unrestricted restricted defId ctxt (Forall nullSpan [] [] goal) cs 
       case synRes of 

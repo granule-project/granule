@@ -172,7 +172,9 @@ Def :: { Def () () }
   : Sig NL SpecList Bindings
       {%  let name = fst3 $1 in 
           let (exs, auxs) = $3 in 
-          let spec = if null exs && null auxs then Nothing else Just $ Spec nullSpanNoFile exs auxs
+          let spec = if null exs && null auxs 
+                     then Nothing 
+                     else Just $ Spec nullSpanNoFile False exs auxs
           in case $4 of
             (nameB, _) | not (nameB == name) ->
               error $ "Name for equation `" <> nameB <> "` does not match the signature head `" <> name <> "`"
@@ -201,9 +203,9 @@ ExprList :: { [Expr () ()] }
 
 Components :: { [(Id, Maybe Type)] }
   : VAR                                   {% return [(mkId $ symString $1, Nothing)] }
-  | VAR '[' Coeffect ']'                  {% return [(mkId $ symString $1, Just $3 )] }
+  | VAR '%' Coeffect                   {% return [(mkId $ symString $1, Just $3)] }
   | VAR ',' Components                   { (mkId $ symString $1, Nothing) : $3 }
-  | VAR '[' Coeffect ']' ',' Components  { (mkId $ symString $1, Just $3 ) : $6 }
+  | VAR '%' Coeffect ',' Components  { (mkId $ symString $1, Just $3) : $5 }
   | {- empty -}                           {% return [] }
 
 DataDecl :: { DataDecl }

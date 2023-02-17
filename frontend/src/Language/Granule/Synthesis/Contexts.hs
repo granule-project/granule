@@ -92,8 +92,11 @@ ctxtMultByCoeffect _ [] = return []
 ctxtMultByCoeffect g1 ((x, SVar (Discharged t g2) sInf):xs) = do
   ctxt <- ctxtMultByCoeffect g1 xs
   return ((x, SVar (Discharged t (TyInfix TyOpTimes g1 g2)) sInf): ctxt)
--- Skip over top level defs 
-ctxtMultByCoeffect g (var@(x, SDef{}):xs) = do 
+
+ctxtMultByCoeffect g1 (var@(x, SDef tySch (Just g2)):xs) = do 
+  ctxt <- ctxtMultByCoeffect g1 xs 
+  return $ (x, SDef tySch (Just $ TyInfix TyOpTimes g1 g2)):ctxt
+ctxtMultByCoeffect g (var@(x, SDef tySch Nothing):xs) = do 
   ctxt <- ctxtMultByCoeffect g xs 
   return $ var:ctxt
 
@@ -144,6 +147,10 @@ ctxtMerge operator [] ((x, SVar (Linear t) sInf) : ctxt) = do
   ctxt' <- ctxtMerge operator [] ctxt
   return $ ((x, SVar (Linear t) sInf) : ctxt')
   
+ctxtMerge operator [] (var@(x, SDef tySch g) : ctxt) = do 
+  ctxt' <- ctxtMerge operator [] ctxt
+  return $ var : ctxt'
+
 
 -- Inductive cases
 ctxtMerge operator ((x, SVar (Discharged t1 g1) sInf) : ctxt1') ctxt2 =
@@ -177,10 +184,17 @@ ctxtMerge operator ((x, SVar (Linear t1) sInf) : ctxt1') ctxt2 =
     Just (_, SDef{}) -> none -- mode mismatch
     Nothing -> none                     -- Cannot weaken a linear thing
 
--- skip over top level definitions
-ctxtMerge operator (var@(x, SDef{}) : ctxt1') ctxt2 = do 
-  ctxt2' <- ctxtMerge operator ctxt1' ctxt2 
-  return $ var:ctxt2' 
+ctxtMerge operator (var@(x, SDef tySch (Just g)) : ctxt1') ctxt2 = 
+  case lookupAndCutout x ctxt2 of 
+    Just (ctxt2', SDef tySch' (Just g')) -> do 
+      ctxt' <- ctxtMerge operator ctxt1' ctxt2' 
+      return $ (x, SDef tySch (Just $ operator g g')) :ctxt'
+
+ctxtMerge operator (var@(x, SDef tySch Nothing) : ctxt1') ctxt2 = do
+    ctxt' <- ctxtMerge operator ctxt1' ctxt2
+    return $ var:ctxt'
+      
+
 
 
 
@@ -203,7 +217,12 @@ ctxtAdd ((x, SVar (Linear t1) sInf):xs) ys =
       ctxt <- ctxtAdd xs ys
       return $ (x, (SVar (Linear t1) sInf)) : ctxt
     _ -> Nothing
--- skip over top level definitions
-ctxtAdd (var@(x, SDef{}):xs) ys = do 
+ctxtAdd (var@(x, SDef tySch Nothing):xs) ys = do 
   ctxt <- ctxtAdd xs ys 
   return $ var:ctxt
+ctxtAdd (var@(x, SDef tySch (Just g1)):xs) ys = 
+  case lookupAndCutout x ys of 
+    Just (ys', SDef tySch' (Just g1')) -> do 
+      ctxt <- ctxtAdd xs ys' 
+      return $ (x, SDef tySch (Just $ TyInfix TyOpPlus g1 g1')) : ctxt
+    _ -> Nothing

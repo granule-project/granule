@@ -342,7 +342,7 @@ checkSpec :: (?globals :: Globals) =>
   -> Type
   -> Checker (Maybe (Spec () Type))
 checkSpec defCtxt Nothing defTy = return Nothing
-checkSpec defCtxt (Just (Spec span examples components)) defTy = do 
+checkSpec defCtxt (Just (Spec span refactored examples components)) defTy = do 
 
   elaboratedExamples :: [Example () Type] <- runAll elaborateExample examples
 
@@ -351,7 +351,7 @@ checkSpec defCtxt (Just (Spec span examples components)) defTy = do
           Just _ -> return ()
           _ -> throw UnboundVariableError{ errLoc = span, errId = ident}) 
 
-  return (Just (Spec span elaboratedExamples components))
+  return (Just (Spec span refactored elaboratedExamples components))
 
   where
     elaborateExample :: Example () () -> Checker (Example () Type)

@@ -121,6 +121,7 @@ definitionType Def { defTypeScheme = ts } =
 data Spec v a = 
   Spec { 
     specSpan          :: Span,
+    specRefactored    :: Bool,
     specExamples      :: [Example v a],
     specComponents    :: [(Id, Maybe Type)]
   }
@@ -132,6 +133,11 @@ data Example v a =
     output :: Expr v a
   }
   deriving (Generic)
+
+instance Rp.Refactorable (Spec v a) where
+  isRefactored spec =  if specRefactored spec then Just Rp.Replace else Nothing
+
+  getSpan = convSpan . specSpan
 
 
 deriving instance (Eq v, Eq a) => Eq (Spec v a)

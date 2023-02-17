@@ -41,7 +41,6 @@ import Language.Granule.Utils
 -- Currently we expec t that a type scheme has kind ktype
 kindCheckDef :: (?globals :: Globals) => Def v t -> Checker (Def v t)
 kindCheckDef (Def s id rf spec eqs (Forall s' quantifiedVariables constraints ty)) = do
-
   let localTyVarContext = universify quantifiedVariables
 
   -- Set up the quantified variables in the type variable context
