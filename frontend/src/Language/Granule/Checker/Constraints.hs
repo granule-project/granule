@@ -230,6 +230,7 @@ freshSolverVarScoped quant name (TyCon conName) q k =
                   .|| solverVar .== literal manyRep
                     , SLNL solverVar)
         "OOZ"    -> k (solverVar .== 0 .|| solverVar .== 1, SOOZ (ite (solverVar .== 0) sFalse sTrue))
+        "Cartesian" -> k (sTrue, SPoint)
         k -> solverError $ "I don't know how to make a fresh solver variable of type " <> show conName)
 
 freshSolverVarScoped quant name t q k | t == extendedNat = do
@@ -374,6 +375,10 @@ compileCoeffect (TyCon name) (TyCon (internalName -> "LNL")) _ = do
 
   return (SLNL . fromInteger . toInteger $ n, sTrue)
 
+-- Cartesian semiring
+compileCoeffect (TyCon name) (TyCon (internalName -> "Cartesian")) _ | internalName name == "Any" = do
+  return (SPoint, sTrue)
+
 compileCoeffect (TyCon name) (TyCon (internalName -> "Sec")) _ = do
   case internalName name of
     "Hi" -> return (SSec hiRepresentation, sTrue)
@@ -485,6 +490,7 @@ compileCoeffect (TyGrade k' 0) k vars = do
         "Q"         -> return (SFloat (fromRational 0), sTrue)
         "OOZ"       -> return (SOOZ sFalse, sTrue)
         "LNL"       -> return (SLNL (literal zeroRep), sTrue)
+        "Cartesian" -> return (SPoint, sTrue)
         _           -> solverError $ "I don't know how to compile a 0 for " <> pretty k
     otherK | otherK == extendedNat ->
       return (SExtNat 0, sTrue)
@@ -523,6 +529,7 @@ compileCoeffect (TyGrade k' 1) k vars = do
         "Q"         -> return (SFloat (fromRational 1), sTrue)
         "OOZ"       -> return (SOOZ sTrue, sTrue)
         "LNL"       -> return (SLNL (literal oneRep), sTrue)
+        "Cartesian" -> return (SPoint, sTrue)
         _           -> solverError $ "I don't know how to compile a 1 for " <> pretty k
 
     otherK | otherK == extendedNat ->

@@ -1,0 +1,14 @@
+-- gr --no-eval
+exampleW : forall {a : Type} . a [Any] -> Int
+exampleW [_] = 42
+
+exampleC : forall {a : Type} . a [Any] -> (a, a)
+exampleC [x] = (x, x)
+
+exampleCompose : forall {a : Type} . a [Any] -> ((a, a), a)
+exampleCompose [x] =
+  let (ab, [b]) = push @(,) [exampleC [x]];
+      (c, d) = exampleC ab
+  in ((b, c), d)
+                  
+
