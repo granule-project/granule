@@ -67,7 +67,7 @@ provePredicate predicate vars constructors
       -- Force the result
       _ <- return $ thmRes `seq` thmRes
       end    <- if benchmarking then Clock.getTime Clock.Monotonic else return 0
-      let duration = (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double))
+      let duration = (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / 10^(6 :: Integer)::Double)
 
       res <- return $ (duration, case thmRes of
         -- we're good: the negation of the theorem is unsatisfiable
@@ -776,7 +776,7 @@ liftM2And k = bindM2And (\a b -> return (k a b))
 matchTypes :: (?globals :: Globals, MonadIO m) => Type -> Maybe Type -> m Type
 matchTypes t Nothing = return t
 matchTypes t (Just t') | t == t' = return t
-matchTypes t (Just t') | otherwise = solverError $ "I have conflicting kinds of " ++ pretty t ++ " and " ++ pretty t'
+matchTypes t (Just t') = solverError $ "I have conflicting kinds of " ++ pretty t ++ " and " ++ pretty t'
 
 -- Get universe set for the parameter ttpe
 setUniverse :: (?globals :: Globals, ?constructors :: Ctxt [Id])
