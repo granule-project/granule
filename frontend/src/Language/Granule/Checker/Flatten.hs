@@ -14,7 +14,7 @@ import Control.Monad.State.Strict
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
--- import Language.Granule.Syntax.Pretty
+import Language.Granule.Syntax.Pretty
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.SubstitutionContexts
@@ -35,6 +35,7 @@ cProduct x y = TyApp (TyApp (TyCon (mkId ",,")) x) y
 mguCoeffectTypes :: (?globals :: Globals)
                  => Span -> Type -> Type -> Checker (Type, Substitution, Injections)
 mguCoeffectTypes s t1 t2 = do
+  debugM "mguCoeffectTypes" (pretty t1 ++ " ~?~ " ++ pretty t2)
   upper <- mguCoeffectTypes' s t1 t2
   case upper of
     Just x -> return x
@@ -55,7 +56,7 @@ mguCoeffectTypes' s (isExt -> Just t) (isExt -> Just t') = do
   coeffecTyUpper <- mguCoeffectTypes' s t t'
   case coeffecTyUpper of
     Just (upperTy, subst, (inj1, inj2)) -> do
-      return $ Just (TyApp (TyCon $ mkId "Ext") upperTy, subst, (inj1, inj2))            
+      return $ Just (TyApp (TyCon $ mkId "Ext") upperTy, subst, (inj1, inj2))
     Nothing -> return Nothing
 
 -- Both are variables

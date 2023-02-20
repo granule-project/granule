@@ -148,6 +148,7 @@ checkTyCon d@(DataDecl sp name tyVars kindAnn ds)
   where
     ids = map dataConstrId ds -- the IDs of data constructors
     tyConKind = mkKind tyVars
+    mkKind :: Ctxt Type -> Type
     mkKind [] = case kindAnn of Just k -> k; Nothing -> Type 0 -- default to `Type`
     mkKind ((id,v):vs) = FunTy (Just id) Nothing v (mkKind vs)
 
@@ -407,8 +408,8 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
       -- Check that our consumption context matches the binding
       if (NoTopLevelApprox `elem` globalsExtensions ?globals)
         then ctxtEquals s localGam combinedGam
-        else ctxtApprox s localGam combinedGam
-      -- ctxtApprox s localGam combinedGam
+        else do
+          ctxtApprox s localGam combinedGam
 
       -- Conclude the implication
       concludeImplication s localVars
@@ -687,7 +688,7 @@ checkExpr defs gam pol topLevel tau
       subst'' <- combineSubstitutions s subst subst'
 
       -- Create elborated AST
-      let scaleTy = FunTy Nothing Nothing floatTy 
+      let scaleTy = FunTy Nothing Nothing floatTy
                       (FunTy Nothing Nothing (Box (TyRational (toRational x)) floatTy) floatTy)
       let elab' = App s floatTy rf
                     (App s' scaleTy rf' (Val s'' floatTy rf'' (Var floatTy v)) (Val s3 floatTy rf3 (NumFloat x))) elab
@@ -1264,7 +1265,7 @@ synthExpr defs gam pol (App s _ rf e e') | not (usingExtension GradedBase) = do
          -- Not a function type
       t -> throw LhsOfApplicationNotAFunction{ errLoc = s, errTy = fTy }
 
--- Application 
+-- Application
 -- GRADED BASE
 
 synthExpr defs gam pol (App s _ rf e1 e2) | usingExtension GradedBase = do
