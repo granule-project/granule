@@ -73,8 +73,8 @@ synthLinearHoles ((HoleMessage sp goal ctxt tyVars holeVars synthCtxt@(Just (cs,
     rest <- synthLinearHoles holes
     synRes <- synthesiseGradedBase hints index [] [] defId ctxt (GrType.Forall nullSpan [] [] goal) cs 
     case synRes of 
-        []    -> return $ HoleMessage sp goal ctxt tyVars holeVars synthCtxt cases : rest
-        (_:_) -> return $ HoleMessage sp goal ctxt tyVars holeVars synthCtxt [([], last $ synRes)] : rest
+        ([], _)    -> return $ HoleMessage sp goal ctxt tyVars holeVars synthCtxt cases : rest
+        (res@(_:_), _) -> return $ HoleMessage sp goal ctxt tyVars holeVars synthCtxt [([], last $ res)] : rest
 synthLinearHoles (hole:holes) = synthLinearHoles holes 
 
 

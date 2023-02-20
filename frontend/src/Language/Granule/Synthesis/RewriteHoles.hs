@@ -48,11 +48,11 @@ holeRewriter source cases =
 -- The reprinter which runs on a refactored AST. Reprinting is done at the Def
 -- level down, as the equations across a definition are subject to change.
 astReprinter :: (?globals :: Globals) => Reprinting Identity
-astReprinter = catchAll `extQ` reprintSpec `extQ` reprintEqnList `extQ` reprintEqn
+astReprinter = catchAll `extQ` reprintEqnList `extQ` reprintEqn
   where
 
-    reprintSpec spec = 
-      genReprinting (return . Text.pack . pretty) (spec :: Spec () ())
+    -- reprintSpec spec = 
+    --   genReprinting (return . Text.pack . pretty) (spec :: Spec () ())
 
     reprintEqn eqn =
       genReprinting (return . Text.pack . pretty) (eqn :: Equation () ())

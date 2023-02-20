@@ -173,7 +173,9 @@ evalBinOp op v1 v2 = case op of
       (NumInt n1, NumInt n2) -> Constr () (mkId . show $ n1 == n2) []
       (CharLiteral n1, CharLiteral n2) -> Constr () (mkId . show $ n1 == n2) []
       (NumFloat n1, NumFloat n2) -> Constr () (mkId . show $ n1 == n2) []
-      _ -> evalFail
+      -- This seems very bad
+      (v1, v2) -> Constr () (mkId $ show (show v1 == show v2)) []
+      -- _ -> evalFail
     OpNotEq -> case (v1, v2) of
       (NumInt n1, NumInt n2) -> Constr () (mkId . show $ n1 /= n2) []
       (NumFloat n1, NumFloat n2) -> Constr () (mkId . show $ n1 /= n2) []
@@ -1104,7 +1106,7 @@ eval = evalAtEntryPoint (mkId entryPoint)
 
 evalAtEntryPoint :: (?globals :: Globals) => Id -> AST () () -> IO (Maybe RValue)
 evalAtEntryPoint entryPoint (AST dataDecls defs _ _ _) = do
-    bindings <- evalDefs builtIns (map toRuntimeRep defs)
+    bindings <- evalDefs builtIns (map toRuntimeRep defs) 
     case lookup entryPoint bindings of
       Nothing             -> return Nothing
       -- Evaluate inside a promotion of pure if its at the top-level

@@ -111,3 +111,34 @@ modifyPred pred = Synthesiser $ lift $ modify (\state ->
   state {
     predicateContext = pred
         })
+
+
+data Measurement = 
+  Measurement {
+    smtCalls        :: Integer
+  , synthTime       :: Double 
+  , proverTime      :: Double 
+  , solverTime      :: Double
+  , meanTheoremSize :: Double
+  , success         :: Bool 
+  , timeout         :: Bool 
+  , pathsExplored   :: Integer   
+
+  } deriving Show
+
+instance Semigroup Measurement where
+ (Measurement smt synTime provTime solveTime meanTheorem success timeout paths) <> 
+  (Measurement smt' synTime' provTime' solveTime' meanTheorem' success' timeout' paths') = 
+    Measurement 
+      (smt + smt')
+      (synTime + synTime')
+      (provTime + provTime')
+      (solveTime + solveTime')
+      (meanTheorem + meanTheorem')
+      (success || success')
+      (timeout || timeout')
+      (paths + paths')
+
+instance Monoid Measurement where
+  mempty  = Measurement 0 0.0 0.0 0.0 0.0 False False 0 
+  mappend = (<>)

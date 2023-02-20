@@ -176,13 +176,13 @@ solve = do
   -- Force the result
   _ <- return result
   end    <- liftIO $ Clock.getTime Clock.Monotonic
-  let proverTime' = fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double)
+  let proveTime' = fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double)
   -- Update benchmarking data
   Synthesiser $ lift $ lift $ lift $ modify (\state ->
             state {
              smtCallsCount = 1 + smtCallsCount state,
              smtTime = smtTime' + smtTime state,
-             proverTime = proverTime' + proverTime state,
+             proveTime = proveTime' + proveTime state,
              theoremSizeTotal = toInteger (length tyVars) + sizeOfPred pred + theoremSizeTotal state
                   })
 
@@ -1389,7 +1389,7 @@ synthesiseProgram :: (?globals :: Globals)
            -> Ctxt Assumption    -- (unfocused) free variables
            -> TypeScheme           -- type from which to synthesise
            -> CheckerState
-           -> IO [Expr () ()]
+           -> IO ([Expr () ()], Maybe Measurement)
 synthesiseProgram hints index unrComps rComps defId ctxt goalTy checkerState = do
 
   start <- liftIO $ Clock.getTime Clock.Monotonic
@@ -1419,9 +1419,9 @@ synthesiseProgram hints index unrComps rComps defId ctxt goalTy checkerState = d
   let initialState = SynthesisData {
                          smtCallsCount= 0
                       ,  smtTime= 0
-                      ,  proverTime= 0
+                      ,  proveTime= 0
                       ,  theoremSizeTotal= 0
-                      ,  pathsExplored= 0
+                      ,  paths = 0
                       ,  startTime=start
                       ,  constructors=[]
                       ,  currDef = [defId]
@@ -1463,12 +1463,12 @@ synthesiseProgram hints index unrComps rComps defId ctxt goalTy checkerState = d
           putStrLn $ "Measurement "
             <> "{ smtCalls = " <> show (smtCallsCount aggregate)
             <> ", synthTime = " <> show (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double))
-            <> ", proverTime = " <> show (proverTime aggregate)
+            <> ", proverTime = " <> show (proveTime aggregate)
             <> ", solverTime = " <> show (Language.Granule.Synthesis.Monad.smtTime aggregate)
             <> ", meanTheoremSize = " <> show (if smtCallsCount aggregate == 0 then 0 else fromInteger (theoremSizeTotal aggregate) / fromInteger (smtCallsCount aggregate))
             <> ", success = " <> (if null results then "False" else "True")
             <> ", timeout = False"
-            <> ", pathsExplored = " <> show (pathsExplored aggregate)
+            <> ", pathsExplored = " <> show (paths aggregate)
             <> " } "
         else do
           -- Output benchmarking info
@@ -1477,7 +1477,7 @@ synthesiseProgram hints index unrComps rComps defId ctxt goalTy checkerState = d
           putStrLn $ "-------- Synthesiser benchmarking data (" ++ show resourceScheme ++ ") -------"
           putStrLn $ "Total smtCalls     = " ++ show (smtCallsCount aggregate)
           putStrLn $ "Total smtTime    (ms) = "  ++ show (Language.Granule.Synthesis.Monad.smtTime aggregate)
-          putStrLn $ "Total proverTime (ms) = "  ++ show (proverTime aggregate)
+          putStrLn $ "Total proverTime (ms) = "  ++ show (proveTime aggregate)
           putStrLn $ "Total synth time (ms) = "  ++ show (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double))
           putStrLn $ "Mean theoremSize   = " ++ show ((if smtCallsCount aggregate == 0 then 0 else fromInteger $ theoremSizeTotal aggregate) / fromInteger (smtCallsCount aggregate))
       -- </benchmarking-output>
@@ -1486,7 +1486,7 @@ synthesiseProgram hints index unrComps rComps defId ctxt goalTy checkerState = d
       end    <- liftIO $ Clock.getTime Clock.Monotonic
       printInfo $ "No programs synthesised - Timeout after: " <> (show timeoutLim  <> "ms")
       return []
-  return fin
+  return (fin, Nothing)
 
   where
 
@@ -1638,18 +1638,18 @@ synthesiseGradedBase :: (?globals :: Globals)
   -> Ctxt Assumption    -- (unfocused) free variables
   -> TypeScheme           -- type from which to synthesise
   -> CheckerState
-  -> IO [Expr () ()]
+  -> IO ([Expr () ()], Maybe Measurement)
 synthesiseGradedBase hints index unrestricted restricted currentDef ctxt (Forall _ _ _ goalTy) cs = do
 
-  let defaultTimeout = 100000
+  -- let defaultTimeout = 100000
 
   start <- liftIO $ Clock.getTime Clock.Monotonic
   let synthState = SynthesisData {
                          smtCallsCount= 0
                       ,  smtTime= 0
-                      ,  proverTime= 0
+                      ,  proveTime = 0
                       ,  theoremSizeTotal= 0
-                      ,  pathsExplored= 0
+                      ,  paths = 0
                       ,  startTime=start
                       ,  constructors=[]
                       ,  currDef = [currentDef]
@@ -1664,34 +1664,44 @@ synthesiseGradedBase hints index unrestricted restricted currentDef ctxt (Forall
                     , guessMax = 13
                       }
 
-  let timeout = case hints of
-                    Just h -> case (hTimeout h, hNoTimeout h) of (_, True) -> -1 ; (Just lim, _) -> lim * 1000 
-                    Nothing -> defaultTimeout 
+  -- let timeout = case hints of
+  --                   Just h -> case (hTimeout h, hNoTimeout h) of (_, True) -> -1 ; (Just lim, _) -> lim * 1000 
+  --                   Nothing -> defaultTimeout 
 
   let gamma = map (\(v, a)  -> (v, SVar a $ Just NonDecreasing)) ctxt ++
               map (\(v, (tySch, grade)) -> (v, SDef tySch (Just grade))) restricted ++
               map (\(v, tySch) -> (v, SDef tySch Nothing)) unrestricted
 
-  result <- liftIO $ System.Timeout.timeout timeout $ synLoop 0 sParams index gamma synthState cs goalTy 
+  result <- liftIO $ synLoop 0 sParams index gamma synthState cs goalTy 
 
   case result of
-      Just (synthResult, aggregate) -> do
+      (synthResult, aggregate) -> do
         let programs = nub $ rights (map fst synthResult)
         end    <- liftIO $ Clock.getTime Clock.Monotonic
-
         -- <benchmarking-output>
-        when benchmarking $
+        if benchmarking then 
           if benchmarkingRawData then
-            putStrLn $ "Measurement "
-              <> "{ smtCalls = " <> show (smtCallsCount aggregate)
-              <> ", synthTime = " <> show (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double))
-              <> ", proverTime = " <> show (proverTime aggregate)
-              <> ", solverTime = " <> show (Language.Granule.Synthesis.Monad.smtTime aggregate)
-              <> ", meanTheoremSize = " <> show (if smtCallsCount aggregate == 0 then 0 else fromInteger (theoremSizeTotal aggregate) / fromInteger (smtCallsCount aggregate))
-              <> ", success = " <> (if null programs then "False" else "True")
-              <> ", timeout = False"
-              <> ", pathsExplored = " <> show (pathsExplored aggregate)
-              <> " } "
+            let measurement = Measurement 
+                                { smtCalls = smtCallsCount aggregate
+                                , synthTime = fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double)
+                                , proverTime = proveTime aggregate
+                                , solverTime = Language.Granule.Synthesis.Monad.smtTime aggregate
+                                , meanTheoremSize = if smtCallsCount aggregate == 0 then 0 else fromInteger (theoremSizeTotal aggregate) / fromInteger (smtCallsCount aggregate)
+                                , success = if null programs then False else True
+                                , timeout = False
+                                , pathsExplored = paths aggregate
+                                } in 
+                return (programs, Just measurement)
+            -- putStrLn $ "Measurement "
+            --   <> "{ smtCalls = " <> show (smtCallsCount aggregate)
+            --   <> ", synthTime = " <> show (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double))
+            --   <> ", proverTime = " <> show (proverTime aggregate)
+            --   <> ", solverTime = " <> show (Language.Granule.Synthesis.Monad.smtTime aggregate)
+            --   <> ", meanTheoremSize = " <> show (if smtCallsCount aggregate == 0 then 0 else fromInteger (theoremSizeTotal aggregate) / fromInteger (smtCallsCount aggregate))
+            --   <> ", success = " <> (if null programs then "False" else "True")
+            --   <> ", timeout = False"
+            --   <> ", pathsExplored = " <> show (pathsExplored aggregate)
+            --   <> " } "
           else do
             -- Output benchmarking info
             putStrLn "-------------------------------------------------"
@@ -1699,15 +1709,12 @@ synthesiseGradedBase hints index unrestricted restricted currentDef ctxt (Forall
             putStrLn $ "-------- Synthesiser benchmarking data (" ++ "Additive NonPruning" ++  ") -------"
             putStrLn $ "Total smtCalls     = " ++ show (smtCallsCount aggregate)
             putStrLn $ "Total smtTime    (ms) = "  ++ show (Language.Granule.Synthesis.Monad.smtTime aggregate)
-            putStrLn $ "Total proverTime (ms) = "  ++ show (proverTime aggregate)
+            putStrLn $ "Total proverTime (ms) = "  ++ show (proveTime aggregate)
             putStrLn $ "Total synth time (ms) = "  ++ show (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double))
             putStrLn $ "Mean theoremSize   = " ++ show ((if smtCallsCount aggregate == 0 then 0 else fromInteger $ theoremSizeTotal aggregate) / fromInteger (smtCallsCount aggregate))
-          -- </benchmarking-output>
-        return programs
-      _ -> do
-        end    <- liftIO $ Clock.getTime Clock.Monotonic
-        printInfo $ "No programs synthesised - Timeout after: " <> (show timeout  <> "ms")
-        return []
+            return (programs, Nothing)
+        else 
+          return (programs, Nothing)
 
 
 synLoop :: (?globals :: Globals) 
@@ -2197,31 +2204,35 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
               -- _ <- if null args then return () else error $ show args
 
               (t, delta, subst, _, _) <- gSynthInner sParams { matchCurrent = (matchCurrent sParams) + 1} focusPhase gamma' (Focused omega') goal
-              -- traceM $ "here"
+              traceM $ "here: " <>  pretty t 
+              traceM $ "delta: " <>  show delta
 
-              (delta', grade_si) <- foldM (\(delta', mGrade) dVar@(dName, SVar (Discharged ty grade_s) dSInfo) ->
-                case lookup dName varsAndGrades of
-                  Just grade_rq -> do
-                    cs <- conv get
+              (delta', grade_si) <- foldM (\(delta', mGrade) dVar@(dName, dAssumption) ->
+                case dAssumption of 
+                  SVar (Discharged ty grade_s) dSInfo ->
+                    case lookup dName varsAndGrades of
+                      Just grade_rq -> do
+                        cs <- conv get
 
-                    grade_id_s' <- freshIdentifier
-                    (kind, _, _) <- conv $ synthKind ns grade_s
-                    conv $ existentialTopLevel grade_id_s' kind
-                    let grade_s' = TyVar grade_id_s'
+                        grade_id_s' <- freshIdentifier
+                        (kind, _, _) <- conv $ synthKind ns grade_s
+                        conv $ existentialTopLevel grade_id_s' kind
+                        let grade_s' = TyVar grade_id_s'
 
-                    -- ∃s'_ij . s_ij ⊑ s'_ij · q_ij ⊑ r · q_ij
-                    modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (grade_s' `gTimes` grade_rq) (grade_r `gTimes` grade_r) kind) (predicateContext cs)
-                    modifyPred $ addConstraintViaConjunction (ApproximatedBy ns grade_s (grade_s' `gTimes` grade_rq) kind) (predicateContext cs)
+                        -- ∃s'_ij . s_ij ⊑ s'_ij · q_ij ⊑ r · q_ij
+                        modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (grade_s' `gTimes` grade_rq) (grade_r `gTimes` grade_r) kind) (predicateContext cs)
+                        modifyPred $ addConstraintViaConjunction (ApproximatedBy ns grade_s (grade_s' `gTimes` grade_rq) kind) (predicateContext cs)
 
-                    res <- solve
+                        res <- solve
 
-                    -- s' \/ ...
-                    let grade_si = case mGrade of
-                            Just s -> s `gJoin` grade_s'
-                            Nothing -> grade_s'
+                        -- s' \/ ...
+                        let grade_si = case mGrade of
+                              Just s -> s `gJoin` grade_s'
+                              Nothing -> grade_s'
 
-                    return (delta', Just grade_si)
-                  _ -> return (dVar:delta', mGrade)
+                        return (delta', Just grade_si)
+                      _ -> return (dVar:delta', mGrade)
+                  SDef{} -> return (delta', mGrade)
                 ) ([], Nothing) delta
 
               case (lookupAndCutout x delta', grade_si) of

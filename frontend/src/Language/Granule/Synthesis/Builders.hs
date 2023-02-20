@@ -220,7 +220,9 @@ makeEquality :: Expr () () -> Expr () () -> Expr () ()
 makeEquality left right = Binop nullSpanNoFile () False OpEq left right
 
 makeAnd :: Expr () () -> Expr () () -> Expr () ()
-makeAnd left right = App s () False (App s () False grAnd left) right
+makeAnd left right = App s () False (App s () False grAnd left) (Val s () False (Promote () right)) -- (Hole s () False [] Nothing) -- right)
   where 
     s = nullSpanNoFile
-    grAnd = Val s () False (Abs () (PVar s () False (Id "x" "x`0")) Nothing (Val s () False (Abs () (PBox s () False (PVar s () False (Id "y" "y`1"))) Nothing (Case s () False (Val s () False (Var () (Id "x" "x`0"))) [(PConstr s () False (Id "True" "True") [],(Val s () False (Var () (Id "y" "y`1")))),(PConstr s () False (Id "False" "False") [],(Val s () False (Constr () (Id "False" "False") [])))]))))
+    ty = (Box (TyInfix TyOpInterval (TyGrade (Just (TyApp (TyCon (Id "Ext" "Ext")) (TyCon (Id "Nat" "Nat")))) 0) (TyCon (Id "Infinity" "Infinity"))) (TyCon (Id "Bool" "Bool")))
+    grAnd = 
+      Val s () False (Abs () (PVar s () False (Id "x" "x`0")) Nothing (Val s () False (Abs () (PBox s () False (PVar s () False (Id "y" "y`1"))) (Just ty) (Case s () False (Val s () False (Var () (Id "x" "x`0"))) [(PConstr s () False (Id "True" "True") [],(Val s () False (Var () (Id "y" "y`1")))),(PConstr s () False (Id "False" "False") [],(Val s () False (Constr () (Id "False" "False") [])))]))))

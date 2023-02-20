@@ -20,12 +20,12 @@
 module Language.Granule.Interpreter where
 
 import Control.Exception (SomeException, displayException, try)
-import Control.Monad ((<=<), forM)
+import Control.Monad -- ((<=<), forM, forM_)
 -- import Control.Monad.IO.Class (liftIO)
 import Development.GitRev
 import Data.Char (isSpace)
 import Data.Either (isRight)
-import Data.List (intercalate, isPrefixOf, stripPrefix)
+import Data.List (intercalate, isPrefixOf, stripPrefix, find)
 import Data.List.Extra (breakOn)
 import Data.List.NonEmpty (NonEmpty, toList)
 import qualified Data.List.NonEmpty as NonEmpty (filter)
@@ -35,15 +35,19 @@ import System.Exit
 
 import System.Directory (getAppUserDataDirectory, getCurrentDirectory)
 import System.FilePath (takeFileName)
+import qualified System.Timeout
 import "Glob" System.FilePath.Glob (glob)
 import Options.Applicative
 import Options.Applicative.Help.Pretty (string)
+import Control.Monad.State.Strict
 
 import Language.Granule.Context
 import Language.Granule.Checker.Checker
 import Language.Granule.Checker.Monad (CheckerError(..))
 import Language.Granule.Interpreter.Eval
 import Language.Granule.Syntax.Def 
+import Language.Granule.Syntax.Expr 
+import Language.Granule.Syntax.Identifiers 
 import Language.Granule.Syntax.Type 
 import Language.Granule.Syntax.Preprocessor
 import Language.Granule.Syntax.Parser
@@ -52,6 +56,8 @@ import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Synthesis.RewriteHoles
 import Language.Granule.Synthesis.Synth
+import Language.Granule.Synthesis.Builders
+import Language.Granule.Synthesis.Monad (Measurement)
 import Language.Granule.Synthesis.LinearHaskell
 import Language.Granule.Utils
 import Paths_granule_interpreter (version)
@@ -156,7 +162,11 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
                         holes' <- runSynthesiser holes ast (GradedBase `elem` globalsExtensions ?globals)
                         runHoleSplitter input config errs holes'
                       _ -> runHoleSplitter input config errs holes
-                  _ -> return . Left $ CheckerError errs
+                  _ ->  if fromMaybe False (globalsSynthesise ?globals) && not (null holeErrors) then do 
+                          _ <- runSynthesiser holeErrors ast (GradedBase `elem` globalsExtensions ?globals)
+                          return $ Right NoEval
+                          -- return . Left $ CheckerError errs
+                        else return . Left $ CheckerError errs
           Right (Right (ast', derivedDefs)) -> do
             if noEval then do
               printSuccess "OK"
@@ -196,7 +206,7 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
           rewriteHoles input noImportAst (keepBackup config) holeCases
           case globalsSynthesise ?globals of
             Just True -> do
-              printSuccess "Synthesised"
+              -- printSuccess "Synthesised"
               return $ Right NoEval
             _         -> return . Left . CheckerError $ errs
 
@@ -207,15 +217,18 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
 
     runSynthesiser :: (?globals :: Globals) => [CheckerError] -> AST () () -> Bool -> IO [CheckerError]
     runSynthesiser holes ast isGradedBase = do 
-      holes' <- synthesiseHoles holes isGradedBase
-      -- Run examples here
+      let holesWithEmptyMeasurements = map (\h -> (h, Nothing, 0)) holes
+      res <- synthesiseHoles ast holesWithEmptyMeasurements isGradedBase
+      let (holes', measurements, _) = unzip3 res
+      forM_ measurements (\m -> case m of (Just m') -> putStrLn $ show m' ; _ -> return ())
       return holes'
 
 
-    synthesiseHoles :: (?globals :: Globals) => [CheckerError] -> Bool -> IO [CheckerError]
-    synthesiseHoles [] _ = return []
-    synthesiseHoles ((HoleMessage sp goal ctxt tyVars holeVars synthCtxt@(Just (cs, defs, (Just defId, spec), index, hints)) cases):holes) isGradedBase = do 
-      rest <- synthesiseHoles holes isGradedBase
+    synthesiseHoles :: (?globals :: Globals) => AST () () -> [(CheckerError, Maybe Measurement, Int)] -> Bool -> IO [(CheckerError, Maybe Measurement, Int)]
+    synthesiseHoles _ [] _ = return []
+    synthesiseHoles astSrc ((HoleMessage sp goal ctxt tyVars hVars synthCtxt@(Just (cs, defs, (Just defId, spec), index, hints)) hcases, aggregate, attemptNo):holes) isGradedBase = do 
+      let timeout = 100000
+      rest <- synthesiseHoles astSrc holes isGradedBase
       let (unrestricted, restricted) = case spec of 
             Just (Spec _ _ _ comps) -> 
               foldr (\(id, compTy) (unres, res) -> 
@@ -226,149 +239,95 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
                   _ -> (unres, res)
                 ) ([], []) comps
             _ -> ([], [])
-      synRes <-  if not isGradedBase 
+      res <- liftIO $ System.Timeout.timeout timeout $ if not isGradedBase 
                  then synthesiseProgram hints index unrestricted restricted defId ctxt (Forall nullSpan [] [] goal) cs 
                  else synthesiseGradedBase hints index unrestricted restricted defId ctxt (Forall nullSpan [] [] goal) cs 
-      case synRes of 
-        []    -> return $ HoleMessage sp goal ctxt tyVars holeVars synthCtxt cases : rest
-        (_:_) -> return $ HoleMessage sp goal ctxt tyVars holeVars synthCtxt [([], last $ synRes)] : rest
+      case (res, spec, holes) of 
+        (Just ([], measurement), _, _) -> do 
+          return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt hcases, measurement, attemptNo) : rest
+        (Nothing, _ , _) -> do 
+          -- end    <- liftIO $ Clock.getTime Clock.Monotonic
+          printInfo $ "No programs synthesised - Timeout after: " <> (show timeout  <> "ms")
+          return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt hcases, Nothing, attemptNo) : rest
+        (Just (programs@(_:_), measurement), Just (Spec _ _ examples@(_:_) _), []) -> do 
+          let hole = HoleMessage sp goal ctxt tyVars hVars synthCtxt [([], last $ programs)] 
+          let holeCases = concatMap (\h -> map (\(pats, e) -> (errLoc h, zip (getCtxtIds (holeVars h)) pats, e)) (cases h)) [hole]
+          
+          let astChanged = holeRefactor holeCases astSrc 
+          let aggregate' = case (aggregate, measurement) of 
+                    (Just agg, Just mes) -> Just $ agg <> mes
+                    (Just agg, _) -> Just agg
+                    (_, Just mes) -> Just mes 
+                    _ -> Nothing
+          success <- System.Timeout.timeout timeout $ runExamples astChanged examples defId
+          case (success, attemptNo < exampleLimit) of
+            (Just False, True) -> do
+              let synthCtxt' = Just (cs, defs, (Just defId, spec), index + 1, hints)
+              rest' <- synthesiseHoles astSrc [(HoleMessage sp goal ctxt tyVars hVars synthCtxt' hcases, aggregate', attemptNo+1)] isGradedBase
+              return $ rest ++ rest'
+            (Just False, False) -> do 
+              -- Example limit reached
+              return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt hcases, Nothing, attemptNo) : rest
+            _ -> do 
+              return $ (hole, aggregate', attemptNo) : rest
+        (Just (programs@(_:_), measurement), _, _) -> do
+          return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt [([], last $ programs)], measurement, attemptNo) : rest
 
 
-    synthesiseHoles (hole:holes) isGradedBase = do 
-      rest <- synthesiseHoles holes isGradedBase
+    synthesiseHoles ast (hole:holes) isGradedBase = do 
+      rest <- synthesiseHoles ast holes isGradedBase
       return $ hole : rest
     
-   
-    --   let ast'@(AST _ defs' _ _ _) = foldr (\synRes (AST decls defs imports hidden mod) -> 
-    --         case synRes of 
-    --           (Hole span _ _ _ _, Just expr, defId) -> do
-    --             let relDef = find (\(Def _ defId' _ _ _ _) -> defId == defId') defs in
-    --               case relDef of 
-    --                 Just (Def dSpan dId dRef dSpec (EquationList elSpan elId elRef elEqs) dTyS) -> do 
-    --                   let elEqs' = map (\(Equation eqSp eqId eqAnn eqRef eqPats eqExpr) -> 
-    --                         let resExpr = exprFold span expr eqExpr in 
-    --                           Equation eqSp eqId eqAnn eqRef eqPats resExpr
-    --                         ) elEqs in
-    --                     let def' = Def dSpan dId dRef dSpec (EquationList elSpan elId elRef elEqs') dTyS in
-    --                     let defs' = def' : filter (\(Def _ dId' _ _ _ _) -> dId == dId') defs in
-    --                     AST decls defs' imports hidden mod 
-    --                 Nothing -> error "Required definition is not in scope"
-    --           (Hole span _ _ _ _, Nothing, defId) -> ast      
-    --           _ -> error "Invalid hole or synthed term does not belong to any definition."        
-    --           ) ast res
+    runExamples :: (?globals :: Globals)
+                => AST () ()
+                -> [Example () ()]
+                -> Id
+                -> IO Bool 
+    runExamples ast@(AST decls defs imports hidden mod) examples defId = do
+        -- _ <- error "asdasda"
+        let exampleMainExprs = 
+              -- map (\(Example input output) -> makeEquality (App nullSpanNoFile () False (Val nullSpanNoFile () False (Var () defId))  input) output) examples
+              map (\(Example input output) -> makeEquality input output) examples
+        -- remove the existing main function (should probably keep the main function so we can stitch it back in after)
+        
+        let defsWithoutMain = filter (\(Def _ mIdent _ _ _ _) -> mIdent /= mkId entryPoint) defs
 
-    --   let holes' = removeMutuals holes
-      
-    --   res <- runExamples ast' holes'
+        let foundBoolDecl = find (\(DataDecl _ dIdent _ _ _) ->  dIdent == mkId "Bool") decls
+        let declsWithBool = case foundBoolDecl of 
+                              Just decl -> decls 
+                              Nothing -> boolDecl : decls
+                  
+        let exampleMainExprsCombined = 
+              foldr (\mainExpr acc -> case acc of Just acc' -> Just $ makeAnd mainExpr acc' ; Nothing -> Just mainExpr) Nothing exampleMainExprs
+        case exampleMainExprsCombined of 
+          Nothing -> error "Could not construct main definition for example AST!"
+          Just exampleMainExprsCombined' -> do
+            -- exmapleMainDef:
+            --    (&&') : Bool -> Bool [0..1] -> Bool
+            --    (&&') True [y] = y;
+            --    (&&') False [_] = False 
+            --
+            --    main : IO ()
+            --    main = (example_in_1 == example_out_1) (&&') ... (&&') (example_in_n == example_out_n)
+            let exampleMainDef = Def nullSpanNoFile (mkId entryPoint) False Nothing 
+                                    (EquationList nullSpanNoFile (mkId entryPoint) False 
+                                        [(Equation nullSpanNoFile (mkId entryPoint) () False [] exampleMainExprsCombined')]) (Forall nullSpanNoFile [] [] (TyInt 0)) 
+            let astWithExampleMain = AST declsWithBool (defsWithoutMain ++ [exampleMainDef]) imports hidden mod
+            result <- try $ eval astWithExampleMain
+            case result of
+              -- If an example fails, rerun the synthesis and take the next program. 
+              Left (e :: SomeException) -> do 
+                return False 
+              Right (Just (Constr _ idv [])) | mkId "True" == idv -> return True
+              Right _ -> return False
 
-    --   case res of
-    --     [] -> return ast' 
-    --     holes' -> handleSynth (SynthContext defs' holes' checkerState) ast' 
+          where 
+            boolDecl :: DataDecl 
+            boolDecl = 
+              DataDecl nullSpanNoFile (mkId "Bool") [] Nothing 
+                [ DataConstrNonIndexed nullSpanNoFile (mkId "True") [] 
+                , DataConstrNonIndexed nullSpanNoFile (mkId "False") [] ]
 
-    
-
-    -- runExamples 
-    --   :: (?globals :: Globals)
-    --   => AST () () 
-    --   -> [(Expr () Type, Type, Int, Ctxt Assumption, (Maybe Id, Maybe (Spec () ())))] 
-    --   -> IO [(Expr () Type, Type, Int, Ctxt Assumption, (Maybe Id, Maybe (Spec () ())))]
-    -- runExamples _ [] = return []
-    -- runExamples ast@(AST decls defs imports hidden mod) (hole@(expr, goal, index, ctxt, (Just defId, Just (Spec specS examples comps))):holes) = 
-    --   if index > exampleLimit then do
-    --     let exampleMainExprs = 
-    --           map (\(Example input output) -> makeEquality (App nullSpanNoFile () False (Val nullSpanNoFile () False (Var () defId))  input) output) examples
-    --     -- remove the existing main function (should probably keep the main function so we can stitch it back in after)
-    --     let defs' = filter (\(Def _ mIdent _ _ _ _) -> mIdent == mkId entryPoint) defs
-
-    --     let exampleMainExprsCombined = 
-    --           foldr (\mainExpr acc -> case acc of Just acc' -> Just $ makeAnd mainExpr acc' ; Nothing -> Just mainExpr) Nothing exampleMainExprs
-    --     case exampleMainExprsCombined of 
-    --       Nothing -> error "Could not construct main definition for example AST!"
-    --       Just exampleMainExprsCombined' -> do
-    --         -- exmapleMainDef:
-    --         --    (&&') : Bool -> Bool [0..1] -> Bool
-    --         --    (&&') True [y] = y;
-    --         --    (&&') False [_] = False 
-    --         --
-    --         --    main : IO ()
-    --         --    main = (example_in_1 == example_out_1) (&&') ... (&&') (example_in_n == example_out_n)
-    --         let exampleMainDef = Def nullSpanNoFile (mkId entryPoint) False Nothing 
-    --                                 (EquationList nullSpanNoFile (mkId entryPoint) False 
-    --                                     [(Equation nullSpanNoFile (mkId entryPoint) () False [] exampleMainExprsCombined')]) (Forall nullSpanNoFile [] [] (TyInt 0)) 
-    --         let ast' = AST decls (exampleMainDef:defs') imports hidden mod
-    --         result <- try $ eval ast'
-    --         case result of
-    --           -- If an example fails, rerun the synthesis and take the next program. 
-    --           Left (e :: SomeException) -> 
-    --             runExamples ast ((expr, goal, index+1, ctxt, (Just defId, Just (Spec specS examples comps))):holes)
-    --               -- return . Left . EvalError $ displayException e
-    --           Right (Just (Constr _ idv [])) | mkId "True" == idv -> 
-    --             runExamples ast holes
-    --           Right _ -> 
-    --             runExamples ast ((expr, goal, index+1, ctxt, (Just defId, Just (Spec specS examples comps))):holes)
-    --   else runExamples ast holes
-    -- runExamples _ _ = error "ill formed"
-
-
-    --   -- remove synthed programs that have mutual dependencies (i.e. both have examples and use one another)
-    --   -- f 1 = 1 
-    --   -- f 2 = 4
-    --   -- f 3 = 9 
-    --   -- g [1]
-    --   -- f x = g x 
-
-    --   -- g 1 = 1
-    --   -- g 2 = 2
-    --   -- g 3 = 9
-    --   -- f 
-    --   -- g x = (f x) * x
-
-    --   -- This is bad because which examples do we try and check first? They are both wrong, so will require new programs, but 
-    --   -- we would be here forever. However:
-
-    --   -- f 1 = 1 
-    --   -- f 2 = 2 
-    --   -- g [1]
-    --   -- f x = g x
-
-    --   -- g 1 = 1
-    --   -- g 2 = 2 
-    --   -- h [1]
-    --   -- g x = h x
-
-    --   -- h = h
-
-    --   -- Is fine if we have to synth f, g, and h, starting from h working back to f.
-
-
-    -- -- Probably a more efficient way of doing this!
-    --   -- First make a map compCtxt of: defId |-> components, for eached def with a synthesis hole
-    --   -- Then for each component in a synthesis hole, lookup whether that component is a def with a hole 
-    --   -- which uses the current def as a component. If it is, filter it from the final list of holes
-    -- removeMutuals :: 
-    --      [(Expr () Type, Type, Int, Ctxt Assumption, (Maybe Id, Maybe (Spec () ())))]
-    --   -> [(Expr () Type, Type, Int, Ctxt Assumption, (Maybe Id, Maybe (Spec () ())))]
-    -- removeMutuals holes =
-    --   let compCtxt = foldr (\(holeExpr, goal, index, ctxt, (defId, spec)) compCtxt -> 
-    --           case (defId, spec) of 
-    --             (Just defId', Just (Spec _ _ comps)) -> 
-    --               let (ids, _) = unzip comps in 
-    --               (defId', ids):compCtxt
-    --             _ -> compCtxt 
-    --             ) [] holes in 
-    --   filter (\(holeExpr, goal, index, ctxt, (defId, spec)) -> 
-    --             case (defId, spec) of 
-    --               (Just defId', Just (Spec _ _ comps)) -> 
-    --                 foldr (\(depId, _) acc -> 
-    --                     case acc of 
-    --                       True -> 
-    --                         case lookup depId compCtxt of 
-    --                           Just deps -> not $ defId' `elem` deps
-    --                           _ -> acc
-    --                       False -> False
-    --                   ) True comps 
-    --               _ -> True 
-    --             ) holes 
  
     
 
