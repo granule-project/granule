@@ -19,7 +19,7 @@ import Language.Granule.Syntax.Annotated
 import Language.Granule.Utils
 
 
-spec :: Spec
+spec :: Test.Hspec.Spec
 spec = let ?globals = mempty in do
     let tyVarK = TyVar $ mkId "k"
     let varA = mkId "a"
@@ -92,7 +92,7 @@ spec = let ?globals = mempty in do
         annotation (extractMainExpr defElab) `shouldBe` ((TyCon $ mkId "Int") :: Type)
 
 extractMainExpr :: Def v a -> Expr v a
-extractMainExpr (Def _ _ _ (EquationList _ _ _ [Equation _ _ _ _ _ e]) _) = e
+extractMainExpr (Def _ _ _ _ (EquationList _ _ _ [Equation _ _ _ _ _ e]) _) = e
 extractMainExpr _ = undefined
 
 runCtxts

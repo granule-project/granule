@@ -1,0 +1,6 @@
+Type checking failed: 
+Linearity error: frontend/tests/cases/negative/simple/nestedWildLinearAbs.gr:2:6:
+Wildcard pattern `_` allowing a value to be discarded
+
+Linearity error: frontend/tests/cases/negative/simple/nestedWildLinearAbs.gr:3:9:
+Wildcard pattern `_` allowing a value to be discarded

@@ -1,6 +1,0 @@
-Type checking failed: 
-Counter example: frontend/tests/cases/negative/universal.gr:2:1:
-  When checking `foo`, expected n uses, but instead there are (2 : Nat) actual uses.
-
-Counter-example:
-  n = 0 :: Integer

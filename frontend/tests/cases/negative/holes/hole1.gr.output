@@ -1,0 +1,12 @@
+Type checking failed: 
+Found a goal: frontend/tests/cases/negative/holes/hole1.gr:2:15:
+
+   Expected type is: `Int [n * m]`
+
+   Context:
+     x : .[Int]. m
+     y : .[Int]. n
+
+   Type context:
+     n : Nat
+     m : Nat

@@ -1,0 +1,8 @@
+Type checking failed: 
+Too many patterns: frontend/tests/cases/negative/simple/different-number-of-args-in-equations.gr:3:1:
+Couldn't match expected type `Int` against a type of the form `?` implied by the remaining pattern(s)
+	`2`
+
+Too many patterns: frontend/tests/cases/negative/simple/different-number-of-args-in-equations.gr:7:1:
+Couldn't match expected type `Int -> Int` against a type of the form `?` implied by the remaining pattern(s)
+	`y`

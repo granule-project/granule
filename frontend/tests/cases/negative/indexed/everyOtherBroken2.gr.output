@@ -1,0 +1,3 @@
+Type checking failed: 
+Impossible pattern match: frontend/tests/cases/negative/everyOtherBroken2.gr:9:1:
+Pattern match in an equation of `everyOther` is impossible as it implies the unsatisfiable condition ∃ n01 : Nat . (n01 + 1 = ((n02 + 1) + 1) + 1) ∧ ((n01 + 1) + 1 = (n02 + 1) + 1)

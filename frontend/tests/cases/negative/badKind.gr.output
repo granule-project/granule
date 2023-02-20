@@ -1,3 +1,0 @@
-Type checking failed: 
-Kind mismatch: frontend/tests/cases/negative/badKind.gr:1:1:
-Expected kind `Type` for type `a` but actual kind is `Nat`

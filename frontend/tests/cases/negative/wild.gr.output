@@ -1,3 +1,0 @@
-Type checking failed: 
-Linearity error: frontend/tests/cases/negative/wild.gr:6:15:
-Wildcard pattern `_` allowing a value to be discarded

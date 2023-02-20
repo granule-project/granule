@@ -1,0 +1,4 @@
+Type checking failed: 
+Definition name clash: frontend/tests/cases/negative/simple/name-clash.gr:12:1:
+`onlyDefinedHere` already defined at
+	(location redacted)

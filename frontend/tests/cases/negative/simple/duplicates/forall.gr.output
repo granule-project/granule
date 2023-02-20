@@ -1,0 +1,3 @@
+Type checking failed: 
+Duplicate binding: frontend/tests/cases/negative/simple/duplicates/forall.gr:1:6:
+Variable `a` bound more than once.

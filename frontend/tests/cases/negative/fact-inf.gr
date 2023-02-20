@@ -1,5 +1,0 @@
-import Nat
-
-fact : ∀ {n : Nat} . (N n) [(∞ : (Ext Nat))..(∞ : (Ext Nat))] → Int
-fact [Z] = 1;
-fact [S m] = natToInt (S m) * fact [m]

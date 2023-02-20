@@ -1,0 +1,9 @@
+-- gr --no-eval
+
+data Expr a where
+  Const : Int → Expr Int;
+  Add : Expr a → Expr a → Expr a
+
+eval : Expr Int → Int
+eval (Const n) = n;
+eval (Add x y) = eval x + eval y

@@ -1,0 +1,3 @@
+Type checking failed: 
+Wrong return type in value constructor: frontend/tests/cases/negative/simple/bool.gr:2:3:
+Expected type constructor `Bool`, but got `Int`

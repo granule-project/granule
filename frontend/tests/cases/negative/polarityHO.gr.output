@@ -1,3 +1,0 @@
-Type checking failed: 
-Pattern typing error: frontend/tests/cases/negative/polarityHO.gr:3:52:
-Pattern match `[y]` does not have expected type `Int`

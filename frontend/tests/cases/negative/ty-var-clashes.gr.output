@@ -1,3 +1,0 @@
-Type checking failed: 
-Kind mismatch: frontend/tests/cases/negative/ty-var-clashes.gr:2:3:
-Expected kind `Type -> Type` for type `Foo` but actual kind is `(a : Type) -> (b : Type) -> Type`

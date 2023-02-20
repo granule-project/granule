@@ -26,9 +26,9 @@ data SynthesisData =
   , theoremSizeTotal          :: Integer
   , pathsExplored             :: Integer
   , startTime                 :: Clock.TimeSpec
-  , constructors              :: Ctxt (Ctxt (TypeScheme, Substitution), Bool)
-  , currDef                   :: [Id]
-  , depthReached              :: Bool
+  , constructors              :: Ctxt (Ctxt (TypeScheme, Substitution, [Int]))
+  , topLevelDef               :: Id 
+  , structurallyDecreasing    :: Bool 
   }
   deriving Show
 

@@ -1,0 +1,4 @@
+Type checking failed: 
+Found a goal: frontend/tests/cases/negative/holes/hole0.gr:2:8:
+
+   Expected type is: `Int`

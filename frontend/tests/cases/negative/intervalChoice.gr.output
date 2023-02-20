@@ -1,4 +1,0 @@
-Type checking failed: 
-Falsifiable theorem: frontend/tests/cases/negative/intervalChoice.gr:11:1:
-  The following constraint associated with `b` is false:
-	  (prom_[11:33]0 ≤ 0..1) ∧ (prom_[11:29]0 + (1 : Interval Nat) ≤ 1..1) ∧ (0..1 ≤ prom_[11:33]0) ∧ (0..1 ≤ prom_[11:29]0)

@@ -1,0 +1,3 @@
+Type checking failed: 
+Unification failed: frontend/tests/cases/negative/polymorphism/badExistential.gr:4:25:
+Cannot unify universally quantified type variable `a20` of kind `Type` with `t`

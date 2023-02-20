@@ -1,0 +1,15 @@
+Type checking failed: 
+Impossible pattern match: frontend/tests/cases/negative/graded/fact-inf.gr:9:1:
+Pattern match in an equation of `natToInt` is impossible as it implies the unsatisfiable condition ∃ n00 : Nat . (n00 + 1 = (n00 + 1) + 1)
+
+Counter example: frontend/tests/cases/negative/graded/fact-inf.gr:13:1:
+  When checking `fact`, (1 : Interval (Ext Nat)) is not approximatable by ((∞ : Ext Nat))..((∞ : Ext Nat)) for type Interval (Ext Nat)
+
+Counter-example:
+  n = 0 :: Integer
+
+
+Solver timeout: frontend/tests/cases/negative/graded/fact-inf.gr:14:1:
+Solver timed out with limit of 10000ms while checking the grading of definition `fact` with the following theorem:
+∀ {n00 : Nat} . (((n00 + 1 = (n01 + 1) + 1) ∧ (n00 + 1 = (n01 + 1) + 1)) -> ((1 : Interval (Ext Nat)) + ((((∞ : Ext Nat))..((∞ : Ext Nat))) * (1 : Interval (Ext Nat))) ≤ ((∞ : Ext Nat))..((∞ : Ext Nat))) ∧ ((n01 + 1) + 1 = (n01 + 1) + 1) ∧ ((n01 + 1) + 1 = ((n01 + 1) + 1) + 1) ∧ (n01 + 1 = (n01 + 1) + 1) ∧ (n01 + 1 = (n01 + 1) + 1) ∧ ((n01 + 1) + 1 = (n01 + 1) + 1) ∧ (n01 + 1 = n01 + 1) ∧ ((1 : Interval (Ext Nat)) ≤ ((∞ : Ext Nat))..((∞ : Ext Nat))))
+You may want to increase the timeout (see --help).

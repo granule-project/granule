@@ -1,4 +1,0 @@
-import List
-
-main : List Char
-main = Next 'h' (Next 'i' Empty)

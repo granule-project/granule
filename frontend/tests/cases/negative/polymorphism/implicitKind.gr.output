@@ -1,0 +1,3 @@
+Type checking failed: 
+Kind mismatch: frontend/tests/cases/negative/polymorphism/implicitKind.gr:10:1:
+Expected kind `Type -> Type -> Type` for type `Vec` but actual kind is `Nat -> Type -> Type`

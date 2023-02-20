@@ -1,0 +1,8 @@
+--- Type-safe null; wrap a computation that could fail
+data Maybe a = None | Some a
+
+reflect : forall {a : Type} . Maybe a -> (() -> (a [0..1]) <MayFail>)
+reflect mb = 
+    case mb of
+        None -> (\() -> throw);
+        Some x -> (\() -> x)

@@ -9,6 +9,7 @@ module Language.Granule.Utils where
 import Control.Applicative ((<|>))
 import Control.Exception (SomeException, catch, throwIO, try)
 import Control.Monad (when, forM)
+import Control.Monad.State.Class
 import Data.List ((\\), nub, sortBy)
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NonEmpty
@@ -372,3 +373,28 @@ snd3 (_, x, _) = x
 
 thd3 :: (a, b, c) -> c
 thd3 (_, _, x) = x
+
+-- Other utils
+ifM :: Monad m => m Bool -> m a -> m a -> m a
+ifM condM f g = do
+  cond <- condM
+  if cond then f else g
+
+whenM :: Monad m => m Bool -> m () -> m ()
+whenM condM f = ifM condM f (return ())
+
+mapMaybeM :: Monad m => (a -> m (Maybe b)) -> [a] -> m [b]
+mapMaybeM f [] = return []
+mapMaybeM f (x : xs) = do
+  my <- f x
+  ys <- mapMaybeM f xs
+  case my of
+    Just y  -> return $ y : ys
+    Nothing -> return ys
+
+-- modify primitive but which can have effects
+modifyM :: MonadState s m => (s -> m s) -> m ()
+modifyM f = do
+  s <- get
+  s' <- f s
+  put s'
