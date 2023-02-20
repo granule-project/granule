@@ -709,9 +709,9 @@ checkExpr defs gam pol topLevel tau (App s a rf e1 e2) | (usingExtension GradedB
 --
 --  The moding here, with synthesis for e1, is because we need
 --  to know the grade `r`.
-  
+
   -- Syntheise type of function
-  (tau', gam, subst, elab) <- synthExpr defs gam pol (App s a rf e1 e2) 
+  (tau', gam, subst, elab) <- synthExpr defs gam pol (App s a rf e1 e2)
   -- Check the return types match
   (eqT, _, substTy) <- equalTypes s tau tau'
   unless eqT $ throw TypeError{ errLoc = s, tyExpected = tau, tyActual = tau' }
@@ -1278,7 +1278,6 @@ synthExpr defs gam pol (App s _ rf e1 e2) | usingExtension GradedBase = do
 --
   -- Syntheise type of function
   (funTy, gam1, subst1, elab_e1) <- synthExpr defs gam pol e1
-
   case funTy of
     FunTy _ grade sig tau -> do
       -- Check whether `e2` can be promoted (implicitly by this rule)

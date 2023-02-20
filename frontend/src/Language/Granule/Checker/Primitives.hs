@@ -36,7 +36,7 @@ capabilities =
    [(mkId "Console", funTy (tyCon "String") (tyCon "()"))
   , (mkId "TimeDate", funTy (tyCon "()") (tyCon "String"))]
 
-    
+
 
 -- Associates type constuctors names to their:
 --    * kind
@@ -80,7 +80,7 @@ typeConstructors =
     , (mkId "One",      (tyCon "LNL", [], False))
     , (mkId "Many",     (tyCon "LNL", [], False))
     -- Security levels
-    
+
     -- Note that Private/Public can be members of Sec (and map to Hi/Lo) or if 'SecurityLevels' is
     -- turned on then they are part of the 'Level' semiring
     , (mkId "Private",  (extensionDependent [(SecurityLevels, tyCon "Level")] (tyCon "Sec"), [], False))
@@ -582,13 +582,13 @@ uniqueBind
   . (*a -> !b) -> !a -> !b
 uniqueBind = BUILTIN
 
-uniquePush 
-  : forall {a b : Type} 
+uniquePush
+  : forall {a b : Type}
   . *(a, b)  -> (*a, *b)
 uniquePush = BUILTIN
 
-uniquePull 
-  : forall {a b : Type} 
+uniquePull
+  : forall {a b : Type}
   . (*a, *b) -> *(a, b)
 uniquePull = BUILTIN
 

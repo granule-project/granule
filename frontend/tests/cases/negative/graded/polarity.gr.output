@@ -4,4 +4,4 @@ Type variable `a` cannot be unified with type `a [0]` (occurs check failure; imp
 
 Falsifiable theorem: frontend/tests/cases/negative/graded/polarity.gr:7:1:
   The following constraint associated with `secondOrderAlt` is false:
-	  (prom_[7:26]0 = 0) ∧ (1 = prom_[7:26]0)
+	  (prom_[7:26]0 = 0) ∧ (prom_[7:26]0 = 1)
