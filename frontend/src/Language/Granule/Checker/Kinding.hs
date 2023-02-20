@@ -287,10 +287,18 @@ synthKindWithConfiguration s config (TyApp t1 t2) = do
     (FunTy name _ k1 k2) -> do
       (subst2, t2') <- checkKind s t2 k1
       -- Create and apply substitution of t2 for name if there is a name
-      let subst3 = case name of Nothing -> []; Just id -> [(id, SubstT t2)]
-      k2' <- substitute subst3 k2
+      let localSpecialisation = case name of Nothing -> []; Just id -> [(id, SubstT t2)]
+      k2' <- substitute localSpecialisation k2
+      -- NOTE THIS SUBSTITUTION IS LOCAL AND SHOULD NOT BE RETURNED
+      -- IT IS ONLY TO DO WITH REWRITING THE RESULT KIND HERE
+      -- e.g., (a : Type) -> B a   instantiated with a = Int
+      -- we want to do B Int
+      -- but we don't need to know that `a |-> Int` anywhere else
+        -- since `a` is bound only int his context
+        -- Therefore do not output `localSpecialisation` here.
+
       -- Construct output substitution and (specialised) result
-      subst <- combineManySubstitutions s [subst1, subst2, subst3]
+      subst <- combineManySubstitutions s [subst1, subst2]
       return (k2', subst, TyApp t1' t2')
     _ -> throw KindError { errLoc = s, errTy = t1, errKL = funK }
 
