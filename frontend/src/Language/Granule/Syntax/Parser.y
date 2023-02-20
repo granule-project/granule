@@ -169,13 +169,20 @@ Import :: { Import }
                               }
 
 Def :: { Def () () }
-  : Sig NL SpecList Bindings
+  : Sig NL Bindings
       {%  let name = fst3 $1 in 
-          let (exs, auxs) = $3 in 
-          let spec = if null exs && null auxs 
-                     then Nothing 
-                     else Just $ Spec nullSpanNoFile False exs auxs
-          in case $4 of
+          case $3 of
+            (nameB, _) | not (nameB == name) ->
+              error $ "Name for equation `" <> nameB <> "` does not match the signature head `" <> name <> "`"
+
+            (_, bindings) -> do
+              span <- mkSpan (thd3 $1, endPos $ getSpan $ last (equations bindings))
+              return $ Def span (mkId name) False Nothing bindings (snd3 $1)
+      }
+  | Sig NL Spec NL Bindings
+      {%  let name = fst3 $1 in 
+          let spec = $3 in
+          case $5 of
             (nameB, _) | not (nameB == name) ->
               error $ "Name for equation `" <> nameB <> "` does not match the signature head `" <> name <> "`"
 
@@ -184,12 +191,15 @@ Def :: { Def () () }
               return $ Def span (mkId name) False spec bindings (snd3 $1)
       }
   
+Spec :: { Maybe (Spec () ()) }
+  : spec SpecList           { let (exs, auxs)  = $2 in
+                                         Just $ Spec nullSpanNoFile False exs auxs }
 
 SpecList :: { ([Example () ()], [(Id, Maybe Type)]) }
-  : spec Example NL SpecList            { let (exs, auxs) = $4 
-                                           in ($2 : exs, auxs) }  
-  | spec Components NL SpecList        { let (exs, auxs) = $4 
-                                           in (exs, $2 ++ auxs) }
+  : Example ';' SpecList            { let (exs, auxs) = $3
+                                           in ($1 : exs, auxs) }  
+  | Components                          {   let auxs = $1
+                                           in ([], auxs) }
   | {- empty -}                         { ([], []) }
 
 Example :: { Example () () }
@@ -200,12 +210,16 @@ Example :: { Example () () }
 
 ExprList :: { [Expr () ()] }
   : Expr ExprList { $1 : $2 }
+  | Expr          { [$1] }
+  | {- empty -}   { [] }
 
 Components :: { [(Id, Maybe Type)] }
   : VAR                                   {% return [(mkId $ symString $1, Nothing)] }
   | VAR '%' Coeffect                   {% return [(mkId $ symString $1, Just $3)] }
+  -- : VAR '[' Coeffect ']'                 {% return [(mkId $ symString $1, Just $3)] }
   | VAR ',' Components                   { (mkId $ symString $1, Nothing) : $3 }
   | VAR '%' Coeffect ',' Components  { (mkId $ symString $1, Just $3) : $5 }
+  -- | VAR '[' Coeffect ']' ',' Components  { (mkId $ symString $1, Just $3) : $6 }
   | {- empty -}                           {% return [] }
 
 DataDecl :: { DataDecl }
