@@ -740,8 +740,16 @@ mguCoeffectTypesFromCoeffects :: (?globals :: Globals)
   -> Type
   -> Checker (Type, Substitution, (Type -> Type, Type -> Type))
 mguCoeffectTypesFromCoeffects s c1 c2 = do
-  (coeffTy1, subst1, _) <- synthKind s c1
-  (coeffTy2, subst2, _) <- synthKind s c2
+  (coeffTy1, subst1, coeffTy2, subst2) <-
+    if usingExtension GradedBase
+    then do
+      (coeffTy1, subst1, _) <- synthKindWithConfiguration s GradeToPolyAsCoeffect c1
+      (coeffTy2, subst2, _) <- synthKindWithConfiguration s GradeToPolyAsCoeffect c2
+      return (coeffTy1, subst1, coeffTy2, subst2)
+    else do
+      (coeffTy1, subst1, _) <- synthKind s c1
+      (coeffTy2, subst2, _) <- synthKind s c2
+      return (coeffTy1, subst1, coeffTy2, subst2)
   (coeffTy, subst3, res) <- mguCoeffectTypes s coeffTy1 coeffTy2
   subst <- combineManySubstitutions s [subst1, subst2, subst3]
   return (coeffTy, subst, res)
