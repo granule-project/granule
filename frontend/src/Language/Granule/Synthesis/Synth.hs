@@ -48,7 +48,7 @@ import Control.Arrow (second)
 -- import Control.Monad.Omega
 import System.Clock (TimeSpec)
 
--- import Debug.Trace
+import Debug.Trace
 -- import Data.Ord
 
 

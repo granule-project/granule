@@ -22,13 +22,13 @@ data SynthesisData =
   SynthesisData {
     smtCallsCount             :: Integer
   , smtTime                   :: Double
-  , proverTime                :: Double -- longer than smtTime as it includes compilation of predicates to SMT
+  , proveTime                 :: Double -- longer than smtTime as it includes compilation of predicates to SMT
   , theoremSizeTotal          :: Integer
-  , pathsExplored             :: Integer
+  , paths                     :: Integer
   , startTime                 :: Clock.TimeSpec
-  , constructors              :: Ctxt (Ctxt (TypeScheme, Substitution, [Int]))
-  , topLevelDef               :: Id 
-  , structurallyDecreasing    :: Bool 
+  , constructors              :: Ctxt (Ctxt (TypeScheme, Substitution), Bool)
+  , currDef                   :: [Id]
+  , maxReached                :: Bool
   }
   deriving Show
 
@@ -38,11 +38,23 @@ data SynthesisData =
 --   }
 
 instance Semigroup SynthesisData where
- (SynthesisData calls stime time size paths startTime constructors currDef depthReached) <> (SynthesisData calls' stime' time' size' paths' startTime' constructors' currDef' depthReached') =
-    SynthesisData (calls + calls') (stime + stime') (time + time') (size + size') (paths + paths') (startTime + startTime') (constructors ++ constructors') (currDef ++ currDef')  (depthReached || depthReached') 
+ (SynthesisData c smt t s p st cons def max) <> 
+    (SynthesisData c' smt' t' s' p' st' cons' def' max') =
+      SynthesisData 
+        (c + c') 
+        (smt + smt') 
+        (t + t') 
+        (s + s') 
+        (p + p') 
+        (st + st') 
+        (cons ++ cons') 
+        (def ++ def')  
+        (max || max')  
+
+
 
 instance Monoid SynthesisData where
-  mempty  = SynthesisData 0 0 0 0 0 0 [] [] False 
+  mempty  = SynthesisData 0 0 0 0 0 0 [] [] False
   mappend = (<>)
 
 -- Synthesiser monad
@@ -86,7 +98,7 @@ try :: Synthesiser a -> Synthesiser a -> Synthesiser a
 try m n = do
   Synthesiser $ lift $ lift $ lift $ modify (\state ->
     state {
-      pathsExplored = 1 + pathsExplored state
+      paths = 1 + paths state
       })
   Synthesiser $ ExceptT ((runExceptT (unSynthesiser m)) `interleave` (runExceptT (unSynthesiser n)))
 
