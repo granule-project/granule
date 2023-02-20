@@ -1,0 +1,4 @@
+Type checking failed: 
+Falsifiable theorem: frontend/tests/cases/negative/security/security.gr:17:1:
+  The following constraint associated with `main` is false:
+	  (Public ≤ l0) ∧ (l0 ≤ Private)

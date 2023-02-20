@@ -1,0 +1,3 @@
+Type checking failed: 
+Operator resolution failed: frontend/tests/cases/negative/polymorphism/badPoly2.gr:2:10:
+Could not resolve operator `+` at type `a -> Int -> ..`

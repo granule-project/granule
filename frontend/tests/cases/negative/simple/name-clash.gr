@@ -1,0 +1,13 @@
+data Bool = True | False
+
+map : Int
+map = 0
+
+id : Int
+id = 0
+
+onlyDefinedHere : Bool
+onlyDefinedHere = True
+
+onlyDefinedHere : Bool
+onlyDefinedHere = True

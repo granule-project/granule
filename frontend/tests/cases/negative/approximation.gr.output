@@ -1,3 +1,0 @@
-Type checking failed: 
-Falsifiable theorem: frontend/tests/cases/negative/approximation.gr:2:1:
-  When checking `bar`, expected 2 uses, but instead there are 4 actual uses.

@@ -1,6 +1,0 @@
-Type checking failed: 
-Counter example: frontend/tests/cases/negative/semiringsDontHaveCommutativeMult.gr:2:1:
-  When checking `poly`, c * ((1 : k) + (1 : k)) is not approximatable by (((1 : k)) + ((1 : k))) * c for type k
-
-Counter-example:
-  c = 0 :: k

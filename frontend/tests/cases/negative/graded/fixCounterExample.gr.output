@@ -1,0 +1,6 @@
+Type checking failed: 
+Counter example: frontend/tests/cases/negative/graded/fixCounterExample.gr:2:1:
+  When checking `fix`, (1 : s) + r0 is not approximatable by r for type s
+
+Counter-example:
+  r = 0 :: s

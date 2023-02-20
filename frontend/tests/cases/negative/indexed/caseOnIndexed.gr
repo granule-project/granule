@@ -1,0 +1,11 @@
+data Bool = True | Fase
+
+data Vec (n : Nat) t where
+  Nil  : Vec 0 t;
+  Cons : t -> Vec n t -> Vec (n+1) t
+
+isEmpty : ∀ {n : Nat} . Vec n Int → Bool
+isEmpty xs =
+    case xs of
+      Nil        → True;
+      (Cons _ _) → False

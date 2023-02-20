@@ -1,0 +1,3 @@
+Type checking failed: 
+Type error: frontend/tests/cases/negative/polymorphism/badExistential.gr:4:25:
+Expected `f a2.0 -> a` but got `f t -> a`

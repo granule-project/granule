@@ -1,0 +1,12 @@
+-- Small example of case expressions in Granule
+constId : Int → Int
+constId x = case 0 of 0 → x
+
+constId2 : Int → Int
+constId2 x =
+    case 0 of
+      0 → x;
+      1 → x
+
+main : Int
+main = constId 10 + constId2 20

@@ -1825,9 +1825,22 @@ intersectCtxtsWithWeaken s a b = do
    -- All the things that were not shared
    let remaining   = b `subtractCtxt` intersected
    let leftRemaining = a `subtractCtxt` intersected
-   weakenedRemaining <- mapM weaken remaining
-   let newCtxt = intersected <> filter isNonLinearAssumption (weakenedRemaining <> leftRemaining)
-   return . normaliseCtxt $ newCtxt
+
+   let linearNotUsedInBoth =
+         flip mapMaybe (leftRemaining <> remaining) (\(v, ass) ->
+           case ass of
+             Linear t -> Just $ LinearNotUsed v
+             _        -> Nothing)
+
+   case linearNotUsedInBoth of
+     -- All linear things used equally
+     [] -> do
+        weakenedRemaining <- mapM weaken remaining
+        let newCtxt = intersected <> filter isNonLinearAssumption (weakenedRemaining <> leftRemaining)
+        return . normaliseCtxt $ newCtxt
+
+     (p:ps) -> illLinearityMismatch s (p:|ps)
+
   where
    isNonLinearAssumption :: (Id, Assumption) -> Bool
    isNonLinearAssumption (_, Discharged _ _) = True

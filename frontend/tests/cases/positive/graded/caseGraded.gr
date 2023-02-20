@@ -1,0 +1,13 @@
+--- Conditional on integers
+--- Returns `x` if `g` is zero, else returns `y`
+if0 : forall {a : Type} . Int [0..1] -> a [0..1] -> a [0..1] -> a
+if0 g [x] [y] =
+    case g of
+      [0] -> x;
+      [_] -> y
+
+add : Int [1] → Int [1] → Int
+add [x] [y] = x+y
+
+main : Int
+main = add [if0 [0] [1] [2]] [if0 [1] [1] [2]]

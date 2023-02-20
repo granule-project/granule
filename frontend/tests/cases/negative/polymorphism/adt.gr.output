@@ -1,0 +1,3 @@
+Type checking failed: 
+Kind mismatch: frontend/tests/cases/negative/adt.gr:6:3:
+Expected kind `Type` for type `Maybe` but actual kind is `(a : Type) -> Type`

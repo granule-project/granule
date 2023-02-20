@@ -1,0 +1,3 @@
+Type checking failed: 
+Type error: frontend/tests/cases/negative/indexed/expr.gr:6:8:
+Expected `Expr Int -> Expr Int -> Expr Int` but got `Expr Float -> Expr Float -> Expr Float`

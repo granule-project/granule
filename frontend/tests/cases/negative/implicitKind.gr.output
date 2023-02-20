@@ -1,3 +1,0 @@
-Type checking failed: 
-Unification failed: frontend/tests/cases/negative/implicitKind.gr:10:1:
-Trying to unify `Type` and `Nat`

@@ -16,20 +16,19 @@ import Language.Granule.Syntax.Type
 
 import Language.Granule.Utils
 
+-- Filters a type variable context to include only variables which
+-- have a grade type
 includeOnlyGradeVariables :: (?globals :: Globals)
-  => Span -> [(a, (Type, b))] -> Checker [(a, (Type, b))]
+  => Span -> Ctxt (Type, b) -> Checker (Ctxt (Type, b))
 includeOnlyGradeVariables s xs = mapM convert xs >>= (return . catMaybes)
   where
     convert (var, (t, q)) = (do
-      k <- checkKind s t kcoeffect
+      k <- checkKind s t kcoeffect <|> checkKind s t keffect
       return $ Just (var, (t, q))) `catchError` const (return Nothing)
 
 tyVarContextExistential :: Checker (Ctxt (Type, Quantifier))
 tyVarContextExistential = do
   st <- get
-  return $ mapMaybe (\(v, (k, q)) ->
+  return $ flip mapMaybe(tyVarContext st) (\(v, (k, q)) ->
     case q of
-      -- This makes splitting work when the LHS is a pattern, but not sure if it
-      -- has adverse effects...
-      -- BoundQ -> Nothing
-      _      -> Just (v, (k, InstanceQ))) (tyVarContext st)
+      _      -> Just (v, (k, InstanceQ)))

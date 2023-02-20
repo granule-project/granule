@@ -1,6 +1,0 @@
-Type checking failed: 
-Unbound type constructor: frontend/tests/cases/negative/twoBox.gr:4:1:
-`Vec`
-
-Unbound type constructor: frontend/tests/cases/negative/twoBox.gr:7:1:
-`Vec`
