@@ -79,6 +79,9 @@ typeConstructors =
     , (mkId "Zero",     (tyCon "LNL", [], False))
     , (mkId "One",      (tyCon "LNL", [], False))
     , (mkId "Many",     (tyCon "LNL", [], False))
+
+    , (mkId "Cartesian", (kcoeffect, [], False))
+    , (mkId "Any", (tyCon "Cartesian", [], False))
     -- Security levels
     
     -- Note that Private/Public can be members of Sec (and map to Hi/Lo) or if 'SecurityLevels' is
