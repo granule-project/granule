@@ -1790,7 +1790,9 @@ gSynth sParams focusPhase gamma (Focused omega) goal = do
                             modifyPred $ addConstraintViaConjunction (ApproximatedBy ns gradeUsed gradeSpec kind) (predicateContext s)
                             solve
                           _ -> return False
-                      Just (SDef _ Nothing) -> return True) (gamma ++ omega)
+                      Just (SDef _ Nothing) -> return True
+                      Nothing -> return False 
+                      ) (gamma ++ omega)
   if and consumed
     then return expr
     else none
