@@ -2219,27 +2219,27 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
                               Nothing -> grade_s'
 
                         return (delta', Just grade_si)
-                      _ -> return (dVar:delta', mGrade)
-                  SDef{} -> return (delta', mGrade)
+                      _ -> do 
+                        return (dVar:delta', mGrade)
+                  SDef{} -> do 
+                    return (delta', mGrade)
                 ) ([], Nothing) delta
 
               case (lookupAndCutout x delta', grade_si) of
-                (Just (delta'', SVar (Discharged _ grade_r') sInfo), Just grade_si') -> do
+                (Just (delta'', SVar (Discharged _ grade_r') sInfo), grade_si) -> do
 
                   returnDelta <- if index == 0 then return delta' else ctxtMerge (TyInfix TyOpJoin) deltas delta'
                   returnSubst <- conv $ combineSubstitutions ns subst substs
 
                   modifyPred $ moveToNewConjunct (predicateContext cs)
 
-                  let grade_r_out' = case mGrade_r_out of
-                        Just g -> g `gJoin` grade_r'
-                        Nothing -> grade_r'
+                  let (grade_r_out', grade_s_out') = case (mGrade_r_out, mGrade_s_out, grade_si) of 
+                          (Just g, Just s, Just si) -> (Just $ g `gJoin` grade_r', Just $ s `gJoin` si)
+                          (Just g, _, _) -> (Just $ g `gJoin` grade_r', Nothing)
+                          (Nothing, Just s, Just si) -> (Just grade_r', Just $ s `gJoin` si)
+                          _ -> (Just grade_r', Nothing)
 
-                  let grade_s_out' = case mGrade_s_out of
-                        Just s -> s `gJoin` grade_si'
-                        Nothing -> grade_si'
-
-                  return ((constrPat, t):exprs, returnDelta, returnSubst, Just grade_r_out', Just grade_s_out', index+1)
+                  return ((constrPat, t):exprs, returnDelta, returnSubst, grade_r_out', grade_s_out', index+1)
 
                 _ -> do
                   modifyPred $ moveToNewConjunct (predicateContext cs)
@@ -2249,17 +2249,21 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
               return (exprs, deltas, substs, mGrade_r_out, mGrade_s_out, index)
           ) ([], [], [], Nothing, Nothing, 0) datacons
 
+        traceM ((pretty $ makeCaseUntyped x patExprs) <> show grade_r_out <> "     |  " <> show grade_s_out)
         case (patExprs, grade_r_out, grade_s_out) of
           (_:_, Just grade_r_out', Just grade_s_out') -> do
             let var_x_out = (x, SVar (Discharged ty (grade_r_out' `gPlus` grade_s_out')) sInfo)
             return (makeCaseUntyped x patExprs, var_x_out:delta, subst, False, Just x)
+          (_:_, Just grade_r_out', Nothing) -> do 
+            let var_x_out = (x, SVar (Discharged ty (grade_r_out')) sInfo)
+            return (makeCaseUntyped x patExprs, var_x_out:delta, subst, False, Just x)
           _ -> none
-      (False, Just _) -> do 
-        Synthesiser $ lift $ lift $ lift $ modify (\state ->
-            state {
-                maxReached = True
-                  })
-        none
+      -- (False, Just _) -> do 
+      --   Synthesiser $ lift $ lift $ lift $ modify (\state ->
+      --       state {
+      --           maxReached = True
+      --             })
+        -- none
       _ -> none
 
 
