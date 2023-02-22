@@ -8,7 +8,7 @@ module Language.Granule.Utils where
 
 import Control.Applicative ((<|>))
 import Control.Exception (SomeException, catch, throwIO, try)
-import Control.Monad (when, forM)
+import Control.Monad (when, forM, foldM)
 import Control.Monad.State.Class
 import Data.List ((\\), nub, sortBy)
 import Data.List.NonEmpty (NonEmpty(..))
@@ -398,3 +398,8 @@ modifyM f = do
   s <- get
   s' <- f s
   put s'
+
+-- foldM but with parameters reversed for code readability
+-- when the inductive part is long
+forallM :: Monad m => [a] -> b -> (b -> a -> m b) -> m b
+forallM xs b h = foldM h b xs
