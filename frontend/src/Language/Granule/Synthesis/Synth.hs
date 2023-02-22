@@ -1969,11 +1969,18 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
   appRule sParams focusPhase gamma (Focused (var : left)) (Focused right) goal `try` do
     assumptionTy <- getSAssumptionType assumption
     st <- getSynthState
-    case (assumptionTy, scrutCurrent sParams < scrutMax sParams) of
-      ((FunTy bName (Just grade_q) tyA tyB, funDef, Just grade_r, sInfo, tySch), _) -> do
+    case (assumptionTy, guessCurrent sParams <= guessMax sParams, scrutCurrent sParams <= scrutMax sParams) of
+      ((FunTy bName (Just grade_q) tyA tyB, funDef, Just grade_r, sInfo, tySch), True, _) -> do
 
+        traceM "trying app"
         let omega = left ++ right
         x2 <- freshIdentifier
+        
+
+        -- let assumption@(_, SVar _ sInfo) = if isRecursiveCon tyB (x2, (Forall ns [] [] arg, []))
+        --                                    then (y, SVar (Discharged arg' grade_rq) (Just $ Decreasing 1))
+        --                                    else (y, SVar (Discharged arg' grade_rq) (Just NonDecreasing))
+
         let (gamma', omega') = bindToContext (x2, SVar (Discharged tyB grade_r) Nothing) (gamma ++ [var]) omega (isLAsync tyB)
 
         -- traceM $ "checking: " <> show x1
@@ -1996,8 +2003,9 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
                   let isScrutinee = case scrutinee of Just scr -> scr == x2 ; _ -> False
                   (t2, delta2, subst2, struct2, _) <- do 
                     if isScrutinee 
-                    then gSynthInner sParams { scrutCurrent = (scrutCurrent sParams) + 1 } RightSync (gamma ++ omega ++ [var]) (Focused []) tyA
-                    else gSynthInner sParams  RightSync (gamma ++ omega ++ [var]) (Focused []) tyA
+                    then gSynthInner sParams { scrutCurrent = (scrutCurrent sParams) + 1, guessCurrent = (guessCurrent sParams) + 1 } RightSync (gamma ++ omega ++ [var]) (Focused []) tyA
+                    else gSynthInner sParams { guessCurrent = (guessCurrent sParams) + 1 }  RightSync (gamma ++ omega ++ [var]) (Focused []) tyA
+
                   case lookupAndCutout x1 delta2 of
                     Just (delta2', varUsed') -> do
                       let s3 = case varUsed' of
@@ -2023,6 +2031,18 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
                     _ -> none
               _ -> none
           _ -> none
+      (_, False, _) -> do
+        Synthesiser $ lift $ lift $ lift $ modify (\state ->
+            state {
+                maxReached = True
+                  })
+        none
+      -- (_, _, False) -> 
+      --   Synthesiser $ lift $ lift $ lift $ modify (\state ->
+      --       state {
+      --           maxReached = True
+      --             })
+      --   none
       _ -> none
 
 
@@ -2100,12 +2120,21 @@ unboxRule _ _ _ _ _ _ = none
 -}
 constrRule :: (?globals :: Globals) => SearchParameters -> FocusPhase -> Ctxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
 constrRule sParams focusPhase gamma goal = do
-  case isADTorGADT goal of
-    Just datatypeName -> do
+  case (guessCurrent sParams <= guessMax sParams, isADTorGADT goal) of
+    (True, Just datatypeName) -> do
       synthState <- getSynthState
       let (recDatacons, datacons) = relevantConstructors datatypeName $ constructors synthState
       let datacons' = sortBy compareArity (recDatacons ++ datacons)
       tryDatacons datatypeName [] datacons' goal
+
+    (False, Just _) -> do 
+      Synthesiser $ lift $ lift $ lift $ modify (\state ->
+          state {
+              maxReached = True
+                })
+      none
+
+    _ -> none
 
 
   where
@@ -2134,12 +2163,13 @@ constrRule sParams focusPhase gamma goal = do
     synthArgs ((ty, mGrade_q):args) subst = do
       (ts, deltas, substs) <- synthArgs args subst
       ty' <- conv $ substitute subst ty
-      (t, delta, subst, _, _) <- gSynthInner sParams RightAsync gamma (Focused []) ty'
+      (t, delta, subst, _, _) <- gSynthInner sParams { guessCurrent = (guessCurrent sParams) + 1} RightAsync gamma (Focused []) ty'
       delta' <- maybeToSynthesiser $ ctxtAdd deltas delta
       substs' <- conv $ combineSubstitutions ns substs subst
       delta'' <- case mGrade_q of
         Just grade_q -> ctxtMultByCoeffect grade_q delta'
         _ -> return delta'
+      traceM $ "constrIntro delta'': " <> (show delta'')
       return (t:ts, delta'', substs')
 
 
@@ -2157,11 +2187,9 @@ caseRule :: (?globals :: Globals) => SearchParameters -> FocusPhase -> Ctxt SAss
 caseRule _ _ _ _ (Focused []) _ = none
 caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Discharged ty grade_r) sInfo):right)) goal =
   caseRule sParams focusPhase gamma (Focused (var : left)) (Focused right) goal `try` do
-    traceM $ "entering case branch with goal: " <> pretty goal
-    -- traceM "I'm trying here!"
     st <- getSynthState 
-    case (matchCurrent sParams < matchMax sParams,isADTorGADT ty) of
-      (_, Just datatypeName) -> do
+    case (matchCurrent sParams <= matchMax sParams,isADTorGADT ty) of
+      (True, Just datatypeName) -> do
 
         let omega = left ++ right
         synthState <- getSynthState
@@ -2264,12 +2292,12 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
             let var_x_out = (x, SVar (Discharged ty (grade_r_out')) sInfo)
             return (makeCaseUntyped x patExprs, var_x_out:delta, subst, False, Just x)
           _ -> none
-      -- (False, Just _) -> do 
-      --   Synthesiser $ lift $ lift $ lift $ modify (\state ->
-      --       state {
-      --           maxReached = True
-      --             })
-        -- none
+      (False, Just _) -> do 
+        Synthesiser $ lift $ lift $ lift $ modify (\state ->
+            state {
+                maxReached = True
+                  })
+        none
       _ -> none
 
 
