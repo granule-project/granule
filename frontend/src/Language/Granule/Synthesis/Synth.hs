@@ -1859,9 +1859,9 @@ gSynthInner sParams focusPhase gamma (Focused omega) goal = do
 
     focLeft _ _ [] goal = none
     focLeft sParams left (var:right) goal =
-      focLeft sParams (var:left) right goal
-      `try`
       gSynthInner sParams LeftSync (left ++ right) (Focused [var]) goal
+      `try`
+      focLeft sParams (var:left) right goal
 
     transitionToLeftAsync _ _ _ (FunTy{}) = none
     transitionToLeftAsync sParams gamma omega goal = gSynthInner sParams LeftAsync gamma (Focused omega) goal
