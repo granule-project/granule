@@ -2289,7 +2289,7 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
                           returnDelta <- if index == 0 then return delta' else ctxtMerge (TyInfix TyOpJoin) deltas delta'
                           returnSubst <- conv $ combineSubstitutions ns subst substs
                           -- TODO: could `cs` be stale here? check
-                          modifyPred $ moveToNewConjunct (predicateContext cs)
+                          modifyPred $ moveToNewConjunct predFinal
 
                           -- This is VERY ugly but it works... There is a much better way of writing this but it can wait
                           let (grade_r_out', grade_s_out') = case (mGrade_r_out, mGrade_s_out, grade_si) of
@@ -2301,13 +2301,13 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
                                   (Nothing, Just s, Nothing) -> (Just grade_r', Just $ s )
                                   _ -> (Just grade_r', Nothing)
 
+                          
                           return ((constrPat, t):exprs, returnDelta, returnSubst, grade_r_out', grade_s_out', index+1)
 
                         _ -> do
-                          modifyPred $ moveToNewConjunct (predicateContext cs)
-                          return (exprs, deltas, substs, mGrade_r_out, mGrade_s_out, index)
+                          none
                     _ -> do
-                      modifyPred $ moveToNewConjunct (predicateContext cs)
+                      modifyPred $ moveToNewConjunct predFinal
                       return (exprs, deltas, substs, mGrade_r_out, mGrade_s_out, index)
                   )
 
