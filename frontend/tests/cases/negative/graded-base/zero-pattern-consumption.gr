@@ -1,0 +1,5 @@
+data Bool = True | False
+
+neg : Bool % 0 -> Bool
+neg False = True;
+neg True = False
