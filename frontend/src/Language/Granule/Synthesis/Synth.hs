@@ -1905,13 +1905,19 @@ varRule gamma (Focused left) (Focused (var@(name, assumption) : right)) goal = d
                 let singleUse = (name, SVar (Discharged t (TyGrade (Just kind) 1)) mSInfo)
                 return (Val ns () False (Var () name), singleUse:delta, subst, isDecr mSInfo, Nothing)
               (True, Just grade) -> do 
-                (kind, _, _) <- conv $ synthKind ns grade
-                delta <- ctxtMultByCoeffect (TyGrade (Just kind) 0) (left ++ right)
-                let singleUse = (name, SDef tySch (Just $ TyGrade (Just kind) 1))
-                return (Val ns () False (Var () name), singleUse:delta, subst, False, Nothing)
+                synSt <- getSynthState
+                if not $ name `elem` currDef synSt then do 
+                  (kind, _, _) <- conv $ synthKind ns grade
+                  delta <- ctxtMultByCoeffect (TyGrade (Just kind) 0) (left ++ right)
+                  let singleUse = (name, SDef tySch (Just $ TyGrade (Just kind) 1))
+                  return (Val ns () False (Var () name), singleUse:delta, subst, False, Nothing)
+                else none
               (True, Nothing) -> do 
-                delta <- ctxtMultByCoeffect (TyGrade Nothing 0) (left ++ right)
-                return (Val ns () False (Var () name), var:delta, subst, False, Nothing)
+                synSt <- getSynthState
+                if not $ name `elem` currDef synSt then do 
+                  delta <- ctxtMultByCoeffect (TyGrade Nothing 0) (left ++ right)
+                  return (Val ns () False (Var () name), var:delta, subst, False, Nothing)
+                else none
           else none
         else none
 -- varRule _ _ _ _ = none
