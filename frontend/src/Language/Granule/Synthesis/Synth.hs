@@ -52,18 +52,18 @@ import Debug.Trace
 -- import Data.Ord
 
 
--- Phases of focusing, in brief: 
--- * Right Async: (initial phase) introduction rule abstraction, when abs 
+-- Phases of focusing, in brief:
+-- * Right Async: (initial phase) introduction rule abstraction, when abs
 --                rule can no longer be applied, tranasition to:
 -- * Left Async: elimination rules for constructors and graded modalities
 --               when these are all decomposed, transition to focusing where
 --               one of the sync phases is chosen:
--- * Right Sync: constructor and graded modality introductions. Transitions back 
+-- * Right Sync: constructor and graded modality introductions. Transitions back
 --               Right Async when finished.
 -- * Left Sync:  applications and variables.
 data FocusPhase = RightAsync | RightSync | LeftAsync | LeftSync
 
--- Augments a standard Granule assumption with StructInfo (if applicable to the 
+-- Augments a standard Granule assumption with StructInfo (if applicable to the
 -- assumptions type).
 
 data Goal =  Goal TypeScheme (Maybe StructInfo)
@@ -76,11 +76,11 @@ data ResourceScheme a = Additive a | Subtractive
   deriving (Show, Eq)
 
 
--- Pushes the fresh variable name from an unboxing up to the outer expression 
--- for refactoring e.g.: 
--- let [x] = y : A in x 
--- yields the binding  [(y, (x, A))] which allows the let binding to 
--- later be refactored to: 
+-- Pushes the fresh variable name from an unboxing up to the outer expression
+-- for refactoring e.g.:
+-- let [x] = y : A in x
+-- yields the binding  [(y, (x, A))] which allows the let binding to
+-- later be refactored to:
 -- f [x] = x
 type Bindings = [(Id, (Id, Type))]
 
@@ -99,11 +99,11 @@ data Depth = Depth
 ------------------------------
 
 -- Additional semiring-dependent constraints for additive resource management.
--- If we are in additive mode, we can finish early if such a constraint is not 
+-- If we are in additive mode, we can finish early if such a constraint is not
 -- satisfiable:
--- 
+--
 -- ∀x,y . x ⊑︎ y => xRy
---  
+--
 increasingConstraints :: (?globals :: Globals) => Ctxt SAssumption -> Ctxt SAssumption -> Synthesiser ()
 increasingConstraints gamma delta = increasingConstraints' gamma delta False
   where
@@ -131,7 +131,7 @@ addIncreasingConstraint k@(isInterval -> Just t) gradeIn gradeOut = do
 addIncreasingConstraint k@(TyCon con) gradeIn gradeOut  =
   case internalName con of
 
-    -- Natural Numbers: R = {(x, y) | ∃z. x + z ⊑ y} 
+    -- Natural Numbers: R = {(x, y) | ∃z. x + z ⊑ y}
     "Nat" -> do
       st <- conv get
       var <- freshIdentifier
@@ -140,7 +140,7 @@ addIncreasingConstraint k@(TyCon con) gradeIn gradeOut  =
       liftIO $ putStrLn $ "gradeOut: " <> show gradeOut
       modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (TyInfix TyOpPlus gradeOut (TyVar var)) gradeIn k) (predicateContext st)
 
-    -- Linear/Non Linear: R = {(x, y) | } 
+    -- Linear/Non Linear: R = {(x, y) | }
     "LNL" -> do
       st <- conv get
       var <- freshIdentifier
@@ -210,8 +210,8 @@ solve = do
 bindToContext ::
      (Id, SAssumption)    -- The assumption being bound
   -> Ctxt SAssumption     -- Gamma
-  -> Ctxt SAssumption     -- Omega 
-  -> Bool                 -- is Left Asynchronous? 
+  -> Ctxt SAssumption     -- Omega
+  -> Bool                 -- is Left Asynchronous?
   -> (Ctxt SAssumption, Ctxt SAssumption)
 bindToContext var gamma omega True = (gamma, var:omega)
 bindToContext var gamma omega False = (var:gamma, omega)
@@ -256,18 +256,18 @@ isAtomic _ = False
 -- TODO: rewrite a lot of checkConstructor and auxilliary functions
 
 -- Takes a data constructor and returns whether the constructor is a canditate for synthesis based on
--- the type of the assumption. If so, return a fresh polymorphic instance of that constructor. 
+-- the type of the assumption. If so, return a fresh polymorphic instance of that constructor.
 checkConstructor :: (?globals::Globals)
       => Bool             -- Do impossibility check?
-      -> TypeScheme       -- Type of data type definition 
+      -> TypeScheme       -- Type of data type definition
       -> Type             -- Type of assumption
       -> Substitution
       -> Synthesiser (Bool, Type, [(Type, Maybe Coeffect)], Substitution, Substitution)
 checkConstructor impossibility con@(Forall  _ binders constraints conTy) assumptionTy subst = do
     conv $ resetAddedConstraintsFlag -- reset the flag that says if any constraints were added
-    (conTyFresh, tyVarsFreshD, substFromFreshening, constraints', coercions) <- conv $ freshPolymorphicInstance InstanceQ True con subst [] 
+    (conTyFresh, tyVarsFreshD, substFromFreshening, constraints', coercions) <- conv $ freshPolymorphicInstance InstanceQ True con subst []
 
-    -- Take the rightmost type of the function type, collecting the arguments along the way 
+    -- Take the rightmost type of the function type, collecting the arguments along the way
     let (conTy', args) = collectTyAndArgs conTyFresh
     conTy'' <- conv $ substitute coercions conTy'
 --    conTy'' <- conv $ substitute (flipSubstitution coercions) conTy'
@@ -394,7 +394,7 @@ useVar (name, SVar (Linear t) _) gamma Subtractive _ = return gamma
 useVar (name, SVar (Discharged t grade) sInfo) gamma Subtractive Nothing = do
   (kind, _, _) <- conv $ synthKind nullSpan grade
   var <- freshIdentifier
-  conv $ existentialTopLevel var kind -- Existentials must be at the topLevel because they may be generated inside an implication but may occur outside of the implication 
+  conv $ existentialTopLevel var kind -- Existentials must be at the topLevel because they may be generated inside an implication but may occur outside of the implication
   st <- conv get
   modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (TyInfix TyOpPlus (TyVar var) (TyGrade (Just kind) 1)) grade kind) (predicateContext st)
   res <- solve
@@ -419,7 +419,7 @@ useVar (name, SVar (Discharged t grade) sInfo) _ Additive{} (Just gradeOnRule) =
   (kind, _, _) <- conv $ synthKind nullSpan grade
   return [(name, SVar (Discharged t gradeOnRule) sInfo)]
 
--- Defs 
+-- Defs
 -- For top level definitions we do not need to track resource usage
 useVar (name, def@SDef{}) gamma Subtractive _ = return ((name, def):gamma)
 useVar (name, def@SDef{}) _ Additive{} _ = return []
@@ -571,7 +571,7 @@ appHelper gamma (Focused left) (Focused (var@(x, assumption) : right)) Subtracti
   (case assumptionTy of
     (FunTy _ _ tyA tyB, isTopLevelDef, _, _, _) -> do
 
-      -- Only try the app if we haven't hit the app allowed depth 
+      -- Only try the app if we haven't hit the app allowed depth
       -- debugM "synthDebug - (app) trying to use a function " (show var ++ " to get goal " ++ pretty goalTySch)
 
       let omega = left ++ right
@@ -861,7 +861,7 @@ unboxHelper gamma (Focused left) (Focused (var@(x, ty) : right)) add@(Additive{}
 
 
 
-{-- 
+{--
 
 
 --}
@@ -957,7 +957,7 @@ constrIntroHelper _ _ _ _ _ _ _ = none
 
 
 
-{- 
+{-
 
 Constructor elimination synthesis
 ---------------------------------
@@ -1026,7 +1026,7 @@ constrElimHelper gamma (Focused left) (Focused (var@(x, assumption):right)) mode
 
                     -- If we are rebinding the assumption we are currently doing the eliminatino on (i.e. if it's graded) then
                     -- we need to rebing it in gamma NOT omega. Otherwise we will end up staying focused on it and trying to use
-                    -- it even when we can not 
+                    -- it even when we can not
 
                     (gamma', omega') <-
                       case mode of
@@ -1036,7 +1036,7 @@ constrElimHelper gamma (Focused left) (Focused (var@(x, assumption):right)) mode
                             Just (usageOut', assumption') -> return (gamma ++ [(x, assumption')], usageOut')
                             _ -> return (gamma, usageOut)
 
-                    -- Required for focusing with recursive data structures. If we have hit the depth limit but still have other vars in omega 
+                    -- Required for focusing with recursive data structures. If we have hit the depth limit but still have other vars in omega
                     -- that cannot be decomposed we need to move them into gamma
 
                     let reachedDepth = currentDepth + 1 > elims depth
@@ -1172,7 +1172,7 @@ constrElimHelper gamma (Focused left) (Focused (var@(x, assumption):right)) mode
             res <- solve
             if res then checkAssumptions (x, t') add del assmps unboxed else none
 
-  -- Top level definitions should never appear in delta, however, just skip over them if so 
+  -- Top level definitions should never appear in delta, however, just skip over them if so
   checkAssumptions x mode del (var@(id, SDef{}):assmps) unboxed = checkAssumptions x mode del assmps unboxed
 
 
@@ -1383,7 +1383,7 @@ synthesise resourceScheme gamma (Focused omega) depth grade goal = do
 synthesiseProgram :: (?globals :: Globals)
            => Maybe Hints
            -> Int -- index
-           -> Ctxt TypeScheme  -- Unrestricted Defs 
+           -> Ctxt TypeScheme  -- Unrestricted Defs
            -> Ctxt (TypeScheme, Type) -- Restricted Defs
            -> Id
            -> Ctxt Assumption    -- (unfocused) free variables
@@ -1428,7 +1428,7 @@ synthesiseProgram hints index unrComps rComps defId ctxt goalTy checkerState = d
                       ,  maxReached = False
                       }
 
-  let (hintELim, hintILim) = (1, 1) -- case (hasElimHint hints, hasIntroHint hints) of 
+  let (hintELim, hintILim) = (1, 1) -- case (hasElimHint hints, hasIntroHint hints) of
   --           (Just e, Just i)   -> (e, i)
   --           (Just e, Nothing)  -> (e, 1)
   --           (Nothing, Just i)  -> (1, i)
@@ -1493,7 +1493,7 @@ synthesiseProgram hints index unrComps rComps defId ctxt goalTy checkerState = d
       loop resourceScheme (elimMax, introMax) index defs grade gamma agg = do
 
 --      Diagonal search
-        -- let diagonal = runOmega $ liftM2 (,) (each [0..elimMax]) (each [0..introMax]) 
+        -- let diagonal = runOmega $ liftM2 (,) (each [0..elimMax]) (each [0..introMax])
 
 --      Rectilinear search
         -- let norm (x,y) = sqrt (fromIntegral x^2+fromIntegral y^2)
@@ -1632,7 +1632,7 @@ sizeOfCoeffect _ = 0
 synthesiseGradedBase :: (?globals :: Globals)
   => Maybe Hints
   -> Int
-  -> Ctxt TypeScheme  -- Unrestricted Defs 
+  -> Ctxt TypeScheme  -- Unrestricted Defs
   -> Ctxt (TypeScheme, Type) -- Restricted Defs
   -> Id
   -> Ctxt Assumption    -- (unfocused) free variables
@@ -1643,6 +1643,7 @@ synthesiseGradedBase hints index unrestricted restricted currentDef ctxt (Forall
 
   -- let defaultTimeout = 100000
 
+  -- Start timing and initialise state
   start <- liftIO $ Clock.getTime Clock.Monotonic
   let synthState = SynthesisData {
                          smtCallsCount= 0
@@ -1665,23 +1666,27 @@ synthesiseGradedBase hints index unrestricted restricted currentDef ctxt (Forall
                       }
 
   -- let timeout = case hints of
-  --                   Just h -> case (hTimeout h, hNoTimeout h) of (_, True) -> -1 ; (Just lim, _) -> lim * 1000 
-  --                   Nothing -> defaultTimeout 
+  --                   Just h -> case (hTimeout h, hNoTimeout h) of (_, True) -> -1 ; (Just lim, _) -> lim * 1000
+  --                   Nothing -> defaultTimeout
 
+  -- Initialise input context with
+  -- local synthesis context
   let gamma = map (\(v, a)  -> (v, SVar a $ Just NonDecreasing)) ctxt ++
+  -- restricted definition given as hints
               map (\(v, (tySch, grade)) -> (v, SDef tySch (Just grade))) restricted ++
+  -- unrestricted definitions given as hints
               map (\(v, tySch) -> (v, SDef tySch Nothing)) unrestricted
 
-  result <- liftIO $ synLoop 0 sParams index gamma synthState cs goalTy 
+  result <- liftIO $ synLoop 0 sParams index gamma synthState cs goalTy
 
   case result of
       (synthResult, aggregate) -> do
         let programs = nub $ rights (map fst synthResult)
         end    <- liftIO $ Clock.getTime Clock.Monotonic
         -- <benchmarking-output>
-        if benchmarking then 
+        if benchmarking then
           if benchmarkingRawData then
-            let measurement = Measurement 
+            let measurement = Measurement
                                 { smtCalls = smtCallsCount aggregate
                                 , synthTime = fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double)
                                 , proverTime = proveTime aggregate
@@ -1690,7 +1695,7 @@ synthesiseGradedBase hints index unrestricted restricted currentDef ctxt (Forall
                                 , success = if null programs then False else True
                                 , timeout = False
                                 , pathsExplored = paths aggregate
-                                } in 
+                                } in
                 return (programs, Just measurement)
             -- putStrLn $ "Measurement "
             --   <> "{ smtCalls = " <> show (smtCallsCount aggregate)
@@ -1713,27 +1718,27 @@ synthesiseGradedBase hints index unrestricted restricted currentDef ctxt (Forall
             putStrLn $ "Total synth time (ms) = "  ++ show (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double))
             putStrLn $ "Mean theoremSize   = " ++ show ((if smtCallsCount aggregate == 0 then 0 else fromInteger $ theoremSizeTotal aggregate) / fromInteger (smtCallsCount aggregate))
             return (programs, Nothing)
-        else 
+        else
           return (programs, Nothing)
 
 
-synLoop :: (?globals :: Globals) 
-        => Int 
-        -> SearchParameters 
-        -> Int 
-        -> Ctxt SAssumption 
-        -> SynthesisData 
-        -> CheckerState 
-        -> Type 
-        -> IO ([(Either (NonEmpty CheckerError) (Expr () ()), CheckerState)], SynthesisData) 
-synLoop step sParams index gamma synthState checkerState goal = do 
+synLoop :: (?globals :: Globals)
+        => Int
+        -> SearchParameters
+        -> Int
+        -> Ctxt SAssumption
+        -> SynthesisData
+        -> CheckerState
+        -> Type
+        -> IO ([(Either (NonEmpty CheckerError) (Expr () ()), CheckerState)], SynthesisData)
+synLoop step sParams index gamma synthState checkerState goal = do
   let synRes = gSynth sParams RightAsync gamma (Focused []) goal
   (res, agg) <- runStateT (runSynthesiser index synRes checkerState) synthState
   if not (solved res) && (maxReached agg) then
     synLoop (step+1) (adjustParams step sParams) index gamma agg { maxReached = False } checkerState goal
   else return (res, agg)
 
-  where 
+  where
     solved res = case res of ((Right (expr), _):_) -> True ; _ -> False
 
     adjustParams 0 sParams = sParams { matchMax = (matchMax sParams) + 1}
@@ -1747,7 +1752,7 @@ synLoop step sParams index gamma synthState checkerState goal = do
 gSynth :: (?globals :: Globals) => SearchParameters -> FocusPhase -> Ctxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () ())
 gSynth sParams focusPhase gamma (Focused omega) goal = do
 
-  relevantConstructors <- do 
+  relevantConstructors <- do
       let snd3 (a, b, c) = b
           tripleToTup (a, b, c) = (a, b)
       st <- get
@@ -1791,7 +1796,7 @@ gSynth sParams focusPhase gamma (Focused omega) goal = do
                             solve
                           _ -> return False
                       Just (SDef _ Nothing) -> return True
-                      Nothing -> return False 
+                      Nothing -> return False
                       ) (gamma ++ omega)
   if and consumed
     then return expr
@@ -1815,7 +1820,7 @@ gSynthInner sParams focusPhase gamma (Focused omega) goal = do
       unboxRule sParams LeftAsync gamma (Focused []) (Focused omega) goal
       `try`
       caseRule sParams LeftAsync gamma (Focused []) (Focused omega) goal
-    -- Focus / shift to Sync phases 
+    -- Focus / shift to Sync phases
     (LeftAsync, []) -> do
       foc sParams goal gamma $ isRSync goal
 
@@ -1871,7 +1876,7 @@ gSynthInner sParams focusPhase gamma (Focused omega) goal = do
 
 
 
-{- 
+{-
 
 --------------------------------- Var
 Γ, x :ᵣ A ⊢ A => x | 0·Γ, x :₁ A
@@ -1883,10 +1888,10 @@ varRule _ _ (Focused []) _ = none
 varRule gamma (Focused left) (Focused (var@(name, assumption) : right)) goal = do
   varRule gamma (Focused (var:left)) (Focused right) goal `try` do
     assumptionTy <- getSAssumptionType assumption
-    case assumptionTy of 
+    case assumptionTy of
       (t, funDef, mGrade, mSInfo, tySch) -> do
         conv resetAddedConstraintsFlag
-        st <- conv get 
+        st <- conv get
         (success, _, subst) <- conv $ equalTypes ns t goal
         cs <- conv get
         modifyPred $ addPredicateViaConjunction (Conj $ predicateStack cs) (predicateContext cs)
@@ -1898,23 +1903,23 @@ varRule gamma (Focused left) (Focused (var@(name, assumption) : right)) goal = d
                     else return True
           -- now to do check we can actually use it
           if solved then do
-            case (funDef, mGrade) of 
-              (False, Just grade) -> do 
+            case (funDef, mGrade) of
+              (False, Just grade) -> do
                 (kind, _, _) <- conv $ synthKind ns grade
                 delta <- ctxtMultByCoeffect (TyGrade (Just kind) 0) (left ++ right)
                 let singleUse = (name, SVar (Discharged t (TyGrade (Just kind) 1)) mSInfo)
                 return (Val ns () False (Var () name), singleUse:delta, subst, isDecr mSInfo, Nothing)
-              (True, Just grade) -> do 
+              (True, Just grade) -> do
                 synSt <- getSynthState
-                if not $ name `elem` currDef synSt then do 
+                if not $ name `elem` currDef synSt then do
                   (kind, _, _) <- conv $ synthKind ns grade
                   delta <- ctxtMultByCoeffect (TyGrade (Just kind) 0) (left ++ right)
                   let singleUse = (name, SDef tySch (Just $ TyGrade (Just kind) 1))
                   return (Val ns () False (Var () name), singleUse:delta, subst, False, Nothing)
                 else none
-              (True, Nothing) -> do 
+              (True, Nothing) -> do
                 synSt <- getSynthState
-                if not $ name `elem` currDef synSt then do 
+                if not $ name `elem` currDef synSt then do
                   delta <- ctxtMultByCoeffect (TyGrade Nothing 0) (left ++ right)
                   return (Val ns () False (Var () name), var:delta, subst, False, Nothing)
                 else none
@@ -1923,11 +1928,11 @@ varRule gamma (Focused left) (Focused (var@(name, assumption) : right)) goal = d
 -- varRule _ _ _ _ = none
 
 
-{- 
+{-
 
 Γ, x :ᵣ A ⊢ B => t | Δ, x :ᵣ A      r ⊑ q
 -------------------------------------------- Abs
-Γ ⊢ Aʳ → B => λᵣx.t | Δ 
+Γ ⊢ Aʳ → B => λᵣx.t | Δ
 
 -}
 absRule :: (?globals :: Globals) => SearchParameters ->  FocusPhase -> Ctxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
@@ -1955,7 +1960,7 @@ absRule sParams focusPhase gamma (Focused omega) (FunTy name (Just grade) tyA ty
 absRule _ _ _ _ _ = none
 
 
-{- 
+{-
 
 Γ, x :_r1 A^q → B, y :_r2 B ⊢ C => t₁ | Δ₁, x :_s1 A^q → B, y :_s2 B
 Γ, x :_r1 A^q → B ⊢ A => t₂ | Δ₂, x :_s3 : A^q → B
@@ -1975,7 +1980,7 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
         traceM "trying app"
         let omega = left ++ right
         x2 <- freshIdentifier
-        
+
 
         -- let assumption@(_, SVar _ sInfo) = if isRecursiveCon tyB (x2, (Forall ns [] [] arg, []))
         --                                    then (y, SVar (Discharged arg' grade_rq) (Just $ Decreasing 1))
@@ -2001,8 +2006,8 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
                         SDef tySch (Just s1')   -> s1'
                         SDef tySch Nothing      -> undefined
                   let isScrutinee = case scrutinee of Just scr -> scr == x2 ; _ -> False
-                  (t2, delta2, subst2, struct2, _) <- do 
-                    if isScrutinee 
+                  (t2, delta2, subst2, struct2, _) <- do
+                    if isScrutinee
                     then gSynthInner sParams { scrutCurrent = (scrutCurrent sParams) + 1, guessCurrent = (guessCurrent sParams) + 1 } RightSync (gamma ++ omega ++ [var]) (Focused []) tyA
                     else gSynthInner sParams { guessCurrent = (guessCurrent sParams) + 1 }  RightSync (gamma ++ omega ++ [var]) (Focused []) tyA
 
@@ -2037,7 +2042,7 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
                 maxReached = True
                   })
         none
-      -- (_, _, False) -> 
+      -- (_, _, False) ->
       --   Synthesiser $ lift $ lift $ lift $ modify (\state ->
       --       state {
       --           maxReached = True
@@ -2066,7 +2071,7 @@ boxRule _ _ _ _ = none
 
 {-
 
-Γ, y :_r·q A, x :_r □q A ⊢ B => t | Δ, y : [A] s1, x :_s2 □q A 
+Γ, y :_r·q A, x :_r □q A ⊢ B => t | Δ, y : [A] s1, x :_s2 □q A
 ∃s3 . s1 ⊑ s3 · q ⊑ r · q
 ---------------------------------------------------------------- :: unbox
 Γ, x :_r □q A ⊢ B => case x of [y] -> t | Δ, x :_s3+s2 □q A
@@ -2127,7 +2132,7 @@ constrRule sParams focusPhase gamma goal = do
       let datacons' = sortBy compareArity (recDatacons ++ datacons)
       tryDatacons datatypeName [] datacons' goal
 
-    (False, Just _) -> do 
+    (False, Just _) -> do
       Synthesiser $ lift $ lift $ lift $ modify (\state ->
           state {
               maxReached = True
@@ -2145,10 +2150,10 @@ constrRule sParams focusPhase gamma goal = do
         case result of
           (True, specTy, args, subst, substFromFreshening) -> do
             case args of
-              -- Nullary constructor 
+              -- Nullary constructor
               [] -> do
                 -- _ <- error "here"
-                delta <- ctxtMultByCoeffect (TyGrade Nothing 0) gamma 
+                delta <- ctxtMultByCoeffect (TyGrade Nothing 0) gamma
                 return (Val ns () False (Constr () cName []), delta, [], False, Nothing)
 
               -- N-ary constructor
@@ -2187,7 +2192,7 @@ caseRule :: (?globals :: Globals) => SearchParameters -> FocusPhase -> Ctxt SAss
 caseRule _ _ _ _ (Focused []) _ = none
 caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Discharged ty grade_r) sInfo):right)) goal =
   caseRule sParams focusPhase gamma (Focused (var : left)) (Focused right) goal `try` do
-    st <- getSynthState 
+    st <- getSynthState
     case (matchCurrent sParams <= matchMax sParams,isADTorGADT ty) of
       (True, Just datatypeName) -> do
 
@@ -2216,7 +2221,7 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
                         Just grade_q -> grade_r `gTimes` grade_q
                         Nothing -> grade_r
 
-                  arg' <- conv $ substitute subst arg 
+                  arg' <- conv $ substitute subst arg
                   let assumption@(_, SVar _ sInfo) = if isRecursiveCon datatypeName (y, (Forall ns bs constraints arg, []))
                                    then (y, SVar (Discharged arg' grade_rq) (Just $ Decreasing 1))
                                    else (y, SVar (Discharged arg' grade_rq) (Just NonDecreasing))
@@ -2228,7 +2233,7 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
               let constrPat = PConstr ns () False cName (map (PVar ns () False) $ reverse vars)
 
 
-              
+
               traceM $ "gamma: " <> (show gamma')
               traceM $ "omega: " <> (show omega')
               traceM $ "args: " <> (show args)
@@ -2238,7 +2243,7 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
               -- _ <- error "STOP"
 
               (delta', grade_si, predFinal) <- foldM (\(delta', mGrade, currentPred) dVar@(dName, dAssumption) ->
-                case dAssumption of 
+                case dAssumption of
                   SVar (Discharged ty grade_s) dSInfo ->
                     case lookup dName varsAndGrades of
                       Just grade_rq -> do
@@ -2257,9 +2262,9 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
                               Just s -> s `gJoin` grade_s'
                               Nothing -> grade_s'
                         return (delta', Just grade_si, pred3)
-                      _ -> do 
+                      _ -> do
                         return (dVar:delta', mGrade, currentPred)
-                  SDef{} -> do 
+                  SDef{} -> do
                     return (delta', mGrade, currentPred)
                 ) ([], Nothing, pred') delta
 
@@ -2280,7 +2285,7 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
                   modifyPred $ moveToNewConjunct (predicateContext cs)
 
                   -- This is VERY ugly but it works... There is a much better way of writing this but it can wait
-                  let (grade_r_out', grade_s_out') = case (mGrade_r_out, mGrade_s_out, grade_si) of 
+                  let (grade_r_out', grade_s_out') = case (mGrade_r_out, mGrade_s_out, grade_si) of
                           (Just g, Just s, Just si) -> (Just $ g `gJoin` grade_r', Just $ s `gJoin` si)
                           (Just g, Nothing, Just si) -> (Just $ g `gJoin` grade_r', Just $ si)
                           (Just g, Just s, Nothing) -> (Just $ g `gJoin` grade_r', Just $ s)
@@ -2304,11 +2309,11 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
           (_:_, Just grade_r_out', Just grade_s_out') -> do
             let var_x_out = (x, SVar (Discharged ty (grade_r_out' `gPlus` grade_s_out')) sInfo)
             return (makeCaseUntyped x patExprs, var_x_out:delta, subst, False, Just x)
-          (_:_, Just grade_r_out', Nothing) -> do 
+          (_:_, Just grade_r_out', Nothing) -> do
             let var_x_out = (x, SVar (Discharged ty (grade_r_out')) sInfo)
             return (makeCaseUntyped x patExprs, var_x_out:delta, subst, False, Just x)
           _ -> none
-      (False, Just _) -> do 
+      (False, Just _) -> do
         Synthesiser $ lift $ lift $ lift $ modify (\state ->
             state {
                 maxReached = True
@@ -2323,7 +2328,7 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
 caseRule _ _ _ _ _ _ = none
 
 
-data SearchParameters = 
+data SearchParameters =
   SearchParams {
     scrutCurrent  :: Integer
   , scrutMax      :: Integer
