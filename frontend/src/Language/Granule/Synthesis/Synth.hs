@@ -1936,7 +1936,9 @@ varRule gamma (Focused left) (Focused (var@(name, assumption) : right)) goal = d
 
 -}
 absRule :: (?globals :: Globals) => SearchParameters ->  FocusPhase -> Ctxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
-absRule sParams focusPhase gamma (Focused omega) (FunTy name (Just grade) tyA tyB) = do
+absRule sParams focusPhase gamma (Focused omega) (FunTy name gradeM tyA tyB) = do
+  -- Extract the graded arrow, or use generic 1 if there is no grade
+  let grade = case gradeM of Just grade -> grade; Nothing -> TyGrade Nothing 1
 
   x <-  useBinderNameOrFreshen name
 
