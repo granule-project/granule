@@ -2307,10 +2307,11 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
                         _ -> do
                           none
                     _ -> do
-                      modifyPred $ moveToNewConjunct predFinal
+                      -- modifyPred $ moveToNewConjunct predFinal
                       return (exprs, deltas, substs, mGrade_r_out, mGrade_s_out, index)
                   )
 
+        cs <- conv $ get
         traceM ((pretty $ makeCaseUntyped x patExprs) <> show grade_r_out <> "     |  " <> show grade_s_out)
         case (patExprs, grade_r_out, grade_s_out) of
           (_:_, Just grade_r_out', Just grade_s_out') -> do
