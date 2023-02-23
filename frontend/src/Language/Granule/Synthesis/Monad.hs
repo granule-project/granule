@@ -72,7 +72,10 @@ instance Monad Synthesiser where
     Synthesiser $ ExceptT (StateT
        (\s -> unSynth k s >>- (\(eb, s) ->
           case eb of
-            Left r -> mzero
+            Left r -> do
+              -- Useful for debugging tests
+              -- liftIO $ putStrLn $ "checker error: " ++ (show r)
+              mzero
             Right b -> (unSynth . f) b s)))
 
      where
