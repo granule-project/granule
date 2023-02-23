@@ -1,0 +1,7 @@
+language GradedBase
+
+data Maybe a = Nothing | Just a
+data List a = Nil | Cons a (List a)
+
+safeHead : forall {a : Type} . List a % (0..1) -> Maybe a
+safeHead = ?
