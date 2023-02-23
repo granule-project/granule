@@ -227,7 +227,7 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
     synthesiseHoles :: (?globals :: Globals) => AST () () -> [(CheckerError, Maybe Measurement, Int)] -> Bool -> IO [(CheckerError, Maybe Measurement, Int)]
     synthesiseHoles _ [] _ = return []
     synthesiseHoles astSrc ((HoleMessage sp goal ctxt tyVars hVars synthCtxt@(Just (cs, defs, (Just defId, spec), index, hints)) hcases, aggregate, attemptNo):holes) isGradedBase = do 
-      let timeout = 100000
+      let timeout = 10000000
       rest <- synthesiseHoles astSrc holes isGradedBase
       let (unrestricted, restricted) = case spec of 
             Just (Spec _ _ _ comps) -> 
@@ -247,7 +247,7 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
           return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt hcases, measurement, attemptNo) : rest
         (Nothing, _ , _) -> do 
           -- end    <- liftIO $ Clock.getTime Clock.Monotonic
-          printInfo $ "No programs synthesised - Timeout after: " <> (show timeout  <> "ms")
+          printInfo $ "No programs synthesised - Timeout after: " <> show (fromIntegral timeout / (10^(6 :: Integer)::Double))  <> "s"
           return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt hcases, Nothing, attemptNo) : rest
         (Just (programs@(_:_), measurement), Just (Spec _ _ examples@(_:_) _), []) -> do 
           let hole = HoleMessage sp goal ctxt tyVars hVars synthCtxt [([], last $ programs)] 
