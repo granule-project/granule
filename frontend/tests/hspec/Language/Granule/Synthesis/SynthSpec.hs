@@ -12,6 +12,8 @@ import Language.Granule.Utils
 
 import Control.Monad.State.Strict
 
+-- To run just these tests do: stack test --test-arguments "-m "Synth""
+
 spec :: Test.Spec
 spec = let ?globals = mempty :: Globals in do
   describe "Tests on checkConstructor" $ do
