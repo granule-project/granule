@@ -240,7 +240,7 @@ checkConstructor impossibility con@(Forall  _ binders constraints conTy) assumpt
     -- Apply the coercions associated with this data constructor
     conTy'' <- conv $ substitute coercions conTy'
 
-    -- assumptionTy == conTy?
+    -- Check if assumptionTy == conTy?
     (success, specTy, subst') <- conv $ equalTypes ns assumptionTy conTy''
 
     -- TODO: reconsider the flip here
