@@ -1,5 +1,5 @@
 language GradedBase
 data Maybe a = Nothing | Just a
 
-mapMaybe : forall {a : Type, b : Type} . (a -> b) % (0..1) -> Maybe a % (1..1) -> Maybe b
+mapMaybe : forall {a : Type, b : Type} . (a -> b) % (0..1) -> (Maybe a) % (1..1) -> Maybe b
 mapMaybe = ?
