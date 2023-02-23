@@ -115,15 +115,12 @@ boolToSynthesiser True x = return x
 boolToSynthesiser False _ = none
 
 
+
 getSynthState ::  Synthesiser (SynthesisData)
 getSynthState = Synthesiser $ lift $ lift $ get
 
-modifyPred :: PredContext -> Synthesiser ()
-modifyPred pred = Synthesiser $ lift $ modify (\state -> 
-  state {
-    predicateContext = pred
-        })
-
+modifyPred :: (PredContext -> PredContext) -> Synthesiser ()
+modifyPred f = Synthesiser $ lift $ modify (\s -> s { predicateContext = f $ predicateContext s })
 
 data Measurement = 
   Measurement {

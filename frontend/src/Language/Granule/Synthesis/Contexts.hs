@@ -74,7 +74,7 @@ ctxtSubtract gam ((x, SVar (Discharged t g2) _):del) =
         var <- conv $ freshTyVarInContext (mkId "c") kind
         conv $ existentialTopLevel var kind
         s <- conv get
-        modifyPred $ addConstraintViaConjunction (ApproximatedBy nullSpanNoFile (TyInfix TyOpPlus (TyVar var) g') g kind) (predicateContext s)
+        -- modifyPred s $ addConstraintViaConjunction (ApproximatedBy nullSpanNoFile (TyInfix TyOpPlus (TyVar var) g') g kind) (predicateContext s)
         -- maximality
         varOther' <- conv $ freshIdentifierBase "cOther"
         let varOther = mkId varOther'
@@ -115,7 +115,7 @@ ctxtDivByCoeffect g1 ((x, SVar (Discharged t g2) sInf):xs) =
       var <- conv $ freshTyVarInContext (mkId "c") kind
       conv $ existentialTopLevel var kind
       s <- conv get
-      modifyPred $ addConstraintViaConjunction (ApproximatedBy nullSpanNoFile (TyInfix TyOpTimes g (TyVar var)) g' kind) (predicateContext s)
+      -- modifyPred s $ addConstraintViaConjunction (ApproximatedBy nullSpanNoFile (TyInfix TyOpTimes g (TyVar var)) g' kind) (predicateContext s)
       return $ TyVar var
 
 -- Skip over top level defs 
