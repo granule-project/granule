@@ -1,0 +1,6 @@
+language GradedBase 
+
+data Test c where First c 
+
+f : forall { a : Type } . (Test a) %1..2 -> a [2]
+f (First y) = [y]
