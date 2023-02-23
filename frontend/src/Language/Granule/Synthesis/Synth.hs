@@ -1971,10 +1971,8 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
     case (assumptionTy, guessCurrent sParams <= guessMax sParams, scrutCurrent sParams <= scrutMax sParams) of
       ((FunTy bName (Just grade_q) tyA tyB, funDef, Just grade_r, sInfo, tySch), True, _) -> do
 
-        traceM "trying app"
         let omega = left ++ right
         x2 <- freshIdentifier
-
 
         -- let assumption@(_, SVar _ sInfo) = if isRecursiveCon tyB (x2, (Forall ns [] [] arg, []))
         --                                    then (y, SVar (Discharged arg' grade_rq) (Just $ Decreasing 1))
@@ -1982,19 +1980,13 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
 
         let (gamma', omega') = bindToContext (x2, SVar (Discharged tyB grade_r) Nothing) (gamma ++ [var]) omega (isLAsync tyB)
 
-        -- traceM $ "checking: " <> show x1
-        -- traceM $ "gamma: " <> show gamma'
-        -- traceM $ "omega: " <> show omega'
-        -- traceM $ "goal: " <> pretty goal
-
-
+        -- Synthesises the function arg 
         (t1, delta1, subst1, struct1, scrutinee) <- gSynthInner sParams focusPhase gamma' (Focused omega') goal
 
-        -- _ <- error "stop"
         case lookupAndCutout x2 delta1 of
           Just (delta1', SVar (Discharged _ s2) _) ->
             case lookupAndCutout x1 delta1' of
-              Just (delta1'', varUsed) -> do
+              Just (delta1Out, varUsed) -> do
                   let s1 = case varUsed of
                         SVar (Discharged _ s1') _ -> s1'
                         SDef tySch (Just s1')   -> s1'
@@ -2011,11 +2003,11 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
                             SVar (Discharged _ s3') _ -> s3'
                             SDef tySch (Just s3')   -> s3'
                             SDef tySch Nothing      -> undefined
-                    -- let outputDelta = delta1'' `ctxtAdd` (s2 `ctxtMultByCoeffect` (q `ctxtMultByCoeffect` delta2))
-                      outputDelta2 <- (s2 `ctxtMultByCoeffect` delta2) >>= (\delta2' -> grade_q `ctxtMultByCoeffect` delta2')
+                      delta2Out <- (s2 `ctxtMultByCoeffect` delta2') >>= (\d2' -> grade_q `ctxtMultByCoeffect` d2')
+                      -- s2 + s1 + (s2 * q * s3)
                       let outputGrade = s2 `gPlus` s1 `gPlus` (s2 `gTimes` grade_q `gTimes` s3)
                       if struct2 || notElem x1 (currDef st) then
-                        case ctxtAdd delta1'' outputDelta2 of
+                        case ctxtAdd delta1Out delta2Out of
                           Just delta3 -> do
                             substOut <- conv $ combineSubstitutions ns subst1 subst2
                             let appExpr = App ns () False (Val ns () False (Var () x1)) t2
