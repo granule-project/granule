@@ -21,6 +21,7 @@ import Data.List.NonEmpty (NonEmpty(..))
 
 import Language.Granule.Context
 
+import Language.Granule.Checker.Coeffects(getGradeFromArrow)
 import Language.Granule.Checker.CoeffectsTypeConverter
 import Language.Granule.Checker.Constraints
 import Language.Granule.Checker.Monad
@@ -1930,7 +1931,7 @@ varRule gamma (Focused left) (Focused (var@(name, assumption) : right)) goal = d
 absRule :: (?globals :: Globals) => SearchParameters ->  FocusPhase -> Ctxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
 absRule sParams focusPhase gamma (Focused omega) (FunTy name gradeM tyA tyB) = do
   -- Extract the graded arrow, or use generic 1 if there is no grade
-  let grade = case gradeM of Just grade -> grade; Nothing -> TyGrade Nothing 1
+  let grade = getGradeFromArrow gradeM
 
   x <-  useBinderNameOrFreshen name
 
@@ -1969,7 +1970,8 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
     assumptionTy <- getSAssumptionType assumption
     st <- getSynthState
     case (assumptionTy, guessCurrent sParams <= guessMax sParams, scrutCurrent sParams <= scrutMax sParams) of
-      ((FunTy bName (Just grade_q) tyA tyB, funDef, Just grade_r, sInfo, tySch), True, _) -> do
+      ((FunTy bName gradeM tyA tyB, funDef, Just grade_r, sInfo, tySch), True, _) -> do
+        let grade_q = getGradeFromArrow gradeM
 
         let omega = left ++ right
         x2 <- freshIdentifier
