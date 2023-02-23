@@ -30,7 +30,7 @@ spec = let ?globals = mempty :: Globals in do
       -- A unit constructor matches a unit goal
       status <- testCheckConstructor
                    $ checkConstructor False (Forall ns [] [] unitCon) unitCon []
-      status `shouldBe` [Just True]
+      status `shouldBe` [Just (True, unitCon)]
 
     -- A simple constructor with a polymorphic type
     -- MkSimple :: Simple a
@@ -42,27 +42,43 @@ spec = let ?globals = mempty :: Globals in do
       status `shouldBe` []
     it "Polymorphic test: `Simple a` vs Simple () - success" $ do
       status <- testCheckConstructor $ checkConstructor False simple (TyApp simpleCon unitCon) []
-      status `shouldBe` [Just True]
+      status `shouldBe` [Just (True, TyApp simpleCon unitCon)]
 
     -- Either constructor
     let eitherCon = TyCon $ mkId "Either"
-    let either =
+    let leftConstr =
           Forall ns [(mkId "a", Type 0), (mkId "b", Type 0)] []
                   (FunTy Nothing Nothing (TyVar $ mkId "a") (TyApp (TyApp eitherCon (TyVar $ mkId "a")) (TyVar $ mkId "b")))
 
-    it "Polymorphic test: `Either a b` vs `Either () ()` - success" $ do
-      status <- testCheckConstructor $ checkConstructor False either (TyApp (TyApp eitherCon unitCon) unitCon) []
-      status `shouldBe` [Just True]
+    it "Polymorphic test: `a -> Either a b` vs `Either () ()` - success" $ do
+      status <- testCheckConstructor $ checkConstructor False leftConstr (TyApp (TyApp eitherCon unitCon) unitCon) []
+      status `shouldBe` [Just (True, (TyApp (TyApp eitherCon unitCon) unitCon))]
+
+
+    -- Vec constructor
+    -- TODO complete this example
+    -- let vecCon = TyCon $ mkId "Vec"
+    -- let consConstr =
+    --       Forall (Span {startPos = (5,12), endPos = (5,29), filename = "simple.gr"}) [((Id "n" "n`0"),TyCon (Id "Nat" "Nat"))] [] (FunTy Nothing Nothing (TyVar (Id "a" "a")) (FunTy Nothing Nothing (TyApp (TyApp (TyCon (Id "Vec" "Vec")) (TyVar (Id "n" "n`0"))) (TyVar (Id "a" "a"))) (TyApp (TyApp (TyCon (Id "Vec" "Vec")) (TyInfix TyOpPlus (TyVar (Id "n" "n`0")) (TyGrade Nothing 1)))
+
+    -- it "Polymorphic test: `a -> Vec n a -> Vec n' a` (with n' ~ n + 1) vs `Vec 0 a` - fail" $ do
+    --   status <- testCheckConstructor $ checkConstructor False either (TyApp (TyApp eitherCon unitCon) unitCon) []
+    --   status `shouldBe` [Just True]
+
+    -- it "Polymorphic test: `a -> Vec n a -> Vec n' a` (with n' ~ n + 1) vs `Vec 1 a` - success" $ do
+    --   status <- testCheckConstructor $ checkConstructor False either (TyApp (TyApp eitherCon unitCon) unitCon) []
+    --   status `shouldBe` [Just True]
+
 
     return ()
 
 
 -- Helper for running checkConstructor specifically
 testCheckConstructor :: (?globals :: Globals) => Synthesiser (Bool, Type, [(Type, Maybe Coeffect)], Substitution, Substitution)
-                                              -> IO [Maybe Bool]
+                                              -> IO [Maybe (Bool, Type)]
 testCheckConstructor m = do
   constr <- testSynthesiser m
-  let status = map (fmap (\(status, _, _, _, _) -> status)) constr
+  let status = map (fmap (\(status, ty, _, _, _) -> (status, ty))) constr
   return status
 
 -- Helper for running the synthesiser
@@ -71,6 +87,9 @@ testSynthesiser synthComputation = do
     -- Representation of
     -- data Simple a = Simple a
     -- data Maybe a = Nothing | Just a
+    -- data Vec (n : Nat) (a : Type) where
+    --   Nil : Vec 0 a;
+    --   Cons : forall {n : Nat} . a -> Vec n a -> Vec (n+1) a
     let extras =
           [DataDecl {dataDeclSpan = Span {startPos = (1,1), endPos = (1,17), filename = "simple.gr"}
                     , dataDeclId = (Id "Simple" "Simple")
@@ -89,6 +108,7 @@ testSynthesiser synthComputation = do
                                             ,DataConstrNonIndexed {dataConstrSpan = Span {startPos = (2,28), endPos = (2,28), filename = "simple.gr"}
                                                                   , dataConstrId = (Id "Right" "Right")
                                                                   , dataConstrParams = [TyVar (Id "b" "b")]}]}
+         ,DataDecl {dataDeclSpan = Span {startPos = (3,1), endPos = (5,29), filename = "simple.gr"}, dataDeclId = (Id "Vec" "Vec"), dataDeclTyVarCtxt = [((Id "n" "n"),TyCon (Id "Nat" "Nat")),((Id "a" "a"),Type 0)], dataDeclKindAnn = Nothing, dataDeclDataConstrs = [DataConstrIndexed {dataConstrSpan = Span {startPos = (4,5), endPos = (0,0), filename = "simple.gr"}, dataConstrId = (Id "Nil" "Nil"), dataConstrTypeScheme = Forall (Span {startPos = (0,0), endPos = (0,0), filename = ""}) [] [] (TyApp (TyApp (TyCon (Id "Vec" "Vec")) (TyGrade Nothing 0)) (TyVar (Id "a" "a")))},DataConstrIndexed {dataConstrSpan = Span {startPos = (5,5), endPos = (5,29), filename = "simple.gr"}, dataConstrId = (Id "Cons" "Cons"), dataConstrTypeScheme = Forall (Span {startPos = (5,12), endPos = (5,29), filename = "simple.gr"}) [((Id "n" "n`0"),TyCon (Id "Nat" "Nat"))] [] (FunTy Nothing Nothing (TyVar (Id "a" "a")) (FunTy Nothing Nothing (TyApp (TyApp (TyCon (Id "Vec" "Vec")) (TyVar (Id "n" "n`0"))) (TyVar (Id "a" "a"))) (TyApp (TyApp (TyCon (Id "Vec" "Vec")) (TyInfix TyOpPlus (TyVar (Id "n" "n`0")) (TyGrade Nothing 1))) (TyVar (Id "a" "a")))))}]}
          ]
     -- Load in the primitive data constructors first before running the computation synthComputation
     let synthComputation' =
