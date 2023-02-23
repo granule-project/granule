@@ -1809,7 +1809,7 @@ gSynthInner sParams focusPhase gamma (Focused omega) goal = do
       transitionToLeftAsync sParams gamma omega goal
 
     (LeftAsync, _:_) -> do
-      varRule gamma (Focused []) (Focused $ gamma ++ omega) goal
+      varRule [] (Focused []) (Focused $ gamma ++ omega) goal
       `try`
       unboxRule sParams LeftAsync gamma (Focused []) (Focused omega) goal
       `try`
@@ -1820,7 +1820,7 @@ gSynthInner sParams focusPhase gamma (Focused omega) goal = do
 
     (RightSync, []) ->
       if isRSync goal then do
-        varRule gamma (Focused []) (Focused omega) goal
+        varRule [] (Focused []) (Focused $ gamma ++ omega) goal
         `try`
         boxRule sParams RightSync gamma goal
         `try`
@@ -1832,7 +1832,7 @@ gSynthInner sParams focusPhase gamma (Focused omega) goal = do
       if not (isLSync ty) && not (isAtomic ty) then do
         gSynthInner sParams LeftAsync gamma (Focused [var]) goal
       else do
-        varRule gamma (Focused []) (Focused omega) goal
+        varRule [] (Focused []) (Focused $ gamma ++ omega) goal
         `try`
         appRule sParams LeftSync gamma (Focused []) (Focused omega) goal
 
@@ -1840,7 +1840,7 @@ gSynthInner sParams focusPhase gamma (Focused omega) goal = do
       if not (isLSync ty) && not (isAtomic ty) then do
         gSynthInner sParams LeftAsync gamma (Focused [var]) goal
       else do
-        varRule gamma (Focused []) (Focused omega) goal
+        varRule [] (Focused []) (Focused $ gamma ++ omega) goal
         `try`
         appRule sParams LeftSync gamma (Focused []) (Focused omega) goal
 
@@ -2008,7 +2008,7 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
                       delta2Out <- (s2 `ctxtMultByCoeffect` delta2') >>= (\d2' -> grade_q `ctxtMultByCoeffect` d2')
                       -- s2 + s1 + (s2 * q * s3)
                       let outputGrade = s2 `gPlus` s1 `gPlus` (s2 `gTimes` grade_q `gTimes` s3)
-                      if struct2 || notElem x1 (currDef st) then
+                      if (struct1 || struct2) || notElem x1 (currDef st) then
                         case ctxtAdd delta1Out delta2Out of
                           Just delta3 -> do
                             substOut <- conv $ combineSubstitutions ns subst1 subst2
@@ -2017,13 +2017,16 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
                                 then (x1, SDef tySch (Just outputGrade))
                                 else (x1, SVar (Discharged (FunTy bName (Just grade_q) tyA tyB) outputGrade) sInfo)
 
-                            return (Language.Granule.Syntax.Expr.subst appExpr x2 t1, assumption':delta3, substOut, struct1, if isScrutinee then Nothing else scrutinee)
+                            traceM $ "output: " <> (pretty $ Language.Granule.Syntax.Expr.subst appExpr x2 t1)
+                            traceM $ "delta: " <> (show delta3)
+                            return (Language.Granule.Syntax.Expr.subst appExpr x2 t1, assumption':delta3, substOut, struct1 || struct2, if isScrutinee then Nothing else scrutinee)
                           _ -> none
                         else none
                     _ -> none
               _ -> none
           _ -> none
-      (_, False, _) -> noneWithMaxReached
+      (_, False, _) -> none
+      (_, _, False) -> noneWithMaxReached
       _ -> none
 
 
@@ -2127,23 +2130,23 @@ constrRule sParams focusPhase gamma goal = do
 
               -- N-ary constructor
               args@(_:_) -> do
-                (ts, delta, substOut) <- synthArgs args subst
-                return (makeConstrUntyped ts cName, delta, substOut, False, Nothing)
+                (ts, delta, substOut, structs) <- synthArgs args subst
+                return (makeConstrUntyped ts cName, delta, substOut, structs, Nothing)
           _ -> none
       `try` tryDatacons dtName (con:right) left goal
 
 
-    synthArgs [] _ = return ([], [], [])
+    synthArgs [] _ = return ([], [], [], False)
     synthArgs ((ty, mGrade_q):args) subst = do
-      (ts, deltas, substs) <- synthArgs args subst
+      (ts, deltas, substs, structs) <- synthArgs args subst
       ty' <- conv $ substitute subst ty
-      (t, delta, subst, _, _) <- gSynthInner sParams { guessCurrent = (guessCurrent sParams) + 1} RightAsync gamma (Focused []) ty'
+      (t, delta, subst, struct, _) <- gSynthInner sParams { guessCurrent = (guessCurrent sParams) + 1} RightAsync gamma (Focused []) ty'
       delta' <- maybeToSynthesiser $ ctxtAdd deltas delta
       substs' <- conv $ combineSubstitutions ns substs subst
       delta'' <- case mGrade_q of
         Just grade_q -> ctxtMultByCoeffect grade_q delta'
         _ -> return delta'
-      return (t:ts, delta'', substs')
+      return (t:ts, delta'', substs', struct || structs)
 
 
 {-
