@@ -2,7 +2,8 @@
 module Language.Granule.Synthesis.Refactor where
 
 import Language.Granule.Syntax.Def
-import Language.Granule.Syntax.Expr
+import Language.Granule.Syntax.Expr 
+import Language.Granule.Syntax.Helpers (freeVars)
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Identifiers
 
@@ -50,15 +51,20 @@ bubbleUpPatterns gradedVars (App s a b (Val s' a' b' (Abs s'' p mt e)) (Val s3 a
     (pats', App s a b (Val s' a' b' (Abs s'' p mt e')) (Val s3 a3 b3 (Var a4 x)))
 
 -- Fold away case expressions
-bubbleUpPatterns gradedVars (Case _ _ _ (Val _ _ _ (Var _ name)) [(p, expr)]) pats =
+bubbleUpPatterns gradedVars (Case _ _ _ (Val _ _ _ (Var _ name)) [(p, expr)]) pats | not $ name `elem` (freeVars expr) = do
   bubbleUpPatterns gradedVars expr (replaceInPats pats name p)
 
 bubbleUpPatterns _ e pats = (pats, e)
 
 refactorCase :: Eq a => [Pattern a] -> Expr v a -> [([Pattern a], Expr v a)]
-refactorCase pats (Case _ _ _ (Val _ _ _ (Var _ name)) casePats) =
-  concatMap (\(pat, body) -> refactorCase (replaceInPats pats name pat) body) casePats
-refactorCase pats (Case _ _ _ (Val _ _ _ (Promote _ (Val _ _ _ (Var _ name)))) casePats) =
+refactorCase pats e@(Case _ _ _ (Val _ _ _ (Var _ name)) casePats) = do 
+  let (_, exprs) = unzip casePats 
+  let fvBody = concatMap (\body -> freeVars body) exprs
+  if not $ name `elem` fvBody then 
+    concatMap (\(pat, body) -> refactorCase (replaceInPats pats name pat) body) casePats
+  else 
+    [(pats, e)]
+refactorCase pats (Case _ _ _ (Val _ _ _ (Promote _ (Val _ _ _ (Var _ name)))) casePats) = do
   concatMap (\(pat, body) -> refactorCase (replaceInPats pats name pat) body) casePats
 refactorCase pats e = [(pats, e)]
 
