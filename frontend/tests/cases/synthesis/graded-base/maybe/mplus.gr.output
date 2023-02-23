@@ -1,0 +1,11 @@
+language GradedBase
+
+data Maybe a = Nothing | Just a
+
+mplus : forall {a : Type, b : Type} . Maybe a % (0..1) -> Maybe b % (0..1) -> Maybe (a, b)
+spec
+  mplus (Just 1) (Just 2) = Just (1, 2);
+mplus (Just v) (Just w) = Just (v, w);
+mplus (Just v) Nothing = Nothing;
+mplus Nothing (Just z) = Nothing;
+mplus Nothing Nothing = Nothing

@@ -4,4 +4,4 @@ Falsifiable theorem: frontend/tests/cases/negative/graded/errorExample.gr:4:1:
 
 Falsifiable theorem: frontend/tests/cases/negative/graded/errorExample.gr:13:1:
   The following constraint associated with `main` is false:
-	  (3 = c1) ∧ (1 = c1)
+	  (c1 = 3) ∧ (c1 = 1)

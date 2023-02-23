@@ -1,0 +1,6 @@
+language GradedBase
+
+data Maybe a = Nothing | Just a
+
+mplus : forall {a : Type, b : Type} . Maybe a % (0..1) -> Maybe b % (0..1) -> Maybe (a, b)
+mplus = ?

@@ -15,7 +15,7 @@ import qualified System.Clock as Clock
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.SubstitutionContexts (Substitution)
 import Language.Granule.Syntax.Type (TypeScheme)
-import Language.Granule.Syntax.Identifiers 
+import Language.Granule.Syntax.Identifiers
 
 -- Data structure for collecting information about synthesis
 data SynthesisData =
@@ -72,7 +72,10 @@ instance Monad Synthesiser where
     Synthesiser $ ExceptT (StateT
        (\s -> unSynth k s >>- (\(eb, s) ->
           case eb of
-            Left r -> mzero
+            Left r -> do
+              -- Useful for debugging tests
+              -- liftIO $ putStrLn $ "checker error: " ++ (show r)
+              mzero
             Right b -> (unSynth . f) b s)))
 
      where
