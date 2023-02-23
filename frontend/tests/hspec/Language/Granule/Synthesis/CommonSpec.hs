@@ -44,9 +44,16 @@ spec = let ?globals = mempty :: Globals in do
       status <- testCheckConstructor $ checkConstructor False simple (TyApp simpleCon unitCon) []
       status `shouldBe` [Just True]
 
-    -- Maybe-style constructor
-    -- let maybeCon = TyCon $ mkId "Maybe"
-    -- let maybe = Forall ns [(mkId "a", Type 0)] [] ()
+    -- Either constructor
+    let eitherCon = TyCon $ mkId "Either"
+    let either =
+          Forall ns [(mkId "a", Type 0), (mkId "b", Type 0)] []
+                  (FunTy Nothing Nothing (TyVar $ mkId "a") (TyApp (TyApp eitherCon (TyVar $ mkId "a")) (TyVar $ mkId "b")))
+
+    it "Polymorphic test: `Either a b` vs `Either () ()` - success" $ do
+      status <- testCheckConstructor $ checkConstructor False either (TyApp (TyApp eitherCon unitCon) unitCon) []
+      status `shouldBe` [Just True]
+
     return ()
 
 
@@ -61,19 +68,32 @@ testCheckConstructor m = do
 -- Helper for running the synthesiser
 testSynthesiser :: (?globals :: Globals) => Synthesiser a -> IO [Maybe a]
 testSynthesiser synthComputation = do
-    -- Representation of a simple ty con
-    let simpleTyCon =
-          DataDecl {dataDeclSpan = Span {startPos = (1,1), endPos = (1,17), filename = "simple.gr"}
+    -- Representation of
+    -- data Simple a = Simple a
+    -- data Maybe a = Nothing | Just a
+    let extras =
+          [DataDecl {dataDeclSpan = Span {startPos = (1,1), endPos = (1,17), filename = "simple.gr"}
                     , dataDeclId = (Id "Simple" "Simple")
                     , dataDeclTyVarCtxt = [((Id "a" "a"),Type 0)]
                     , dataDeclKindAnn = Nothing
                     , dataDeclDataConstrs = [DataConstrNonIndexed {dataConstrSpan = Span {startPos = (1,17), endPos = (1,17), filename = "simple.gr"}
-                    , dataConstrId = (Id "Simple" "Simple")
-                    , dataConstrParams = [TyVar (Id "a" "a")]}]}
+                                            , dataConstrId = (Id "Simple" "Simple")
+                                            , dataConstrParams = [TyVar (Id "a" "a")]}]}
+         ,DataDecl {dataDeclSpan = Span {startPos = (2,1), endPos = (2,28), filename = "simple.gr"}
+                    , dataDeclId = (Id "Either" "Either")
+                    , dataDeclTyVarCtxt = [((Id "a" "a"),Type 0),((Id "b" "b"),Type 0)]
+                    , dataDeclKindAnn = Nothing
+                    , dataDeclDataConstrs = [DataConstrNonIndexed {dataConstrSpan = Span {startPos = (2,19), endPos = (2,19), filename = "simple.gr"}
+                                                                  , dataConstrId = (Id "Left" "Left")
+                                                                  , dataConstrParams = [TyVar (Id "a" "a")]}
+                                            ,DataConstrNonIndexed {dataConstrSpan = Span {startPos = (2,28), endPos = (2,28), filename = "simple.gr"}
+                                                                  , dataConstrId = (Id "Right" "Right")
+                                                                  , dataConstrParams = [TyVar (Id "b" "b")]}]}
+         ]
     -- Load in the primitive data constructors first before running the computation synthComputation
     let synthComputation' =
-             (conv (runAll checkTyCon (simpleTyCon : Primitives.dataTypes)))
-          >> (conv (runAll checkDataCons (simpleTyCon : Primitives.dataTypes)))
+             (conv (runAll checkTyCon (extras ++ Primitives.dataTypes)))
+          >> (conv (runAll checkDataCons (extras ++ Primitives.dataTypes)))
           >> synthComputation
     (outputs, dat) <- runStateT (runSynthesiser 1 synthComputation' initState) mempty
     mapM (convertError . fst) outputs
