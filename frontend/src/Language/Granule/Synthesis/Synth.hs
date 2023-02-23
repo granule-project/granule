@@ -36,7 +36,7 @@ import Language.Granule.Synthesis.Contexts
 import Data.Either (rights)
 import Control.Monad.State.Strict
 
-import qualified Control.Monad.State.Strict as State (get)
+-- import qualified Control.Monad.State.Strict as State (get)
 import qualified System.Clock as Clock
 -- import qualified Control.Monad.Memo as Memo
 import qualified System.Timeout
@@ -48,7 +48,7 @@ import Control.Arrow (second)
 -- import Control.Monad.Omega
 import System.Clock (TimeSpec)
 
-import Debug.Trace
+-- import Debug.Trace
 -- import Data.Ord
 
 
@@ -159,16 +159,23 @@ ns :: Span
 ns = nullSpanNoFile
 
 
+noneWithMaxReached :: Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
+noneWithMaxReached = do 
+  Synthesiser $ lift $ lift $ lift $ modify (\state ->
+                  state {
+                    maxReached = True
+                    })
+  none
+
+
 solve :: (?globals :: Globals) => Synthesiser Bool
 solve = do
-  cs <- conv State.get
+  cs <- conv get
+
   tyVars <- conv $ includeOnlyGradeVariables ns (tyVarContext cs)
 
-  st <- conv get
-
-  let pred = fromPredicateContext (predicateContext st)
+  let pred = fromPredicateContext (predicateContext cs)
   debugM "synthDebug" ("SMT on pred = " ++ pretty pred)
-  tyVars <- conv $ includeOnlyGradeVariables nullSpanNoFile (tyVarContext cs)
   -- Prove the predicate
   start  <- liftIO $ Clock.getTime Clock.Monotonic
   constructors <- conv allDataConstructorNames
@@ -270,20 +277,7 @@ checkConstructor impossibility con@(Forall  _ binders constraints conTy) assumpt
     -- Take the rightmost type of the function type, collecting the arguments along the way
     let (conTy', args) = collectTyAndArgs conTyFresh
     conTy'' <- conv $ substitute coercions conTy'
---    conTy'' <- conv $ substitute (flipSubstitution coercions) conTy'
 
-    -- traceM "equal types on: "
-    -- traceM $ "conTy: " <> show conTy
-    -- traceM $ "binders: " <> show binders
-    -- traceM $ "conTyFresh: " <> show conTyFresh
-    -- traceM $ "args: " <> show args
-    -- traceM $ "subst: " <> show subst
-    -- traceM $ "coercions: " <> show coercions
-    -- traceM $ "substFromFreshening: " <> show substFromFreshening
-    -- traceM $ "tyVarsFreshD: " <> show tyVarsFreshD
-    -- traceM $ "assumptionTy: " <> show assumptionTy
-    -- traceM $ "conTy': " <> show conTy'
-    -- traceM $ "conTy'': " <> show conTy''
     -- assumptionTy == conTy?
     (success, specTy, subst') <- conv $ equalTypes ns  assumptionTy conTy''
     -- traceM $ "specTy: " <> pretty specTy
@@ -2032,22 +2026,10 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
                             return (Language.Granule.Syntax.Expr.subst appExpr x2 t1, assumption':delta3, substOut, struct1, if isScrutinee then Nothing else scrutinee)
                           _ -> none
                         else none
-                    -- s2 + s1 + (s2 * q * s3)
                     _ -> none
               _ -> none
           _ -> none
-      (_, False, _) -> do
-        Synthesiser $ lift $ lift $ lift $ modify (\state ->
-            state {
-                maxReached = True
-                  })
-        none
-      -- (_, _, False) ->
-      --   Synthesiser $ lift $ lift $ lift $ modify (\state ->
-      --       state {
-      --           maxReached = True
-      --             })
-      --   none
+      (_, False, _) -> noneWithMaxReached
       _ -> none
 
 
@@ -2132,13 +2114,7 @@ constrRule sParams focusPhase gamma goal = do
       let datacons' = sortBy compareArity (recDatacons ++ datacons)
       tryDatacons datatypeName [] datacons' goal
 
-    (False, Just _) -> do
-      Synthesiser $ lift $ lift $ lift $ modify (\state ->
-          state {
-              maxReached = True
-                })
-      none
-
+    (False, Just _) -> noneWithMaxReached
     _ -> none
 
 
@@ -2152,7 +2128,6 @@ constrRule sParams focusPhase gamma goal = do
             case args of
               -- Nullary constructor
               [] -> do
-                -- _ <- error "here"
                 delta <- ctxtMultByCoeffect (TyGrade Nothing 0) gamma
                 return (Val ns () False (Constr () cName []), delta, [], False, Nothing)
 
@@ -2174,7 +2149,6 @@ constrRule sParams focusPhase gamma goal = do
       delta'' <- case mGrade_q of
         Just grade_q -> ctxtMultByCoeffect grade_q delta'
         _ -> return delta'
-      traceM $ "constrIntro delta'': " <> (show delta'')
       return (t:ts, delta'', substs')
 
 
@@ -2218,7 +2192,6 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
 
                   case (result, predSucceeded) of
                     ((True, _, args, subst, _), Right pred'@(ImplConsequent ctxt p path)) -> do
-                      modifyPred pred'
 
                       (gamma', omega', varsAndGrades) <- foldM (\(gamma, omega, vars) (arg, mGrade_q) -> do
                           y <- freshIdentifier
@@ -2282,38 +2255,29 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
                                   (Nothing, Nothing, Just si) -> (Just grade_r', Just $  si)
                                   (Nothing, Just s, Nothing) -> (Just grade_r', Just $ s )
                                   _ -> (Just grade_r', Nothing)
-
                           
                           return ((constrPat, t):exprs, returnDelta, returnSubst, grade_r_out', grade_s_out', index+1)
 
                         _ -> do
+                          modifyPred $ moveToNewConjunct
                           none
                     _ -> do
-                      -- modifyPred $ moveToNewConjunct predFinal
+                      modifyPred $ moveToNewConjunct
                       return (exprs, deltas, substs, mGrade_r_out, mGrade_s_out, index)
                   )
 
-        cs <- conv $ get
-        traceM ((pretty $ makeCaseUntyped x patExprs) <> show grade_r_out <> "     |  " <> show grade_s_out)
-        case (patExprs, grade_r_out, grade_s_out) of
-          (_:_, Just grade_r_out', Just grade_s_out') -> do
+        res <- solve
+
+        case (patExprs, grade_r_out, grade_s_out, res) of
+          (_:_, Just grade_r_out', Just grade_s_out', True) -> do
             let var_x_out = (x, SVar (Discharged ty (grade_r_out' `gPlus` grade_s_out')) sInfo)
             return (makeCaseUntyped x patExprs, var_x_out:delta, subst, False, Just x)
-          (_:_, Just grade_r_out', Nothing) -> do
+          (_:_, Just grade_r_out', Nothing, True) -> do
             let var_x_out = (x, SVar (Discharged ty (grade_r_out')) sInfo)
             return (makeCaseUntyped x patExprs, var_x_out:delta, subst, False, Just x)
           _ -> none
-      (False, Just _) -> do
-        Synthesiser $ lift $ lift $ lift $ modify (\state ->
-            state {
-                maxReached = True
-                  })
-        none
+      (False, Just _) -> noneWithMaxReached
       _ -> none
-
-
-
-
 
 caseRule _ _ _ _ _ _ = none
 
