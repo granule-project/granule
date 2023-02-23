@@ -1,3 +1,17 @@
 Type checking failed: 
+Solver timeout: StdLib/Nat.gr:17:1:
+Solver timed out with limit of 10000ms while checking the grading of definition `copyNat` with the following theorem:
+∀ {n00 : Nat} . (((n00 + 1 = n02 + 1)) -> (() -> (n02 + 1 = n02 + 1) ∧ ((n02 + 1) + 1 = ((n02 + 1) + 1) + 1) ∧ (n02 + 1 = (n02 + 1) + 1) ∧ (n02 + 1 = n02 + 1) ∧ (n02 + 1 = n02 + 1)) ∧ (n02 + 1 = n02 + 1))
+You may want to increase the timeout (see --help).
+
+Impossible pattern match: StdLib/Nat.gr:41:1:
+Pattern match in an equation of `monus` is impossible as it implies the unsatisfiable condition ∃ n00 : Nat . ((n00 + 1) + 1 = n00 + 1)
+
+Impossible pattern match: StdLib/Nat.gr:47:1:
+Pattern match in an equation of `sub` is impossible as it implies the unsatisfiable condition ∃ n00 : Nat . ∃ n01 : Nat . ((n00 + 1) + 1 = n00 + 1) ∧ (n00 + 1 ≥ n01 + 1)
+
 Impossible pattern match: frontend/tests/cases/negative/indexed/impossible-pattern-match.gr:7:1:
-Pattern match in an equation of `subBad` is impossible as it implies the unsatisfiable condition ∃ n0.0 : Nat . (n0.0 + 1 = 0)
+Pattern match in an equation of `subBad` is impossible as it implies the unsatisfiable condition ∃ n00 : Nat . (n00 + 1 = 0)
+
+Impossible pattern match: frontend/tests/cases/negative/indexed/impossible-pattern-match.gr:8:1:
+Pattern match in an equation of `subBad` is impossible as it implies the unsatisfiable condition ∃ n00 : Nat . ∃ n01 : Nat . ((n00 + 1) + 1 = n00 + 1) ∧ (n01 + 1 = n00 + 1)

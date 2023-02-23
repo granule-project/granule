@@ -1,0 +1,5 @@
+language GradedBase
+data Maybe a = Nothing | Just a
+
+toJust : forall {a : Type} . a -> Maybe a
+toJust = ?
