@@ -203,15 +203,7 @@ SpecList :: { ([Example () ()], [(Id, Maybe Type)]) }
   | {- empty -}                         { ([], []) }
 
 Example :: { Example () () }
-  : VAR ExprList '=' Expr { let inputExpr = foldr (\expr acc -> 
-                                App nullSpanNoFile () False acc expr) (Val nullSpanNoFile () False (Var () (mkId $ symString $1))) $2 
-                            in 
-                            Example inputExpr $4 }
-
-ExprList :: { [Expr () ()] }
-  : Expr ExprList { $1 : $2 }
-  | Expr          { [$1] }
-  | {- empty -}   { [] }
+  : Expr '=' Expr                 { Example $1 $3 }
 
 Components :: { [(Id, Maybe Type)] }
   : VAR                                   {% return [(mkId $ symString $1, Nothing)] }
