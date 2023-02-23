@@ -22,8 +22,25 @@ import Control.Monad.State.Strict
 
 spec :: Test.Spec
 spec = let ?globals = mempty :: Globals in do
+  checkConstructorTests
+  recursiveConstructorTests
 
+recursiveConstructorTests :: Test.Spec
+recursiveConstructorTests = do
+  describe "Tests on isRecursiveCon" $ do
+    it "Non-recursive constructor of list (Nil)" $ do
+      let listTy = TyApp (TyCon $ mkId "List") (TyVar $ mkId "a")
+      let recNil = isRecursiveCon (mkId "List") (mkId "Nil", (Forall ns [(mkId "a", Type 0)] [] listTy, []))
+      recNil `shouldBe` False
 
+    it "Non-recursive constructor of list (Cons)" $ do
+      let listTy = TyApp (TyCon $ mkId "List") (TyVar $ mkId "a")
+      let consTy = FunTy Nothing Nothing (TyVar $ mkId "a") (FunTy Nothing Nothing listTy listTy)
+      let recNil = isRecursiveCon (mkId "List") (mkId "Cons", (Forall ns [(mkId "a", Type 0)] [] consTy, []))
+      recNil `shouldBe` True
+
+checkConstructorTests :: (?globals :: Globals) => Test.Spec
+checkConstructorTests =
   describe "Tests on checkConstructor" $ do
     let unitCon = TyCon (mkId "()")
     it "Monomorphic test: unit" $ do
@@ -70,9 +87,6 @@ spec = let ?globals = mempty :: Globals in do
     --   status `shouldBe` [Just True]
 
 
-    return ()
-
-
 -- Helper for running checkConstructor specifically
 testCheckConstructor :: (?globals :: Globals) => Synthesiser (Bool, Type, [(Type, Maybe Coeffect)], Substitution, Substitution)
                                               -> IO [Maybe (Bool, Type)]
@@ -108,8 +122,8 @@ testSynthesiser synthComputation = do
                                             ,DataConstrNonIndexed {dataConstrSpan = Span {startPos = (2,28), endPos = (2,28), filename = "simple.gr"}
                                                                   , dataConstrId = (Id "Right" "Right")
                                                                   , dataConstrParams = [TyVar (Id "b" "b")]}]}
-         ,DataDecl {dataDeclSpan = Span {startPos = (3,1), endPos = (5,29), filename = "simple.gr"}, dataDeclId = (Id "Vec" "Vec"), dataDeclTyVarCtxt = [((Id "n" "n"),TyCon (Id "Nat" "Nat")),((Id "a" "a"),Type 0)], dataDeclKindAnn = Nothing, dataDeclDataConstrs = [DataConstrIndexed {dataConstrSpan = Span {startPos = (4,5), endPos = (0,0), filename = "simple.gr"}, dataConstrId = (Id "Nil" "Nil"), dataConstrTypeScheme = Forall (Span {startPos = (0,0), endPos = (0,0), filename = ""}) [] [] (TyApp (TyApp (TyCon (Id "Vec" "Vec")) (TyGrade Nothing 0)) (TyVar (Id "a" "a")))},DataConstrIndexed {dataConstrSpan = Span {startPos = (5,5), endPos = (5,29), filename = "simple.gr"}, dataConstrId = (Id "Cons" "Cons"), dataConstrTypeScheme = Forall (Span {startPos = (5,12), endPos = (5,29), filename = "simple.gr"}) [((Id "n" "n`0"),TyCon (Id "Nat" "Nat"))] [] (FunTy Nothing Nothing (TyVar (Id "a" "a")) (FunTy Nothing Nothing (TyApp (TyApp (TyCon (Id "Vec" "Vec")) (TyVar (Id "n" "n`0"))) (TyVar (Id "a" "a"))) (TyApp (TyApp (TyCon (Id "Vec" "Vec")) (TyInfix TyOpPlus (TyVar (Id "n" "n`0")) (TyGrade Nothing 1))) (TyVar (Id "a" "a")))))}]}
-         ]
+         ,DataDecl {dataDeclSpan = Span {startPos = (3,1), endPos = (5,29), filename = "simple.gr"}, dataDeclId = (Id "Vec" "Vec"), dataDeclTyVarCtxt = [((Id "n" "n"),TyCon (Id "Nat" "Nat")),((Id "a" "a"),Type 0)], dataDeclKindAnn = Nothing, dataDeclDataConstrs = [DataConstrIndexed {dataConstrSpan = Span {startPos = (4,5), endPos = (0,0), filename = "simple.gr"}, dataConstrId = (Id "NilV" "NilV"), dataConstrTypeScheme = Forall (Span {startPos = (0,0), endPos = (0,0), filename = ""}) [] [] (TyApp (TyApp (TyCon (Id "Vec" "Vec")) (TyGrade Nothing 0)) (TyVar (Id "a" "a")))},DataConstrIndexed {dataConstrSpan = Span {startPos = (5,5), endPos = (5,29), filename = "simple.gr"}, dataConstrId = (Id "ConsV" "ConsV"), dataConstrTypeScheme = Forall (Span {startPos = (5,12), endPos = (5,29), filename = "simple.gr"}) [((Id "n" "n`0"),TyCon (Id "Nat" "Nat"))] [] (FunTy Nothing Nothing (TyVar (Id "a" "a")) (FunTy Nothing Nothing (TyApp (TyApp (TyCon (Id "Vec" "Vec")) (TyVar (Id "n" "n`0"))) (TyVar (Id "a" "a"))) (TyApp (TyApp (TyCon (Id "Vec" "Vec")) (TyInfix TyOpPlus (TyVar (Id "n" "n`0")) (TyGrade Nothing 1))) (TyVar (Id "a" "a")))))}]}
+         ,DataDecl {dataDeclSpan = Span {startPos = (6,1), endPos = (6,21), filename = "simple.gr"}, dataDeclId = (Id "List" "List"), dataDeclTyVarCtxt = [((Id "a" "a"),Type 0)], dataDeclKindAnn = Nothing, dataDeclDataConstrs = [DataConstrNonIndexed {dataConstrSpan = Span {startPos = (6,15), endPos = (6,15), filename = "simple.gr"}, dataConstrId = (Id "Nil" "Nil"), dataConstrParams = []},DataConstrNonIndexed {dataConstrSpan = Span {startPos = (6,21), endPos = (6,21), filename = "simple.gr"}, dataConstrId = (Id "Cons" "Cons"), dataConstrParams = [TyVar (Id "a" "a"),TyApp (TyCon (Id "List" "List")) (TyVar (Id "a" "a"))]}]}]
     -- Load in the primitive data constructors first before running the computation synthComputation
     let synthComputation' =
              (conv (runAll checkTyCon (extras ++ Primitives.dataTypes)))
