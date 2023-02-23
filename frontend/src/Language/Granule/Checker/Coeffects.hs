@@ -109,3 +109,7 @@ generatePolymorphicGrade1 s = do
     modify (\st -> st { tyVarContext = (semiringVar, (kcoeffect, InstanceQ)) : tyVarContext st })
     -- return the 1 : semiringVar information
     return (TyGrade (Just (TyVar semiringVar)) 1, TyVar semiringVar)
+
+getGradeFromArrow :: Maybe Type -> Type
+getGradeFromArrow (Just grade) = grade
+getGradeFromArrow Nothing      = TyGrade Nothing 1

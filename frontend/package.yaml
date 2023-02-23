@@ -77,6 +77,8 @@ library:
   - Language.Granule.Synthesis.LinearHaskell
   - Language.Granule.Synthesis.Monad
   - Language.Granule.Synthesis.Splitting
+  - Language.Granule.Synthesis.Common
+  - Language.Granule.Synthesis.SynthLinearBase
   - Language.Granule.Synthesis.Synth
   - Language.Granule.Synthesis.RewriteHoles
   - Language.Granule.Context

@@ -484,17 +484,17 @@ data PredContext =
 -----
 -----       .
 -----       .  path
------       . 
+-----       .
 ----     forall x : Nat . _ -> _
 ----     /   \
 ---     p    [ ]
 
 ---    ImplAntecedent [("x", Nat)] path
 
----      . 
+---      .
 ---      .  path
----      . 
----   forall x : Nat . -> 
+---      .
+---   forall x : Nat . ->
 ---      /      \
 ---    [ ]      ?
 
