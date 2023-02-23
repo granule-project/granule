@@ -15,7 +15,7 @@ import qualified System.Clock as Clock
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.SubstitutionContexts (Substitution)
 import Language.Granule.Syntax.Type (TypeScheme)
-import Language.Granule.Syntax.Identifiers 
+import Language.Granule.Syntax.Identifiers
 
 -- Data structure for collecting information about synthesis
 data SynthesisData =
