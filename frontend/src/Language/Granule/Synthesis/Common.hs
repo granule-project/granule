@@ -230,15 +230,18 @@ checkConstructor :: (?globals::Globals)
       -> Synthesiser (Bool, Type, [(Type, Maybe Coeffect)], Substitution, Substitution)
 checkConstructor impossibility con@(Forall  _ binders constraints conTy) assumptionTy subst = do
     conv $ resetAddedConstraintsFlag -- reset the flag that says if any constraints were added
-    (conTyFresh, tyVarsFreshD, substFromFreshening, constraints', coercions) <- conv $ freshPolymorphicInstance InstanceQ True con subst []
+    -- Generate a fresh instance of this constructor (assumes it is not indexed)
+    let typeIndices = []
+    (conTyFresh, tyVarsFreshD, substFromFreshening, constraints', coercions) <-
+        conv $ freshPolymorphicInstance InstanceQ True con subst typeIndices
 
     -- Take the rightmost type of the function type, collecting the arguments along the way
     let (conTy', args) = collectTyAndArgs conTyFresh
+    -- Apply the coercions associated with this data constructor
     conTy'' <- conv $ substitute coercions conTy'
 
     -- assumptionTy == conTy?
-    (success, specTy, subst') <- conv $ equalTypes ns  assumptionTy conTy''
-    -- traceM $ "specTy: " <> pretty specTy
+    (success, specTy, subst') <- conv $ equalTypes ns assumptionTy conTy''
 
     subst'' <- conv $ combineSubstitutions ns (flipSubstitution coercions) subst'
     st <- getSynthState
