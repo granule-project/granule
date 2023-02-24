@@ -47,7 +47,7 @@ import Control.Arrow (second)
 -- import Control.Monad.Omega
 import System.Clock (TimeSpec)
 
-import Debug.Trace
+-- import Debug.Trace
 -- import Data.Ord
 
 ------------------------------
@@ -727,8 +727,6 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
                                 then (x1, SDef tySch (Just outputGrade))
                                 else (x1, SVar (Discharged (FunTy bName (Just grade_q) tyA tyB) outputGrade) sInfo)
 
-                            traceM $ "output: " <> (pretty $ Language.Granule.Syntax.Expr.subst appExpr x2 t1)
-                            traceM $ "delta: " <> (show delta3)
                             return (Language.Granule.Syntax.Expr.subst appExpr x2 t1, assumption':delta3, substOut, struct1 || struct2, if isScrutinee then Nothing else scrutinee)
                           _ -> none
                         else none
