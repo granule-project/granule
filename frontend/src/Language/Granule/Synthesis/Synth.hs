@@ -890,7 +890,7 @@ constrRule sParams focusPhase gamma goal = do
 
 (C: B₁^q₁ → ... → Bₙ^qₙ → K A ∈ D)
 
-Γ, x :ᵣ K A, y₁ⁱ :_q₁ B₁ ... yₙⁱ :_qₙ Bₙ ⊢ B => tᵢ | Δᵢ, x :_rᵢ K A, y₁ⁱ :_s₁ⁱ B₁ ... yₙⁱ :_sₙⁱ Bₙ
+Γ, x :ᵣ K A, y₁ⁱ :_(r · q₁) B₁ ... yₙⁱ :_(r · qₙ) Bₙ ⊢ B => tᵢ | Δᵢ, x :_rᵢ K A, y₁ⁱ :_s₁ⁱ B₁ ... yₙⁱ :_sₙⁱ Bₙ
 
 ∃s'ⱼⁱ . sⱼⁱ ⊑ s'ⱼⁱ · qⱼⁱ ⊑ r · qⱼⁱ
 
