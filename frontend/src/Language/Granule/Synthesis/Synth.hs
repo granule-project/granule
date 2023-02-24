@@ -31,7 +31,7 @@ import Language.Granule.Synthesis.Monad
 import Language.Granule.Synthesis.Contexts
 import Language.Granule.Synthesis.Common
 
-import Data.Either (rights)
+import Data.Either (rights, fromRight)
 import Control.Monad.State.Strict
 
 -- import qualified Control.Monad.State.Strict as State (get)
@@ -879,6 +879,11 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
         let omega = left ++ right
         synthState <- getSynthState
 
+        -- If the type is polyshaped then add constraint that we incur a usage
+        whenM (conv $ polyShaped ty) $ do
+          (kind, _, _) <- conv $ synthKind ns grade_r
+          modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (TyGrade (Just kind) 1) grade_r kind)
+
         let (recCons, nonRecCons) = relevantConstructors datatypeName (constructors synthState)
 
         let datacons = sortBy compareArity (recCons ++ nonRecCons)
@@ -889,15 +894,15 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
             (\ (exprs, deltas, substs, mGrade_r_out, mGrade_s_out, index)
                 con@(cName, (tySc@(Forall s bs constraints cTy), cSubst)) -> do
                   -- TODO: too big for a lambda - extract to its own function
-                  cs <- conv get
-                  let pred = newImplication [] (predicateContext cs)
 
+                  debugM "case - constructor" (pretty cName)
+
+                  modifyPred (newImplication [])
                   result <- checkConstructor True tySc ty cSubst
+                  modifyPred (fromRight Top . moveToConsequent)
 
-                  let predSucceeded = moveToConsequent pred
-
-                  case (result, predSucceeded) of
-                    ((True, _, args, subst, _), Right pred'@(ImplConsequent ctxt p path)) -> do
+                  case result of
+                    (True, _, args, subst, _) -> do
 
                       (gamma', omega', varsAndGrades) <- foldM (\(gamma, omega, vars) (arg, mGrade_q) -> do
                           y <- freshIdentifier
