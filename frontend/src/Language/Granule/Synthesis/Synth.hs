@@ -508,7 +508,7 @@ gSynth sParams focusPhase gamma (Focused omega) goal = do
 
 
 gSynthInner :: (?globals :: Globals) => SearchParameters -> FocusPhase -> Ctxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
-gSynthInner sParams focusPhase gamma (Focused omega) goal = do
+gSynthInner sParams focusPhase gamma (Focused omega) goal | guessCurrent sParams <= guessMax sParams = do
 
   case (focusPhase, omega) of
     (RightAsync, _) -> do
@@ -540,7 +540,7 @@ gSynthInner sParams focusPhase gamma (Focused omega) goal = do
 
     (LeftSync, [var@(x, SVar (Discharged ty g) _)]) -> do
       if not (isLSync ty) && not (isAtomic ty) then do
-        gSynthInner sParams LeftAsync gamma (Focused [var]) goal
+        gSynthInner (incrG sParams) LeftAsync gamma (Focused [var]) goal
       else do
         varRule [] (Focused []) (Focused $ gamma ++ omega) goal
         `try`
@@ -548,14 +548,14 @@ gSynthInner sParams focusPhase gamma (Focused omega) goal = do
 
     (LeftSync, [var@(x, SDef (Forall _ _ _ ty) g)]) -> do
       if not (isLSync ty) && not (isAtomic ty) then do
-        gSynthInner sParams LeftAsync gamma (Focused [var]) goal
+        gSynthInner (incrG sParams) LeftAsync gamma (Focused [var]) goal
       else do
         varRule [] (Focused []) (Focused $ gamma ++ omega) goal
         `try`
         appRule sParams LeftSync gamma (Focused []) (Focused omega) goal
 
     (LeftSync, []) ->
-      gSynthInner sParams RightAsync gamma (Focused []) goal
+      gSynthInner (incrG sParams) RightAsync gamma (Focused []) goal
 
   where
 
@@ -568,16 +568,19 @@ gSynthInner sParams focusPhase gamma (Focused omega) goal = do
 
     focLeft _ _ [] goal = none
     focLeft sParams left (var:right) goal =
-      gSynthInner sParams LeftSync (left ++ right) (Focused [var]) goal
-      `try`
       focLeft sParams (var:left) right goal
+      `try`
+      gSynthInner (incrG sParams) LeftSync (left ++ right) (Focused [var]) goal
 
     transitionToLeftAsync _ _ _ (FunTy{}) = none
     transitionToLeftAsync sParams gamma omega goal = gSynthInner sParams LeftAsync gamma (Focused omega) goal
 
     focRight sParams gamma = gSynthInner sParams RightSync gamma (Focused [])
 
+gSynthInner _ _ _ _ _ = none
 
+incrG :: SearchParameters -> SearchParameters
+incrG sParams = sParams { guessCurrent = (guessCurrent sParams) + 1}
 
 
 {-
@@ -693,7 +696,7 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
         let (gamma', omega') = bindToContext (x2, SVar (Discharged tyB grade_r) Nothing) (gamma ++ [var]) omega (isLAsync tyB)
 
         -- Synthesises the function arg
-        (t1, delta1, subst1, struct1, scrutinee) <- gSynthInner sParams focusPhase gamma' (Focused omega') goal
+        (t1, delta1, subst1, struct1, scrutinee) <- gSynthInner (incrG sParams) focusPhase gamma' (Focused omega') goal
 
         case lookupAndCutout x2 delta1 of
           Just (delta1', SVar (Discharged _ s2) _) ->
@@ -706,8 +709,8 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
                   let isScrutinee = case scrutinee of Just scr -> scr == x2 ; _ -> False
                   (t2, delta2, subst2, struct2, _) <- do
                     if isScrutinee
-                    then gSynthInner sParams { scrutCurrent = (scrutCurrent sParams) + 1, guessCurrent = (guessCurrent sParams) + 1 } RightSync (gamma ++ omega ++ [var]) (Focused []) tyA
-                    else gSynthInner sParams { guessCurrent = (guessCurrent sParams) + 1 }  RightSync (gamma ++ omega ++ [var]) (Focused []) tyA
+                    then gSynthInner (incrG $ sParams { scrutCurrent = (scrutCurrent sParams) + 1 }) RightSync (gamma ++ omega ++ [var]) (Focused []) tyA
+                    else gSynthInner (incrG sParams)  RightSync (gamma ++ omega ++ [var]) (Focused []) tyA
 
                   case lookupAndCutout x1 delta2 of
                     Just (delta2', varUsed') -> do
@@ -848,7 +851,7 @@ constrRule sParams focusPhase gamma goal = do
     synthArgs ((ty, mGrade_q):args) subst = do
       (ts, deltas, substs, structs) <- synthArgs args subst
       ty' <- conv $ substitute subst ty
-      (t, delta, subst, struct, _) <- gSynthInner sParams { guessCurrent = (guessCurrent sParams) + 1} RightAsync gamma (Focused []) ty'
+      (t, delta, subst, struct, _) <- gSynthInner (incrG sParams) RightAsync gamma (Focused []) ty'
       delta' <- maybeToSynthesiser $ ctxtAdd deltas delta
       substs' <- conv $ combineSubstitutions ns substs subst
       delta'' <- case mGrade_q of
