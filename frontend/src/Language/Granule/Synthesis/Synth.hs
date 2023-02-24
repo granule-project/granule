@@ -943,20 +943,31 @@ casePatternMatchBranchSynth
 
   case result of
     (True, _, args, subst, _) -> do
+      -- args contains the types and maybe grade for each argument of this constructor
 
-      (gamma', omega', varsAndGrades) <- foldM (\(gamma, omega, vars) (arg, mGrade_q) -> do
+      -- for every argument position of the constructor...
+      (gamma', omega', varsAndGrades) <-
+        forallM args (gamma ++ [var], omega, []) (\(gamma, omega, vars) (arg, mGrade_q) -> do
+          --
           y <- freshIdentifier
           let grade_rq = case mGrade_q of
-                Just grade_q -> grade_r `gTimes` grade_q
-                Nothing -> grade_r
+                            Just grade_q -> grade_r `gTimes` grade_q
+                            -- Contains a small optimisation of avoiding a times * 1
+                            Nothing      -> grade_r
 
           arg' <- conv $ substitute subst arg
-          let assumption@(_, SVar _ sInfo) = if isRecursiveCon datatypeName (y, (Forall ns bs constraints arg, []))
-                          then (y, SVar (Discharged arg' grade_rq) (Just $ Decreasing 1))
-                          else (y, SVar (Discharged arg' grade_rq) (Just NonDecreasing))
-          let (gamma', omega') = bindToContext assumption gamma omega (isLAsync arg' && not (isDecr sInfo && matchCurrent sParams <= matchMax sParams))
+
+          let assumption@(_, SVar _ sInfo) =
+                -- Check if the constructor here is recursive
+                if isRecursiveCon datatypeName (y, (Forall s bs constraints arg', []))
+                      then (y, SVar (Discharged arg' grade_rq) (Just $ Decreasing 1))
+                      else (y, SVar (Discharged arg' grade_rq) (Just NonDecreasing))
+
+          let (gamma', omega') =
+                bindToContext assumption gamma omega (isLAsync arg' && not (isDecr sInfo && matchCurrent sParams <= matchMax sParams))
           return (gamma', omega', (y, grade_rq):vars)
-        ) (gamma ++ [var], omega, []) args
+        )
+
       let (vars, _) = unzip varsAndGrades
       let constrPat = PConstr ns () False cName (map (PVar ns () False) $ reverse vars)
 
