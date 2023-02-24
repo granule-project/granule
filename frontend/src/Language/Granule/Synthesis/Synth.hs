@@ -21,6 +21,7 @@ import Language.Granule.Context
 
 import Language.Granule.Checker.Coeffects(getGradeFromArrow)
 import Language.Granule.Checker.Monad
+import Language.Granule.Checker.Patterns(polyShaped)
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Kinding
 import Language.Granule.Checker.Substitution
