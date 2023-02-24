@@ -23,6 +23,7 @@ import Language.Granule.Checker.Coeffects(getGradeFromArrow)
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Kinding
+import Language.Granule.Checker.Patterns
 import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Types
@@ -878,6 +879,10 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
 
         let omega = left ++ right
         synthState <- getSynthState
+
+        isPoly <- conv $ polyShaped ty 
+        (kind, _, _) <- conv $ synthKind ns grade_r
+        modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (TyGrade (Just kind) 1) grade_r kind)
 
         let (recCons, nonRecCons) = relevantConstructors datatypeName (constructors synthState)
 
