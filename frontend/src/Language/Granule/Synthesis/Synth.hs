@@ -135,7 +135,8 @@ markRecursiveType tyCon dataTy = markRecursiveType' tyCon dataTy False
     markRecursiveType' tyCon (TyCon tyCon') True = tyCon == tyCon'
     markRecursiveType' _ _ _ = False
 
-
+-- TODO: not used and could be calculated using `any isRecursiveCon` on the constructors...
+-- TODO: remove?
 isRecursiveType :: Maybe Id -> Ctxt (Ctxt (TypeScheme, Substitution), Bool) -> Bool
 isRecursiveType (Just id) cons = case lookup id cons of Just (_, isRecursive)  -> isRecursive ; Nothing -> False
 isRecursiveType _ _ = False
@@ -591,6 +592,7 @@ varRule _ _ (Focused []) _ = none
 -- varRule gamma (Focused left) (Focused (var@(name, SVar (Discharged t grade) sInfo) : right)) goal = do
 varRule gamma (Focused left) (Focused (var@(name, assumption) : right)) goal = do
   varRule gamma (Focused (var:left)) (Focused right) goal `try` do
+    debugM "varRule, goal is" (pretty goal)
     assumptionTy <- getSAssumptionType assumption
     case assumptionTy of
       (t, funDef, mGrade, mSInfo, tySch) -> do
@@ -639,7 +641,9 @@ varRule gamma (Focused left) (Focused (var@(name, assumption) : right)) goal = d
 
 -}
 absRule :: (?globals :: Globals) => SearchParameters ->  FocusPhase -> Ctxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
-absRule sParams focusPhase gamma (Focused omega) (FunTy name gradeM tyA tyB) = do
+absRule sParams focusPhase gamma (Focused omega) goal@(FunTy name gradeM tyA tyB) = do
+  debugM "varRule, goal is" (pretty goal)
+
   -- Extract the graded arrow, or use generic 1 if there is no grade
   let grade = getGradeFromArrow gradeM
 
@@ -677,6 +681,8 @@ appRule :: (?globals :: Globals) => SearchParameters -> FocusPhase -> Ctxt SAssu
 appRule _ _ _ _ (Focused []) _ = none
 appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) : right)) goal =
   appRule sParams focusPhase gamma (Focused (var : left)) (Focused right) goal `try` do
+    debugM "appRule, goal is" (pretty goal)
+
     assumptionTy <- getSAssumptionType assumption
     st <- getSynthState
     case (assumptionTy, guessCurrent sParams <= guessMax sParams, scrutCurrent sParams <= scrutMax sParams) of
@@ -750,8 +756,10 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
 
 -}
 boxRule :: (?globals :: Globals) => SearchParameters -> FocusPhase -> Ctxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
-boxRule sParams focusPhase gamma (Box grade_r goal) = do
-  (t, delta, subst, struct, scrutinee) <- gSynthInner sParams focusPhase gamma (Focused []) goal
+boxRule sParams focusPhase gamma goal@(Box grade_r goal_inner) = do
+  debugM "boxRule, goal is" (pretty goal)
+
+  (t, delta, subst, struct, scrutinee) <- gSynthInner sParams focusPhase gamma (Focused []) goal_inner
   delta' <- ctxtMultByCoeffect grade_r delta
   let boxExpr = Val ns () False (Promote () t)
   return (boxExpr, delta', subst, struct, scrutinee)
@@ -770,6 +778,7 @@ unboxRule :: (?globals :: Globals) => SearchParameters -> FocusPhase -> Ctxt SAs
 unboxRule _ _ _ _ (Focused []) _ = none
 unboxRule sParams focusPhase gamma (Focused left) (Focused (var_x@(x, SVar (Discharged (Box grade_q ty) grade_r) sInfo):right)) goal =
   unboxRule sParams focusPhase gamma (Focused (var_x:left)) (Focused right) goal `try` do
+    debugM "unboxRule, goal is" (pretty goal)
 
     let omega = left ++ right
     y <- freshIdentifier
@@ -814,6 +823,7 @@ unboxRule _ _ _ _ _ _ = none
 -}
 constrRule :: (?globals :: Globals) => SearchParameters -> FocusPhase -> Ctxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
 constrRule sParams focusPhase gamma goal = do
+  debugM "constrRule, goal is" (pretty goal)
   case (guessCurrent sParams <= guessMax sParams, isADTorGADT goal) of
     (True, Just datatypeName) -> do
       synthState <- getSynthState
@@ -873,7 +883,8 @@ caseRule :: (?globals :: Globals) => SearchParameters -> FocusPhase -> Ctxt SAss
 caseRule _ _ _ _ (Focused []) _ = none
 caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Discharged ty grade_r) sInfo):right)) goal =
   caseRule sParams focusPhase gamma (Focused (var : left)) (Focused right) goal `try` do
-    st <- getSynthState
+    debugM "caseRule, goal is" (pretty goal)
+
     case (matchCurrent sParams <= matchMax sParams,isADTorGADT ty) of
       (True, Just datatypeName) -> do
 
