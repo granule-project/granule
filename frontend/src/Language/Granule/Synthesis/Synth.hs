@@ -991,9 +991,7 @@ casePatternMatchBranchSynth
                 modifyPred $ (ExistsHere grade_id_s' kind)
 
                 -- s' \/ ...
-                let grade_si = case mGrade of
-                      Just s -> s `gJoin` grade_s'
-                      Nothing -> grade_s'
+                let grade_si = getGradeFromArrow mGrade `gJoin` grade_s'
                 return (delta', Just grade_si)
               _ -> do
                 return (dVar:delta', mGrade)
