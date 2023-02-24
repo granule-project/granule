@@ -748,7 +748,7 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
                             let appExpr = App ns () False (Val ns () False (Var () x1)) t2
                             let assumption' = if funDef
                                 then (x1, SDef tySch (Just outputGrade))
-                                -- TODO: We should be able to return "Just grade_q" instead of "gradeM" here but this fails later on 
+                                -- TODO: We should be able to return "Just grade_q" instead of "gradeM" here but this fails later on
                                 -- (possibly related to the caseRule)
                                 else (x1, SVar (Discharged (FunTy bName gradeM tyA tyB) outputGrade) sInfo)
 
@@ -889,21 +889,151 @@ constrRule sParams focusPhase gamma goal = do
 {-
 
 (C: B₁^q₁ → ... → Bₙ^qₙ → K A ∈ D)
+
 Γ, x :ᵣ K A, y₁ⁱ :_q₁ B₁ ... yₙⁱ :_qₙ Bₙ ⊢ B => tᵢ | Δᵢ, x :_rᵢ K A, y₁ⁱ :_s₁ⁱ B₁ ... yₙⁱ :_sₙⁱ Bₙ
+
 ∃s'ⱼⁱ . sⱼⁱ ⊑ s'ⱼⁱ · qⱼⁱ ⊑ r · qⱼⁱ
+
 sᵢ = s'₁ⁱ ⊔ ... ⊔ s'ₙⁱ
+
 --------------------------------------------------------------------------------------------------------:: case (v1)
 Γ, x :ᵣ K A ⊢ B => case x of cᵢ y₁ⁱ ... yₙⁱ -> tᵢ | (Δ₁ ⊔ ... ⊔ Δₙ), x :_(r₁ ⊔ ... ⊔ rₙ)+(s₁ ⊔ ... ⊔ sₙ)
 
+i.e., with a goal of type `B` and `x : r K A` in context we want
+to case on it, which involves make a case, pattern matching on all
+the constructors `C`
+
 -}
+
+-- Output list of pattern->expr pair for the branch
+-- output context D
+-- substituion Theta
+-- grade r
+-- grade s
+casePatternMatchBranchSynth :: (?globals :: Globals) =>
+     SearchParameters
+  -> FocusPhase
+  -> Ctxt SAssumption                      -- gamma context
+  -> Ctxt SAssumption                      -- omega context
+  -> (Id, SAssumption)                     -- var being matched on
+  -> Id                                    -- name of the type constructor on which we are match
+                                           --    (should be consistent with first parameter)
+  -> Type                                  -- branch goal type
+  -> (Id, (TypeScheme, Substitution))      -- constructor info
+  -> Synthesiser
+       (Maybe ((Pattern (), Expr () ()), (Ctxt SAssumption, (Substitution, (Coeffect, Maybe Coeffect)))))
+casePatternMatchBranchSynth
+  sParams
+  focusPhase
+  gamma
+  omega
+  var@(x, SVar (Discharged ty grade_r) sInfo)
+  datatypeName
+  goal
+  con@(cName, (tySc@(Forall s bs constraints cTy), cSubst)) = do
+  -- Debugging
+  debugM "case - constructor" (pretty cName)
+
+
+  -- New implication
+  modifyPred (newImplication [])
+  -- Check that we can use a constructor here
+  result <- checkConstructor True tySc ty cSubst
+  modifyPred (fromRight Top . moveToConsequent)
+
+  case result of
+    (True, _, args, subst, _) -> do
+
+      (gamma', omega', varsAndGrades) <- foldM (\(gamma, omega, vars) (arg, mGrade_q) -> do
+          y <- freshIdentifier
+          let grade_rq = case mGrade_q of
+                Just grade_q -> grade_r `gTimes` grade_q
+                Nothing -> grade_r
+
+          arg' <- conv $ substitute subst arg
+          let assumption@(_, SVar _ sInfo) = if isRecursiveCon datatypeName (y, (Forall ns bs constraints arg, []))
+                          then (y, SVar (Discharged arg' grade_rq) (Just $ Decreasing 1))
+                          else (y, SVar (Discharged arg' grade_rq) (Just NonDecreasing))
+          let (gamma', omega') = bindToContext assumption gamma omega (isLAsync arg' && not (isDecr sInfo && matchCurrent sParams <= matchMax sParams))
+          return (gamma', omega', (y, grade_rq):vars)
+        ) (gamma ++ [var], omega, []) args
+      let (vars, _) = unzip varsAndGrades
+      let constrPat = PConstr ns () False cName (map (PVar ns () False) $ reverse vars)
+
+      (t, delta, subst, _, _) <- gSynthInner sParams { matchCurrent = (matchCurrent sParams) + 1} focusPhase gamma' (Focused omega') goal
+
+      (delta', grade_si) <- foldM (\(delta', mGrade) dVar@(dName, dAssumption) ->
+        case dAssumption of
+          SVar (Discharged ty grade_s) dSInfo ->
+            case lookup dName varsAndGrades of
+              Just grade_rq -> do
+
+                grade_id_s' <- freshIdentifier
+                let grade_s' = TyVar grade_id_s'
+                (kind, _, _) <- conv $ synthKind ns grade_s
+                conv $ existentialTopLevel grade_id_s' kind
+
+                -- ∃s'_ij . s_ij ⊑ s'_ij · q_ij ⊑ r · q_ij
+                modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (grade_s' `gTimes` grade_rq) (grade_r `gTimes` grade_r) kind)
+                modifyPred $ addConstraintViaConjunction (ApproximatedBy ns grade_s (grade_s' `gTimes` grade_rq) kind)
+                modifyPred $ (ExistsHere grade_id_s' kind)
+
+                -- s' \/ ...
+                let grade_si = case mGrade of
+                      Just s -> s `gJoin` grade_s'
+                      Nothing -> grade_s'
+                return (delta', Just grade_si)
+              _ -> do
+                return (dVar:delta', mGrade)
+          SDef{} -> do
+            return (delta', mGrade)
+        ) ([], Nothing) delta
+
+      -- Needs reviewing
+      -- A grade which conveys that pattern matching on a nullary constructor incurs a use
+      -- let nullConOneGrade =  [(x, SVar (Discharged ty $ TyGrade (Just kind) 1) sInfo)]
+      -- deltaToConc' <- if not (null args)
+      --                 then return delta'
+      --                 else case ctxtAdd nullConOneGrade delta' of
+      --                   Just delta'' -> do
+      --                     return delta''
+      --                   Nothing -> do
+      --                     none
+      let deltaToConc' = delta'
+
+      case (lookupAndCutout x deltaToConc') of
+        (Just (_, SVar (Discharged _ grade_r') sInfo)) -> do
+
+          modifyPred $ moveToNewConjunct
+
+          -- -- This is VERY ugly but it works... There is a much better way of writing this but it can wait
+          -- let (grade_r_out', grade_s_out') = case (mGrade_s_out, grade_si) of
+          --         (Just g, Just s, Just si) -> (Just $ g `gJoin` grade_r', Just $ s `gJoin` si)
+          --         (Just g, Nothing, Just si) -> (Just $ g `gJoin` grade_r', Just $ si)
+          --         (Just g, Just s, Nothing) -> (Just $ g `gJoin` grade_r', Just $ s)
+          --         (Nothing, Just s, Just si) -> (Just grade_r', Just $ s `gJoin` si)
+          --         (Nothing, Nothing, Just si) -> (Just grade_r', Just $  si)
+          --         (Nothing, Just s, Nothing) -> (Just grade_r', Just $ s )
+          --         _ -> (Just grade_r', Nothing)
+
+          --return ((constrPat, t):exprs, returnDelta, returnSubst, grade_r_out', grade_s_out', index+1)
+          return $ Just ((constrPat, t), (deltaToConc', (subst, (grade_r', grade_si))))
+
+        _ -> do
+          modifyPred $ moveToNewConjunct
+          none
+    _ -> do
+      modifyPred $ moveToNewConjunct
+      return Nothing
+
 caseRule :: (?globals :: Globals) => SearchParameters -> FocusPhase -> Ctxt SAssumption -> FocusedCtxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
 caseRule _ _ _ _ (Focused []) _ = none
 caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Discharged ty grade_r) sInfo):right)) goal =
   caseRule sParams focusPhase gamma (Focused (var : left)) (Focused right) goal `try` do
     debugM "caseRule, goal is" (pretty goal)
 
-    case (matchCurrent sParams <= matchMax sParams,isADTorGADT ty) of
-      (True, Just datatypeName) -> do
+    case (matchCurrent sParams <= matchMax sParams,leftmostOfApplication ty) of
+      (True, TyCon datatypeName) -> do
 
         let omega = left ++ right
         synthState <- getSynthState
@@ -927,118 +1057,44 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
           let datacons = sortBy compareArity (recCons ++ nonRecCons)
 
           -- Process each data constructor
-          (patExprs, delta, subst, grade_r_out, grade_s_out, _) <-
-            forallM datacons ([], [], [], Nothing, Nothing, 0)
-              (\ (exprs, deltas, substs, mGrade_r_out, mGrade_s_out, index)
-                  con@(cName, (tySc@(Forall s bs constraints cTy), cSubst)) -> do
-                    -- TODO: too big for a lambda - extract to its own function
+          branchInformation <-
+            mapMaybeM (casePatternMatchBranchSynth
+                           sParams focusPhase  -- synth configs
+                           gamma omega         -- contexts
+                           var                 -- var being match on
+                           datatypeName
+                           goal) datacons
 
-                    debugM "case - constructor" (pretty cName)
+          let (patExprs, contextsAndSubstsGrades) = unzip branchInformation
+          let (deltas, substsAndGrades)           = unzip contextsAndSubstsGrades
+          let (substs, grades)                    = unzip substsAndGrades
+          -- TODO: more clear names here
+          let (grade_rs, grade_ss)                = unzip grades
 
-                    modifyPred (newImplication [])
-                    result <- checkConstructor True tySc ty cSubst
-                    modifyPred (fromRight Top . moveToConsequent)
+          -- join contexts
+          delta <- foldM (ctxtMerge gJoin) (head deltas) (tail deltas)
 
-                    case result of
-                      (True, _, args, subst, _) -> do
+          -- join grades
+          let grade_r_out = foldr gJoin  (head grade_rs) (tail grade_rs)
+          let grade_s_out = foldr gJoin' (head grade_ss) (tail grade_ss)
 
-                        (gamma', omega', varsAndGrades) <- foldM (\(gamma, omega, vars) (arg, mGrade_q) -> do
-                            y <- freshIdentifier
-                            let grade_rq = case mGrade_q of
-                                  Just grade_q -> grade_r `gTimes` grade_q
-                                  Nothing -> grade_r
-
-                            arg' <- conv $ substitute subst arg
-                            let assumption@(_, SVar _ sInfo) = if isRecursiveCon datatypeName (y, (Forall ns bs constraints arg, []))
-                                            then (y, SVar (Discharged arg' grade_rq) (Just $ Decreasing 1))
-                                            else (y, SVar (Discharged arg' grade_rq) (Just NonDecreasing))
-                            let (gamma', omega') = bindToContext assumption gamma omega (isLAsync arg' && not (isDecr sInfo && matchCurrent sParams <= matchMax sParams))
-                            return (gamma', omega', (y, grade_rq):vars)
-                          ) (gamma ++ [var], omega, []) args
-                        let (vars, _) = unzip varsAndGrades
-                        let constrPat = PConstr ns () False cName (map (PVar ns () False) $ reverse vars)
-
-                        (t, delta, subst, _, _) <- gSynthInner sParams { matchCurrent = (matchCurrent sParams) + 1} focusPhase gamma' (Focused omega') goal
-
-                        (delta', grade_si) <- foldM (\(delta', mGrade) dVar@(dName, dAssumption) ->
-                          case dAssumption of
-                            SVar (Discharged ty grade_s) dSInfo ->
-                              case lookup dName varsAndGrades of
-                                Just grade_rq -> do
-
-                                  grade_id_s' <- freshIdentifier
-                                  let grade_s' = TyVar grade_id_s'
-                                  (kind, _, _) <- conv $ synthKind ns grade_s
-                                  conv $ existentialTopLevel grade_id_s' kind
-
-                                  -- ∃s'_ij . s_ij ⊑ s'_ij · q_ij ⊑ r · q_ij
-                                  modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (grade_s' `gTimes` grade_rq) (grade_r `gTimes` grade_r) kind)
-                                  modifyPred $ addConstraintViaConjunction (ApproximatedBy ns grade_s (grade_s' `gTimes` grade_rq) kind)
-                                  modifyPred $ (ExistsHere grade_id_s' kind)
-
-                                  -- s' \/ ...
-                                  let grade_si = case mGrade of
-                                        Just s -> s `gJoin` grade_s'
-                                        Nothing -> grade_s'
-                                  return (delta', Just grade_si)
-                                _ -> do
-                                  return (dVar:delta', mGrade)
-                            SDef{} -> do
-                              return (delta', mGrade)
-                          ) ([], Nothing) delta
-
-                        -- Needs reviewing
-                        -- A grade which conveys that pattern matching on a nullary constructor incurs a use
-                        -- let nullConOneGrade =  [(x, SVar (Discharged ty $ TyGrade (Just kind) 1) sInfo)]
-                        -- deltaToConc' <- if not (null args)
-                        --                 then return delta'
-                        --                 else case ctxtAdd nullConOneGrade delta' of
-                        --                   Just delta'' -> do
-                        --                     return delta''
-                        --                   Nothing -> do
-                        --                     none
-                        let deltaToConc' = delta'
-
-                        case (lookupAndCutout x deltaToConc') of
-                          (Just (_, SVar (Discharged _ grade_r') sInfo)) -> do
-
-                            returnDelta <- if index == 0 then return deltaToConc' else ctxtMerge (TyInfix TyOpJoin) deltas deltaToConc'
-                            returnSubst <- conv $ combineSubstitutions ns subst substs
-
-                            modifyPred $ moveToNewConjunct
-
-                            -- This is VERY ugly but it works... There is a much better way of writing this but it can wait
-                            let (grade_r_out', grade_s_out') = case (mGrade_r_out, mGrade_s_out, grade_si) of
-                                    (Just g, Just s, Just si) -> (Just $ g `gJoin` grade_r', Just $ s `gJoin` si)
-                                    (Just g, Nothing, Just si) -> (Just $ g `gJoin` grade_r', Just $ si)
-                                    (Just g, Just s, Nothing) -> (Just $ g `gJoin` grade_r', Just $ s)
-                                    (Nothing, Just s, Just si) -> (Just grade_r', Just $ s `gJoin` si)
-                                    (Nothing, Nothing, Just si) -> (Just grade_r', Just $  si)
-                                    (Nothing, Just s, Nothing) -> (Just grade_r', Just $ s )
-                                    _ -> (Just grade_r', Nothing)
-
-                            return ((constrPat, t):exprs, returnDelta, returnSubst, grade_r_out', grade_s_out', index+1)
-
-                          _ -> do
-                            modifyPred $ moveToNewConjunct
-                            none
-                      _ -> do
-                        modifyPred $ moveToNewConjunct
-                        return (exprs, deltas, substs, mGrade_r_out, mGrade_s_out, index)
-                    )
+          -- join substitutions
+          subst <- conv $ combineManySubstitutions ns substs
 
           res <- solve
 
           case (patExprs, grade_r_out, grade_s_out, res) of
-            (_:_, Just grade_r_out', Just grade_s_out', True) -> do
+
+            (_:_, grade_r_out', Just grade_s_out', True) -> do
               let var_x_out = (x, SVar (Discharged ty (grade_r_out' `gPlus` grade_s_out')) sInfo)
               return (makeCaseUntyped x patExprs, var_x_out:delta, subst, False, Just x)
-            (_:_, Just grade_r_out', Nothing, True) -> do
+
+            (_:_, grade_r_out', Nothing, True) -> do
               let var_x_out = (x, SVar (Discharged ty (grade_r_out')) sInfo)
               return (makeCaseUntyped x patExprs, var_x_out:delta, subst, False, Just x)
             _ -> none
         else none
-      (False, Just _) -> noneWithMaxReached
+      (False, _) -> noneWithMaxReached
       _ -> none
 
 caseRule _ _ _ _ _ _ = none
@@ -1064,6 +1120,12 @@ gTimes = TyInfix TyOpTimes
 
 gJoin :: Type -> Type -> Type
 gJoin = TyInfix TyOpJoin
+
+gJoin' :: Maybe Type -> Maybe Type -> Maybe Type
+gJoin' Nothing Nothing = Nothing
+gJoin' (Just t) Nothing = Just t
+gJoin' Nothing (Just t) = Just t
+gJoin' (Just t) (Just t') = Just (TyInfix TyOpJoin t t')
 
 
 
