@@ -3,5 +3,5 @@ language GradedBase
 data Test c where First c | Second c
 
 f : forall { a : Type } . (Test a) %1..2 -> (a, a)
-f (Second u) = (u, u);
-f (First y) = (y, y)
+f (First y) = (y, y);
+f (Second u) = (u, u)
