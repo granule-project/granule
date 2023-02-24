@@ -28,16 +28,34 @@ spec = let ?globals = mempty :: Globals in do
 recursiveConstructorTests :: Test.Spec
 recursiveConstructorTests = do
   describe "Tests on isRecursiveCon" $ do
+    let listTy = TyApp (TyCon $ mkId "List") (TyVar $ mkId "a")
+    let nilTyS  = Forall ns [(mkId "a", Type 0)] [] listTy
+    let consTyS = Forall ns [(mkId "a", Type 0)] [] (FunTy Nothing Nothing (TyVar $ mkId "a") (FunTy Nothing Nothing listTy listTy))
+
     it "Non-recursive constructor of list (Nil)" $ do
-      let listTy = TyApp (TyCon $ mkId "List") (TyVar $ mkId "a")
-      let recNil = isRecursiveCon (mkId "List") (mkId "Nil", (Forall ns [(mkId "a", Type 0)] [] listTy, []))
+      let recNil = isRecursiveCon (mkId "List") (mkId "Nil", (nilTyS, []))
       recNil `shouldBe` False
 
-    it "Non-recursive constructor of list (Cons)" $ do
-      let listTy = TyApp (TyCon $ mkId "List") (TyVar $ mkId "a")
-      let consTy = FunTy Nothing Nothing (TyVar $ mkId "a") (FunTy Nothing Nothing listTy listTy)
-      let recNil = isRecursiveCon (mkId "List") (mkId "Cons", (Forall ns [(mkId "a", Type 0)] [] consTy, []))
-      recNil `shouldBe` True
+    it "Recursive constructor of list (Cons)" $ do
+      let recCons = isRecursiveCon (mkId "List") (mkId "Cons", (consTyS, []))
+      recCons `shouldBe` True
+
+    it "Relevant constructors for List are returned correctly partioned into rec/non-rec" $ do
+      let constructors = [(mkId "List", ([(mkId "Nil", (nilTyS, [])), (mkId "Cons", (consTyS, []))], False))]
+      let relConstructors = relevantConstructors (mkId "List") constructors
+      relConstructors `shouldBe` ([(mkId "Cons", (consTyS, []))],  [(mkId "Nil", (nilTyS, []))])
+
+    it "Non-recursive constructor of Maybe (Just)" $ do
+      let maybeTy = TyApp (TyCon $ mkId "Maybe") (TyVar $ mkId "a")
+      let justTy = FunTy Nothing Nothing (TyVar $ mkId "a") maybeTy
+      let recJust = isRecursiveCon (mkId "Maybe") (mkId "Just", (Forall ns [(mkId "a", Type 0)] [] justTy, []))
+      recJust `shouldBe` False
+
+    it "Recursive constructor involving a pair: (SnocList a, a) -> SnocList a " $ do
+      let slistTy = TyApp (TyCon $ mkId "SnocList") (TyVar $ mkId "a")
+      let sconsTy = FunTy Nothing Nothing (TyApp (TyApp (TyCon $ mkId ",") slistTy) (TyVar $ mkId "a")) slistTy
+      let srecCons = isRecursiveCon (mkId "SnocList") (mkId "SCons", (Forall ns [(mkId "a", Type 0)] [] sconsTy, []))
+      srecCons `shouldBe` True
 
 checkConstructorTests :: (?globals :: Globals) => Test.Spec
 checkConstructorTests =

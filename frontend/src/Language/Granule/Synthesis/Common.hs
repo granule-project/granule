@@ -194,19 +194,26 @@ bindToContext var gamma omega _         = (var:gamma, omega)
 -- then `isRecursiveCons "List" ("Cons", ..type-of-cons..) = True
 -- but  `isRecursiveCons "List" ("Nil", ..type-of-cons..) = False
 isRecursiveCon :: Id -> (Id, (TypeScheme, Substitution)) -> Bool
-isRecursiveCon id1 (_, (Forall _ _ _ conTy, subst)) =
-  isDecreasing id1 $ constrArgIds conTy
+isRecursiveCon tyConId (_, (Forall _ _ _ constructorTy, subst)) =
+  any positivePosition (parameterTypes constructorTy)
   where
-    constrArgIds :: Type -> [Type]
-    constrArgIds (TyCon id) = [TyCon id]
-    constrArgIds (TyVar id) = [TyVar id]
-    constrArgIds (Box _ t) = do
-      constrArgIds t
-    constrArgIds (TyApp t1 t2) = do
-      t1 : constrArgIds t2
-    constrArgIds (FunTy _ _ e1 e2) = do
-      e1 : constrArgIds e2
-    constrArgIds _ = []
+    -- Determine if type constructor `tyConId` appears
+    -- in a positive (recursive) position in a type
+    positivePosition (TyCon id)      = (tyConId == id)
+    positivePosition (TyApp t1 t2)   = positivePosition t1 || positivePosition t2
+    positivePosition (FunTy _ _ _ t) = positivePosition t
+    positivePosition (Box _ t)       = positivePosition t
+    positivePosition (Diamond _ t)   = positivePosition t
+    positivePosition (Star _    t)   = positivePosition t
+    positivePosition (TyVar _)       = False
+    positivePosition (TyInt _)       = False
+    positivePosition (TyRational _)  = False
+    positivePosition (TyGrade _ _)   = False
+    positivePosition (TyInfix _ t1 t2) = positivePosition t1 || positivePosition t2
+    positivePosition (TySet _ t)       = any positivePosition t
+    positivePosition (TyCase t ts)     = positivePosition t || any (positivePosition . snd) ts
+    positivePosition (TySig t _)       = positivePosition t
+    positivePosition (Type  _)         = False
 
 isDecreasing :: Id -> [Type] -> Bool
 isDecreasing id1 [] = False
@@ -217,8 +224,6 @@ isDecreasing id1 ((TyApp t1 t2):tys)   = isDecreasing id1 (t1:t2:tys)
 isDecreasing id1 (x:xs) = isDecreasing id1 xs
 
 -- # Common synthesis helpers
-
--- TODO: rewrite a lot of checkConstructor and auxilliary functions
 
 -- Takes a data constructor and returns whether the constructor is a canditate for synthesis based on
 -- the type of the assumption. If so, return a fresh polymorphic instance of that constructor.
@@ -265,7 +270,9 @@ checkConstructor impossibility con@(Forall  _ binders constraints conTy) assumpt
   collectTyAndArgs t = (t, [])
 
 -- Return constructors relevant to the type constructor ID in two lists: recursive and non-recursive
-relevantConstructors :: Id -> Ctxt (Ctxt (TypeScheme, Substitution), Bool) -> (Ctxt ((TypeScheme, Substitution)), Ctxt ((TypeScheme, Substitution)))
+relevantConstructors :: Id
+ -> Ctxt (Ctxt (TypeScheme, Substitution), Bool)
+ -> (Ctxt ((TypeScheme, Substitution)), Ctxt ((TypeScheme, Substitution)))
 relevantConstructors id [] = ([], [])
 relevantConstructors id ((typeId, (dCons, _)):tys) =
   if id == typeId then
