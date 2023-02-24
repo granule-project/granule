@@ -593,10 +593,13 @@ varRule _ _ (Focused []) _ = none
 varRule gamma (Focused left) (Focused (var@(name, assumption) : right)) goal = do
   varRule gamma (Focused (var:left)) (Focused right) goal `try` do
     debugM "varRule, goal is" (pretty goal)
+
     assumptionTy <- getSAssumptionType assumption
     case assumptionTy of
       (t, funDef, mGrade, mSInfo, tySch) -> do
         conv resetAddedConstraintsFlag
+        st <- conv get
+        debugM "equality in var rule" ("tyVarContext = " ++ pretty (tyVarContext st) ++ "\n" ++ pretty t ++ " = "  ++ pretty goal)
         (success, _, subst) <- conv $ equalTypes ns t goal
         cs <- conv get
         modifyPred $ addPredicateViaConjunction (Conj $ predicateStack cs)
