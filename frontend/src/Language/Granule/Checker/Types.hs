@@ -12,6 +12,7 @@ module Language.Granule.Checker.Types where
 import Control.Monad.State.Strict
 import Data.List (sortBy, sort)
 
+import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Effects
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
@@ -80,7 +81,7 @@ relGrades s c c' rel = do
                     _       -> []
           else
             []
-  
+
   substFinal <- combineManySubstitutions s [subst, substExtra]
   return substFinal
 
@@ -170,7 +171,7 @@ equalTypesRelatedCoeffectsInner s rel fTy1@(FunTy _ grade t1 t2) fTy2@(FunTy _ g
   debugM "equalTypesRelatedCoeffectsInner (funTy left)" ""
   -- contravariant position (always approximate)
   (eq1, u1) <- equalTypesRelatedCoeffects s ApproximatedBy t1' t1 (flipIndicator sp) mode
-  
+
    -- covariant position (depends: is not always over approximated)
   t2 <- substitute u1 t2
   t2' <- substitute u1 t2'
@@ -178,13 +179,12 @@ equalTypesRelatedCoeffectsInner s rel fTy1@(FunTy _ grade t1 t2) fTy2@(FunTy _ g
   (eq2, u2) <- equalTypesRelatedCoeffects s rel t2 t2' sp mode
 
   -- grade relation if in GradedBase
-  subst <- 
+  subst <-
     if (usingExtension GradedBase) then
       case (grade, grade') of
-        (Just r, Just r')  -> relGrades s r r' rel
-        (Nothing, Just r') -> relGrades s (TyGrade Nothing 1) r' rel
-        (Just r, Nothing)  -> relGrades s r (TyGrade Nothing 1) rel
         (Nothing, Nothing) -> return []
+        _                  -> relGrades s (getGradeFromArrow grade) (getGradeFromArrow grade') rel
+
       else return []
 
   unifiers <- combineManySubstitutions s [u1, u2, subst]
@@ -222,7 +222,7 @@ equalTypesRelatedCoeffectsInner s rel x@(Box c t) y@(Box c' t') k sp Types = do
 
   -- Related the grades
   subst <- relGrades s c c' rel
-  
+
   -- Equailty on the inner types
   (eq, subst') <- equalTypesRelatedCoeffects s rel t t' sp Types
 
