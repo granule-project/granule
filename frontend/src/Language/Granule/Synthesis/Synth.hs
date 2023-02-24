@@ -347,7 +347,7 @@ synthesiseGradedBase :: (?globals :: Globals)
   -> TypeScheme           -- type from which to synthesise
   -> CheckerState
   -> IO ([Expr () ()], Maybe Measurement)
-synthesiseGradedBase hints index unrestricted restricted currentDef ctxt (Forall _ _ _ goalTy) cs = do
+synthesiseGradedBase hints index unrestricted restricted currentDef ctxt (Forall _ _ constraints goalTy) cs = do
 
   -- let defaultTimeout = 100000
 
@@ -385,7 +385,17 @@ synthesiseGradedBase hints index unrestricted restricted currentDef ctxt (Forall
   -- unrestricted definitions given as hints
               map (\(v, tySch) -> (v, SDef tySch Nothing)) unrestricted
 
-  result <- liftIO $ synLoop 0 sParams index gamma synthState cs goalTy
+  -- Add constraints from type scheme and from checker so far as implication
+  (_, cs') <- runChecker cs $ do
+    preds <- mapM (compileTypeConstraintToConstraint ns) constraints
+    modify (\s ->
+       case predicateStack s of
+        -- Take implication context off the stack from the incoming checker if there is one
+        (_:implContext:_) ->
+           s { predicateContext = ImplConsequent [] (Conj $ implContext : lefts preds) Top }
+        _ -> s { predicateContext = ImplConsequent [] (Conj $ lefts preds) Top })
+
+  result <- liftIO $ synLoop 0 sParams index gamma synthState cs' goalTy
 
   case result of
       (synthResult, aggregate) -> do
