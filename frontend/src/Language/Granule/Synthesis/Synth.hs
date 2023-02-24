@@ -1133,13 +1133,8 @@ gJoin :: Type -> Type -> Type
 gJoin = TyInfix TyOpJoin
 
 gJoin' :: Maybe Type -> Maybe Type -> Maybe Type
-gJoin' Nothing Nothing = Nothing
-gJoin' (Just t) Nothing = Just t
-gJoin' Nothing (Just t) = Just t
-gJoin' (Just t) (Just t') = Just (TyInfix TyOpJoin t t')
-
-
-
+gJoin' t t' = Just $
+  TyInfix TyOpJoin (getGradeFromArrow t) (getGradeFromArrow t')
 
 exprFold :: Span -> Expr () () -> Expr () () -> Expr () ()
 exprFold s newExpr (App s' a rf e1 e2) = App s' a rf (exprFold s newExpr e1) (exprFold s newExpr e2)
