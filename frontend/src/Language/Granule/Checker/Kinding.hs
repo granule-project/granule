@@ -520,6 +520,11 @@ closedOperatorAtKind s TyOpExpon t = do
   _ <- checkKind s t keffect
   return $ Just []
 
+-- => is closed
+closedOperatorAtKind s TyOpImpl t | t == kpredicate = do
+  return $ Just []
+
+
 -- TODO: ghost variables, do we need to worry about substitution?
 closedOperatorAtKind s TyOpConverge t = do
   _ <- checkKind s t kcoeffect

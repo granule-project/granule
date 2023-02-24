@@ -19,6 +19,7 @@ import Data.List.NonEmpty (NonEmpty(..))
 
 import Language.Granule.Context
 
+import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Coeffects(getGradeFromArrow)
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
@@ -32,7 +33,7 @@ import Language.Granule.Synthesis.Monad
 import Language.Granule.Synthesis.Contexts
 import Language.Granule.Synthesis.Common
 
-import Data.Either (rights)
+import Data.Either (lefts, rights)
 import Control.Monad.State.Strict
 
 -- import qualified Control.Monad.State.Strict as State (get)
@@ -894,7 +895,7 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
         let omega = left ++ right
         synthState <- getSynthState
 
-        isPoly <- conv $ polyShaped ty 
+        isPoly <- conv $ polyShaped ty
         (kind, _, _) <- conv $ synthKind ns grade_r
         modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (TyGrade (Just kind) 1) grade_r kind)
 

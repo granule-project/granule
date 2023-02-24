@@ -178,6 +178,7 @@ instance Pretty TypeOperator where
    TyOpJoin            -> "∨"
    TyOpInterval        -> ".."
    TyOpConverge        -> "#"
+   TyOpImpl            -> "=>"
 
 instance Pretty v => Pretty (AST v a) where
   pretty (AST dataDecls defs imprts hidden name) =
@@ -323,7 +324,7 @@ ticks x = "`" <> x <> "`"
 
 prettyComp :: (?globals :: Globals) => (Id, Maybe Type) -> String
 prettyComp (var, Just ty) = pretty var <> " % " <> pretty ty
-prettyComp (var, Nothing) = pretty var 
+prettyComp (var, Nothing) = pretty var
 
 instance {-# OVERLAPPABLE #-} Show a => Pretty a where
   pretty = show

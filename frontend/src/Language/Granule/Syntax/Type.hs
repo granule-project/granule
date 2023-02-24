@@ -88,6 +88,7 @@ data TypeOperator
   | TyOpJoin
   | TyOpInterval
   | TyOpConverge
+  | TyOpImpl
   deriving (Eq, Ord, Show, Data)
 
 -- ## Type schemes

@@ -170,7 +170,7 @@ Import :: { Import }
 
 Def :: { Def () () }
   : Sig NL Bindings
-      {%  let name = fst3 $1 in 
+      {%  let name = fst3 $1 in
           case $3 of
             (nameB, _) | not (nameB == name) ->
               error $ "Name for equation `" <> nameB <> "` does not match the signature head `" <> name <> "`"
@@ -180,7 +180,7 @@ Def :: { Def () () }
               return $ Def span (mkId name) False Nothing bindings (snd3 $1)
       }
   | Sig NL Spec NL Bindings
-      {%  let name = fst3 $1 in 
+      {%  let name = fst3 $1 in
           let spec = $3 in
           case $5 of
             (nameB, _) | not (nameB == name) ->
@@ -404,6 +404,15 @@ TyJuxt :: { Type }
   | TyAtom '^' TyAtom         { TyInfix TyOpExpon $1 $3 }
   | TyAtom "/\\" TyAtom       { TyInfix TyOpMeet $1 $3 }
   | TyAtom "\\/" TyAtom       { TyInfix TyOpJoin $1 $3 }
+  | TyAtom '<=' TyAtom        { TyInfix TyOpLesserEq $1 $3 }
+  | TyAtom '.' '<=' TyAtom    { TyInfix TyOpLesserEqNat $1 $4 }
+  | TyAtom '>=' TyAtom        { TyInfix TyOpGreaterEq $1 $3 }
+  | TyAtom '.' '>=' TyAtom    { TyInfix TyOpGreaterEqNat $1 $4 }
+  | TyAtom '==' TyAtom        { TyInfix TyOpEq $1 $3 }
+  | TyAtom '/=' TyAtom        { TyInfix TyOpNotEq $1 $3 }
+  | TyAtom '=>' TyAtom        { TyInfix TyOpImpl $1 $3 }
+
+
 
 TyCases :: { [(Type, Type)] }
  : TyCase TyCasesNext             { $1 : $2 }
@@ -425,6 +434,8 @@ Constraint :: { Type }
   | TyAtom '.' '>=' TyAtom    { TyInfix TyOpGreaterEqNat $1 $4 }
   | TyAtom '==' TyAtom        { TyInfix TyOpEq $1 $3 }
   | TyAtom '/=' TyAtom        { TyInfix TyOpNotEq $1 $3 }
+  | TyAtom '=>' TyAtom        { TyInfix TyOpImpl $1 $3 }
+
 
 TyAtom :: { Type }
   : CONSTR                    { case constrString $1 of
