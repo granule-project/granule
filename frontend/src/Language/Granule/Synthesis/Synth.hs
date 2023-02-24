@@ -748,7 +748,9 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
                             let appExpr = App ns () False (Val ns () False (Var () x1)) t2
                             let assumption' = if funDef
                                 then (x1, SDef tySch (Just outputGrade))
-                                else (x1, SVar (Discharged (FunTy bName (Just grade_q) tyA tyB) outputGrade) sInfo)
+                                -- TODO: We should be able to return "Just grade_q" instead of "gradeM" here but this fails later on 
+                                -- (possibly related to the caseRule)
+                                else (x1, SVar (Discharged (FunTy bName gradeM tyA tyB) outputGrade) sInfo)
 
                             return (Language.Granule.Syntax.Expr.subst appExpr x2 t1, assumption':delta3, substOut, struct1 || struct2, if isScrutinee then Nothing else scrutinee)
                           _ -> none
