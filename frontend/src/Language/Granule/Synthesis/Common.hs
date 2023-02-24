@@ -225,8 +225,6 @@ isDecreasing id1 (x:xs) = isDecreasing id1 xs
 
 -- # Common synthesis helpers
 
--- TODO: rewrite a lot of checkConstructor and auxilliary functions
-
 -- Takes a data constructor and returns whether the constructor is a canditate for synthesis based on
 -- the type of the assumption. If so, return a fresh polymorphic instance of that constructor.
 checkConstructor :: (?globals::Globals)
@@ -272,7 +270,9 @@ checkConstructor impossibility con@(Forall  _ binders constraints conTy) assumpt
   collectTyAndArgs t = (t, [])
 
 -- Return constructors relevant to the type constructor ID in two lists: recursive and non-recursive
-relevantConstructors :: Id -> Ctxt (Ctxt (TypeScheme, Substitution), Bool) -> (Ctxt ((TypeScheme, Substitution)), Ctxt ((TypeScheme, Substitution)))
+relevantConstructors :: Id
+ -> Ctxt (Ctxt (TypeScheme, Substitution), Bool)
+ -> (Ctxt ((TypeScheme, Substitution)), Ctxt ((TypeScheme, Substitution)))
 relevantConstructors id [] = ([], [])
 relevantConstructors id ((typeId, (dCons, _)):tys) =
   if id == typeId then
