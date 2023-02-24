@@ -10,5 +10,5 @@ spec
     and False False = False;
 and x y =
     (case x of
-      False -> x;
-      True -> y)
+      True -> y;
+      False -> x)
