@@ -971,7 +971,8 @@ casePatternMatchBranchSynth
       let (vars, _) = unzip varsAndGrades
       let constrPat = PConstr ns () False cName (map (PVar ns () False) $ reverse vars)
 
-      (t, delta, subst, _, _) <- gSynthInner sParams { matchCurrent = (matchCurrent sParams) + 1} focusPhase gamma' (Focused omega') goal
+      (t, delta, subst, _, _) <-
+         gSynthInner sParams { matchCurrent = (matchCurrent sParams) + 1} focusPhase gamma' (Focused omega') goal
 
       (delta', grade_si) <- foldM (\(delta', mGrade) dVar@(dName, dAssumption) ->
         case dAssumption of
@@ -1010,25 +1011,11 @@ casePatternMatchBranchSynth
       --                     return delta''
       --                   Nothing -> do
       --                     none
-      let deltaToConc' = delta'
 
-      case (lookupAndCutout x deltaToConc') of
+      case (lookupAndCutout x delta') of
         (Just (_, SVar (Discharged _ grade_r') sInfo)) -> do
-
           modifyPred $ moveToNewConjunct
-
-          -- -- This is VERY ugly but it works... There is a much better way of writing this but it can wait
-          -- let (grade_r_out', grade_s_out') = case (mGrade_s_out, grade_si) of
-          --         (Just g, Just s, Just si) -> (Just $ g `gJoin` grade_r', Just $ s `gJoin` si)
-          --         (Just g, Nothing, Just si) -> (Just $ g `gJoin` grade_r', Just $ si)
-          --         (Just g, Just s, Nothing) -> (Just $ g `gJoin` grade_r', Just $ s)
-          --         (Nothing, Just s, Just si) -> (Just grade_r', Just $ s `gJoin` si)
-          --         (Nothing, Nothing, Just si) -> (Just grade_r', Just $  si)
-          --         (Nothing, Just s, Nothing) -> (Just grade_r', Just $ s )
-          --         _ -> (Just grade_r', Nothing)
-
-          --return ((constrPat, t):exprs, returnDelta, returnSubst, grade_r_out', grade_s_out', index+1)
-          return $ Just ((constrPat, t), (deltaToConc', (subst, (grade_r', grade_si))))
+          return $ Just ((constrPat, t), (delta', (subst, (grade_r', grade_si))))
 
         _ -> do
           modifyPred $ moveToNewConjunct

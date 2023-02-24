@@ -3,9 +3,9 @@ language GradedBase
 data Bool = True | False
 
 and : Bool %0..∞ -> Bool %0..∞ -> Bool
-spec 
+spec
     and True True = True;
     and False True = False;
     and True False = False;
     and False False = False;
-and = ? 
+and = ?
