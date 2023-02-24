@@ -1,0 +1,14 @@
+language GradedBase
+
+data Bool = True | False
+
+or : Bool %0..∞ -> Bool %0..∞ -> Bool
+spec 
+    or True True = True;
+    or False True = True;
+    or True False = True;
+    or False False = False;
+or x y = 
+    (case x of
+      False -> y;
+      True -> x) 
