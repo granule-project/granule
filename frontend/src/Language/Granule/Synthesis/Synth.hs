@@ -24,6 +24,7 @@ import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Patterns(polyShaped)
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Kinding
+import Language.Granule.Checker.Patterns
 import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Types
@@ -883,7 +884,8 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
         cs <- conv $ get
 
         -- If the type is polyshaped then add constraint that we incur a usage
-        conv resetAddedConstraintsFlag
+        -- TODO: check whether we need to reset this flag
+        -- conv resetAddedConstraintsFlag
         (kind, _, _) <- conv $ synthKind ns grade_r
         whenM (conv $ polyShaped ty) $ do
           modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (TyGrade (Just kind) 1) grade_r kind)
@@ -892,7 +894,7 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
                     then solve
                     else return True
 
-        if solved then do 
+        if solved then do
 
           let (recCons, nonRecCons) = relevantConstructors datatypeName (constructors synthState)
 
@@ -959,15 +961,15 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
                               return (delta', mGrade)
                           ) ([], Nothing) delta
 
-                        -- Needs reviewing 
-                        -- A grade which conveys that pattern matching on a nullary constructor incurs a use 
-                        -- let nullConOneGrade =  [(x, SVar (Discharged ty $ TyGrade (Just kind) 1) sInfo)]  
+                        -- Needs reviewing
+                        -- A grade which conveys that pattern matching on a nullary constructor incurs a use
+                        -- let nullConOneGrade =  [(x, SVar (Discharged ty $ TyGrade (Just kind) 1) sInfo)]
                         -- deltaToConc' <- if not (null args)
-                        --                 then return delta' 
-                        --                 else case ctxtAdd nullConOneGrade delta' of 
-                        --                   Just delta'' -> do 
+                        --                 then return delta'
+                        --                 else case ctxtAdd nullConOneGrade delta' of
+                        --                   Just delta'' -> do
                         --                     return delta''
-                        --                   Nothing -> do 
+                        --                   Nothing -> do
                         --                     none
                         let deltaToConc' = delta'
 
