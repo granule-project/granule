@@ -959,15 +959,17 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
                               return (delta', mGrade)
                           ) ([], Nothing) delta
 
+                        -- Needs reviewing 
                         -- A grade which conveys that pattern matching on a nullary constructor incurs a use 
-                        let nullConOneGrade =  [(x, SVar (Discharged ty $ TyGrade (Just kind) 1) sInfo)]  
-                        deltaToConc' <- if not (null args)
-                                        then return delta' 
-                                        else case ctxtAdd nullConOneGrade delta' of 
-                                          Just delta'' -> do 
-                                            return delta''
-                                          Nothing -> do 
-                                            none
+                        -- let nullConOneGrade =  [(x, SVar (Discharged ty $ TyGrade (Just kind) 1) sInfo)]  
+                        -- deltaToConc' <- if not (null args)
+                        --                 then return delta' 
+                        --                 else case ctxtAdd nullConOneGrade delta' of 
+                        --                   Just delta'' -> do 
+                        --                     return delta''
+                        --                   Nothing -> do 
+                        --                     none
+                        let deltaToConc' = delta'
 
                         case (lookupAndCutout x deltaToConc') of
                           (Just (_, SVar (Discharged _ grade_r') sInfo)) -> do
