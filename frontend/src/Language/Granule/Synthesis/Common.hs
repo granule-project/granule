@@ -195,25 +195,27 @@ bindToContext var gamma omega _         = (var:gamma, omega)
 -- but  `isRecursiveCons "List" ("Nil", ..type-of-cons..) = False
 isRecursiveCon :: Id -> (Id, (TypeScheme, Substitution)) -> Bool
 isRecursiveCon tyConId (_, (Forall _ _ _ constructorTy, subst)) =
-  any positivePosition (parameterTypes constructorTy)
-  where
-    -- Determine if type constructor `tyConId` appears
-    -- in a positive (recursive) position in a type
-    positivePosition (TyCon id)      = (tyConId == id)
-    positivePosition (TyApp t1 t2)   = positivePosition t1 || positivePosition t2
-    positivePosition (FunTy _ _ _ t) = positivePosition t
-    positivePosition (Box _ t)       = positivePosition t
-    positivePosition (Diamond _ t)   = positivePosition t
-    positivePosition (Star _    t)   = positivePosition t
-    positivePosition (TyVar _)       = False
-    positivePosition (TyInt _)       = False
-    positivePosition (TyRational _)  = False
-    positivePosition (TyGrade _ _)   = False
-    positivePosition (TyInfix _ t1 t2) = positivePosition t1 || positivePosition t2
-    positivePosition (TySet _ t)       = any positivePosition t
-    positivePosition (TyCase t ts)     = positivePosition t || any (positivePosition . snd) ts
-    positivePosition (TySig t _)       = positivePosition t
-    positivePosition (Type  _)         = False
+  any (positivePosition tyConId) (parameterTypes constructorTy)
+
+
+-- Determine if type constructor `tyConId` appears
+-- in a positive (recursive) position in a type
+positivePosition :: Id -> Type -> Bool
+positivePosition tyConId (TyCon id)      = (tyConId == id)
+positivePosition id (TyApp t1 t2)   = positivePosition id t1 || positivePosition id t2
+positivePosition id (FunTy _ _ _ t) = positivePosition id t
+positivePosition id (Box _ t)       = positivePosition id t
+positivePosition id (Diamond _ t)   = positivePosition id t
+positivePosition id (Star _    t)   = positivePosition id t
+positivePosition id (TyVar _)       = False
+positivePosition id (TyInt _)       = False
+positivePosition id (TyRational _)  = False
+positivePosition id (TyGrade _ _)   = False
+positivePosition id (TyInfix _ t1 t2) = positivePosition id t1 || positivePosition id t2
+positivePosition id (TySet _ t)       = any (positivePosition id) t
+positivePosition id (TyCase t ts)     = positivePosition id t || any (positivePosition id . snd) ts
+positivePosition id (TySig t _)       = positivePosition id t
+positivePosition id (Type  _)         = False
 
 isDecreasing :: Id -> [Type] -> Bool
 isDecreasing id1 [] = False

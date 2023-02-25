@@ -959,12 +959,12 @@ casePatternMatchBranchSynth
 
           let assumption@(_, SVar _ sInfo) =
                 -- Check if the constructor here is recursive
-                if isRecursiveCon datatypeName (y, (Forall s bs constraints arg', []))
-                      then (y, SVar (Discharged arg' grade_rq) (Just $ Decreasing 1))
-                      else (y, SVar (Discharged arg' grade_rq) (Just NonDecreasing))
+                if positivePosition datatypeName arg' 
+                then (y, SVar (Discharged arg' grade_rq) (Just $ Decreasing 1))
+                else (y, SVar (Discharged arg' grade_rq) (Just $ NonDecreasing))
 
           let (gamma', omega') =
-                bindToContext assumption gamma omega (isLAsync arg' && not (isDecr sInfo && matchCurrent sParams <= matchMax sParams))
+                bindToContext assumption gamma omega (isLAsync arg' && not (isDecr sInfo || matchCurrent sParams <= matchMax sParams))
           return (gamma', omega', (y, grade_rq):vars)
         )
 
