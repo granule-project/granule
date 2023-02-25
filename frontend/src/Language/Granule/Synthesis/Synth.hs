@@ -524,14 +524,14 @@ gSynthInner sParams focusPhase gamma (Focused omega) goal | guessCurrent sParams
 
   case (focusPhase, omega) of
     (RightAsync, _) -> do
-      varRule [] (Focused []) (Focused (gamma ++ omega)) goal
+      varRule [] (Focused []) (Focused (omega ++ gamma)) goal
       `try`
       absRule sParams RightAsync gamma (Focused omega) goal
       `try`
       transitionToLeftAsync sParams gamma omega goal
 
     (LeftAsync, _:_) -> do
-      varRule [] (Focused []) (Focused $ gamma ++ omega) goal
+      varRule [] (Focused []) (Focused $ omega ++ gamma) goal
       `try`
       unboxRule sParams LeftAsync gamma (Focused []) (Focused omega) goal
       `try`
@@ -542,19 +542,19 @@ gSynthInner sParams focusPhase gamma (Focused omega) goal | guessCurrent sParams
 
     (RightSync, []) ->
       if isRSync goal then do
-        varRule [] (Focused []) (Focused $ gamma ++ omega) goal
+        varRule [] (Focused []) (Focused $ omega ++ gamma) goal
         `try`
         boxRule sParams RightSync gamma goal
         `try`
         constrRule sParams RightSync gamma goal
       else do
-        gSynthInner sParams RightAsync gamma (Focused []) goal
+        gSynthInner (incrG sParams) RightAsync gamma (Focused []) goal
 
     (LeftSync, [var@(x, SVar (Discharged ty g) _)]) -> do
       if not (isLSync ty) && not (isAtomic ty) then do
         gSynthInner (incrG sParams) LeftAsync gamma (Focused [var]) goal
       else do
-        varRule [] (Focused []) (Focused $ gamma ++ omega) goal
+        varRule [] (Focused []) (Focused $ omega ++ gamma) goal
         `try`
         appRule sParams LeftSync gamma (Focused []) (Focused omega) goal
 
@@ -562,7 +562,7 @@ gSynthInner sParams focusPhase gamma (Focused omega) goal | guessCurrent sParams
       if not (isLSync ty) && not (isAtomic ty) then do
         gSynthInner (incrG sParams) LeftAsync gamma (Focused [var]) goal
       else do
-        varRule [] (Focused []) (Focused $ gamma ++ omega) goal
+        varRule [] (Focused []) (Focused $ omega ++ gamma) goal
         `try`
         appRule sParams LeftSync gamma (Focused []) (Focused omega) goal
 
@@ -585,9 +585,9 @@ gSynthInner sParams focusPhase gamma (Focused omega) goal | guessCurrent sParams
       gSynthInner (incrG sParams) LeftSync (left ++ right) (Focused [var]) goal
 
     transitionToLeftAsync _ _ _ (FunTy{}) = none
-    transitionToLeftAsync sParams gamma omega goal = gSynthInner sParams LeftAsync gamma (Focused omega) goal
+    transitionToLeftAsync sParams gamma omega goal = gSynthInner (incrG sParams) LeftAsync gamma (Focused omega) goal
 
-    focRight sParams gamma = gSynthInner sParams RightSync gamma (Focused [])
+    focRight sParams gamma = gSynthInner (incrG sParams) RightSync gamma (Focused [])
 
 gSynthInner _ _ _ _ _ = none
 
@@ -604,10 +604,8 @@ incrG sParams = sParams { guessCurrent = (guessCurrent sParams) + 1}
 varRule :: (?globals :: Globals) => Ctxt SAssumption -> FocusedCtxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
 varRule _ _ (Focused []) _ = none
 -- varRule gamma (Focused left) (Focused (var@(name, SVar (Discharged t grade) sInfo) : right)) goal = do
-varRule gamma (Focused left) (Focused (var@(name, assumption) : right)) goal = do
-  varRule gamma (Focused (var:left)) (Focused right) goal `try` do
+varRule gamma (Focused left) (Focused (var@(name, assumption) : right)) goal = do 
     debugM "varRule, goal is" (pretty goal)
-
     assumptionTy <- getSAssumptionType assumption
     case assumptionTy of
       (t, funDef, mGrade, mSInfo, tySch) -> do
@@ -647,6 +645,7 @@ varRule gamma (Focused left) (Focused (var@(name, assumption) : right)) goal = d
                 else none
           else none
         else none
+    `try` varRule gamma (Focused (var:left)) (Focused right) goal 
 -- varRule _ _ _ _ = none
 
 
@@ -728,9 +727,10 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
                         SDef tySch Nothing      -> undefined
                   let isScrutinee = case scrutinee of Just scr -> scr == x2 ; _ -> False
                   (t2, delta2, subst2, struct2, _) <- do
+
                     if isScrutinee
                     then gSynthInner (incrG $ sParams { scrutCurrent = (scrutCurrent sParams) + 1 }) RightSync (gamma ++ omega ++ [var]) (Focused []) tyA
-                    else gSynthInner (incrG sParams)  RightSync (gamma ++ omega ++ [var]) (Focused []) tyA
+                    else gSynthInner (incrG sParams)  RightSync (omega ++ gamma ++ [var]) (Focused []) tyA
 
                   case lookupAndCutout x1 delta2 of
                     Just (delta2', varUsed') -> do
@@ -996,7 +996,7 @@ casePatternMatchBranchSynth
               _ -> do
                 return (dVar:delta', mGrade)
           SDef{} -> do
-            return (delta', mGrade)
+            return (dVar:delta', mGrade)
         ) ([], Nothing) delta
 
       -- Needs reviewing
@@ -1011,9 +1011,9 @@ casePatternMatchBranchSynth
       --                     none
 
       case (lookupAndCutout x delta') of
-        (Just (_, SVar (Discharged _ grade_r') sInfo)) -> do
+        (Just (delta'', SVar (Discharged _ grade_r') sInfo)) -> do
           modifyPred $ moveToNewConjunct
-          return $ Just ((constrPat, t), (delta', (subst, (grade_r', grade_si))))
+          return $ Just ((constrPat, t), (delta'', (subst, (grade_r', grade_si))))
 
         _ -> do
           modifyPred $ moveToNewConjunct
