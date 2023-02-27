@@ -1012,15 +1012,14 @@ casePatternMatchBranchSynth
         )
 
       -- Concludes the implication
+      -- TODO: maybe run solve here per branch
       modifyPred $ moveToNewConjunct
       case (lookupAndCutout x delta') of
         (Just (delta'', SVar (Discharged _ grade_r') sInfo)) -> do
           if null args then do
+            -- TODO: check isPoly
             (kind, _, _) <- conv $ synthKind ns grade_r
-            -- TODO: not sure I understand why we have this
-            let grade_s = TyGrade (Just kind) 1
-            let grade_si' = getGradeFromArrow grade_si `gJoin` grade_s
-            return $ Just ((constrPat, t), (delta'', (subst, (grade_r', Just grade_si'))))
+            return $ Just ((constrPat, t), (delta'', (subst, (grade_r', Just (TyGrade (Just kind) 1)))))
           else do
             return $ Just ((constrPat, t), (delta'', (subst, (grade_r', grade_si))))
 
