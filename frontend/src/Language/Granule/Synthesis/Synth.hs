@@ -604,7 +604,7 @@ incrG sParams = sParams { guessCurrent = (guessCurrent sParams) + 1}
 varRule :: (?globals :: Globals) => Ctxt SAssumption -> FocusedCtxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
 varRule _ _ (Focused []) _ = none
 -- varRule gamma (Focused left) (Focused (var@(name, SVar (Discharged t grade) sInfo) : right)) goal = do
-varRule gamma (Focused left) (Focused (var@(name, assumption) : right)) goal = do 
+varRule gamma (Focused left) (Focused (var@(name, assumption) : right)) goal = do
     debugM "varRule, goal is" (pretty goal)
     assumptionTy <- getSAssumptionType assumption
     case assumptionTy of
@@ -645,7 +645,7 @@ varRule gamma (Focused left) (Focused (var@(name, assumption) : right)) goal = d
                 else none
           else none
         else none
-    `try` varRule gamma (Focused (var:left)) (Focused right) goal 
+    `try` varRule gamma (Focused (var:left)) (Focused right) goal
 -- varRule _ _ _ _ = none
 
 
@@ -761,7 +761,7 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
       (_, False, _) -> none
       (_, _, False) -> noneWithMaxReached
       _ -> none
-  `try` appRule sParams focusPhase gamma (Focused (var : left)) (Focused right) goal 
+  `try` appRule sParams focusPhase gamma (Focused (var : left)) (Focused right) goal
 
 
 
@@ -946,36 +946,44 @@ casePatternMatchBranchSynth
     (True, _, args, subst, _) -> do
       -- args contains the types and maybe grade for each argument of this constructor
 
-      -- for every argument position of the constructor...
+      -- for every argument position of the constructor we need to create a variable
+      -- to bind the result:
       (gamma', omega', varsAndGrades) <-
-        forallM args (gamma ++ [var], omega, []) (\(gamma, omega, vars) (arg, mGrade_q) -> do
-          --
-          y <- freshIdentifier
+        forallM args (gamma ++ [var], omega, []) (\(gamma, omega, vars) (argTy, mGrade_q) -> do
+          -- Three piece of information calculate:
+
+          -- (i) variable name
+          var <- freshIdentifier
+          -- (ii) grade
           let grade_rq = case mGrade_q of
                             Just grade_q -> grade_r `gTimes` grade_q
                             -- Contains a small optimisation of avoiding a times * 1
                             Nothing      -> grade_r
+          -- (iii) type
+          argTy' <- conv $ substitute subst argTy
 
-          arg' <- conv $ substitute subst arg
-
+          -- Create an assumption for the variable and work out which synthesis environment
+          -- to insert it into
           let assumption@(_, SVar _ sInfo) =
                 -- Check if the constructor here is recursive
-                if positivePosition datatypeName arg' 
-                then (y, SVar (Discharged arg' grade_rq) (Just $ Decreasing 1))
-                else (y, SVar (Discharged arg' grade_rq) (Just $ NonDecreasing))
+                if positivePosition datatypeName argTy'
+                then (var, SVar (Discharged argTy' grade_rq) (Just $ Decreasing 1))
+                else (var, SVar (Discharged argTy' grade_rq) (Just $ NonDecreasing))
 
+          -- TODO: explain the extra condition here.
           let (gamma', omega') =
-                bindToContext assumption gamma omega (isLAsync arg' && not (isDecr sInfo || matchCurrent sParams <= matchMax sParams))
-          return (gamma', omega', (y, grade_rq):vars)
+                bindToContext assumption gamma omega (isLAsync argTy' && not (isDecr sInfo || matchCurrent sParams <= matchMax sParams))
+          return (gamma', omega', (var, grade_rq):vars)
         )
 
       let (vars, _) = unzip varsAndGrades
       let constrPat = PConstr ns () False cName (map (PVar ns () False) $ reverse vars)
 
+      -- Synthesise the body of the branch which produces output context `delta`
       (t, delta, subst, _, _) <-
          gSynthInner sParams { matchCurrent = (matchCurrent sParams) + 1} focusPhase gamma' (Focused omega') goal
 
-      (delta', grade_si) <- foldM (\(delta', mGrade) dVar@(dName, dAssumption) ->
+      (delta', grade_si) <- forallM delta ([], Nothing) (\(delta', mGrade) dVar@(dName, dAssumption) ->
         case dAssumption of
           SVar (Discharged ty grade_s) dSInfo ->
             case lookup dName varsAndGrades of
@@ -993,18 +1001,20 @@ casePatternMatchBranchSynth
 
                 -- s' \/ ...
                 let grade_si = getGradeFromArrow mGrade `gJoin` grade_s'
+                -- TODO: why not dVar:delta' here?
                 return (delta', Just grade_si)
               _ -> do
                 return (dVar:delta', mGrade)
           SDef{} -> do
             return (dVar:delta', mGrade)
-        ) ([], Nothing) delta
+        )
 
       case (lookupAndCutout x delta') of
         (Just (delta'', SVar (Discharged _ grade_r') sInfo)) -> do
           modifyPred $ moveToNewConjunct
-          if null args then do 
-            (kind, _, _) <- conv $ synthKind ns grade_r 
+          if null args then do
+            (kind, _, _) <- conv $ synthKind ns grade_r
+            -- TODO: not sure I understand why we have this
             let grade_s = TyGrade (Just kind) 1
             let grade_si' = getGradeFromArrow grade_si `gJoin` grade_s
             return $ Just ((constrPat, t), (delta'', (subst, (grade_r', Just grade_si'))))
@@ -1088,7 +1098,7 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
         else none
       (False, _) -> noneWithMaxReached
       _ -> none
-  `try` caseRule sParams focusPhase gamma (Focused (var : left)) (Focused right) goal 
+  `try` caseRule sParams focusPhase gamma (Focused (var : left)) (Focused right) goal
 
 caseRule _ _ _ _ _ _ = none
 
