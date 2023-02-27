@@ -1042,15 +1042,14 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
         cs <- conv $ get
 
         -- If the type is polyshaped then add constraint that we incur a usage
-        -- TODO: check whether we need to reset this flag
-        -- conv resetAddedConstraintsFlag
-        whenM (conv $ polyShaped ty) $ do
-          (kind, _, _) <- conv $ synthKind ns grade_r
-          modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (TyGrade (Just kind) 1) grade_r kind)
-
-        solved <- if addedConstraints cs
-                    then solve
-                    else return True
+        -- TODO: MOVE! This is the wrong place, needs to be on the scrutinee grade at the end.
+        solved <- 
+          ifM (conv $ polyShaped ty)
+            (do
+              (kind, _, _) <- conv $ synthKind ns grade_r
+              modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (TyGrade (Just kind) 1) grade_r kind)
+              solve)
+            (return True)
 
         if solved then do
 
