@@ -538,9 +538,10 @@ constrIntroHelper gamma resourceScheme False depth focusPhase grade goal@(Goal g
     tryConstructors _ _ _ [] = none
     tryConstructors adtName state right ((conName, (conTySch@(Forall s conBinders conConstraints conTy), conSubst)):left) =
       tryConstructors adtName state ((conName, (conTySch, conSubst)):right) left `try` do
-        result <- checkConstructor False conTySch tyA conSubst
+        result <- checkConstructor conTySch tyA conSubst
         case result of
-          (True, specTy, _, specSubst, substFromFreshening) -> do
+          (True, specTy, _, specSubst, substFromFreshening, predicate) -> do
+            modifyPred (addPredicateViaConjunction predicate)
             specTy' <- conv $ substitute substFromFreshening specTy
             subst' <- conv $ combineSubstitutions s conSubst specSubst
             specTy'' <- conv $ substitute subst' specTy'
@@ -644,12 +645,12 @@ constrElimHelper gamma (Focused left) (Focused (var@(x, assumption):right)) mode
                 let pred = newImplication [] (predicateContext cs)
 
                 debugM "compiletoSBV ELIM (check constructor)" $ pretty conId
-                result <- checkConstructor True conTySch tyA' conSubst
+                result <- checkConstructor conTySch tyA' conSubst
 
                 let predSucceeded = moveToConsequent pred
 
                 case (result, predSucceeded) of
-                  ((True, specTy, conTyArgs, conSubst', _), Right pred'@(ImplConsequent ctxt p path)) -> do
+                  ((True, specTy, conTyArgs, conSubst', _, _), Right pred'@(ImplConsequent ctxt p path)) -> do
 
                     -- modifyPred cs pred'
 

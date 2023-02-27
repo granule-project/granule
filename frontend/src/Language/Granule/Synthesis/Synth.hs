@@ -857,9 +857,10 @@ constrRule sParams focusPhase gamma goal = do
     tryDatacons dtName _ [] _ = none
     tryDatacons dtName right (con@(cName, (tySc@(Forall s bs cs cTy), cSubst)):left) goal =
        do
-        result <- checkConstructor False tySc goal cSubst
+        result <- checkConstructor tySc goal cSubst
         case result of
-          (True, specTy, args, subst, substFromFreshening) -> do
+          (True, specTy, args, subst, substFromFreshening, predicate) -> do
+            modifyPred (addPredicateViaConjunction predicate)
             case args of
               -- Nullary constructor
               [] -> do
@@ -935,15 +936,16 @@ casePatternMatchBranchSynth
   -- Debugging
   debugM "case - constructor" (pretty cName)
 
-
-  -- New implication
-  modifyPred (newImplication [])
   -- Check that we can use a constructor here
-  result <- checkConstructor True tySc ty cSubst
-  modifyPred (fromRight Top . moveToConsequent)
+  result <- checkConstructor tySc ty cSubst
 
   case result of
-    (True, _, args, subst, _) -> do
+    (True, _, args, subst, _, predicate) -> do
+      -- New implication
+      modifyPred (newImplication [])
+      modifyPred (addPredicateViaConjunction predicate)
+      modifyPred (fromRight Top . moveToConsequent)
+
       -- args contains the types and maybe grade for each argument of this constructor
 
       -- for every argument position of the constructor we need to create a variable
@@ -1009,9 +1011,10 @@ casePatternMatchBranchSynth
             return (dVar:delta', mGrade)
         )
 
+      -- Concludes the implication
+      modifyPred $ moveToNewConjunct
       case (lookupAndCutout x delta') of
         (Just (delta'', SVar (Discharged _ grade_r') sInfo)) -> do
-          modifyPred $ moveToNewConjunct
           if null args then do
             (kind, _, _) <- conv $ synthKind ns grade_r
             -- TODO: not sure I understand why we have this
@@ -1022,10 +1025,8 @@ casePatternMatchBranchSynth
             return $ Just ((constrPat, t), (delta'', (subst, (grade_r', grade_si))))
 
         _ -> do
-          modifyPred $ moveToNewConjunct
           none
     _ -> do
-      modifyPred $ moveToNewConjunct
       return Nothing
 
 caseRule :: (?globals :: Globals) => SearchParameters -> FocusPhase -> Ctxt SAssumption -> FocusedCtxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)

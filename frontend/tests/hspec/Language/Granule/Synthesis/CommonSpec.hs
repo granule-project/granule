@@ -10,6 +10,7 @@ import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Checker.Checker(checkDataCons,checkTyCon)
+import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.SubstitutionContexts
 import qualified Language.Granule.Checker.Primitives as Primitives
 import Language.Granule.Checker.Monad(initState,runAll)
@@ -64,7 +65,7 @@ checkConstructorTests =
     it "Monomorphic test: unit" $ do
       -- A unit constructor matches a unit goal
       status <- testCheckConstructor
-                   $ checkConstructor False (Forall ns [] [] unitCon) unitCon []
+                   $ checkConstructor (Forall ns [] [] unitCon) unitCon []
       status `shouldBe` [Just (True, unitCon)]
 
     -- A simple constructor with a polymorphic type
@@ -73,10 +74,10 @@ checkConstructorTests =
     let simple = Forall ns [(mkId "a", Type 0)] [] (TyApp simpleCon (TyVar $ mkId "a"))
 
     it "Polymorphic test: `Simple a` vs () - fail" $ do
-      status <- testCheckConstructor $ checkConstructor False simple unitCon []
+      status <- testCheckConstructor $ checkConstructor simple unitCon []
       status `shouldBe` []
     it "Polymorphic test: `Simple a` vs Simple () - success" $ do
-      status <- testCheckConstructor $ checkConstructor False simple (TyApp simpleCon unitCon) []
+      status <- testCheckConstructor $ checkConstructor simple (TyApp simpleCon unitCon) []
       status `shouldBe` [Just (True, TyApp simpleCon unitCon)]
 
     -- Either constructor
@@ -86,7 +87,7 @@ checkConstructorTests =
                   (FunTy Nothing Nothing (TyVar $ mkId "a") (TyApp (TyApp eitherCon (TyVar $ mkId "a")) (TyVar $ mkId "b")))
 
     it "Polymorphic test: `a -> Either a b` vs `Either () ()` - success" $ do
-      status <- testCheckConstructor $ checkConstructor False leftConstr (TyApp (TyApp eitherCon unitCon) unitCon) []
+      status <- testCheckConstructor $ checkConstructor  leftConstr (TyApp (TyApp eitherCon unitCon) unitCon) []
       status `shouldBe` [Just (True, (TyApp (TyApp eitherCon unitCon) unitCon))]
 
 
@@ -97,20 +98,20 @@ checkConstructorTests =
     --       Forall (Span {startPos = (5,12), endPos = (5,29), filename = "simple.gr"}) [((Id "n" "n`0"),TyCon (Id "Nat" "Nat"))] [] (FunTy Nothing Nothing (TyVar (Id "a" "a")) (FunTy Nothing Nothing (TyApp (TyApp (TyCon (Id "Vec" "Vec")) (TyVar (Id "n" "n`0"))) (TyVar (Id "a" "a"))) (TyApp (TyApp (TyCon (Id "Vec" "Vec")) (TyInfix TyOpPlus (TyVar (Id "n" "n`0")) (TyGrade Nothing 1)))
 
     -- it "Polymorphic test: `a -> Vec n a -> Vec n' a` (with n' ~ n + 1) vs `Vec 0 a` - fail" $ do
-    --   status <- testCheckConstructor $ checkConstructor False either (TyApp (TyApp eitherCon unitCon) unitCon) []
+    --   status <- testCheckConstructor $ checkConstructor either (TyApp (TyApp eitherCon unitCon) unitCon) []
     --   status `shouldBe` [Just True]
 
     -- it "Polymorphic test: `a -> Vec n a -> Vec n' a` (with n' ~ n + 1) vs `Vec 1 a` - success" $ do
-    --   status <- testCheckConstructor $ checkConstructor False either (TyApp (TyApp eitherCon unitCon) unitCon) []
+    --   status <- testCheckConstructor $ checkConstructor either (TyApp (TyApp eitherCon unitCon) unitCon) []
     --   status `shouldBe` [Just True]
 
 
 -- Helper for running checkConstructor specifically
-testCheckConstructor :: (?globals :: Globals) => Synthesiser (Bool, Type, [(Type, Maybe Coeffect)], Substitution, Substitution)
+testCheckConstructor :: (?globals :: Globals) => Synthesiser (Bool, Type, [(Type, Maybe Coeffect)], Substitution, Substitution, Pred)
                                               -> IO [Maybe (Bool, Type)]
 testCheckConstructor m = do
   constr <- testSynthesiser m
-  let status = map (fmap (\(status, ty, _, _, _) -> (status, ty))) constr
+  let status = map (fmap (\(status, ty, _, _, _, _) -> (status, ty))) constr
   return status
 
 -- Helper for running the synthesiser
