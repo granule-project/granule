@@ -995,7 +995,7 @@ casePatternMatchBranchSynth
                 conv $ existentialTopLevel grade_id_s' kind
 
                 -- ∃s'_ij . s_ij ⊑ s'_ij · q_ij ⊑ r · q_ij
-                modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (grade_s' `gTimes` grade_rq) (grade_r `gTimes` grade_r) kind)
+                modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (grade_s' `gTimes` grade_rq) (grade_r `gTimes` grade_rq) kind)
                 modifyPred $ addConstraintViaConjunction (ApproximatedBy ns grade_s (grade_s' `gTimes` grade_rq) kind)
                 modifyPred $ (ExistsHere grade_id_s' kind)
 
