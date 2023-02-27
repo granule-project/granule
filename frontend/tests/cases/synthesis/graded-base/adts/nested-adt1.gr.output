@@ -3,4 +3,4 @@ language GradedBase
 data Test c where First c 
 
 f : forall { a : Type } . (Test (Test a)) %1..1 -> a
-f = ?
+f (First (First z)) = z

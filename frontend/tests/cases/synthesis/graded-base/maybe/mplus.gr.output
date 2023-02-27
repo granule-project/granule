@@ -6,6 +6,6 @@ mplus : forall {a : Type, b : Type} . Maybe a % (0..1) -> Maybe b % (0..1) -> Ma
 spec
   mplus (Just 1) (Just 2) = Just (1, 2);
 mplus Nothing Nothing = Nothing;
-mplus Nothing (Just z) = Nothing;
-mplus (Just v) Nothing = Nothing;
-mplus (Just v) (Just w) = Just (v, w)
+mplus (Just z) Nothing = Nothing;
+mplus Nothing (Just v) = Nothing;
+mplus (Just w) (Just v) = Just (w, v)

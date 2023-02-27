@@ -1,4 +1,8 @@
 language GradedBase
 
 quad : forall {a b c d : Type} . ((a , b), (c, d)) %1..2 -> (((a, c), (a, d)), ((b, c), (b, d)))
-quad = ? 
+quad ((u, v), z) = (
+    (case z of
+      (x9, x10) -> ((u, x9), (u, x10))), 
+    (case z of
+      (w, p) -> ((v, w), (v, p))))
