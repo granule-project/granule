@@ -696,7 +696,7 @@ absRule _ _ _ _ _ = none
 appRule :: (?globals :: Globals) => SearchParameters -> FocusPhase -> Ctxt SAssumption -> FocusedCtxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
 appRule _ _ _ _ (Focused []) _ = none
 appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) : right)) goal =
-  appRule sParams focusPhase gamma (Focused (var : left)) (Focused right) goal `try` do
+  do
     debugM "appRule, goal is" (pretty goal)
 
     assumptionTy <- getSAssumptionType assumption
@@ -761,6 +761,7 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
       (_, False, _) -> none
       (_, _, False) -> noneWithMaxReached
       _ -> none
+  `try` appRule sParams focusPhase gamma (Focused (var : left)) (Focused right) goal 
 
 
 
@@ -1025,7 +1026,7 @@ casePatternMatchBranchSynth
 caseRule :: (?globals :: Globals) => SearchParameters -> FocusPhase -> Ctxt SAssumption -> FocusedCtxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
 caseRule _ _ _ _ (Focused []) _ = none
 caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Discharged ty grade_r) sInfo):right)) goal =
-  caseRule sParams focusPhase gamma (Focused (var : left)) (Focused right) goal `try` do
+  do
     debugM "caseRule, goal is" (pretty goal)
 
     case (matchCurrent sParams <= matchMax sParams,leftmostOfApplication ty) of
@@ -1038,8 +1039,8 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
         -- If the type is polyshaped then add constraint that we incur a usage
         -- TODO: check whether we need to reset this flag
         -- conv resetAddedConstraintsFlag
-        (kind, _, _) <- conv $ synthKind ns grade_r
         whenM (conv $ polyShaped ty) $ do
+          (kind, _, _) <- conv $ synthKind ns grade_r
           modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (TyGrade (Just kind) 1) grade_r kind)
 
         solved <- if addedConstraints cs
@@ -1092,6 +1093,7 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
         else none
       (False, _) -> noneWithMaxReached
       _ -> none
+  `try` caseRule sParams focusPhase gamma (Focused (var : left)) (Focused right) goal 
 
 caseRule _ _ _ _ _ _ = none
 
