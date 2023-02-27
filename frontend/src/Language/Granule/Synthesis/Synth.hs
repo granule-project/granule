@@ -136,12 +136,6 @@ markRecursiveType tyCon dataTy = markRecursiveType' tyCon dataTy False
     markRecursiveType' tyCon (TyCon tyCon') True = tyCon == tyCon'
     markRecursiveType' _ _ _ = False
 
--- TODO: not used and could be calculated using `any isRecursiveCon` on the constructors...
--- TODO: remove?
-isRecursiveType :: Maybe Id -> Ctxt (Ctxt (TypeScheme, Substitution), Bool) -> Bool
-isRecursiveType (Just id) cons = case lookup id cons of Just (_, isRecursive)  -> isRecursive ; Nothing -> False
-isRecursiveType _ _ = False
-
 -- Run from the checker
 synthesiseProgram :: (?globals :: Globals)
            => Maybe Hints
