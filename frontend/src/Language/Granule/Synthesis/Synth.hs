@@ -1000,21 +1000,16 @@ casePatternMatchBranchSynth
             return (dVar:delta', mGrade)
         ) ([], Nothing) delta
 
-      -- Needs reviewing
-      -- A grade which conveys that pattern matching on a nullary constructor incurs a use
-      -- let nullConOneGrade =  [(x, SVar (Discharged ty $ TyGrade (Just kind) 1) sInfo)]
-      -- deltaToConc' <- if not (null args)
-      --                 then return delta'
-      --                 else case ctxtAdd nullConOneGrade delta' of
-      --                   Just delta'' -> do
-      --                     return delta''
-      --                   Nothing -> do
-      --                     none
-
       case (lookupAndCutout x delta') of
         (Just (delta'', SVar (Discharged _ grade_r') sInfo)) -> do
           modifyPred $ moveToNewConjunct
-          return $ Just ((constrPat, t), (delta'', (subst, (grade_r', grade_si))))
+          if null args then do 
+            (kind, _, _) <- conv $ synthKind ns grade_r 
+            let grade_s = TyGrade (Just kind) 1
+            let grade_si' = getGradeFromArrow grade_si `gJoin` grade_s
+            return $ Just ((constrPat, t), (delta'', (subst, (grade_r', Just grade_si'))))
+          else do
+            return $ Just ((constrPat, t), (delta'', (subst, (grade_r', grade_si))))
 
         _ -> do
           modifyPred $ moveToNewConjunct
