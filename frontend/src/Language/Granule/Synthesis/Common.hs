@@ -75,6 +75,31 @@ data FocusPhase = RightAsync | RightSync | LeftAsync | LeftSync
 --
 type Bindings = Ctxt (Id, Type)
 
+-- Search parameters
+
+data SearchParameters =
+  SearchParams {
+    scrutCurrent  :: Integer
+  , scrutMax      :: Integer
+  , matchCurrent  :: Integer
+  , matchMax      :: Integer
+  , guessCurrent  :: Integer
+  , guessMax      :: Integer
+  }
+  deriving (Show, Eq)
+
+defaultSearchParams :: SearchParameters
+defaultSearchParams =
+  SearchParams {
+    scrutCurrent = 0
+  , scrutMax = 1
+  , matchCurrent = 0
+  , matchMax = 0
+  , guessCurrent = 0
+  , guessMax = 13
+    }
+
+
 -- # Key focusing characterisation functions
 
 -- Right Asynchronous

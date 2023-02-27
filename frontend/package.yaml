@@ -57,6 +57,7 @@ library:
   - Language.Granule.Checker.SubstitutionContexts
   - Language.Granule.Checker.TypeAliases
   - Language.Granule.Checker.Types
+  - Language.Granule.Checker.Variables
   - Language.Granule.Syntax.Def
   - Language.Granule.Syntax.Expr
   - Language.Granule.Syntax.Helpers
@@ -74,6 +75,7 @@ library:
   - Language.Granule.Syntax.Span
   - Language.Granule.Syntax.Type
   - Language.Granule.Synthesis.Builders
+  - Language.Granule.Synthesis.Contexts
   - Language.Granule.Synthesis.LinearHaskell
   - Language.Granule.Synthesis.Monad
   - Language.Granule.Synthesis.Splitting

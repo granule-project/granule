@@ -32,26 +32,19 @@ data SynthesisData =
   }
   deriving Show
 
--- data SynthesisState = 
---   SynthState {
---     predicateContext  :: PredContext
---   }
-
 instance Semigroup SynthesisData where
- (SynthesisData c smt t s p st cons def max) <> 
+ (SynthesisData c smt t s p st cons def max) <>
     (SynthesisData c' smt' t' s' p' st' cons' def' max') =
-      SynthesisData 
-        (c + c') 
-        (smt + smt') 
-        (t + t') 
-        (s + s') 
-        (p + p') 
-        (st + st') 
-        (cons ++ cons') 
-        (def ++ def')  
-        (max || max')  
-
-
+      SynthesisData
+        (c + c')
+        (smt + smt')
+        (t + t')
+        (s + s')
+        (p + p')
+        (st + st')
+        (cons ++ cons')
+        (def ++ def')
+        (max || max')
 
 instance Monoid SynthesisData where
   mempty  = SynthesisData 0 0 0 0 0 0 [] [] False
@@ -63,7 +56,7 @@ newtype Synthesiser a = Synthesiser
   { unSynthesiser ::
     (ExceptT (NonEmpty CheckerError) (StateT CheckerState (LogicT (StateT SynthesisData IO)))) a }
   deriving (Functor, Applicative, MonadState CheckerState, MonadError (NonEmpty CheckerError))
-  
+
 
 -- Synthesiser always uses fair bind from LogicT
 instance Monad Synthesiser where
@@ -93,7 +86,7 @@ runSynthesiser index m s = do
 
 conv :: Checker a -> Synthesiser a
 conv (Checker k) =
-  Synthesiser 
+  Synthesiser
     (ExceptT
          (StateT (\s -> lift $ lift $  (runStateT (runExceptT k) (s)))))
 
@@ -125,23 +118,23 @@ getSynthState = Synthesiser $ lift $ lift $ get
 modifyPred :: (PredContext -> PredContext) -> Synthesiser ()
 modifyPred f = Synthesiser $ lift $ modify (\s -> s { predicateContext = f $ predicateContext s })
 
-data Measurement = 
+data Measurement =
   Measurement {
     smtCalls        :: Integer
-  , synthTime       :: Double 
-  , proverTime      :: Double 
+  , synthTime       :: Double
+  , proverTime      :: Double
   , solverTime      :: Double
   , meanTheoremSize :: Double
-  , success         :: Bool 
-  , timeout         :: Bool 
-  , pathsExplored   :: Integer   
+  , success         :: Bool
+  , timeout         :: Bool
+  , pathsExplored   :: Integer
 
   } deriving Show
 
 instance Semigroup Measurement where
- (Measurement smt synTime provTime solveTime meanTheorem success timeout paths) <> 
-  (Measurement smt' synTime' provTime' solveTime' meanTheorem' success' timeout' paths') = 
-    Measurement 
+ (Measurement smt synTime provTime solveTime meanTheorem success timeout paths) <>
+  (Measurement smt' synTime' provTime' solveTime' meanTheorem' success' timeout' paths') =
+    Measurement
       (smt + smt')
       (synTime + synTime')
       (provTime + provTime')
@@ -152,5 +145,5 @@ instance Semigroup Measurement where
       (paths + paths')
 
 instance Monoid Measurement where
-  mempty  = Measurement 0 0.0 0.0 0.0 0.0 False False 0 
+  mempty  = Measurement 0 0.0 0.0 0.0 0.0 False False 0
   mappend = (<>)

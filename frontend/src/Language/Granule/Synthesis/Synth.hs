@@ -358,14 +358,7 @@ synthesiseGradedBase hints index unrestricted restricted currentDef ctxt (Forall
                       ,  currDef = [currentDef]
                       ,  maxReached = False
                       }
-  let sParams = SearchParams {
-                      scrutCurrent = 0
-                    , scrutMax = 1
-                    , matchCurrent = 0
-                    , matchMax = 0
-                    , guessCurrent = 0
-                    , guessMax = 13
-                      }
+  let sParams = defaultSearchParams
 
   -- let timeout = case hints of
   --                   Just h -> case (hTimeout h, hNoTimeout h) of (_, True) -> -1 ; (Just lim, _) -> lim * 1000
@@ -1037,7 +1030,7 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
 
         -- If the type is polyshaped then add constraint that we incur a usage
         -- TODO: MOVE! This is the wrong place, needs to be on the scrutinee grade at the end.
-        solved <- 
+        solved <-
           ifM (conv $ polyShaped ty)
             (do
               (kind, _, _) <- conv $ synthKind ns grade_r
@@ -1094,18 +1087,6 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
   `try` caseRule sParams focusPhase gamma (Focused (var : left)) (Focused right) goal
 
 caseRule _ _ _ _ _ _ = none
-
-
-data SearchParameters =
-  SearchParams {
-    scrutCurrent  :: Integer
-  , scrutMax      :: Integer
-  , matchCurrent  :: Integer
-  , matchMax      :: Integer
-  , guessCurrent  :: Integer
-  , guessMax      :: Integer
-  }
-  deriving (Show, Eq)
 
 
 gPlus :: Type -> Type -> Type
