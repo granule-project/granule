@@ -1007,17 +1007,16 @@ casePatternMatchBranchSynth
       -- Concludes the implication
       -- TODO: maybe run solve here per branch
       modifyPred $ moveToNewConjunct
-      case (lookupAndCutout x delta') of
+
+      case lookupAndCutout x delta' of
         (Just (delta'', SVar (Discharged _ grade_r') sInfo)) -> do
           if null args then do
-            -- TODO: check isPoly
             (kind, _, _) <- conv $ synthKind ns grade_r
             return $ Just ((constrPat, t), (delta'', (subst, (grade_r', Just (TyGrade (Just kind) 1)))))
           else do
             return $ Just ((constrPat, t), (delta'', (subst, (grade_r', grade_si))))
 
-        _ -> do
-          none
+        _ -> error "Granule bug in synthesiser. Please report on GitHub: scrutinee not in the output context"
     _ -> do
       return Nothing
 
