@@ -17,4 +17,3 @@ f (Second x11) = (
     (case x11 of
       First x12 -> x12;
       Second x14 -> x14))
--- output
