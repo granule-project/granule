@@ -1080,7 +1080,7 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
               res <- solve
               debugM "solver result" (show res)
               return res)
-            (return True)
+            solve
 
         case (patExprs, solved) of
 
