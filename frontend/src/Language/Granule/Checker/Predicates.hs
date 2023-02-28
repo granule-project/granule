@@ -369,7 +369,7 @@ instance Pretty [Pred] where
 instance Pretty Pred where
   pretty =
     (predFold
-     (intercalate " ∧ ")
+     (\x -> if null x then "T" else intercalate " ∧ " x)
      (intercalate " ∨ ")
      (\ctxt p q ->
          (if null ctxt then "" else "∀ {" <> pretty' ctxt <> "} . ")
