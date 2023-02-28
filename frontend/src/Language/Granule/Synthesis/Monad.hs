@@ -1,6 +1,7 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Language.Granule.Synthesis.Monad where
 
@@ -90,6 +91,21 @@ conv (Checker k) =
   Synthesiser
     (ExceptT
          (StateT (\s -> lift $ lift $  (runStateT (runExceptT k) (s)))))
+
+-- version of `peekChecker` from the Checker monad, but lifted
+-- into the Synthesis monad
+peekCheckerInSynthesis :: Synthesiser a -> Synthesiser (a, Checker ())
+peekCheckerInSynthesis m = do
+  -- Unfold the outer layers of the transofmers
+  let comp = runStateT (runExceptT (unSynthesiser m))
+  -- Build inner computation that saves the checker state
+  let inner st = do
+        (eitherComputation, s) <- comp st
+        return ((do
+          a <- eitherComputation
+          return (a, put st)), s)
+  -- Rebuild synthesis monad outer
+  Synthesiser . ExceptT . StateT $ inner
 
 try :: Synthesiser a -> Synthesiser a -> Synthesiser a
 try m n = do

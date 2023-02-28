@@ -926,10 +926,13 @@ casePatternMatchBranchSynth
   debugM "case - constructor" (pretty con)
 
   -- Check that we can use a constructor here
-  result <- checkConstructor tySc ty cSubst
+  -- uses peekChecker so that we can roll back any state updates
+  (result, commitToCheckerState) <- peekCheckerInSynthesis $ checkConstructor tySc ty cSubst
 
   case result of
     (True, _, args, subst, _, predicate) -> do
+      -- commit to updating the checker state from `checkConstructor`
+      conv $ commitToCheckerState
       -- New implication
       modifyPred (newImplication [])
       modifyPred (addPredicateViaConjunction predicate)
@@ -994,6 +997,7 @@ casePatternMatchBranchSynth
                 let grade_si = getGradeFromArrow mGrade `gJoin` grade_s'
                 -- now do not include in the result as this is being bound
                 return (delta', Just grade_si)
+              -- Not a variable bound in the scope
               _ -> do
                 return (dVar:delta', mGrade)
           SDef{} -> do
