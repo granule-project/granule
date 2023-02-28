@@ -31,42 +31,41 @@ spec =
 checkCasePatterns :: Test.Spec
 checkCasePatterns = do
   describe "Simple constructor test for Bool" $ do
-      let true = Forall ns [] [] (TyCon $ mkId "Bool")
-      let nat = TyCon $ mkId "Nat"
-      (results, synthData) <- let ?globals = mempty :: Globals in do
-          testSynthesiser $ do
-              tyVarA <- conv $ freshTyVarInContextWithBinding (mkId "a") (Type 0) ForallQ
-              tyVarR <- conv $ freshTyVarInContextWithBinding (mkId "r") nat ForallQ
-              tyVarS <- conv $ freshTyVarInContextWithBinding (mkId "s") nat ForallQ
-              let var = (mkId "x", SVar (Discharged
-                              (TyCon (mkId "Bool"))
-                              (TyVar tyVarR)) Nothing)
-              let gamma = [(mkId "y", SVar (Discharged (TyVar tyVarA) (TyVar tyVarS)) Nothing)]
-              let omega = []
+      it "Branch on (True : Bool)" $ do
+        let true = Forall ns [] [] (TyCon $ mkId "Bool")
+        let nat = TyCon $ mkId "Nat"
+        (results, synthData) <- let ?globals = mempty :: Globals in do
+            testSynthesiser $ do
+                tyVarA <- conv $ freshTyVarInContextWithBinding (mkId "a") (Type 0) ForallQ
+                tyVarR <- conv $ freshTyVarInContextWithBinding (mkId "r") nat ForallQ
+                tyVarS <- conv $ freshTyVarInContextWithBinding (mkId "s") nat ForallQ
+                let var = (mkId "x", SVar (Discharged
+                                (TyCon (mkId "Bool"))
+                                (TyVar tyVarR)) Nothing)
+                let gamma = [(mkId "y", SVar (Discharged (TyVar tyVarA) (TyVar tyVarS)) Nothing)]
+                let omega = []
 
-              casePatternMatchBranchSynth
-                  defaultSearchParams
-                  RightAsync
-                  gamma
-                  omega
-                  var
-                  (mkId "Bool")
-                  (TyVar tyVarA)
-                  (mkId "True", (true, []))
+                casePatternMatchBranchSynth
+                    defaultSearchParams
+                    RightAsync
+                    gamma
+                    omega
+                    var
+                    (mkId "Bool")
+                    (TyVar tyVarA)
+                    (mkId "True", (true, []))
 
-      -- Patter-expr pair
-      let patternExprPair = map (fmap fst . fst) results
-      it "Branch on (True : Bool) produces expected pattern-expr pair" $ do
+        -- Patter-expr pair
+        let patternExprPair = map (fmap fst . fst) results
         patternExprPair
-          `shouldBe` [Just (PConstr ns () False (mkId "True") [], Val ns () False (Var () (mkId "y")))]
+            `shouldBe` [Just (PConstr ns () False (mkId "True") [], Val ns () False (Var () (mkId "y")))]
 
-      -- Predicate
-      it "Branch on (True : Bool) produces expected predicate" $ do
+        -- Predicate
         let predicate = map (fromPredicateContext . predicateContext . snd) results
         let expectedApprox1 = Con $ ApproximatedBy ns (TyVar $ mkId "s") (TyInfix TyOpTimes (TyVar $ mkId "s'") (TyGrade Nothing 1)) nat
         let expectedApprox2 = Con $ ApproximatedBy ns (TyInfix TyOpTimes (TyVar $ mkId "s'") (TyGrade Nothing 1)) (TyInfix TyOpTimes (TyVar $ mkId "r") (TyGrade Nothing 1)) nat
         predicate
-          `shouldBe` (Impl [] (Conj []) (ExistsHere "s'" nat (Conj [expectedApprox1, expectedApprox2])))
+          `shouldBe` [Impl [] (Conj []) (Exists (mkId "s'") nat (Conj [expectedApprox1, expectedApprox2]))]
 
 -- Helper for running the synthesiser
 testSynthesiser :: (?globals :: Globals)
