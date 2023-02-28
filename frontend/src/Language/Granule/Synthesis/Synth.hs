@@ -921,7 +921,7 @@ casePatternMatchBranchSynth
   goal
   con@(cName, (tySc@(Forall s bs constraints cTy), cSubst)) = do
   -- Debugging
-  debugM "case - constructor" (pretty cName)
+  debugM "case - constructor" (pretty con)
 
   -- Check that we can use a constructor here
   result <- checkConstructor tySc ty cSubst
@@ -982,7 +982,6 @@ casePatternMatchBranchSynth
                 let grade_s' = TyVar grade_id_s'
                 (kind, _, _) <- conv $ synthKind ns grade_s
                 conv $ existentialTopLevel grade_id_s' kind
-
                 -- ∃s'_ij . s_ij ⊑ s'_ij · q_ij ⊑ r · q_ij
                 modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (grade_s' `gTimes` grade_rq) (grade_r `gTimes` grade_rq) kind)
                 modifyPred $ addConstraintViaConjunction (ApproximatedBy ns grade_s (grade_s' `gTimes` grade_rq) kind)
