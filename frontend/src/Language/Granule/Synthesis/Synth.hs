@@ -977,6 +977,7 @@ casePatternMatchBranchSynth
       (delta', grade_si) <- forallM delta ([], Nothing) (\(delta', mGrade) dVar@(dName, dAssumption) ->
         case dAssumption of
           SVar (Discharged ty grade_s) dSInfo ->
+            -- See if this is a variable being bound in the case
             case lookup dName varsAndGrades of
               Just grade_rq -> do
 
@@ -991,7 +992,7 @@ casePatternMatchBranchSynth
 
                 -- s' \/ ...
                 let grade_si = getGradeFromArrow mGrade `gJoin` grade_s'
-                -- TODO: why not dVar:delta' here?
+                -- now do not include in the result as this is being bound
                 return (delta', Just grade_si)
               _ -> do
                 return (dVar:delta', mGrade)
