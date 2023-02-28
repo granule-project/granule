@@ -191,7 +191,9 @@ synthesiseProgram hints index unrComps rComps defId ctxt goalTy checkerState = d
   --           (Nothing, Just i)  -> (1, i)
   --           (Nothing, Nothing) -> (1, 1)
 
-  result <- liftIO $ System.Timeout.timeout timeoutLim $ loop resourceScheme (hintELim, hintILim) index unrComps initialGrade gamma initialState
+  let timeOutLimit = if interactiveDebugging then maxBound :: Int else timeoutLim
+  result <-
+    liftIO $ System.Timeout.timeout timeOutLimit $ loop resourceScheme (hintELim, hintILim) index unrComps initialGrade gamma initialState
   fin <- case result of
     Just (synthResults, aggregate) ->  do
       let results = nub $ map fst3 $ rights (map fst synthResults)

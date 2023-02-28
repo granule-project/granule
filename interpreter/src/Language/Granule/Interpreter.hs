@@ -227,7 +227,8 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
     synthesiseHoles :: (?globals :: Globals) => AST () () -> [(CheckerError, Maybe Measurement, Int)] -> Bool -> IO [(CheckerError, Maybe Measurement, Int)]
     synthesiseHoles _ [] _ = return []
     synthesiseHoles astSrc ((HoleMessage sp goal ctxt tyVars hVars synthCtxt@(Just (cs, defs, (Just defId, spec), index, hints)) hcases, aggregate, attemptNo):holes) isGradedBase = do
-      let timeout = 10000000
+      -- TODO: this magic number shouldn't here I don't think...
+      let timeout = if interactiveDebugging then maxBound :: Int else 10000000
       rest <- synthesiseHoles astSrc holes isGradedBase
       let (unrestricted, restricted) = case spec of
             Just (Spec _ _ _ comps) ->
