@@ -9,6 +9,7 @@ import Language.Granule.Synthesis.Synth
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Pattern
+import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Checker.Monad
@@ -30,7 +31,7 @@ spec =
   checkCasePatterns
 
 checkCasePatterns :: Test.Spec
-checkCasePatterns = do
+checkCasePatterns = let ?globals = mempty in do
   describe "Simple constructor test for Bool" $ do
       it "Branch on (True : Bool)" $ do
         let true = Forall ns [] [] (TyCon $ mkId "Bool")
@@ -64,14 +65,10 @@ checkCasePatterns = do
         -- Predicate
         let predicate = map (fromPredicateContext . predicateContext . snd) results
         predicate `shouldBe` [Impl [] (Conj [Conj [],Conj []]) (Conj [Conj [],Conj [],Conj []])]
-          
+
   describe "Construcor test for Either" $ do
     it "Branch on (Left : a -> Either a b)" $ do
-      let tyVarA = TyVar $ mkId "a"
-      let tyVarB = TyVar $ mkId "b"
-      let eitherAB = TyApp (TyApp (TyCon $ mkId "Either") tyVarA) tyVarB
-      --let left = (Left, (forall {a2 : Type, b2 : Type, t8 : Type, t9 : Type} . a2 -> Either t9 t8, [(t8, b2),(t9, a2)]))
-      let left = Forall ns  [((Id "a.3" "a.3"),Type 0)
+      let right = Forall ns  [((Id "a.3" "a.3"),Type 0)
                             ,((Id "b.3" "b.3"),Type 0)
                             ,((Id "t.10" "t.10"),Type 0)
                             ,((Id "t.11" "t.11"),Type 0)] []
@@ -81,10 +78,15 @@ checkCasePatterns = do
       (results, synthData) <- let ?globals = mempty :: Globals in do
           testSynthesiser $ do
               tyVarA <- conv $ freshTyVarInContextWithBinding (mkId "a") (Type 0) ForallQ
+              tyVarB <- conv $ freshTyVarInContextWithBinding (mkId "b") (Type 0) ForallQ
               tyVarR <- conv $ freshTyVarInContextWithBinding (mkId "r") nat ForallQ
               tyVarS <- conv $ freshTyVarInContextWithBinding (mkId "s") nat ForallQ
-              let var = (mkId "x", SVar (Discharged eitherAB (TyVar tyVarR)) Nothing)
-              let gamma = [(mkId "y", SVar (Discharged (TyVar tyVarA) (TyVar tyVarS)) Nothing)]
+              -- Scrutinee
+              let eitherAB = TyApp (TyApp (TyCon $ mkId "Either") (TyVar tyVarA)) (TyVar tyVarB)
+              let var = (mkId "scrutinee", SVar (Discharged eitherAB (TyVar tyVarR)) Nothing)
+              let gamma = []
+              -- alternate for the test
+              -- (mkId "y", SVar (Discharged (TyVar tyVarA) (TyVar tyVarS)) Nothing)]
               let omega = []
 
               casePatternMatchBranchSynth
@@ -94,20 +96,20 @@ checkCasePatterns = do
                   omega
                   var
                   (mkId "Either")
-                  (TyVar tyVarA)
-                  (mkId "Left", (left, coerce))
+                  (TyVar tyVarB)
+                  (mkId "Right", (right, coerce))
 
       -- Patter-expr pair
       let patternExprPair = map (fmap fst . fst) results
       patternExprPair
-          `shouldBe` [Just (PConstr ns () False (mkId "Left") [PVar ns () False (mkId "w")], Val ns () False (Var () (mkId "y")))]
+          `shouldBe` [Just (PConstr ns () False (mkId "Right") [PVar ns () False (mkId "x")], Val ns () False (Var () (mkId "x")))]
 
       -- Predicate
       let predicate = map (fromPredicateContext . predicateContext . snd) results
       let expectedApprox1 = Con $ ApproximatedBy ns (TyVar $ mkId "s") (TyInfix TyOpTimes (TyVar $ mkId "s'") (TyGrade Nothing 1)) nat
       let expectedApprox2 = Con $ ApproximatedBy ns (TyInfix TyOpTimes (TyVar $ mkId "s'") (TyGrade Nothing 1)) (TyInfix TyOpTimes (TyVar $ mkId "r") (TyGrade Nothing 1)) nat
-      predicate
-        `shouldBe` [Impl [] (Conj [Conj [],Conj []]) (Exists (mkId "s'") nat (Conj [expectedApprox1, expectedApprox2]))]
+      pretty predicate
+        `shouldBe` pretty [Impl [] (Conj [Conj [],Conj []]) (Exists (mkId "s'") nat (Conj [expectedApprox1, expectedApprox2]))]
 
 -- Helper for running the synthesiser
 testSynthesiser :: (?globals :: Globals)
