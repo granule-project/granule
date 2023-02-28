@@ -9,6 +9,6 @@ spec
     or True False = True;
     or False False = False;
 or x y =
-    (case x of
-      True -> x;
-      False -> y)
+    (case y of
+      True -> y;
+      False -> x)
