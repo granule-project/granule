@@ -30,14 +30,14 @@ spec =
 
 checkCasePatterns :: Test.Spec
 checkCasePatterns = do
-  describe "Simple constructor test" $ do
-    it "Simple case on Bool" $ do
+  describe "Simple constructor test for Bool" $ do
       let true = Forall ns [] [] (TyCon $ mkId "Bool")
+      let nat = TyCon $ mkId "Nat"
       (results, synthData) <- let ?globals = mempty :: Globals in do
           testSynthesiser $ do
               tyVarA <- conv $ freshTyVarInContextWithBinding (mkId "a") (Type 0) ForallQ
-              tyVarR <- conv $ freshTyVarInContextWithBinding (mkId "r") (TyCon $ mkId "Nat") ForallQ
-              tyVarS <- conv $ freshTyVarInContextWithBinding (mkId "s") (TyCon $ mkId "Nat") ForallQ
+              tyVarR <- conv $ freshTyVarInContextWithBinding (mkId "r") nat ForallQ
+              tyVarS <- conv $ freshTyVarInContextWithBinding (mkId "s") nat ForallQ
               let var = (mkId "x", SVar (Discharged
                               (TyCon (mkId "Bool"))
                               (TyVar tyVarR)) Nothing)
@@ -55,8 +55,18 @@ checkCasePatterns = do
                   (mkId "True", (true, []))
 
       -- Patter-expr pair
-      (map (fmap fst . fst) results)
-        `shouldBe` [Just (PConstr ns () False (mkId "True") [], Val ns () False (Var () (mkId "y")))]
+      let patternExprPair = map (fmap fst . fst) results
+      it "Branch on (True : Bool) produces expected pattern-expr pair" $ do
+        patternExprPair
+          `shouldBe` [Just (PConstr ns () False (mkId "True") [], Val ns () False (Var () (mkId "y")))]
+
+      -- Predicate
+      it "Branch on (True : Bool) produces expected predicate" $ do
+        let predicate = map (fromPredicateContext . predicateContext . snd) results
+        let expectedApprox1 = Con $ ApproximatedBy ns (TyVar $ mkId "s") (TyInfix TyOpTimes (TyVar $ mkId "s'") (TyGrade Nothing 1)) nat
+        let expectedApprox2 = Con $ ApproximatedBy ns (TyInfix TyOpTimes (TyVar $ mkId "s'") (TyGrade Nothing 1)) (TyInfix TyOpTimes (TyVar $ mkId "r") (TyGrade Nothing 1)) nat
+        predicate
+          `shouldBe` (Impl [] (Conj []) (ExistsHere "s'" nat (Conj [expectedApprox1, expectedApprox2])))
 
 -- Helper for running the synthesiser
 testSynthesiser :: (?globals :: Globals)
