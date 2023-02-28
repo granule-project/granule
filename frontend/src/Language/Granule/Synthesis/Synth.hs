@@ -1057,25 +1057,28 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
         -- join substitutions
         subst <- conv $ combineManySubstitutions ns substs
 
+
+        grade_final <- case grade_s_out of 
+                  -- If our constructor bound any variables, we add their usage to the usages of x
+                  Just grade_s_out' -> return $ grade_r_out `gPlus` grade_s_out'
+                  -- For nullary constructors, grade_s_out will be Nothing
+                  Nothing -> return grade_r_out
+        let var_x_out = (x, SVar (Discharged ty grade_final) sInfo)
+
         solved <-
           ifM (conv $ polyShaped ty)
             (do
               (kind, _, _) <- conv $ synthKind ns grade_r
               debugM ("polyShaped for " ++ pretty goal) (pretty grade_r)
-              modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (TyGrade (Just kind) 1) grade_r_out kind)
+              modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (TyGrade (Just kind) 1) grade_final kind)
               res <- solve
               debugM "solver result" (show res)
               return res)
             (return True)
 
-        case (patExprs, grade_r_out, grade_s_out, solved) of
+        case (patExprs, solved) of
 
-          (_:_, grade_r_out', Just grade_s_out', True) -> do
-            let var_x_out = (x, SVar (Discharged ty (grade_r_out' `gPlus` grade_s_out')) sInfo)
-            return (makeCaseUntyped x patExprs, var_x_out:delta, subst, False, Just x)
-
-          (_:_, grade_r_out', Nothing, True) -> do
-            let var_x_out = (x, SVar (Discharged ty (grade_r_out')) sInfo)
+          (_:_, True) ->
             return (makeCaseUntyped x patExprs, var_x_out:delta, subst, False, Just x)
           _ -> none
       (False, _) -> noneWithMaxReached
