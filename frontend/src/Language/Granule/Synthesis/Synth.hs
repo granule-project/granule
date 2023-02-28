@@ -1059,9 +1059,9 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
 
 
         grade_final <- case grade_s_out of 
-                  -- If our constructor bound any variables, we add their usage to the usages of x
+                  -- Add the usages of each branch to the usages of x inside each branch
                   Just grade_s_out' -> return $ grade_r_out `gPlus` grade_s_out'
-                  -- For nullary constructors, grade_s_out will be Nothing
+                  -- Not sure when this case should arise, since nullary constructors get a 1 grade
                   Nothing -> return grade_r_out
         let var_x_out = (x, SVar (Discharged ty grade_final) sInfo)
 
