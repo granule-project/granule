@@ -545,7 +545,16 @@ moveToNewConjunct path = rollup path (Conj [])
     rollup Top                           p = ConjHere [] Top
 
 addConstraintViaConjunction :: Constraint -> PredContext -> PredContext
+addConstraintViaConjunction c (ConjHere ps path) =
+  ConjHere (addToConjunct (Con c) ps) path
 addConstraintViaConjunction c path = ConjHere [Con c] path
 
 addPredicateViaConjunction :: Pred -> PredContext -> PredContext
-addPredicateViaConjunction p path = ConjHere [p] path
+addPredicateViaConjunction p (ConjHere ps path) =
+  ConjHere (addToConjunct p ps) path
+addPredicateViaConjunction p path               = ConjHere [p] path
+
+addToConjunct :: Pred -> [Pred] -> [Pred]
+addToConjunct p ((Conj ps):pss) =
+  Conj (p:ps) : pss
+addToConjunct p ps = p:ps
