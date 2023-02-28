@@ -1028,8 +1028,6 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
         cs <- conv $ get
 
         -- If the type is polyshaped then add constraint that we incur a usage
-
-
         let (recCons, nonRecCons) = relevantConstructors datatypeName (constructors synthState)
 
         let datacons = sortBy compareArity (recCons ++ nonRecCons)
@@ -1063,8 +1061,11 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
           ifM (conv $ polyShaped ty)
             (do
               (kind, _, _) <- conv $ synthKind ns grade_r
+              debugM ("polyShaped for " ++ pretty goal) (pretty grade_r)
               modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (TyGrade (Just kind) 1) grade_r_out kind)
-              solve)
+              res <- solve
+              debugM "solver result" (show res)
+              return res)
             (return True)
 
         case (patExprs, grade_r_out, grade_s_out, solved) of
