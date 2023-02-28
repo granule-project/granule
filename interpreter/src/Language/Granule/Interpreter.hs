@@ -45,10 +45,10 @@ import Language.Granule.Context
 import Language.Granule.Checker.Checker
 import Language.Granule.Checker.Monad (CheckerError(..))
 import Language.Granule.Interpreter.Eval
-import Language.Granule.Syntax.Def 
-import Language.Granule.Syntax.Expr 
-import Language.Granule.Syntax.Identifiers 
-import Language.Granule.Syntax.Type 
+import Language.Granule.Syntax.Def
+import Language.Granule.Syntax.Expr
+import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Preprocessor
 import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Preprocessor.Ascii
@@ -92,12 +92,12 @@ runGrOnFiles globPatterns config = let ?globals = grGlobals config in do
                 (ast, hsSrc) <- processHaskell path
                 _ <- error $ show hsSrc
                 result <- synthesiseLinearHaskell ast hsSrc
-                case result of 
-                  Just srcModified -> do 
+                case result of
+                  Just srcModified -> do
                     writeHaskellToFile path srcModified
                     return $ Right NoEval
                   _ -> return $ Left $ FatalError "Couldn't synthesise Linear Haskell..."
-              _ -> do 
+              _ -> do
                 src <- preprocess
                   (rewriter config)
                   (keepBackup config)
@@ -157,12 +157,12 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
               else
                 case (globalsRewriteHoles ?globals, holeErrors) of
                   (Just True, holes@(_:_)) ->
-                    case (globalsSynthesise ?globals, length holeErrors == length errs) of 
-                      (Just True, True) -> do 
+                    case (globalsSynthesise ?globals, length holeErrors == length errs) of
+                      (Just True, True) -> do
                         holes' <- runSynthesiser holes ast (GradedBase `elem` globalsExtensions ?globals)
                         runHoleSplitter input config errs holes'
                       _ -> runHoleSplitter input config errs holes
-                  _ ->  if fromMaybe False (globalsSynthesise ?globals) && not (null holeErrors) then do 
+                  _ ->  if fromMaybe False (globalsSynthesise ?globals) && not (null holeErrors) then do
                           _ <- runSynthesiser holeErrors ast (GradedBase `elem` globalsExtensions ?globals)
                           return $ Right NoEval
                           -- return . Left $ CheckerError errs
@@ -216,7 +216,7 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
 
 
     runSynthesiser :: (?globals :: Globals) => [CheckerError] -> AST () () -> Bool -> IO [CheckerError]
-    runSynthesiser holes ast isGradedBase = do 
+    runSynthesiser holes ast isGradedBase = do
       let holesWithEmptyMeasurements = map (\h -> (h, Nothing, 0)) holes
       res <- synthesiseHoles ast holesWithEmptyMeasurements isGradedBase
       let (holes', measurements, _) = unzip3 res
@@ -226,38 +226,38 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
 
     synthesiseHoles :: (?globals :: Globals) => AST () () -> [(CheckerError, Maybe Measurement, Int)] -> Bool -> IO [(CheckerError, Maybe Measurement, Int)]
     synthesiseHoles _ [] _ = return []
-    synthesiseHoles astSrc ((HoleMessage sp goal ctxt tyVars hVars synthCtxt@(Just (cs, defs, (Just defId, spec), index, hints)) hcases, aggregate, attemptNo):holes) isGradedBase = do 
+    synthesiseHoles astSrc ((HoleMessage sp goal ctxt tyVars hVars synthCtxt@(Just (cs, defs, (Just defId, spec), index, hints)) hcases, aggregate, attemptNo):holes) isGradedBase = do
       let timeout = 10000000
       rest <- synthesiseHoles astSrc holes isGradedBase
-      let (unrestricted, restricted) = case spec of 
-            Just (Spec _ _ _ comps) -> 
-              foldr (\(id, compTy) (unres, res) -> 
-                case lookup id defs of 
-                  Just tySch -> case compTy of 
+      let (unrestricted, restricted) = case spec of
+            Just (Spec _ _ _ comps) ->
+              foldr (\(id, compTy) (unres, res) ->
+                case lookup id defs of
+                  Just tySch -> case compTy of
                         Just usage -> (unres, (id, (tySch, usage)):res)
                         _ -> ((id, tySch):unres, res)
                   _ -> (unres, res)
                 ) ([], []) comps
             _ -> ([], [])
-      res <- liftIO $ System.Timeout.timeout timeout $ if not isGradedBase 
-                 then synthesiseProgram hints index unrestricted restricted defId ctxt (Forall nullSpan [] [] goal) cs 
-                 else synthesiseGradedBase hints index unrestricted restricted defId ctxt (Forall nullSpan [] [] goal) cs 
-      case (res, spec, holes) of 
-        (Just ([], measurement), _, _) -> do 
+      res <- liftIO $ System.Timeout.timeout timeout $ if not isGradedBase
+                 then synthesiseProgram hints index unrestricted restricted defId ctxt (Forall nullSpan [] [] goal) cs
+                 else synthesiseGradedBase hints index unrestricted restricted defId ctxt (Forall nullSpan [] [] goal) cs
+      case (res, spec, holes) of
+        (Just ([], measurement), _, _) -> do
           return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt hcases, measurement, attemptNo) : rest
-        (Nothing, _ , _) -> do 
+        (Nothing, _ , _) -> do
           -- end    <- liftIO $ Clock.getTime Clock.Monotonic
           printInfo $ "No programs synthesised - Timeout after: " <> show (fromIntegral timeout / (10^(6 :: Integer)::Double))  <> "s"
           return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt hcases, Nothing, attemptNo) : rest
-        (Just (programs@(_:_), measurement), Just (Spec _ _ examples@(_:_) _), []) -> do 
-          let hole = HoleMessage sp goal ctxt tyVars hVars synthCtxt [([], last $ programs)] 
+        (Just (programs@(_:_), measurement), Just (Spec _ _ examples@(_:_) _), []) -> do
+          let hole = HoleMessage sp goal ctxt tyVars hVars synthCtxt [([], last $ programs)]
           let holeCases = concatMap (\h -> map (\(pats, e) -> (errLoc h, zip (getCtxtIds (holeVars h)) pats, e)) (cases h)) [hole]
-          
-          let astChanged = holeRefactor holeCases astSrc 
-          let aggregate' = case (aggregate, measurement) of 
+
+          let astChanged = holeRefactor holeCases astSrc
+          let aggregate' = case (aggregate, measurement) of
                     (Just agg, Just mes) -> Just $ agg <> mes
                     (Just agg, _) -> Just agg
-                    (_, Just mes) -> Just mes 
+                    (_, Just mes) -> Just mes
                     _ -> Nothing
           success <- System.Timeout.timeout timeout $ runExamples astChanged examples defId
           case (success, attemptNo < exampleLimit) of
@@ -265,71 +265,71 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
               let synthCtxt' = Just (cs, defs, (Just defId, spec), index + 1, hints)
               rest' <- synthesiseHoles astSrc [(HoleMessage sp goal ctxt tyVars hVars synthCtxt' hcases, aggregate', attemptNo+1)] isGradedBase
               return $ rest ++ rest'
-            (Just False, False) -> do 
+            (Just False, False) -> do
               -- Example limit reached
               return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt hcases, Nothing, attemptNo) : rest
-            _ -> do 
+            _ -> do
               return $ (hole, aggregate', attemptNo) : rest
         (Just (programs@(_:_), measurement), _, _) -> do
           return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt [([], last $ programs)], measurement, attemptNo) : rest
 
 
-    synthesiseHoles ast (hole:holes) isGradedBase = do 
+    synthesiseHoles ast (hole:holes) isGradedBase = do
       rest <- synthesiseHoles ast holes isGradedBase
       return $ hole : rest
-    
+
     runExamples :: (?globals :: Globals)
                 => AST () ()
                 -> [Example () ()]
                 -> Id
-                -> IO Bool 
+                -> IO Bool
     runExamples ast@(AST decls defs imports hidden mod) examples defId = do
         -- _ <- error "asdasda"
-        let exampleMainExprs = 
+        let exampleMainExprs =
               -- map (\(Example input output) -> makeEquality (App nullSpanNoFile () False (Val nullSpanNoFile () False (Var () defId))  input) output) examples
               map (\(Example input output) -> makeEquality input output) examples
         -- remove the existing main function (should probably keep the main function so we can stitch it back in after)
-        
+
         let defsWithoutMain = filter (\(Def _ mIdent _ _ _ _) -> mIdent /= mkId entryPoint) defs
 
         let foundBoolDecl = find (\(DataDecl _ dIdent _ _ _) ->  dIdent == mkId "Bool") decls
-        let declsWithBool = case foundBoolDecl of 
-                              Just decl -> decls 
+        let declsWithBool = case foundBoolDecl of
+                              Just decl -> decls
                               Nothing -> boolDecl : decls
-                  
-        let exampleMainExprsCombined = 
+
+        let exampleMainExprsCombined =
               foldr (\mainExpr acc -> case acc of Just acc' -> Just $ makeAnd mainExpr acc' ; Nothing -> Just mainExpr) Nothing exampleMainExprs
-        case exampleMainExprsCombined of 
+        case exampleMainExprsCombined of
           Nothing -> error "Could not construct main definition for example AST!"
           Just exampleMainExprsCombined' -> do
             -- exmapleMainDef:
             --    (&&') : Bool -> Bool [0..1] -> Bool
             --    (&&') True [y] = y;
-            --    (&&') False [_] = False 
+            --    (&&') False [_] = False
             --
             --    main : IO ()
             --    main = (example_in_1 == example_out_1) (&&') ... (&&') (example_in_n == example_out_n)
-            let exampleMainDef = Def nullSpanNoFile (mkId entryPoint) False Nothing 
-                                    (EquationList nullSpanNoFile (mkId entryPoint) False 
-                                        [(Equation nullSpanNoFile (mkId entryPoint) () False [] exampleMainExprsCombined')]) (Forall nullSpanNoFile [] [] (TyInt 0)) 
+            let exampleMainDef = Def nullSpanNoFile (mkId entryPoint) False Nothing
+                                    (EquationList nullSpanNoFile (mkId entryPoint) False
+                                        [(Equation nullSpanNoFile (mkId entryPoint) () False [] exampleMainExprsCombined')]) (Forall nullSpanNoFile [] [] (TyInt 0))
             let astWithExampleMain = AST declsWithBool (defsWithoutMain ++ [exampleMainDef]) imports hidden mod
             result <- try $ eval astWithExampleMain
             case result of
-              -- If an example fails, rerun the synthesis and take the next program. 
-              Left (e :: SomeException) -> do 
-                return False 
+              -- If an example fails, rerun the synthesis and take the next program.
+              Left (e :: SomeException) -> do
+                return False
               Right (Just (Constr _ idv [])) | mkId "True" == idv -> return True
               Right _ -> return False
 
-          where 
-            boolDecl :: DataDecl 
-            boolDecl = 
-              DataDecl nullSpanNoFile (mkId "Bool") [] Nothing 
-                [ DataConstrNonIndexed nullSpanNoFile (mkId "True") [] 
+          where
+            boolDecl :: DataDecl
+            boolDecl =
+              DataDecl nullSpanNoFile (mkId "Bool") [] Nothing
+                [ DataConstrNonIndexed nullSpanNoFile (mkId "True") []
                 , DataConstrNonIndexed nullSpanNoFile (mkId "False") [] ]
 
- 
-    
+
+
 
 -- | Get the flags embedded in the first line of a file, e.g.
 -- "-- gr --no-eval"
@@ -445,6 +445,11 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             $ long "debug"
             <> help "Debug mode"
 
+        globalsInteractiveDebugging <-
+          flag Nothing (Just True)
+            $ long "interactive"
+            <> help "Interactive debug mode (for synthesis)"
+
         grShowVersion <-
           flag False True
             $ long "version"
@@ -559,7 +564,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
           flag Nothing (Just True)
            $ long "linear-haskell"
             <> help "Synthesise Linear Haskell programs"
-            
+
         grRewriter
           <- flag'
             (Just asciiToUnicode)
@@ -598,6 +603,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             , grShowVersion
             , grGlobals = Globals
               { globalsDebugging
+              , globalsInteractiveDebugging
               , globalsNoColors
               , globalsAlternativeColors
               , globalsNoEval

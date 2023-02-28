@@ -30,6 +30,7 @@ import Language.Granule.Syntax.Span
 -- | Flags that change Granule's behaviour
 data Globals = Globals
   { globalsDebugging           :: Maybe Bool
+  , globalsInteractiveDebugging :: Maybe Bool
   , globalsNoColors            :: Maybe Bool
   , globalsAlternativeColors   :: Maybe Bool
   , globalsNoEval              :: Maybe Bool
@@ -84,9 +85,10 @@ usingExtension e = elem e $ globalsExtensions ?globals
 
 
 -- | Accessors for global flags with default values
-debugging, noColors, alternativeColors, noEval, suppressInfos, suppressErrors,
+debugging, interactiveDebugging, noColors, alternativeColors, noEval, suppressInfos, suppressErrors,
   timestamp, testing, ignoreHoles, benchmarking, benchmarkingRawData, subtractiveSynthesisMode, alternateSynthesisMode, gradeOnRule, haskellSynth :: (?globals :: Globals) => Bool
 debugging         = fromMaybe False $ globalsDebugging ?globals
+interactiveDebugging         = fromMaybe False $ globalsInteractiveDebugging ?globals
 noColors          = fromMaybe False $ globalsNoColors ?globals
 alternativeColors = fromMaybe False $ globalsAlternativeColors ?globals
 noEval            = fromMaybe False $ globalsNoEval ?globals
@@ -123,6 +125,7 @@ entryPoint = fromMaybe "main" $ globalsEntryPoint ?globals
 instance Semigroup Globals where
   g1 <> g2 = Globals
       { globalsDebugging           = globalsDebugging           g1 <|> globalsDebugging           g2
+      , globalsInteractiveDebugging = globalsInteractiveDebugging g1 <|> globalsInteractiveDebugging g2
       , globalsNoColors            = globalsNoColors            g1 <|> globalsNoColors            g2
       , globalsAlternativeColors   = globalsAlternativeColors   g1 <|> globalsAlternativeColors   g2
       , globalsNoEval              = globalsNoEval              g1 <|> globalsNoEval              g2
@@ -151,6 +154,7 @@ instance Semigroup Globals where
 instance Monoid Globals where
   mempty = Globals
     { globalsDebugging           = Nothing
+    , globalsInteractiveDebugging = Nothing
     , globalsNoColors            = Nothing
     , globalsAlternativeColors   = Nothing
     , globalsNoEval              = Nothing

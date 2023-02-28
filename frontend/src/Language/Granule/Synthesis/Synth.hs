@@ -111,7 +111,7 @@ addIncreasingConstraint k@(TyCon con) gradeIn gradeOut  =
 addIncreasingConstraint _ _ _ = return ()
 
 
-noneWithMaxReached :: Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
+noneWithMaxReached :: (?globals :: Globals) => Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
 noneWithMaxReached = do
   Synthesiser $ lift $ lift $ lift $ modify (\state ->
                   state {
@@ -1058,7 +1058,7 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
         subst <- conv $ combineManySubstitutions ns substs
 
 
-        grade_final <- case grade_s_out of 
+        grade_final <- case grade_s_out of
                   -- Add the usages of each branch to the usages of x inside each branch
                   Just grade_s_out' -> return $ grade_r_out `gPlus` grade_s_out'
                   -- Not sure when this case should arise, since nullary constructors get a 1 grade

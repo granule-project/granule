@@ -202,6 +202,11 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             $ long "debug"
             <> help "Debug mode"
 
+        globalsInteractiveDebugging <-
+          flag Nothing (Just True)
+            $ long "interactive"
+            <> help "Interactive debug mode (for synthesis)"
+
         grShowVersion <-
           flag False True
             $ long "version"
@@ -355,6 +360,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             , grShowVersion
             , grGlobals = Globals
               { globalsDebugging
+              , globalsInteractiveDebugging
               , globalsNoColors
               , globalsAlternativeColors
               , globalsNoEval

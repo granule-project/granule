@@ -23,11 +23,11 @@ import Control.Monad.State.Strict
 import Language.Granule.Utils
 
 
--- An SAssumption is an assumption used for synthesis: 
+-- An SAssumption is an assumption used for synthesis:
 --  * It is either a standard Granule assumption OR
 --  * a top level definition (with a possible restriction on use, given by a coeffect)
-data SAssumption = 
-      SVar Assumption (Maybe StructInfo) 
+data SAssumption =
+      SVar Assumption (Maybe StructInfo)
     | SDef TypeScheme (Maybe Coeffect)
   deriving (Show)
 
@@ -37,17 +37,17 @@ newtype FocusedCtxt a = Focused (Ctxt a)
 
 
 -- A structurally decreasing type is a recursive instance of a recursive data
--- type. For example in the list data type: 
+-- type. For example in the list data type:
 -- List a = Next (List a) | Empty
--- the (List a) to the left of the equals is structurally decreasing, while 
--- the Empty is not. Likewise the Next (List a) is also not decreasing. 
+-- the (List a) to the left of the equals is structurally decreasing, while
+-- the Empty is not. Likewise the Next (List a) is also not decreasing.
 data StructInfo =  NonDecreasing | Decreasing Int
   deriving (Show, Eq, Ord)
 
 
 isDecr :: Maybe StructInfo -> Bool
-isDecr (Just Decreasing{}) = True 
-isDecr _ = False 
+isDecr (Just Decreasing{}) = True
+isDecr _ = False
 
 
 
@@ -82,22 +82,22 @@ ctxtSubtract gam ((x, SVar (Discharged t g2) _):del) =
                                 (Conj [Con $ ApproximatedBy nullSpanNoFile (TyInfix TyOpPlus (TyVar varOther) g') g kind])
                                 (Conj [Con $ ApproximatedBy nullSpanNoFile (TyVar varOther) (TyVar var) kind]))
         return $ TyVar var
--- Skip over top level defs 
-ctxtSubtract gam (var@(x, SDef{}):del) = do 
+-- Skip over top level defs
+ctxtSubtract gam (var@(x, SDef{}):del) = do
   ctxt <- ctxtSubtract gam del
   return $ var:ctxt
 
-ctxtMultByCoeffect :: Type -> Ctxt SAssumption -> Synthesiser (Ctxt SAssumption)
+ctxtMultByCoeffect :: (?globals :: Globals) => Type -> Ctxt SAssumption -> Synthesiser (Ctxt SAssumption)
 ctxtMultByCoeffect _ [] = return []
 ctxtMultByCoeffect g1 ((x, SVar (Discharged t g2) sInf):xs) = do
   ctxt <- ctxtMultByCoeffect g1 xs
   return ((x, SVar (Discharged t (TyInfix TyOpTimes g1 g2)) sInf): ctxt)
 
-ctxtMultByCoeffect g1 (var@(x, SDef tySch (Just g2)):xs) = do 
-  ctxt <- ctxtMultByCoeffect g1 xs 
+ctxtMultByCoeffect g1 (var@(x, SDef tySch (Just g2)):xs) = do
+  ctxt <- ctxtMultByCoeffect g1 xs
   return $ (x, SDef tySch (Just $ TyInfix TyOpTimes g1 g2)):ctxt
-ctxtMultByCoeffect g (var@(x, SDef tySch Nothing):xs) = do 
-  ctxt <- ctxtMultByCoeffect g xs 
+ctxtMultByCoeffect g (var@(x, SDef tySch Nothing):xs) = do
+  ctxt <- ctxtMultByCoeffect g xs
   return $ var:ctxt
 
 ctxtMultByCoeffect _ _ = none
@@ -118,17 +118,17 @@ ctxtDivByCoeffect g1 ((x, SVar (Discharged t g2) sInf):xs) =
       -- modifyPred s $ addConstraintViaConjunction (ApproximatedBy nullSpanNoFile (TyInfix TyOpTimes g (TyVar var)) g' kind) (predicateContext s)
       return $ TyVar var
 
--- Skip over top level defs 
-ctxtDivByCoeffect g1 (var@(x, SDef{}):xs) = do 
-  ctxt <- ctxtDivByCoeffect  g1 xs 
+-- Skip over top level defs
+ctxtDivByCoeffect g1 (var@(x, SDef{}):xs) = do
+  ctxt <- ctxtDivByCoeffect  g1 xs
   return $ var:ctxt
 
 ctxtDivByCoeffect _ _ = none
 
 ctxtMerge :: (?globals :: Globals)
           => (Type -> Type -> Type) -- lattice operator
-          -> Ctxt SAssumption 
-          -> Ctxt SAssumption 
+          -> Ctxt SAssumption
+          -> Ctxt SAssumption
           -> Synthesiser (Ctxt SAssumption)
 
 -- Base cases
@@ -146,8 +146,8 @@ ctxtMerge operator [] ((x, SVar (Discharged t g) sInf) : ctxt) = do
 ctxtMerge operator [] ((x, SVar (Linear t) sInf) : ctxt) = do
   ctxt' <- ctxtMerge operator [] ctxt
   return $ ((x, SVar (Linear t) sInf) : ctxt')
-  
-ctxtMerge operator [] (var@(x, SDef tySch g) : ctxt) = do 
+
+ctxtMerge operator [] (var@(x, SDef tySch g) : ctxt) = do
   ctxt' <- ctxtMerge operator [] ctxt
   return $ var : ctxt'
 
@@ -184,16 +184,16 @@ ctxtMerge operator ((x, SVar (Linear t1) sInf) : ctxt1') ctxt2 =
     Just (_, SDef{}) -> none -- mode mismatch
     Nothing -> none                     -- Cannot weaken a linear thing
 
-ctxtMerge operator (var@(x, SDef tySch (Just g)) : ctxt1') ctxt2 = 
-  case lookupAndCutout x ctxt2 of 
-    Just (ctxt2', SDef tySch' (Just g')) -> do 
-      ctxt' <- ctxtMerge operator ctxt1' ctxt2' 
+ctxtMerge operator (var@(x, SDef tySch (Just g)) : ctxt1') ctxt2 =
+  case lookupAndCutout x ctxt2 of
+    Just (ctxt2', SDef tySch' (Just g')) -> do
+      ctxt' <- ctxtMerge operator ctxt1' ctxt2'
       return $ (x, SDef tySch (Just $ operator g g')) :ctxt'
 
 ctxtMerge operator (var@(x, SDef tySch Nothing) : ctxt1') ctxt2 = do
     ctxt' <- ctxtMerge operator ctxt1' ctxt2
     return $ var:ctxt'
-      
+
 
 
 
@@ -217,12 +217,12 @@ ctxtAdd ((x, SVar (Linear t1) sInf):xs) ys =
       ctxt <- ctxtAdd xs ys
       return $ (x, (SVar (Linear t1) sInf)) : ctxt
     _ -> Nothing
-ctxtAdd (var@(x, SDef tySch Nothing):xs) ys = do 
-  ctxt <- ctxtAdd xs ys 
+ctxtAdd (var@(x, SDef tySch Nothing):xs) ys = do
+  ctxt <- ctxtAdd xs ys
   return $ var:ctxt
-ctxtAdd (var@(x, SDef tySch (Just g1)):xs) ys = 
-  case lookupAndCutout x ys of 
-    Just (ys', SDef tySch' (Just g1')) -> do 
-      ctxt <- ctxtAdd xs ys' 
+ctxtAdd (var@(x, SDef tySch (Just g1)):xs) ys =
+  case lookupAndCutout x ys of
+    Just (ys', SDef tySch' (Just g1')) -> do
+      ctxt <- ctxtAdd xs ys'
       return $ (x, SDef tySch (Just $ TyInfix TyOpPlus g1 g1')) : ctxt
     _ -> Nothing

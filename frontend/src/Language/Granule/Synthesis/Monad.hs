@@ -16,6 +16,7 @@ import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.SubstitutionContexts (Substitution)
 import Language.Granule.Syntax.Type (TypeScheme)
 import Language.Granule.Syntax.Identifiers
+import Language.Granule.Utils
 
 -- Data structure for collecting information about synthesis
 data SynthesisData =
@@ -99,14 +100,17 @@ try m n = do
   Synthesiser $ ExceptT ((runExceptT (unSynthesiser m)) `interleave` (runExceptT (unSynthesiser n)))
 
 
-none :: Synthesiser a
-none = Synthesiser (ExceptT mzero)
+none :: (?globals :: Globals) => Synthesiser a
+none = do
+  when interactiveDebugging (liftIO $ putStrLn "<<< none HERE. Press any key to continue"
+                                   >> getLine >> return ())
+  Synthesiser (ExceptT mzero)
 
-maybeToSynthesiser :: Maybe (Ctxt a) -> Synthesiser (Ctxt a)
+maybeToSynthesiser :: (?globals :: Globals) => Maybe (Ctxt a) -> Synthesiser (Ctxt a)
 maybeToSynthesiser (Just x) = return x
 maybeToSynthesiser Nothing = none
 
-boolToSynthesiser :: Bool -> a -> Synthesiser a
+boolToSynthesiser :: (?globals :: Globals) => Bool -> a -> Synthesiser a
 boolToSynthesiser True x = return x
 boolToSynthesiser False _ = none
 
