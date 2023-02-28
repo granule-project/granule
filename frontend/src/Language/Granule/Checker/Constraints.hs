@@ -132,6 +132,9 @@ compileToSBV predicate tyVarContext constructors =
     -- Build the theorem, doing local creation of universal variables
     -- when needed (see Impl case)
     buildTheorem' :: Ctxt SGrade -> Pred -> Symbolic SBool
+    buildTheorem' solverVars (Conj []) = do
+      return $ sTrue
+
     buildTheorem' solverVars (Conj ps) = do
       ps' <- mapM (buildTheorem' solverVars) ps
       return $ sAnd ps'
