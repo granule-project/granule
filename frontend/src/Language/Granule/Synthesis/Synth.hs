@@ -1029,59 +1029,55 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
         cs <- conv $ get
 
         -- If the type is polyshaped then add constraint that we incur a usage
-        -- TODO: MOVE! This is the wrong place, needs to be on the scrutinee grade at the end.
-        solved <-
-          ifM (conv $ polyShaped ty)
-            (do
-              (kind, _, _) <- conv $ synthKind ns grade_r
-              modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (TyGrade (Just kind) 1) grade_r kind)
-              solve)
-            (return True)
 
-        if solved then do
 
-          let (recCons, nonRecCons) = relevantConstructors datatypeName (constructors synthState)
+        let (recCons, nonRecCons) = relevantConstructors datatypeName (constructors synthState)
 
-          let datacons = sortBy compareArity (recCons ++ nonRecCons)
+        let datacons = sortBy compareArity (recCons ++ nonRecCons)
 
           -- Process each data constructor
-          branchInformation <-
-            mapMaybeM (casePatternMatchBranchSynth
+        branchInformation <-
+          mapMaybeM (casePatternMatchBranchSynth
                            sParams focusPhase  -- synth configs
                            gamma omega         -- contexts
                            var                 -- var being match on
                            datatypeName
                            goal) datacons
 
-          let (patExprs, contextsAndSubstsGrades) = unzip branchInformation
-          let (deltas, substsAndGrades)           = unzip contextsAndSubstsGrades
-          let (substs, grades)                    = unzip substsAndGrades
-          -- TODO: more clear names here
-          let (grade_rs, grade_ss)                = unzip grades
+        let (patExprs, contextsAndSubstsGrades) = unzip branchInformation
+        let (deltas, substsAndGrades)           = unzip contextsAndSubstsGrades
+        let (substs, grades)                    = unzip substsAndGrades
+        -- TODO: more clear names here
+        let (grade_rs, grade_ss)                = unzip grades
 
           -- join contexts
-          delta <- foldM (ctxtMerge gJoin) (head deltas) (tail deltas)
+        delta <- foldM (ctxtMerge gJoin) (head deltas) (tail deltas)
 
           -- join grades
-          let grade_r_out = foldr gJoin  (head grade_rs) (tail grade_rs)
-          let grade_s_out = foldr gJoin' (head grade_ss) (tail grade_ss)
+        let grade_r_out = foldr gJoin  (head grade_rs) (tail grade_rs)
+        let grade_s_out = foldr gJoin' (head grade_ss) (tail grade_ss)
 
-          -- join substitutions
-          subst <- conv $ combineManySubstitutions ns substs
+        -- join substitutions
+        subst <- conv $ combineManySubstitutions ns substs
 
-          res <- solve
+        solved <-
+          ifM (conv $ polyShaped ty)
+            (do
+              (kind, _, _) <- conv $ synthKind ns grade_r
+              modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (TyGrade (Just kind) 1) grade_r_out kind)
+              solve)
+            (return True)
 
-          case (patExprs, grade_r_out, grade_s_out, res) of
+        case (patExprs, grade_r_out, grade_s_out, solved) of
 
-            (_:_, grade_r_out', Just grade_s_out', True) -> do
-              let var_x_out = (x, SVar (Discharged ty (grade_r_out' `gPlus` grade_s_out')) sInfo)
-              return (makeCaseUntyped x patExprs, var_x_out:delta, subst, False, Just x)
+          (_:_, grade_r_out', Just grade_s_out', True) -> do
+            let var_x_out = (x, SVar (Discharged ty (grade_r_out' `gPlus` grade_s_out')) sInfo)
+            return (makeCaseUntyped x patExprs, var_x_out:delta, subst, False, Just x)
 
-            (_:_, grade_r_out', Nothing, True) -> do
-              let var_x_out = (x, SVar (Discharged ty (grade_r_out')) sInfo)
-              return (makeCaseUntyped x patExprs, var_x_out:delta, subst, False, Just x)
-            _ -> none
-        else none
+          (_:_, grade_r_out', Nothing, True) -> do
+            let var_x_out = (x, SVar (Discharged ty (grade_r_out')) sInfo)
+            return (makeCaseUntyped x patExprs, var_x_out:delta, subst, False, Just x)
+          _ -> none
       (False, _) -> noneWithMaxReached
       _ -> none
   `try` caseRule sParams focusPhase gamma (Focused (var : left)) (Focused right) goal
