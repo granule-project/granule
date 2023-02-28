@@ -643,7 +643,7 @@ approximatedByOrEqualConstraint (SSec a) (SSec b) =
   -- So this is flipped implication
   return (b .=> a)
 
-approximatedByOrEqualConstraint (SLNL a) (SLNL b) = 
+approximatedByOrEqualConstraint (SLNL a) (SLNL b) =
   return
     $ ite (a .== literal zeroRep .&& b .== literal oneRep) sFalse
       $ ite (a .<= b) sTrue sFalse

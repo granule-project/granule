@@ -80,7 +80,6 @@ checkCasePatterns = let ?globals = mempty in do
               tyVarA <- conv $ freshTyVarInContextWithBinding (mkId "a") (Type 0) ForallQ
               tyVarB <- conv $ freshTyVarInContextWithBinding (mkId "b") (Type 0) ForallQ
               tyVarR <- conv $ freshTyVarInContextWithBinding (mkId "r") nat ForallQ
-              tyVarS <- conv $ freshTyVarInContextWithBinding (mkId "s") nat ForallQ
               -- Scrutinee
               let eitherAB = TyApp (TyApp (TyCon $ mkId "Either") (TyVar tyVarA)) (TyVar tyVarB)
               let var = (mkId "scrutinee", SVar (Discharged eitherAB (TyVar tyVarR)) Nothing)
@@ -89,7 +88,7 @@ checkCasePatterns = let ?globals = mempty in do
               -- (mkId "y", SVar (Discharged (TyVar tyVarA) (TyVar tyVarS)) Nothing)]
               let omega = []
 
-              casePatternMatchBranchSynth
+              res <- casePatternMatchBranchSynth
                   defaultSearchParams
                   RightAsync
                   gamma
@@ -99,17 +98,26 @@ checkCasePatterns = let ?globals = mempty in do
                   (TyVar tyVarB)
                   (mkId "Right", (right, coerce))
 
+              return (res >>= (\res' -> Just (res', tyVarR)))
+
       -- Patter-expr pair
-      let patternExprPair = map (fmap fst . fst) results
+      let patternExprPair = map (fmap (fst . fst) . fst) results
       patternExprPair
           `shouldBe` [Just (PConstr ns () False (mkId "Right") [PVar ns () False (mkId "x")], Val ns () False (Var () (mkId "x")))]
 
       -- Predicate
       let predicate = map (fromPredicateContext . predicateContext . snd) results
-      let expectedApprox1 = Con $ ApproximatedBy ns (TyVar $ mkId "s") (TyInfix TyOpTimes (TyVar $ mkId "s'") (TyGrade Nothing 1)) nat
-      let expectedApprox2 = Con $ ApproximatedBy ns (TyInfix TyOpTimes (TyVar $ mkId "s'") (TyGrade Nothing 1)) (TyInfix TyOpTimes (TyVar $ mkId "r") (TyGrade Nothing 1)) nat
-      pretty predicate
-        `shouldBe` pretty [Impl [] (Conj [Conj [],Conj []]) (Exists (mkId "s'") nat (Conj [expectedApprox1, expectedApprox2]))]
+      case map (fmap snd . fst) results of
+        (Just tyVarRId : _) -> do
+          let tyVarR = TyVar tyVarRId
+          let expectedApprox1 = Con $ ApproximatedBy ns (TyGrade (Just nat) 1) (TyInfix TyOpTimes (TyVar $ mkId "y") tyVarR) nat
+          let expectedApprox2 = Con $ ApproximatedBy ns (TyInfix TyOpTimes (TyVar $ mkId "y") tyVarR) (TyInfix TyOpTimes tyVarR tyVarR) nat
+          -- ((T ∧ T) -> T ∧ ∃ y : Nat . T ∧ ((1 : Nat) = y * r0) ∧ (y * r0 = r0 * r0))
+          pretty predicate
+            `shouldBe` pretty [Impl [] (Conj [Conj [],Conj []])
+                              (Conj [Conj [],
+                                  Exists (mkId "y") nat (Conj [Conj [], expectedApprox1, expectedApprox2])])]
+        _ -> fail "Not expected"
 
 -- Helper for running the synthesiser
 testSynthesiser :: (?globals :: Globals)
