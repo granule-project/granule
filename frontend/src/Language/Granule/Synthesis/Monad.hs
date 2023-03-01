@@ -115,7 +115,8 @@ try m n = do
       })
   Synthesiser $ ExceptT ((runExceptT (unSynthesiser m)) `interleave` (runExceptT (unSynthesiser n)))
 
-
+-- No synthesis result (fail and backtrack
+-- In --interactive mode it also pauses execution waiting for the user
 none :: (?globals :: Globals) => Synthesiser a
 none = do
   when interactiveDebugging $ do
@@ -123,6 +124,18 @@ none = do
     _ <- liftIO $ getLine
     return ()
   Synthesiser (ExceptT mzero)
+
+-- Allows the synthesiser to be paused in --interactive mode
+pause :: (?globals :: Globals) => Synthesiser ()
+pause = do
+  when interactiveDebugging $ do
+    liftIO $ putStrLn "<<< Paused. Type 'p' to continue"
+    inp <- liftIO $ getLine
+    case inp of
+      ('p':_) -> return ()
+      ('P':_) -> return ()
+      _       -> pause
+  return ()
 
 maybeToSynthesiser :: (?globals :: Globals) => Maybe (Ctxt a) -> Synthesiser (Ctxt a)
 maybeToSynthesiser (Just x) = return x
