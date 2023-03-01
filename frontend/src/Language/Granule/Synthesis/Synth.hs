@@ -1109,11 +1109,9 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
               return res)
             solve
 
-        case (patExprs, solved) of
-
-          (_:_, True) ->
-            return (makeCaseUntyped x patExprs, var_x_out:delta, subst, False, Just x)
-          _ -> none
+        if solved && not (null patExprs)
+          then return (makeCaseUntyped x patExprs, var_x_out:delta, subst, False, Just x)
+          else none
       (False, _) -> noneWithMaxReached
       _ -> none
   `try` caseRule sParams focusPhase gamma (Focused (var : left)) (Focused right) goal
