@@ -8,7 +8,7 @@ spec
     or False True = True;
     or True False = True;
     or False False = False;
-or x y =
+or x y = 
     (case y of
       True -> y;
       False -> x)
