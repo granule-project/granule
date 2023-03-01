@@ -28,6 +28,7 @@ import Language.Granule.Checker.Patterns
 import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Types
+import Language.Granule.Checker.Variables
 import Language.Granule.Synthesis.Builders
 import Language.Granule.Synthesis.Monad
 import Language.Granule.Synthesis.Contexts
@@ -456,7 +457,13 @@ synLoop step sParams index gamma synthState checkerState goal = do
 
 
 
-gSynth :: (?globals :: Globals) => SearchParameters -> FocusPhase -> Ctxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () ())
+gSynth :: (?globals :: Globals)
+  => SearchParameters
+  -> FocusPhase
+  -> Ctxt SAssumption
+  -> FocusedCtxt SAssumption
+  -> Type
+  -> Synthesiser (Expr () ())
 gSynth sParams focusPhase gamma (Focused omega) goal = do
 
   relevantConstructors <- do
@@ -508,7 +515,13 @@ gSynth sParams focusPhase gamma (Focused omega) goal = do
     else none
 
 
-gSynthInner :: (?globals :: Globals) => SearchParameters -> FocusPhase -> Ctxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
+gSynthInner :: (?globals :: Globals)
+  => SearchParameters
+  -> FocusPhase
+  -> Ctxt SAssumption
+  -> FocusedCtxt SAssumption
+  -> Type
+  -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
 gSynthInner sParams focusPhase gamma (Focused omega) goal | guessCurrent sParams <= guessMax sParams = do
 
   case (focusPhase, omega) of
@@ -590,7 +603,12 @@ incrG sParams = sParams { guessCurrent = (guessCurrent sParams) + 1}
 Γ, x :ᵣ A ⊢ A => x | 0·Γ, x :₁ A
 
 -}
-varRule :: (?globals :: Globals) => Ctxt SAssumption -> FocusedCtxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
+varRule :: (?globals :: Globals)
+  => Ctxt SAssumption
+  -> FocusedCtxt SAssumption
+  -> FocusedCtxt SAssumption
+  -> Type
+  -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
 varRule _ _ (Focused []) _ = none
 -- varRule gamma (Focused left) (Focused (var@(name, SVar (Discharged t grade) sInfo) : right)) goal = do
 varRule gamma (Focused left) (Focused (var@(name, assumption) : right)) goal = do
@@ -652,7 +670,7 @@ absRule sParams focusPhase gamma (Focused omega) goal@(FunTy name gradeM tyA tyB
   -- Extract the graded arrow, or use generic 1 if there is no grade
   let grade = getGradeFromArrow gradeM
 
-  x <-  useBinderNameOrFreshen name
+  x <- useBinderNameOrFreshen name
 
   let (gamma', omega') = bindToContext (x, SVar (Discharged tyA grade) (Just NonDecreasing)) gamma omega (isLAsync tyA)
 
@@ -1020,13 +1038,20 @@ casePatternMatchBranchSynth
     _ -> do
       return Nothing
 
-caseRule :: (?globals :: Globals) => SearchParameters -> FocusPhase -> Ctxt SAssumption -> FocusedCtxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
+caseRule :: (?globals :: Globals)
+   => SearchParameters
+   -> FocusPhase
+   -> Ctxt SAssumption
+   -> FocusedCtxt SAssumption
+   -> FocusedCtxt SAssumption
+   -> Type
+   -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
 caseRule _ _ _ _ (Focused []) _ = none
 caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Discharged ty grade_r) sInfo):right)) goal =
   do
     debugM "caseRule, goal is" (pretty goal)
 
-    case (matchCurrent sParams <= matchMax sParams,leftmostOfApplication ty) of
+    case (matchCurrent sParams <= matchMax sParams, leftmostOfApplication ty) of
       (True, TyCon datatypeName) -> do
 
         let omega = left ++ right
@@ -1063,12 +1088,12 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
         -- join substitutions
         subst <- conv $ combineManySubstitutions ns substs
 
-
         grade_final <- case grade_s_out of
                   -- Add the usages of each branch to the usages of x inside each branch
                   Just grade_s_out' -> return $ grade_r_out `gPlus` grade_s_out'
                   -- Not sure when this case should arise, since nullary constructors get a 1 grade
                   Nothing -> return grade_r_out
+        -- Focussed variable output assumption
         let var_x_out = (x, SVar (Discharged ty grade_final) sInfo)
 
         solved <-
