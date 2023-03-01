@@ -17,7 +17,6 @@ import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Types
   (equalTypes)
 import Language.Granule.Syntax.Identifiers
-import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 import Language.Granule.Synthesis.Monad
@@ -319,7 +318,7 @@ solve = do
   tyVars <- conv $ includeOnlyGradeVariables ns (tyVarContext cs)
 
   let pred = fromPredicateContext (predicateContext cs)
-  debugM "synthDebug" ("SMT on pred = " ++ pretty pred)
+
   -- Prove the predicate
   start  <- liftIO $ Clock.getTime Clock.Monotonic
   constructors <- conv allDataConstructorNames
