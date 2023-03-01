@@ -1079,11 +1079,13 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
         let (grade_rs, grade_ss)                = unzip grades
 
           -- join contexts
+        -- TODO: generalise ctxtMerge so it can take a side-effectful operator
+
         delta <- foldM (ctxtMerge gJoin) (head deltas) (tail deltas)
 
           -- join grades
-        let grade_r_out = foldr gJoin  (head grade_rs) (tail grade_rs)
-        let grade_s_out = foldr gJoin' (head grade_ss) (tail grade_ss)
+        grade_r_out <- foldM (computeJoin Nothing)  (head grade_rs) (tail grade_rs)
+        grade_s_out <- foldM (computeJoin' Nothing) (head grade_ss) (tail grade_ss)
 
         -- join substitutions
         subst <- conv $ combineManySubstitutions ns substs
@@ -1118,6 +1120,31 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
 
 caseRule _ _ _ _ _ _ = none
 
+-- Given two grades, returns their join.
+-- and where the first input may specify their kind if its already known
+
+-- Note however that this may also generate predicates
+-- (and hence lives in the `Synthesis` monad) as some
+-- grades do *not* have a join.
+
+computeJoin :: (?globals :: Globals) => Maybe Kind -> Type -> Type -> Synthesiser Type
+computeJoin maybeK g1 g2 = do
+  k <- case maybeK of
+         Nothing -> conv $ do { (k, _, _) <- synthKind ns g1; return k }
+         Just k  -> return k
+  upperBoundGradeVarId <- conv $ freshIdentifierBase $ "ub"
+  let upperBoundGradeVar = mkId upperBoundGradeVarId
+  modify (\st -> st { tyVarContext = (upperBoundGradeVar, (k, InstanceQ)) : tyVarContext st })
+  let upperBoundGrade = TyVar upperBoundGradeVar
+  conv $ addConstraint (Lub ns g1 g2 upperBoundGrade k)
+  return upperBoundGrade
+
+-- Version of computeJoin' where the inputs may be Nothing i.e.,
+-- implicit 1 grade
+computeJoin' :: (?globals :: Globals) => Maybe Kind -> Maybe Type -> Maybe Type -> Synthesiser (Maybe Type)
+computeJoin' mKind mg1 mg2 = do
+  x <- computeJoin mKind (getGradeFromArrow mg1) (getGradeFromArrow mg2)
+  return $ Just x
 
 gPlus :: Type -> Type -> Type
 gPlus = TyInfix TyOpPlus
