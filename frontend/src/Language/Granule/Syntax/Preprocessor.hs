@@ -6,19 +6,23 @@ import Data.List (intercalate)
 
 import Language.Granule.Syntax.Preprocessor.Latex
 import Language.Granule.Syntax.Preprocessor.Markdown
+import Language.Granule.Syntax.Preprocessor.Ascii
 
 import Language.Granule.Utils
 
 -- | Preprocess the source file based on the file extension.
-preprocess :: Maybe (String -> String) -> Bool -> String -> FilePath -> IO String
-preprocess mbRewriter keepOldFile file env
+preprocess :: (?globals :: Globals) => FilePath -> IO String
+preprocess filePath
   = case lookup extension acceptedFormats of
-      Just (stripNonGranule, preprocessOnlyGranule) -> do
-        src <- readFile file
-        case mbRewriter of
+      Just (stripNonGranule, destructivePreprocessor) -> do
+        src <- readFile filePath
+        case rewriter of
           Just rewriter -> do
-            let processedSrc = preprocessOnlyGranule rewriter src
-            written <- writeSrcFile file keepOldFile processedSrc
+            let rewriterF = case rewriter of
+                  AsciiToUnicode -> asciiToUnicode
+                  UnicodeToAscii -> unicodeToAscii
+            let processedSrc = destructivePreprocessor rewriterF src
+            written <- writeSrcFile filePath keepBackupOfProcessedFile processedSrc
             return $ stripNonGranule written
           Nothing -> return $ stripNonGranule src
       Nothing -> error
@@ -28,12 +32,13 @@ preprocess mbRewriter keepOldFile file env
         <> intercalate ", " (map fst acceptedFormats)
         <> "."
   where
-    extension = reverse . takeWhile (/= '.') . reverse $ file
 
-    -- (file extension, (stripNonGranule, destructive preprocessor))
+    extension = reverse . takeWhile (/= '.') . reverse $ filePath
+
+    -- (file extension, (stripNonGranule, destructivePreprocessor))
     acceptedFormats =
-      [ ("gr",    (id,             id))
-      , ("md",    (unMarkdown env, processGranuleMarkdown id env))
-      , ("tex",   (unLatex env,    processGranuleLatex id env))
-      , ("latex", (unLatex env,    processGranuleLatex id env))
+      [ ("gr",    (id,         id))
+      , ("md",    (unMarkdown, processGranuleMarkdown id literateEnvName))
+      , ("tex",   (unLatex,    processGranuleLatex id literateEnvName))
+      , ("latex", (unLatex,    processGranuleLatex id literateEnvName))
       ]

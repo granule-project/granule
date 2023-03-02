@@ -7,6 +7,8 @@ module Language.Granule.Syntax.Preprocessor.Markdown
 import Data.Char (isSpace)
 import Control.Arrow ((>>>))
 
+import Language.Granule.Utils
+
 data DocType
   = Markdown
   | GranuleBlockTwiddle
@@ -15,8 +17,8 @@ data DocType
 -- | Extract fenced code blocks from markdown files on a
 -- line-by-line basis. Maps other lines to the empty string, such that line
 -- numbers are preserved.
-unMarkdown :: String -> (String -> String)
-unMarkdown env = processGranuleMarkdown (const "") env id
+unMarkdown :: (?globals :: Globals) => (String -> String)
+unMarkdown = processGranuleMarkdown (const "") literateEnvName id
 
 -- | Transform the input by the given processing functions for Granule and
 -- Markdown (currently operating on a line-by-line basis)
@@ -29,19 +31,19 @@ processGranuleMarkdown fMd env fGr = lines >>> (`zip` [1..]) >>> go Markdown >>>
   where
     go :: DocType -> [(String, Int)] -> [String]
     go Markdown ((line, lineNumber) : ls)
-      | strip line == "~~~" <> env <> "" || strip line == "~~~ " <> env <> ""
+      | strip line == "~~~" <> env || strip line == "~~~ " <> env
         = fMd line : go GranuleBlockTwiddle ls
-      | strip line == "```" <> env <> "" || strip line == "``` " <> env <> ""
+      | strip line == "```" <> env || strip line == "``` " <> env
         = fMd line : go GranuleBlockTick ls
       | otherwise
         = fMd line : go Markdown ls
     go GranuleBlockTwiddle ((line, lineNumber) : ls)
       | strip line == "~~~"
         = fMd line : go Markdown ls
-      | strip line == "~~~" <> env <> ""
-        || strip line == "~~~ " <> env <> ""
-        || strip line == "```" <> env <> ""
-        || strip line == "``` " <> env <> ""
+      | strip line == "~~~" <> env
+        || strip line == "~~~ " <> env
+        || strip line == "```" <> env
+        || strip line == "``` " <> env
           = error
             $ "Unexpected `"
             <> line
@@ -53,10 +55,10 @@ processGranuleMarkdown fMd env fGr = lines >>> (`zip` [1..]) >>> go Markdown >>>
     go GranuleBlockTick ((line, lineNumber) : ls)
       | strip line == "```"
         = fMd line : go Markdown ls
-      | strip line == "~~~" <> env <> ""
-        || strip line == "~~~ " <> env <> ""
-        || strip line == "```" <> env <> ""
-        || strip line == "``` " <> env <> ""
+      | strip line == "~~~" <> env
+        || strip line == "~~~ " <> env
+        || strip line == "```" <> env
+        || strip line == "``` " <> env
           = error
             $ "Unexpected `"
             <> line

@@ -9,6 +9,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE NamedFieldPuns #-}
 
 module Language.Granule.Syntax.Pretty where
 
@@ -20,8 +21,8 @@ import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Helpers
-import Language.Granule.Syntax.Identifiers
 import Language.Granule.Utils
+import Language.Granule.Syntax.Program
 
 -- Version of pretty that assumes the default Globals so as not to
 -- propagate globals information around
@@ -170,19 +171,25 @@ instance Pretty TypeOperator where
    TyOpInterval        -> ".."
    TyOpConverge        -> "#"
 
-instance Pretty v => Pretty (AST v a) where
-  pretty (AST dataDecls defs imprts hidden name) =
+instance Pretty Module where
+  pretty Mod
+    { moduleAST = AST { dataTypes, definitions }
+    , moduleName
+    , moduleExtensions
+    , moduleImports
+    , moduleHiddenNames } =
     -- Module header (if it exists)
-    (case name of
-        Nothing -> ""
-        Just name -> "module "
-                  <> pretty name
-                  <> " hiding ("
-                  <> (intercalate "," (map pretty (toList hidden)))
-                  <> ") where\n\n")
-    <> (unlines . map ("import " <>) . toList) imprts
-    <> "\n\n" <> pretty' dataDecls
-    <> "\n\n" <> pretty' defs
+    (case moduleName of
+        "" -> ""
+        _ -> "module "
+            <> moduleName
+            <> " hiding ("
+            <> (intercalate "," (map pretty (toList moduleHiddenNames)))
+            <> ") where\n\n"
+    )
+    <> (unlines . map ("import " <>) . toList) moduleImports
+    <> "\n\n" <> pretty' dataTypes
+    <> "\n\n" <> pretty' definitions
     where
       pretty' :: Pretty l => [l] -> String
       pretty' = intercalate "\n\n" . map pretty

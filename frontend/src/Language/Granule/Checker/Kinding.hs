@@ -19,7 +19,6 @@ import Data.Maybe (fromMaybe)
 import Language.Granule.Context
 
 import Language.Granule.Syntax.Def
-import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type

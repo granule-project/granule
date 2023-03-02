@@ -248,6 +248,13 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             , show solverTimeoutMillis <> "ms."
             ]
 
+        globalsCachePath <-
+          optional $ strOption
+            $ long "cache-path"
+            <> help ("Path to the cache file. Defaults to "
+                    <> show cachePath)
+            <> metavar "PATH"
+
         globalsIncludePath <-
           optional $ strOption
             $ long "include-path"

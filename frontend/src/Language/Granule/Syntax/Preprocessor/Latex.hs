@@ -4,6 +4,8 @@ module Language.Granule.Syntax.Preprocessor.Latex
   )
   where
 
+import Language.Granule.Utils
+
 import Data.Char (isSpace)
 import Control.Arrow ((>>>))
 
@@ -14,8 +16,8 @@ data DocType
 -- | Extract @\begin{env}@ code blocks @\end{env}@ from tex files on a
 -- line-by-line basis, where @env@ is the name of the relevant environment. Maps
 -- other lines to the empty string, such that line numbers are preserved.
-unLatex :: String -> (String -> String)
-unLatex env = processGranuleLatex (const "") env id
+unLatex :: (?globals :: Globals) => (String -> String)
+unLatex = processGranuleLatex (const "") literateEnvName id
 
 -- | Transform the input by the given processing functions for Granule and Latex
 -- (currently operating on a line-by-line basis)

@@ -4,7 +4,6 @@ module Language.Granule.Synthesis.Refactor where
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Pattern
-import Language.Granule.Syntax.Identifiers
 
 -- Refactors an equation which contains abstractions in its equations
 -- by pushing these abstractions into equation patterns
