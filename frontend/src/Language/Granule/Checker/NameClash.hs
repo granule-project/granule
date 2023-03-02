@@ -5,11 +5,10 @@ import Control.Monad.Except (throwError)
 import Data.List.NonEmpty (NonEmpty(..))
 import Language.Granule.Checker.Monad
 import Language.Granule.Syntax.Def
-import Language.Granule.Syntax.Identifiers
 import Language.Granule.Utils
 
 checkNameClashes :: AST () () -> Checker ()
-checkNameClashes (AST dataDecls defs _ _ _) =
+checkNameClashes AST{ dataTypes = dataDecls, definitions = defs } =
     case concat [typeConstructorErrs, dataConstructorErrs, defErrs] of
       [] -> pure ()
       (d:ds) -> throwError (d:|ds)

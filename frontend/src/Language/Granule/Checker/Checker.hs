@@ -7,6 +7,7 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE TypeApplications #-}
 
 {-# options_ghc -fno-warn-incomplete-uni-patterns -Wno-deprecations #-}
 
@@ -46,9 +47,9 @@ import Language.Granule.Checker.TypeAliases
 import Language.Granule.Checker.Variables
 import Language.Granule.Context
 
-import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Helpers (freeVars, hasHole)
 import Language.Granule.Syntax.Def
+import Language.Granule.Syntax.Program
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Pattern (Pattern(..))
 import Language.Granule.Syntax.Pretty
@@ -61,81 +62,102 @@ import qualified Language.Granule.Synthesis.Synth as Syn
 
 import Language.Granule.Utils
 
+import Debug.Trace
+import System.Directory (getModificationTime)
+import Control.Exception (try, SomeException)
+
 -- Checking (top-level)
 check :: (?globals :: Globals)
-  => AST () ()
-  -> IO (Either (NonEmpty CheckerError) (AST () Type, [Def () ()]))
-check ast@(AST _ _ _ hidden _) = do
-  evalChecker (initState { allHiddenNames = hidden }) $ (do
-      ast@(AST dataDecls defs imports hidden name) <- return $ replaceTypeAliases ast
+  => Module
+  -> IO (Either (NonEmpty CheckerError) (AST () Type, ModuleSignature))
+check mod@Mod{ moduleAST = ast } =
+  case moduleSignature mod of
+    Just sig -> do
+  -- case moduleMetadata of
+  --   ModMeta
+  --     -- { moduleMetaFilePath = Just sourceFilePath
+  --     { moduleMetaFileModificationTime = Just sourceFileModificationTime
+  --     -- , moduleMetaSignatureFilePath = Just interfaceFilePath
+  --     , moduleMetaSignatureFileModificationTime = Just interfaceFileModificationTime
+  --     }
+  --     | interfaceFileModificationTime > sourceFileModificationTime
+  --     , Just sig <- moduleSignature mod
+
+
+  evalChecker (initState { allHiddenNames = moduleHiddenNames mod }) $ do
+      ast <- return $ replaceTypeAliases ast
       _    <- checkNameClashes ast
-      _    <- runAll checkTyCon (Primitives.dataTypes ++ dataDecls)
-      _    <- runAll checkDataCons (Primitives.dataTypes ++ dataDecls)
+      _    <- runAll checkTyCon (Primitives.dataTypes ++ dataTypes ast)
+      _    <- runAll checkDataCons (Primitives.dataTypes ++ dataTypes ast)
       debugM "extensions" (show $ globalsExtensions ?globals)
       debugM "check" "kindCheckDef"
-      defs <- runAll kindCheckDef defs
+      defs <- runAll kindCheckDef (definitions ast)
       let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
       defs <- runAll (checkDef defCtxt) defs
       -- Add on any definitions computed by the type checker (derived)
       st <- get
       let derivedDefs = map (snd . snd) (derivedDefinitions st)
-      pure $ (AST dataDecls defs imports hidden name, derivedDefs))
+      -- traceM $ show $ AST dataDecls defs imports hidden name
+      -- traceM $ show derivedDefs
+      pure (AST{ dataTypes = dataTypes ast, definitions = defs }, derivedDefs)
 
--- Synthing the type of a single expression in the context of an asy
+-- Synthing the type of a single expression in the context of a Module
 synthExprInIsolation :: (?globals :: Globals)
-  => AST () ()
+  => Module
   -> Expr () ()
   -> IO (Either (NonEmpty CheckerError) (Either (TypeScheme , [Def () ()]) Type))
-synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
-  evalChecker (initState { allHiddenNames = hidden }) $ do
-      _    <- checkNameClashes ast
-      _    <- runAll checkTyCon (Primitives.dataTypes ++ dataDecls)
-      _    <- runAll checkDataCons (Primitives.dataTypes ++ dataDecls)
-      defs <- runAll kindCheckDef defs
+synthExprInIsolation
+  mod@Mod{ moduleAST = ast@AST{ dataTypes = dataDecls, definitions = defs } }
+  expr =
+    evalChecker (initState { allHiddenNames = moduleHiddenNames mod }) $ do
+        _    <- checkNameClashes ast
+        _    <- runAll checkTyCon (Primitives.dataTypes ++ dataDecls)
+        _    <- runAll checkDataCons (Primitives.dataTypes ++ dataDecls)
+        defs <- runAll kindCheckDef defs
 
-      let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
+        let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
 
-      -- also check the defs
-      defs <- runAll (checkDef defCtxt) defs
+        -- also check the defs
+        defs <- runAll (checkDef defCtxt) defs
 
-      -- Since we need to return a type scheme, have a look first
-      -- for top-level identifiers with their schemes
-      case expr of
-        -- Lookup in data constructors
-        (Val s _ _ (Constr _ c [])) -> do
-          mConstructor <- lookupDataConstructor s c
-          case mConstructor of
-            Just (tySch, _) -> return $ Left (tySch, [])
-            Nothing -> do
-              st <- get
-              -- Or see if this is a kind constructors
-              case lookup c (typeConstructors st) of
-                Just (k, _, _) -> return $ Right k
-                Nothing -> throw UnboundDataConstructor{ errLoc = s, errId = c }
+        -- Since we need to return a type scheme, have a look first
+        -- for top-level identifiers with their schemes
+        case expr of
+          -- Lookup in data constructors
+          (Val s _ _ (Constr _ c [])) -> do
+            mConstructor <- lookupDataConstructor s c
+            case mConstructor of
+              Just (tySch, _) -> return $ Left (tySch, [])
+              Nothing -> do
+                st <- get
+                -- Or see if this is a kind constructors
+                case lookup c (typeConstructors st) of
+                  Just (k, _, _) -> return $ Right k
+                  Nothing -> throw UnboundDataConstructor{ errLoc = s, errId = c }
 
-        -- Lookup in definitions
-        (Val s _ _ (Var _ x)) -> do
-          case lookup x (defCtxt <> Primitives.builtins) of
-            Just tyScheme -> return $ Left (tyScheme, [])
-            Nothing -> throw UnboundVariableError{ errLoc = s, errId = x }
+          -- Lookup in definitions
+          (Val s _ _ (Var _ x)) -> do
+            case lookup x (defCtxt <> Primitives.builtins) of
+              Just tyScheme -> return $ Left (tyScheme, [])
+              Nothing -> throw UnboundVariableError{ errLoc = s, errId = x }
 
-        -- Otherwise, do synth
-        _ -> do
-          (ty, _, subst, _) <- synthExpr defCtxt [] Positive expr
-          --
-          -- Solve the generated constraints
-          checkerState <- get
+          -- Otherwise, do synth
+          _ -> do
+            (ty, _, subst, _) <- synthExpr defCtxt [] Positive expr
+            --
+            -- Solve the generated constraints
+            checkerState <- get
 
-          let predicate = Conj $ predicateStack checkerState
-          predicate <- substitute subst predicate
-          solveConstraints predicate (getSpan expr) (mkId "grepl")
+            let predicate = Conj $ predicateStack checkerState
+            predicate <- substitute subst predicate
+            solveConstraints predicate (getSpan expr) (mkId "grepl")
 
 
-          let derivedDefs = map (snd . snd) (derivedDefinitions checkerState)
+            let derivedDefs = map (snd . snd) (derivedDefinitions checkerState)
 
-          -- Apply the outcoming substitution
-          ty' <- substitute subst ty
-          return $ Left (Forall nullSpanNoFile [] [] ty', derivedDefs)
+            -- Apply the outcoming substitution
+            ty' <- substitute subst ty
+            return $ Left (Forall nullSpanNoFile [] [] ty', derivedDefs)
 
 -- TODO: we are checking for name clashes again here. Where is the best place
 -- to do this check?
@@ -303,6 +325,8 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
     checkGuardsForImpossibility s defName
     checkGuardsForExhaustivity s defName ty equations
     let el' = el { equations = elaboratedEquations }
+    traceM "\n\n********\n"
+    traceM $ show $ Def s defName rf el' tys
     pure $ Def s defName rf el' tys
   where
     elaborateEquation :: Equation () () -> Checker (Equation () Type)
@@ -1984,6 +2008,11 @@ checkGuardsForImpossibility s name = do
     debugM "impossibility" $ "about to try" <> pretty thm
     -- Try to prove the theorem
     constructors <- allDataConstructorNames
+
+    -- traceM $ show (thm, tyVars, constructors)
+
+    _ <- liftIO $ try @SomeException $ getModificationTime ""
+
     (_, result) <- liftIO $ provePredicate thm tyVars constructors
 
     p <- simplifyPred thm

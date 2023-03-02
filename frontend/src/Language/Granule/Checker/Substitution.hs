@@ -30,7 +30,6 @@ import Language.Granule.Context
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr hiding (Substitutable)
 import Language.Granule.Syntax.Helpers hiding (freshIdentifierBase)
-import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pattern
 -- import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
@@ -371,7 +370,7 @@ substituteValue ctxt (PromoteF ty expr) =
 substituteValue ctxt (PureF ty expr) =
     do  ty' <- substitute ctxt ty
         return $ Pure ty' expr
-substituteValue ctxt (NecF ty expr) = 
+substituteValue ctxt (NecF ty expr) =
     do ty' <- substitute ctxt ty
        return $ Nec ty' expr
 substituteValue ctxt (ConstrF ty ident vs) =

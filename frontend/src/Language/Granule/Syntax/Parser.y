@@ -32,6 +32,7 @@ import Language.Granule.Syntax.Preprocessor.Latex
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 import Language.Granule.Utils hiding (mkSpan)
+import Language.Granule.Syntax.Program
 
 }
 
@@ -40,7 +41,7 @@ import Language.Granule.Utils hiding (mkSpan)
 %name tscheme TypeScheme
 %tokentype { Token }
 %error { parseError }
-%monad { StateT [Extension] (ReaderT String (Either String)) }
+%monad { ReaderT String (Either String) }
 
 %token
     nl    { TokenNL _ }
@@ -127,35 +128,37 @@ import Language.Granule.Utils hiding (mkSpan)
 %left '.'
 %%
 
-TopLevel :: { AST () () }
+TopLevel :: { Module }
   : module CONSTR where NL Defs
-            { $5 { moduleName = Just $ mkId $ constrString $2 } }
+      { $5 { moduleName = constrString $2 } }
 
   | module CONSTR hiding '(' Ids ')' where  NL Defs
-            { let modName = mkId $ constrString $2
-              in $9 { moduleName = Just modName, hiddenNames = $5 modName } }
+      { $9
+        { moduleName = constrString $2
+        , moduleHiddenNames = M.fromList $ map (\id -> (id, constrString $2)) $5
+        }
+      }
 
-  | language CONSTR NL TopLevel                     {% case parseExtensions (constrString $2) of
-                                                    Just ext -> do
-                                                       -- modify (\st -> st { globalsExtensions = ext : globalsExtensions st })
-                                                       modify (\st -> ext : st)
-                                                       return $4
-                                                    Nothing -> error ("Unknown language extension " ++ symString $2)
-                                                }
+  | language CONSTR NL TopLevel
+      { case parseExtensions (constrString $2) of
+            Just ext -> $4 { moduleExtensions = insert ext (moduleExtensions $4) }
+            Nothing -> error ("Unknown language extension: " ++ symString $2)
+      }
 
-  | Defs                                        { $1 }
+  | Defs
+      { $1 }
 
-Ids :: { Id -> M.Map Id Id }
- : CONSTR          { \modName -> M.insert (mkId $ constrString $1) modName M.empty }
- | CONSTR ',' Ids  { \modName -> M.insert (mkId $ constrString $1) modName ($3 modName) }
+Ids :: { [Id] }
+ : CONSTR          { [mkId $ constrString $1] }
+ | CONSTR ',' Ids  { (mkId $ constrString $1) : $3 }
 
-Defs :: { AST () () }
-  : Def                       { AST [] [$1] mempty mempty Nothing }
-  | DataDecl                  { AST [$1] [] mempty mempty Nothing }
-  | Import                    { AST [] [] (singleton $1) mempty Nothing }
-  | DataDecl NL Defs          { $3 { dataTypes = $1 : dataTypes $3 } }
-  | Def NL Defs               { $3 { definitions = $1 : definitions $3 } }
-  | Import NL Defs            { $3 { imports = insert $1 (imports $3) } }
+Defs :: { Module }
+  : Def                       { emptyModule{ moduleAST = emptyAST{ definitions = [$1] } } }
+  | DataDecl                  { emptyModule{ moduleAST = emptyAST{ dataTypes = [$1] } } }
+  | Import                    { emptyModule{ moduleImports = singleton $1 } }
+  | DataDecl NL Defs          { $3 { moduleAST = (moduleAST $3){ dataTypes = $1 : dataTypes (moduleAST $3) } } }
+  | Def NL Defs               { $3 { moduleAST = (moduleAST $3){ definitions = $1 : definitions (moduleAST $3) } } }
+  | Import NL Defs            { $3 { moduleImports = insert $1 (moduleImports $3) } }
 
 NL :: { () }
   : nl NL                     { }
@@ -163,7 +166,7 @@ NL :: { () }
 
 Import :: { Import }
   : import                    { let TokenImport _ ('i':'m':'p':'o':'r':'t':path) = $1
-                                in dropWhile isSpace path <> ".gr"
+                                in dropWhile isSpace $path
                               }
 
 Def :: { Def () () }
@@ -496,17 +499,17 @@ Expr :: { Expr () () }
                      (PConstr span3 () False (mkId "False") [], $6)] }
 
   | clone Expr as CopyBind in Expr
-    {% let t1 = $2; (_, pat, mt) = $4; t2 = $6 
+    {% let t1 = $2; (_, pat, mt) = $4; t2 = $6
       in (mkSpan (getPos $1, getEnd $6)) >>=
-        \sp -> return $ App sp () False (App sp () False 
-          (Val sp () False (Var () (mkId "uniqueBind"))) 
+        \sp -> return $ App sp () False (App sp () False
+          (Val sp () False (Var () (mkId "uniqueBind")))
           (Val sp () False (Abs () pat mt t2))) t1 }
 
   | endorse Expr as CopyBind in Expr
-    {% let t1 = $2; (_, pat, mt) = $4; t2 = $6 
+    {% let t1 = $2; (_, pat, mt) = $4; t2 = $6
       in (mkSpan (getPos $1, getEnd $6)) >>=
-        \sp -> return $ App sp () False (App sp () False 
-          (Val sp () False (Var () (mkId "trustedBind"))) 
+        \sp -> return $ App sp () False (App sp () False
+          (Val sp () False (Var () (mkId "trustedBind")))
           (Val sp () False (Abs () pat mt t2))) t1 }
 
   | Form
@@ -607,7 +610,7 @@ Atom :: { Expr () () }
                                     >>= \sp -> return $ Val sp () False $ Nec () (Val sp () False $ NumInt x) }
   | '#' FLOAT                 {% let (TokenFloat _ x) = $2
                                  in (mkSpan $ getPosToSpan $1)
-                                    >>= \sp -> return $ Val sp () False $ Nec () (Val sp () False $ NumFloat $ read x) }                                                                                           
+                                    >>= \sp -> return $ Val sp () False $ Nec () (Val sp () False $ NumFloat $ read x) }
   | CONSTR                    {% (mkSpan $ getPosToSpan $1)  >>= \sp -> return $ Val sp () False $ Constr () (mkId $ constrString $1) [] }
   | '#' CONSTR                {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Val sp () False $ Nec () (Val sp () False $ Constr () (mkId $ constrString $2) [])}
   | '(' Expr ',' Expr ')'     {% do
@@ -629,64 +632,66 @@ Atom :: { Expr () () }
                                      case $2 of (TokenCharLiteral _ c) -> Nec () (Val sp () False $ CharLiteral c) }
   | '#' STRING                {% (mkSpan $ getPosToSpan $1) >>= \sp ->
                                   return $ Val sp () False $
-                                     case $2 of (TokenStringLiteral _ c) -> Nec () (Val sp () False $ StringLiteral c) }                              
+                                     case $2 of (TokenStringLiteral _ c) -> Nec () (Val sp () False $ StringLiteral c) }
   | Hole                      { $1 }
   | '&' Expr                  {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ App sp () False (Val sp () False (Var () (mkId "uniqueReturn"))) $2 }
 
 {
 
-mkSpan :: (Pos, Pos) -> StateT [Extension] (ReaderT String (Either String)) Span
+mkSpan :: (Pos, Pos) -> ReaderT String (Either String) Span
 mkSpan (start, end) = do
-  filename <- lift $ ask
+  filename <- ask
   return $ Span start end filename
 
-parseError :: [Token] -> StateT [Extension] (ReaderT String (Either String)) a
-parseError [] = lift $ lift $ Left "Premature end of file"
+parseError :: [Token] -> ReaderT String (Either String) a
+parseError [] = lift $ Left "Premature end of file"
 parseError t = do
-    file <- lift $ ask
-    lift $ lift $ Left $ file <> ":" <> show l <> ":" <> show c <> ": parse error"
+    file <- ask
+    lift $ Left $ file <> ":" <> show l <> ":" <> show c <> ": parse error"
   where (l, c) = getPos (head t)
 
-parseDefs :: FilePath -> String -> Either String (AST () (), [Extension])
-parseDefs file input = runReaderT (runStateT (topLevel $ scanTokens input) []) file
+parseModule :: FilePath -> String -> Either String Module
+parseModule file input = runReaderT (topLevel $ scanTokens input) file
 
-parseAndDoImportsAndFreshenDefs :: (?globals :: Globals) => String -> IO (AST () (), [Extension])
-parseAndDoImportsAndFreshenDefs input = do
-    (ast, extensions) <- parseDefsAndDoImports input
-    return (freshenAST ast, extensions)
+-- parseAndDoImportsAndFreshenDefs :: (?globals :: Globals) => String -> IO (AST () (), [Extension])
+-- parseAndDoImportsAndFreshenDefs input = do
+--     (ast, extensions) <- parseDefsAndDoImports input
+--     return (freshenAST ast, extensions)
 
-parseAndFreshenDefs :: (?globals :: Globals) => String -> IO (AST () (), [Extension])
-parseAndFreshenDefs input = do
-  (ast, extensions) <- either failWithMsg return $ parseDefs sourceFilePath input
-  return (freshenAST ast, extensions)
+-- parseAndFreshenDefs :: (?globals :: Globals) => String -> IO (AST () (), [Extension])
+-- parseAndFreshenDefs input = do
+--   (ast, extensions) <- either failWithMsg return $ parseDefs sourceFilePath input
+--   return (freshenAST ast, extensions)
 
-parseDefsAndDoImports :: (?globals :: Globals) => String -> IO (AST () (), [Extension])
-parseDefsAndDoImports input = do
-    (ast, extensions) <- either failWithMsg return $ parseDefs sourceFilePath input
-    case moduleName ast of
-      Nothing -> doImportsRecursively (imports ast) (ast { imports = empty }, extensions)
-      Just (Id name _) ->
-        if name == takeBaseName sourceFilePath
-          then doImportsRecursively (imports ast) (ast { imports = empty }, extensions)
-          else do
-            failWithMsg $ "Module name `" <> name <> "` does not match filename `" <> takeBaseName sourceFilePath <> "`"
+-- parseDefsAndDoImports :: (?globals :: Globals) => String -> IO (AST () (), [Extension])
+-- parseDefsAndDoImports input = do
+--     (ast, extensions) <- either failWithMsg return $ parseDefs sourceFilePath input
+--     case moduleName ast of
+--       Nothing -> doImportsRecursively (imports ast) (ast { imports = empty }, extensions)
+--       Just (Id name _) ->
+--         if name == takeBaseName sourceFilePath
+--           then doImportsRecursively (imports ast) (ast { imports = empty }, extensions)
+--           else do
+--             failWithMsg $ "Module name `" <> name <> "` does not match filename `" <> takeBaseName sourceFilePath <> "`"
 
-  where
-    -- Get all (transitive) dependencies. TODO: blows up when the file imports itself
-    doImportsRecursively :: Set Import -> (AST () (), [Extension]) -> IO (AST () (), [Extension])
-    doImportsRecursively todo (ast@(AST dds defs done hidden name), extensions) = do
-      case toList (todo \\ done) of
-        [] -> return (ast, extensions)
-        (i:todo) -> do
-          fileLocal <- doesFileExist i
-          let path = if fileLocal then i else includePath </> i
-          let ?globals = ?globals { globalsSourceFilePath = Just path } in do
+  -- where
+  --   -- Get all (transitive) dependencies. TODO: blows up when the file imports itself
+  --   doImportsRecursively :: Set Import -> (AST () (), [Extension]) -> IO (AST () (), [Extension])
+  --   doImportsRecursively todo (ast@(AST dds defs done hidden name), extensions) = do
+  --     case toList (todo \\ done) of
+  --       [] -> return (ast, extensions)
+  --       (i:todo) -> do
+  --         fileLocal <- doesFileExist i
+  --         let path = if fileLocal then i else includePath </> i
+  --         let ?globals = ?globals { globalsSourceFilePath = Just path } in do
 
-            src <- readFile path
-            (AST dds' defs' imports' hidden' _, extensions') <- either failWithMsg return $ parseDefs path src
-            doImportsRecursively
-              (fromList todo <> imports')
-              (AST (dds' <> dds) (defs' <> defs) (insert i done) (hidden `M.union` hidden') name, extensions ++ extensions')
+  --           src <- readFile path
+  --           (AST dds' defs' imports' hidden' _, extensions') <- either failWithMsg return $ parseDefs path src
+  --           doImportsRecursively
+  --             (fromList todo <> imports')
+  --             ( AST (dds' <> dds) (defs' <> defs) (insert i done) (hidden `M.union` hidden') name
+  --             , extensions ++ extensions'
+  --             )
 
 failWithMsg :: String -> IO a
 failWithMsg msg = putStrLn msg >> exitFailure

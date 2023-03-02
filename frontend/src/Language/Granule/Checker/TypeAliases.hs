@@ -8,15 +8,12 @@ import Language.Granule.Checker.Primitives (typeAliases)
 import Data.Functor.Identity (runIdentity)
 
 replaceTypeAliases :: AST a b -> AST a b
-replaceTypeAliases (AST dataDecls defs imports hidden name) =
-  AST
-    (map replaceInDataDecl dataDecls)
-    (map replaceInDef defs)
-    imports hidden name
+replaceTypeAliases AST{ dataTypes = dtys, definitions = defs } =
+  AST{ dataTypes = map replaceInDataDecl dtys, definitions = map replaceInDef defs }
 
 replaceInDataDecl :: DataDecl -> DataDecl
 replaceInDataDecl (DataDecl s v tyVarContext kindAnn constrs) =
- DataDecl s v (map (\(id, t) -> (id, replaceInType t)) tyVarContext)
+ DataDecl s v (ctxtMap replaceInType tyVarContext)
    (replaceInMaybeType kindAnn)
    (map replaceInDataConstr constrs)
 
@@ -51,12 +48,12 @@ replaceInExpr (TryCatch s a b e1 p mt e2 e3) =
   TryCatch s a b (replaceInExpr e1) p (replaceInMaybeType mt) (replaceInExpr e2) (replaceInExpr e3)
 replaceInExpr (Val s a b v) = Val s a b v
 replaceInExpr (Case s a b e patsAndExprs) =
-  Case s a b (replaceInExpr e) (map (\(a, b) -> (a, replaceInExpr b)) patsAndExprs)
+  Case s a b (replaceInExpr e) (ctxtMap replaceInExpr patsAndExprs)
 replaceInExpr (Hole s a b ids) = Hole s a b ids
 
 replaceInTypeScheme :: TypeScheme -> TypeScheme
 replaceInTypeScheme (Forall s quants constraints t) =
-  Forall s (map (\(v, t) -> (v, replaceInType t)) quants)
+  Forall s (ctxtMap replaceInType quants)
     (map replaceInType constraints)
     (replaceInType t)
 
@@ -82,5 +79,3 @@ replaceInType =
       case lookup id typeAliases of
         Just ([], t)  -> t
         _             -> TyCon id
-
-

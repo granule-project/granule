@@ -52,12 +52,18 @@ data Globals = Globals
   , globalsGradeOnRule         :: Maybe Bool
   , globalsSynthTimeoutMillis  :: Maybe Integer
   , globalsSynthIndex          :: Maybe Integer
-  , globalsExtensions           :: [Extension]
+  , globalsExtensions          :: [Extension]
+  , globalsRewriter            :: Maybe Rewriter
+  , globalsKeepBackupOfProcessedFile :: Maybe Bool
+  , globalsLiterateEnvName     :: Maybe String
   } deriving (Read, Show)
 
 -- | Allowed extensions
 data Extension = Base | CBN | NoTopLevelApprox | SecurityLevels
- deriving (Eq, Read, Show)
+ deriving (Eq, Ord, Read, Show)
+
+data Rewriter = AsciiToUnicode | UnicodeToAscii
+  deriving (Eq, Ord, Read, Show)
 
 -- | Given a map from `Extension`s to `a` pick the first
 -- | `a` that matches with an extension in scope. Otherwise
@@ -81,7 +87,9 @@ parseExtensions xs =
 
 -- | Accessors for global flags with default values
 debugging, noColors, alternativeColors, noEval, suppressInfos, suppressErrors,
-  timestamp, testing, ignoreHoles, benchmarking, benchmarkingRawData, subtractiveSynthesisMode, alternateSynthesisMode, altSynthStructuring, gradeOnRule :: (?globals :: Globals) => Bool
+  timestamp, testing, ignoreHoles, benchmarking, benchmarkingRawData, subtractiveSynthesisMode,
+  alternateSynthesisMode, altSynthStructuring, gradeOnRule, keepBackupOfProcessedFile
+  :: (?globals :: Globals) => Bool
 debugging         = fromMaybe False $ globalsDebugging ?globals
 noColors          = fromMaybe False $ globalsNoColors ?globals
 alternativeColors = fromMaybe False $ globalsAlternativeColors ?globals
@@ -97,7 +105,13 @@ subtractiveSynthesisMode = fromMaybe False $ globalsSubtractiveSynthesis ?global
 alternateSynthesisMode = fromMaybe False $ globalsAlternateSynthesisMode ?globals
 altSynthStructuring = fromMaybe False $ globalsAltSynthStructuring ?globals
 gradeOnRule = fromMaybe False $ globalsGradeOnRule ?globals
+keepBackupOfProcessedFile = fromMaybe True $ globalsKeepBackupOfProcessedFile ?globals
 
+rewriter :: (?globals :: Globals) => Maybe Rewriter
+rewriter = globalsRewriter ?globals
+
+literateEnvName :: (?globals :: Globals) => String
+literateEnvName = fromMaybe "granule" $ globalsLiterateEnvName ?globals
 
 -- | Accessor for the solver timeout with a default value
 solverTimeoutMillis :: (?globals :: Globals) => Integer
@@ -148,6 +162,9 @@ instance Semigroup Globals where
       , globalsSynthIndex = globalsSynthIndex g1 <|> globalsSynthIndex g2
       , globalsSynthTimeoutMillis = globalsSynthTimeoutMillis g1 <|> globalsSynthTimeoutMillis g2
       , globalsExtensions = nub (globalsExtensions g1 <> globalsExtensions g2)
+      , globalsRewriter = globalsRewriter g1 <|> globalsRewriter g2
+      , globalsKeepBackupOfProcessedFile = globalsKeepBackupOfProcessedFile g1 <|> globalsKeepBackupOfProcessedFile g2
+      , globalsLiterateEnvName = globalsLiterateEnvName g1 <|> globalsLiterateEnvName g2
       }
 
 instance Monoid Globals where
@@ -172,11 +189,14 @@ instance Monoid Globals where
     , globalsBenchmarkRaw        = Nothing
     , globalsSubtractiveSynthesis   = Nothing
     , globalsAlternateSynthesisMode = Nothing
-        , globalsAltSynthStructuring = Nothing
+    , globalsAltSynthStructuring = Nothing
     , globalsGradeOnRule = Nothing
     , globalsSynthTimeoutMillis  = Nothing
     , globalsSynthIndex  = Nothing
     , globalsExtensions = [Base]
+    , globalsRewriter = Nothing
+    , globalsKeepBackupOfProcessedFile = Nothing
+    , globalsLiterateEnvName = Nothing
     }
 
 -- | A class for messages that are shown to the user. TODO: make more general

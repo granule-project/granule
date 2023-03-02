@@ -6,6 +6,7 @@
 
 module Language.Granule.Context where
 
+import Control.Arrow ( Arrow(second) )
 import Data.Maybe (isJust)
 import Data.List (sortBy)
 import Language.Granule.Syntax.Identifiers (Id)
@@ -37,9 +38,8 @@ replace (x : ctxt) name v
   = x : replace ctxt name v
 
 -- | Map over the just elements of the context (and not the keys (identifiers))
-ctxtMap :: (a -> b) -> Ctxt a -> Ctxt b
-ctxtMap f [] = []
-ctxtMap f ((v, x):ctxt) = (v, f x) : ctxtMap f ctxt
+ctxtMap :: (b -> c) -> [(a, b)] -> [(a, c)]
+ctxtMap = map . second
 
 -- $setup
 -- >>> import Language.Granule.Syntax.Identifiers (mkId)

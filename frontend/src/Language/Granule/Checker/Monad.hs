@@ -17,6 +17,7 @@ module Language.Granule.Checker.Monad where
 import Data.Maybe (mapMaybe)
 import Data.Either (partitionEithers)
 import Data.Foldable (toList)
+import Data.Functor ( ($>) )
 import Data.List (intercalate, transpose)
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Map as M
@@ -32,10 +33,9 @@ import Language.Granule.Checker.Predicates
 import qualified Language.Granule.Checker.Primitives as Primitives
 import Language.Granule.Context
 
-import Language.Granule.Syntax.Def
+import Language.Granule.Syntax.Program
 import Language.Granule.Syntax.Expr (Operator, Expr)
 import Language.Granule.Syntax.Helpers (FreshenerState(..), freshen, Term(..))
-import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Pretty
@@ -70,7 +70,7 @@ runAll f xs = do
   st <- get
   (results, st) <- liftIO $ runAllCheckers st (map f xs)
   case partitionEithers results of
-    ([], successes) -> put st *> pure successes
+    ([], successes) -> put st $> successes
     -- everything succeeded, so `put` the state and carry on
     (err:errs, _) -> throwError $ sconcat (err:|errs)
     -- combine all errors and fail
@@ -179,7 +179,7 @@ data CheckerState = CS
             , derivStack :: [Derivation]
 
             -- Names from modules which are hidden
-            , allHiddenNames :: M.Map Id Id
+            , allHiddenNames :: M.Map Id ModuleName
 
             -- The type of the current equation.
             , equationTy :: Maybe Type
@@ -230,7 +230,7 @@ lookupDataConstructor sp constrName = do
     Nothing -> return $ lookup constrName (dataConstructors st)
     Just mod ->
       -- If the constructor is hidden but we are inside that module...
-      if sourceName mod == takeBaseName (filename sp)
+      if mod == takeBaseName (filename sp)
         -- .. then its fine
         then return $ lookup constrName (dataConstructors st)
         -- Otheriwe this is truly hidden

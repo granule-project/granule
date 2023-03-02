@@ -9,11 +9,9 @@
 module Language.Granule.Checker.Primitives where
 
 import Data.List.NonEmpty (NonEmpty(..))
-import Text.RawString.QQ (r)
 
-import Language.Granule.Syntax.Def
-import Language.Granule.Syntax.Identifiers
-import Language.Granule.Syntax.Parser (parseDefs)
+import Language.Granule.Syntax.Def as Def
+import Language.Granule.Syntax.QuasiQuoter
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Expr (Operator(..))
@@ -36,7 +34,7 @@ capabilities =
    [(mkId "Console", funTy (tyCon "String") (tyCon "()"))
   , (mkId "TimeDate", funTy (tyCon "()") (tyCon "String"))]
 
-    
+
 
 -- Associates type constuctors names to their:
 --    * kind
@@ -80,7 +78,7 @@ typeConstructors =
     , (mkId "One",      (tyCon "LNL", [], False))
     , (mkId "Many",     (tyCon "LNL", [], False))
     -- Security levels
-    
+
     -- Note that Private/Public can be members of Sec (and map to Hi/Lo) or if 'SecurityLevels' is
     -- turned on then they are part of the 'Level' semiring
     , (mkId "Private",  (extensionDependent [(SecurityLevels, tyCon "Level")] (tyCon "Sec"), [], False))
@@ -195,7 +193,7 @@ dataTypes =
           , dataConstrId = mkId "&"
           , dataConstrParams = [TyVar (mkId "a"), TyVar (mkId "b")]
          }]}
-    ] ++ builtinDataTypesParsed
+    ] ++ Def.dataTypes builtinAST
 
 binaryOperators :: Operator -> NonEmpty Type
 binaryOperators = \case
@@ -240,8 +238,8 @@ binaryOperators = \case
         , funTy (TyCon $ mkId "DFloat") (funTy (TyCon $ mkId "DFloat") (TyCon $ mkId "Bool"))]
 
 -- TODO make a proper quasi quoter that parses this at compile time
-builtinSrc :: String
-builtinSrc = [r|
+builtinAST :: AST () ()
+builtinAST = [gr|
 
 import Prelude
 
@@ -582,13 +580,13 @@ uniqueBind
   . (*a -> !b) -> !a -> !b
 uniqueBind = BUILTIN
 
-uniquePush 
-  : forall {a b : Type} 
+uniquePush
+  : forall {a b : Type}
   . *(a, b)  -> (*a, *b)
 uniquePush = BUILTIN
 
-uniquePull 
-  : forall {a b : Type} 
+uniquePull
+  : forall {a b : Type}
   . (*a, *b) -> *(a, b)
 uniquePull = BUILTIN
 
@@ -672,20 +670,12 @@ projR = BUILTIN
 
 |]
 
-
-builtinDataTypesParsed :: [DataDecl]
 builtins :: [(Id, TypeScheme)]
-(builtinDataTypesParsed, builtins) =
-  (types, map unDef defs)
-    where
-      AST types defs _ _ _ = case parseDefs "builtins" builtinSrc of
-        Right (ast, _) -> ast
-        Left err -> error err
+builtins = map unDef $ definitions builtinAST
 
-      unDef :: Def () () -> (Id, TypeScheme)
-      unDef (Def _ name _ _ (Forall _ bs cs t)) = (name, Forall nullSpanBuiltin bs cs t)
+unDef :: Def () () -> (Id, TypeScheme)
+unDef (Def _ name _ _ (Forall _ bs cs t)) = (name, Forall nullSpanBuiltin bs cs t)
 
 -- List of primitives that can't be promoted in CBV
 unpromotables :: [String]
 unpromotables = ["newFloatArray", "forkLinear", "forkLinear'", "forkMulticast", "forkReplicate", "forkReplicateExactly"]
-

@@ -8,23 +8,26 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Language.Granule.Syntax.Def where
+module Language.Granule.Syntax.Def
+  ( module Language.Granule.Syntax.Def
+  , module Reexport
+  )
+where
 
 import Data.List ((\\), delete)
-import Data.Set (Set)
-import qualified Data.Map as M
 import GHC.Generics (Generic)
 import Data.Data
 import qualified Text.Reprinter as Rp
 
-import Language.Granule.Context (Ctxt)
+import Language.Granule.Context as Reexport (Ctxt, ctxtMap)
 import Language.Granule.Syntax.FirstParameter
 import Language.Granule.Syntax.Helpers
-import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Identifiers as Reexport
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Pattern
+
 
 -- | Top-level ASTs
 -- | Comprise a list of data type declarations and a list
@@ -34,10 +37,25 @@ data AST v a =
   AST
     { dataTypes :: [DataDecl]
     , definitions :: [Def v a]
-    , imports :: Set Import
-    , hiddenNames :: M.Map Id Id -- map from names to the module hiding them
-    , moduleName  :: Maybe Id
     }
+
+emptyAST :: AST v a
+emptyAST =
+  AST
+    { dataTypes = mempty
+    , definitions = mempty
+    }
+
+-- instance Semigroup (AST v a) where
+--   ast1 <> ast2 =
+--     AST
+--       { dataTypes = dataTypes ast1 <> dataTypes ast2
+--       , definitions = definitions ast1 <> definitions ast2
+--       , imports = mempty
+--       , hiddenNames = hiddenNames ast1 <> hiddenNames ast2
+--       , moduleName = moduleName ast1
+--       }
+
 
 extendASTWith :: [Def v a] -> AST v a -> AST v a
 extendASTWith defs ast = ast { definitions = defs ++ definitions ast }
@@ -169,9 +187,8 @@ instance FirstParameter DataConstr Span
 
 -- | Fresh a whole AST
 freshenAST :: AST v a -> AST v a
-freshenAST (AST dds defs imports hiddens name) =
-  AST dds' defs' imports hiddens name
-    where (dds', defs') = (map runFreshener dds, map runFreshener defs)
+freshenAST ast@AST{ dataTypes = dds, definitions = defs } =
+  ast{ dataTypes = map runFreshener dds, definitions = map runFreshener defs }
 
 instance Monad m => Freshenable m DataDecl where
   freshen (DataDecl s v tyVars kind ds) = do

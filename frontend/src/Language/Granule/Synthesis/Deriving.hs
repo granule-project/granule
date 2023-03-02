@@ -8,7 +8,6 @@ import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Span
-import Language.Granule.Context
 
 import Language.Granule.Checker.Predicates (Constraint(..))
 import Language.Granule.Checker.Kinding

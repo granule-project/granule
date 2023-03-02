@@ -23,10 +23,11 @@ ghc-options:
 
 default-extensions:
 - ImplicitParams
-- ViewPatterns
 - LambdaCase
-- TupleSections
 - NamedFieldPuns
+- ScopedTypeVariables
+- TupleSections
+- ViewPatterns
 
 library:
   source-dirs: src
@@ -88,7 +89,6 @@ library:
   - Glob
   - filepath
   - bifunctors
-  - raw-strings-qq
   - text-replace
   - directory
   - syb >=0.6
@@ -97,6 +97,8 @@ library:
   - split
   - logict >= 0.7.1.0
   - clock
+  - algebraic-graphs
+  - template-haskell
 
 tests:
   frontend-spec:
