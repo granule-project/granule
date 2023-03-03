@@ -694,7 +694,7 @@ constrElimHelper gamma (Focused left) (Focused (var@(x, assumption):right)) mode
                     case transformPattern bindings tyA' (gamma'' ++ omega'') constrElimPattern unboxed of
                       Just (pattern, bindings') ->
                         let mergeOp = case mode of Additive{} -> TyInfix TyOpJoin ; _ -> TyInfix TyOpMeet in do
-                          returnDelta <- if index == 0 then return delta' else ctxtMerge mergeOp deltas delta'
+                          returnDelta <- if index == 0 then return delta' else ctxtMergeFromPure mergeOp deltas delta'
                           -- modifyPred cs $ moveToNewConjunct (predicateContext cs)
                           returnSubst <- conv $ combineSubstitutions ns subst substs
                           return ((pattern, expr):exprs, returnDelta, returnSubst, bindings ++ bindings', structurallyDecr || structurallyDecr', index + 1)
@@ -771,7 +771,7 @@ constrElimHelper gamma (Focused left) (Focused (var@(x, assumption):right)) mode
             -- modifyPred s $ addConstraintViaConjunction (ApproximatedBy ns (TyGrade (Just kind) 0) g' kind) (predicateContext s)
             res <- solve
             if res then do
-              ctxtMerge (TyInfix TyOpMeet) [(x, (SVar (Discharged t' g) sInfo))] del''
+              ctxtMergeFromPure (TyInfix TyOpMeet) [(x, (SVar (Discharged t' g) sInfo))] del''
             else none
           _ -> do
             del'' <- checkAssumptions (x, t') sub del' assmps unboxed
@@ -779,7 +779,7 @@ constrElimHelper gamma (Focused left) (Focused (var@(x, assumption):right)) mode
             -- modifyPred s $ addConstraintViaConjunction (ApproximatedBy ns (TyGrade (Just kind) 0) g' kind) (predicateContext s)
             res <- solve
             if res then
-              ctxtMerge (TyInfix TyOpMeet) [(x, (SVar (Discharged t' g') sInfo))] del''
+              ctxtMergeFromPure (TyInfix TyOpMeet) [(x, (SVar (Discharged t' g') sInfo))] del''
             else none
       _ -> none
 
@@ -800,7 +800,7 @@ constrElimHelper gamma (Focused left) (Focused (var@(x, assumption):right)) mode
                 -- modifyPred s $ addConstraintViaConjunction (ApproximatedBy ns g' g'' kind) (predicateContext s)
                 res <- solve
                 if res then
-                  ctxtMerge (TyInfix TyOpJoin) [(x, SVar (Discharged t' g) sInfo)] del''
+                  ctxtMergeFromPure (TyInfix TyOpJoin) [(x, SVar (Discharged t' g) sInfo)] del''
                 else none
               _ -> do
                 del'' <- checkAssumptions (x, t') add del' assmps unboxed
@@ -808,7 +808,7 @@ constrElimHelper gamma (Focused left) (Focused (var@(x, assumption):right)) mode
                 -- modifyPred s $ addConstraintViaConjunction (ApproximatedBy ns g' g kind) (predicateContext s)
                 res <- solve
                 if res then
-                  ctxtMerge (TyInfix TyOpJoin) [(x, SVar (Discharged t' g') sInfo)] del''
+                  ctxtMergeFromPure (TyInfix TyOpJoin) [(x, SVar (Discharged t' g') sInfo)] del''
                 else none
           _ -> do
             (kind, _, _) <- conv $ synthKind nullSpan g

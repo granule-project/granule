@@ -1079,9 +1079,9 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
         let (grade_rs, grade_ss)                = unzip grades
 
           -- join contexts
-        -- TODO: generalise ctxtMerge so it can take a side-effectful operator
+        -- TODO: generalise ctxtMergeFromPure so it can take a side-effectful operator
 
-        delta <- foldM (ctxtMerge gJoin) (head deltas) (tail deltas)
+        delta <- foldM (ctxtMerge (computeJoin Nothing)) (head deltas) (tail deltas)
 
           -- join grades
         grade_r_out <- foldM (computeJoin Nothing)  (head grade_rs) (tail grade_rs)

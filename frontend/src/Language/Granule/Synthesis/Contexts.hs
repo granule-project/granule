@@ -125,8 +125,19 @@ ctxtDivByCoeffect g1 (var@(x, SDef{}):xs) = do
 
 ctxtDivByCoeffect _ _ = none
 
-ctxtMerge :: (?globals :: Globals)
+-- Version of `ctxtMerge` that takes a pure lattice
+-- operation
+ctxtMergeFromPure :: (?globals :: Globals)
           => (Type -> Type -> Type) -- lattice operator
+          -> Ctxt SAssumption
+          -> Ctxt SAssumption
+          -> Synthesiser (Ctxt SAssumption)
+ctxtMergeFromPure f = ctxtMerge (\x y -> return (f x y))
+
+-- Given two contexts, merge them based on some (effectful)
+-- lattice operation.
+ctxtMerge :: (?globals :: Globals)
+          => (Type -> Type -> Synthesiser Type) -- lattice operator
           -> Ctxt SAssumption
           -> Ctxt SAssumption
           -> Synthesiser (Ctxt SAssumption)
@@ -159,7 +170,8 @@ ctxtMerge operator ((x, SVar (Discharged t1 g1) sInf) : ctxt1') ctxt2 =
       if t1 == t2 -- Just in case but should always be true
         then do
           ctxt' <- ctxtMerge operator ctxt1' ctxt2'
-          return $ (x, SVar (Discharged t1 (operator g1 g2)) sInf') : ctxt'
+          merged <- operator g1 g2
+          return $ (x, SVar (Discharged t1 merged) sInf') : ctxt'
         else none
 
     Just (_, SVar (Linear _) _) -> none -- mode mismatch
@@ -188,7 +200,8 @@ ctxtMerge operator (var@(x, SDef tySch (Just g)) : ctxt1') ctxt2 =
   case lookupAndCutout x ctxt2 of
     Just (ctxt2', SDef tySch' (Just g')) -> do
       ctxt' <- ctxtMerge operator ctxt1' ctxt2'
-      return $ (x, SDef tySch (Just $ operator g g')) :ctxt'
+      merged <- operator g g'
+      return $ (x, SDef tySch (Just merged)) :ctxt'
 
 ctxtMerge operator (var@(x, SDef tySch Nothing) : ctxt1') ctxt2 = do
     ctxt' <- ctxtMerge operator ctxt1' ctxt2
