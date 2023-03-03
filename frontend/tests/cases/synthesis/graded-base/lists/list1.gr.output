@@ -1,0 +1,10 @@
+language GradedBase
+
+data List a = Nil | Cons a (List a)
+
+append : forall {a : Type} . (List a) % 1 -> a % 1 -> List a
+append Nil y = Nil;
+append (Cons z u) y = (Cons y) ((Cons z) u)
+-- append (Cons x xs) y = Cons x (append xs y);
+-- append Nil y = Cons y Nil
+
