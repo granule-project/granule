@@ -28,6 +28,7 @@ import Language.Granule.Checker.Patterns
 import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Types
+import Language.Granule.Checker.Variables
 import Language.Granule.Synthesis.Builders
 import Language.Granule.Synthesis.Monad
 import Language.Granule.Synthesis.Contexts
@@ -48,7 +49,7 @@ import Control.Arrow (second)
 -- import Control.Monad.Omega
 import System.Clock (TimeSpec)
 
--- import Debug.Trace
+import Debug.Trace
 -- import Data.Ord
 
 ------------------------------
@@ -456,7 +457,13 @@ synLoop step sParams index gamma synthState checkerState goal = do
 
 
 
-gSynth :: (?globals :: Globals) => SearchParameters -> FocusPhase -> Ctxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () ())
+gSynth :: (?globals :: Globals)
+  => SearchParameters
+  -> FocusPhase
+  -> Ctxt SAssumption
+  -> FocusedCtxt SAssumption
+  -> Type
+  -> Synthesiser (Expr () ())
 gSynth sParams focusPhase gamma (Focused omega) goal = do
 
   relevantConstructors <- do
@@ -508,7 +515,13 @@ gSynth sParams focusPhase gamma (Focused omega) goal = do
     else none
 
 
-gSynthInner :: (?globals :: Globals) => SearchParameters -> FocusPhase -> Ctxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
+gSynthInner :: (?globals :: Globals)
+  => SearchParameters
+  -> FocusPhase
+  -> Ctxt SAssumption
+  -> FocusedCtxt SAssumption
+  -> Type
+  -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
 gSynthInner sParams focusPhase gamma (Focused omega) goal | guessCurrent sParams <= guessMax sParams = do
 
   case (focusPhase, omega) of
@@ -590,7 +603,12 @@ incrG sParams = sParams { guessCurrent = (guessCurrent sParams) + 1}
 Γ, x :ᵣ A ⊢ A => x | 0·Γ, x :₁ A
 
 -}
-varRule :: (?globals :: Globals) => Ctxt SAssumption -> FocusedCtxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
+varRule :: (?globals :: Globals)
+  => Ctxt SAssumption
+  -> FocusedCtxt SAssumption
+  -> FocusedCtxt SAssumption
+  -> Type
+  -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
 varRule _ _ (Focused []) _ = none
 -- varRule gamma (Focused left) (Focused (var@(name, SVar (Discharged t grade) sInfo) : right)) goal = do
 varRule gamma (Focused left) (Focused (var@(name, assumption) : right)) goal = do
@@ -1036,7 +1054,14 @@ casePatternMatchBranchSynth
     _ -> do
       return Nothing
 
-caseRule :: (?globals :: Globals) => SearchParameters -> FocusPhase -> Ctxt SAssumption -> FocusedCtxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
+caseRule :: (?globals :: Globals)
+   => SearchParameters
+   -> FocusPhase
+   -> Ctxt SAssumption
+   -> FocusedCtxt SAssumption
+   -> FocusedCtxt SAssumption
+   -> Type
+   -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
 caseRule _ _ _ _ (Focused []) _ = none
 caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Discharged ty grade_r) sInfo):right)) goal =
   do
@@ -1070,21 +1095,23 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
         let (grade_rs, grade_ss)                = unzip grades
 
           -- join contexts
-        delta <- foldM (ctxtMerge gJoin) (head deltas) (tail deltas)
+        -- TODO: generalise ctxtMergeFromPure so it can take a side-effectful operator
+
+        delta <- foldM (ctxtMerge (computeJoin Nothing)) (head deltas) (tail deltas)
 
           -- join grades
-        let grade_r_out = foldr gJoin  (head grade_rs) (tail grade_rs)
-        let grade_s_out = foldr gJoin' (head grade_ss) (tail grade_ss)
+        grade_r_out <- foldM (computeJoin Nothing)  (head grade_rs) (tail grade_rs)
+        grade_s_out <- foldM (computeJoin' Nothing) (head grade_ss) (tail grade_ss)
 
         -- join substitutions
         subst <- conv $ combineManySubstitutions ns substs
-
 
         grade_final <- case grade_s_out of
                   -- Add the usages of each branch to the usages of x inside each branch
                   Just grade_s_out' -> return $ grade_r_out `gPlus` grade_s_out'
                   -- Not sure when this case should arise, since nullary constructors get a 1 grade
                   Nothing -> return grade_r_out
+        -- Focussed variable output assumption
         let var_x_out = (x, SVar (Discharged ty grade_final) sInfo)
 
         solved <-
@@ -1101,17 +1128,40 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
         traceM $ "omega: " <> (show $ omega)
         traceM $ "case: " <> (pretty $ makeCaseUntyped x patExprs)
 
-        case (patExprs, solved) of
-
-          (_:_, True) ->
-            return (makeCaseUntyped x patExprs, var_x_out:delta, subst, False, Just x)
-          _ -> none
+        if solved && not (null patExprs)
+          then return (makeCaseUntyped x patExprs, var_x_out:delta, subst, False, Just x)
+          else none
       (False, _) -> noneWithMaxReached
       _ -> none
   `try` caseRule sParams focusPhase gamma (Focused (var : left)) (Focused right) goal
 
 caseRule _ _ _ _ _ _ = none
 
+-- Given two grades, returns their join.
+-- and where the first input may specify their kind if its already known
+
+-- Note however that this may also generate predicates
+-- (and hence lives in the `Synthesis` monad) as some
+-- grades do *not* have a join.
+
+computeJoin :: (?globals :: Globals) => Maybe Kind -> Type -> Type -> Synthesiser Type
+computeJoin maybeK g1 g2 = do
+  k <- case maybeK of
+         Nothing -> conv $ do { (k, _, _) <- synthKind ns g1; return k }
+         Just k  -> return k
+  upperBoundGradeVarId <- conv $ freshIdentifierBase $ "ub"
+  let upperBoundGradeVar = mkId upperBoundGradeVarId
+  modify (\st -> st { tyVarContext = (upperBoundGradeVar, (k, InstanceQ)) : tyVarContext st })
+  let upperBoundGrade = TyVar upperBoundGradeVar
+  conv $ addConstraint (Lub ns g1 g2 upperBoundGrade k)
+  return upperBoundGrade
+
+-- Version of computeJoin' where the inputs may be Nothing i.e.,
+-- implicit 1 grade
+computeJoin' :: (?globals :: Globals) => Maybe Kind -> Maybe Type -> Maybe Type -> Synthesiser (Maybe Type)
+computeJoin' mKind mg1 mg2 = do
+  x <- computeJoin mKind (getGradeFromArrow mg1) (getGradeFromArrow mg2)
+  return $ Just x
 
 gPlus :: Type -> Type -> Type
 gPlus = TyInfix TyOpPlus

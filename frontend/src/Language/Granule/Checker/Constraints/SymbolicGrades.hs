@@ -492,13 +492,13 @@ symGradeMinus s t = solverError $ cannotDo "minus" s t
 
 
 symGradeHsup :: SGrade -> SGrade -> Symbolic SBool
--- | For LNL grades, when both grades are linear allow pushing, otherwise, pushing is disallowed. 
--- | Check the grades are concrete to disallow hsup on grades which are polymorphic within the LNL semiring. 
+-- | For LNL grades, when both grades are linear allow pushing, otherwise, pushing is disallowed.
+-- | Check the grades are concrete to disallow hsup on grades which are polymorphic within the LNL semiring.
 symGradeHsup (SLNL n) (SLNL m) | isConcrete m, isConcrete n =  return (n .== literal oneRep .&& m .== literal oneRep)
 symGradeHsup (SLNL n) (SLNL m) = return sFalse
 -- | Disallow hsup for polymorphic grades
 symGradeHsup (SUnknown s1) (SUnknown s2) = return sFalse
--- | For all other grades, allow pushing 
+-- | For all other grades, allow pushing
 symGradeHsup (SExt r _) (SExt r' _) = symGradeHsup r r'
 symGradeHsup s1 s2 = return sTrue
 
