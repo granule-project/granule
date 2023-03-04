@@ -211,6 +211,17 @@ bindToContext ::
 bindToContext var gamma omega True = (gamma, var:omega)
 bindToContext var gamma omega _         = (var:gamma, omega)
 
+
+
+isRecursiveType :: Type -> Ctxt (Ctxt (TypeScheme, Substitution), Bool) -> Bool 
+isRecursiveType t tyConstrs = 
+  case isADTorGADT t of 
+    Just name -> 
+      case lookup name tyConstrs of 
+        Just (dataCons, recursive) -> recursive
+        Nothing -> False
+    _ -> False 
+
 -- Given inputs:
 -- `isRecursiveCon dataTypeName (dataConstructorName, (dataConstrType,  coercions))`
 -- determine if `dataConstructorName` is a data constructor that constructs a
