@@ -960,7 +960,7 @@ casePatternMatchBranchSynth
 
       -- for every argument position of the constructor we need to create a variable
       -- to bind the result:
-      (gamma', omega', varsAndGrades) <-
+      (gamma', omega', branchBoundVarsAndGrades) <-
         forallM args (gamma ++ [var], omega, []) (\(gamma, omega, vars) (argTy, mGrade_q) -> do
           -- Three piece of information calculate:
 
@@ -985,10 +985,10 @@ casePatternMatchBranchSynth
           -- TODO: explain the extra condition here.
           let (gamma', omega') =
                 bindToContext assumption gamma omega (isLAsync argTy' && not (isDecr sInfo || matchCurrent sParams <= matchMax sParams))
-          return (gamma', omega', (var, grade_rq):vars)
+          return (gamma', omega', (var, (getGradeFromArrow mGrade_q, grade_rq)):vars)
         )
 
-      let (vars, _) = unzip varsAndGrades
+      let (vars, _) = unzip branchBoundVarsAndGrades
       let constrPat = PConstr ns () False cName (map (PVar ns () False) $ reverse vars)
 
       -- Synthesise the body of the branch which produces output context `delta`
@@ -999,20 +999,20 @@ casePatternMatchBranchSynth
         case dAssumption of
           SVar (Discharged ty grade_s) dSInfo ->
             -- See if this is a variable being bound in the case
-            case lookup dName varsAndGrades of
-              Just grade_rq -> do
+            case lookup dName branchBoundVarsAndGrades of
+              Just (grade_q, grade_rq) -> do
 
                 grade_id_s' <- freshIdentifier
                 let grade_s' = TyVar grade_id_s'
                 (kind, _, _) <- conv $ synthKind ns grade_s
                 conv $ existentialTopLevel grade_id_s' kind
                 -- ∃s'_ij . s_ij ⊑ s'_ij · q_ij ⊑ r · q_ij
-                modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (grade_s' `gTimes` grade_rq) (grade_r `gTimes` grade_rq) kind)
-                modifyPred $ addConstraintViaConjunction (ApproximatedBy ns grade_s (grade_s' `gTimes` grade_rq) kind)
+                modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (grade_s' `gTimes` grade_q) grade_rq kind)
+                modifyPred $ addConstraintViaConjunction (ApproximatedBy ns grade_s (grade_s' `gTimes` grade_q) kind)
                 modifyPred $ (ExistsHere grade_id_s' kind)
 
                 -- s' \/ ...
-                let grade_si = getGradeFromArrow mGrade `gJoin` grade_s'
+                grade_si <- computeJoin (Just kind) (getGradeFromArrow mGrade) (grade_s')
                 -- now do not include in the result as this is being bound
                 return (delta', Just grade_si)
               -- Not a variable bound in the scope
@@ -1149,13 +1149,6 @@ gPlus = TyInfix TyOpPlus
 
 gTimes :: Type -> Type -> Type
 gTimes = TyInfix TyOpTimes
-
-gJoin :: Type -> Type -> Type
-gJoin = TyInfix TyOpJoin
-
-gJoin' :: Maybe Type -> Maybe Type -> Maybe Type
-gJoin' t t' = Just $
-  TyInfix TyOpJoin (getGradeFromArrow t) (getGradeFromArrow t')
 
 exprFold :: Span -> Expr () () -> Expr () () -> Expr () ()
 exprFold s newExpr (App s' a rf e1 e2) = App s' a rf (exprFold s newExpr e1) (exprFold s newExpr e2)
