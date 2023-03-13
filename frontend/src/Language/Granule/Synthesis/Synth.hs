@@ -674,7 +674,12 @@ absRule sParams focusPhase gamma (Focused omega) goal@(FunTy name gradeM tyA tyB
 
   let (gamma', omega') = bindToContext (x, SVar (Discharged tyA grade) (Just NonDecreasing)) gamma omega (isLAsync tyA)
 
-  (t, delta, subst, struct, scrutinee) <- gSynthInner sParams focusPhase gamma' (Focused omega') tyB
+
+  (t, delta, subst, struct, scrutinee) <-
+     -- Recursive call
+     withPartialExpr
+       (Val ns () False (Abs () (PVar ns () False x) Nothing hole))
+       (gSynthInner sParams focusPhase gamma' (Focused omega') tyB)
 
   cs <- conv get
   (kind, _, _) <- conv $ synthKind nullSpan grade

@@ -4,7 +4,9 @@ import Language.Granule.Context
 import Language.Granule.Checker.Monad
           (allDataConstructorNames,predicateContext,tyVarContext,uniqueVarIdCounterMap
           ,predicateStack,resetAddedConstraintsFlag
-          ,Assumption(..))
+          ,Assumption(..)
+          ,navigateUpPartialExpr
+          ,registerPartialExpr)
 import Language.Granule.Checker.CoeffectsTypeConverter
 import Language.Granule.Checker.Constraints
 import Language.Granule.Checker.Predicates
@@ -16,6 +18,7 @@ import Language.Granule.Checker.SubstitutionContexts
   (Substitution,flipSubstitution)
 import Language.Granule.Checker.Types
   (equalTypes)
+import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
@@ -380,3 +383,14 @@ sizeOfCoeffect (TyGrade _ _) = 0
 sizeOfCoeffect (TyInt _) = 0
 sizeOfCoeffect (TyVar _) = 0
 sizeOfCoeffect _ = 0
+
+withPartialExpr :: Expr () () -> Synthesiser a -> Synthesiser a
+withPartialExpr e m = do
+  -- TODO: only do this if we are debugging
+  conv $ registerPartialExpr e
+  x <- m
+  conv $ navigateUpPartialExpr
+  return x
+
+hole :: Expr () ()
+hole = Hole ns () False [] Nothing
