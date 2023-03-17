@@ -125,6 +125,7 @@ tests:
     - containers
     - transformers >=0.5
     - bifunctors
+    - syz
 
 #  zfrontend-doctest: # the "z" is to make them run after hspec
 #    main: doctest.hs

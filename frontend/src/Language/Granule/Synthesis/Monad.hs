@@ -8,6 +8,7 @@ module Language.Granule.Synthesis.Monad where
 import Language.Granule.Context
 import Language.Granule.Checker.Monad
 
+import qualified Data.Generics.Zipper as Z
 import Data.List.NonEmpty (NonEmpty(..))
 import Control.Monad.Except
 import Control.Monad.State.Strict
@@ -15,6 +16,8 @@ import Control.Monad.Logic
 import qualified System.Clock as Clock
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.SubstitutionContexts (Substitution)
+import Language.Granule.Syntax.Expr
+import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Type (TypeScheme)
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Utils
@@ -119,6 +122,8 @@ try m n = do
 -- In --interactive mode it also pauses execution waiting for the user
 none :: (?globals :: Globals) => Synthesiser a
 none = do
+  partialExpr <- getCurrentPartialExpr
+  debugM "[Partial expression]" (pretty partialExpr)
   when interactiveDebugging $ do
     liftIO $ putStrLn "<<< none HERE. Press any key to continue"
     _ <- liftIO $ getLine
@@ -144,8 +149,6 @@ maybeToSynthesiser Nothing = none
 boolToSynthesiser :: (?globals :: Globals) => Bool -> a -> Synthesiser a
 boolToSynthesiser True x = return x
 boolToSynthesiser False _ = none
-
-
 
 getSynthState ::  Synthesiser (SynthesisData)
 getSynthState = Synthesiser $ lift $ lift $ get
@@ -182,3 +185,8 @@ instance Semigroup Measurement where
 instance Monoid Measurement where
   mempty  = Measurement 0 0.0 0.0 0.0 0.0 False False 0
   mappend = (<>)
+
+getCurrentPartialExpr :: Synthesiser (Expr () ())
+getCurrentPartialExpr = do
+  st <- conv get
+  return (Z.fromZipper (partialSynthExpr st))

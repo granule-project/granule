@@ -201,10 +201,14 @@ data CheckerState = CS
             , predicateContext :: PredContext
             , partialSynthExpr  :: Zipper (Expr () ())
             }
-  deriving Show
+  deriving (Eq, Show)
 
-instance Show (Zipper a) where
-  show _ = "its a zipper"
+-- Show and Eq instance for zipper
+instance Eq a => Eq (Zipper a) where
+  x == y = fromZipper x == fromZipper y
+
+instance Show a => Show (Zipper a) where
+  show x = "Zipper for " ++ show (fromZipper x)
 
 registerFinalExpr :: Expr () () -> Checker ()
 registerFinalExpr e =

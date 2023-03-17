@@ -6,6 +6,7 @@ import qualified Test.Hspec as Test
 import Language.Granule.Synthesis.Common
 import Language.Granule.Synthesis.Monad
 import Language.Granule.Syntax.Def
+import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Identifiers
@@ -13,10 +14,11 @@ import Language.Granule.Checker.Checker(checkDataCons,checkTyCon)
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.SubstitutionContexts
 import qualified Language.Granule.Checker.Primitives as Primitives
-import Language.Granule.Checker.Monad(initState,runAll)
+import Language.Granule.Checker.Monad(initState,runAll,partialSynthExpr)
 import Language.Granule.Utils
 
 import Control.Monad.State.Strict
+import qualified Data.Generics.Zipper as Z
 
 -- To run just these tests do:
 --  stack test granule-frontend --test-arguments "-m "Common""
@@ -25,6 +27,7 @@ spec :: Test.Spec
 spec = let ?globals = mempty :: Globals in do
   checkConstructorTests
   recursiveConstructorTests
+  partialExpressionZipperTests
 
 recursiveConstructorTests :: Test.Spec
 recursiveConstructorTests = do
@@ -104,6 +107,37 @@ checkConstructorTests =
     -- it "Polymorphic test: `a -> Vec n a -> Vec n' a` (with n' ~ n + 1) vs `Vec 1 a` - success" $ do
     --   status <- testCheckConstructor $ checkConstructor either (TyApp (TyApp eitherCon unitCon) unitCon) []
     --   status `shouldBe` [Just True]
+
+
+partialExpressionZipperTests :: (?globals :: Globals) => Test.Spec
+partialExpressionZipperTests = do
+  describe "Test facilities for building partial functions" $ do
+
+    it "Starts with a hole" $ do
+      synthExprP <- testSynthesiser $ getCurrentPartialExpr
+      synthExprP `shouldBe` [Just hole]
+
+    it "Navigation test (down)" $ do
+      exprHole <- testSynthesiser $ do
+          withPartialExpr
+            (Val ns () False (Promote () hole)) $ do
+              st <- get
+              let z = partialSynthExpr st
+              liftIO $ putStrLn $ show $
+                 ((Z.down' z >>= Z.right >>= Z.right >>= Z.right >>= Z.getHole) :: Maybe (Value () ()))
+              return (downExpr z >>= Z.getHole)
+      exprHole `shouldBe` [Just (Just hole)]
+
+    it "withPartialExpr - boxing and final var" $ do
+      let var = Val ns () False (Var () (mkId "foo"))
+      synthExprP <-
+        testSynthesiser $ do
+          _ <- withPartialExprAt downExpr
+            (Val ns () False (Promote () hole))
+            -- leaf expr is a variable, which should replace the hole
+            (leafExpr (var, (), (), (), ()))
+          getCurrentPartialExpr
+      synthExprP `shouldBe` [Just (Val ns () False (Promote () var))]
 
 
 -- Helper for running checkConstructor specifically

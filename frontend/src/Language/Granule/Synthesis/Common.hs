@@ -6,7 +6,9 @@ import Language.Granule.Checker.Monad
           ,predicateStack,resetAddedConstraintsFlag
           ,Assumption(..)
           ,navigateUpPartialExpr
-          ,registerPartialExpr)
+          ,registerPartialExpr
+          ,registerFinalExpr
+          ,partialSynthExpr)
 import Language.Granule.Checker.CoeffectsTypeConverter
 import Language.Granule.Checker.Constraints
 import Language.Granule.Checker.Predicates
@@ -29,6 +31,9 @@ import Language.Granule.Utils
 import qualified Data.Map as M
 import qualified System.Clock as Clock
 import Control.Monad.State.Strict(modify,lift,liftIO,get,put)
+import Data.Generics.Zipper
+import Data.Generics.Aliases
+import Data.Typeable
 
 -- # Key data types for controlling synthesis
 
@@ -199,6 +204,10 @@ getSAssumptionType (SDef tySch usage) = do
   return $ (freshTy, True, usage, Nothing, tySch)
 getSAssumptionType (SVar (Ghost _) sInfo) =
   error "Cannot synthesis in the context of Ghost variables (i.e., for language SecurityLevels)"
+
+-- Simple hole expressions
+hole :: Expr () ()
+hole = Hole ns () False [] Nothing
 
 -- ## Typing
 
@@ -384,13 +393,71 @@ sizeOfCoeffect (TyInt _) = 0
 sizeOfCoeffect (TyVar _) = 0
 sizeOfCoeffect _ = 0
 
+-- # Functions for building partial expressions in the synthesiser (using a zipper)
+
 withPartialExpr :: Expr () () -> Synthesiser a -> Synthesiser a
-withPartialExpr e m = do
+withPartialExpr e m =
+  withPartialExprAt Just e m
+
+withPartialExprAt ::
+    (Zipper (Expr () ()) -> Maybe (Zipper (Expr () ())))
+    -> Expr () () -> Synthesiser a -> Synthesiser a
+withPartialExprAt move e m = do
   -- TODO: only do this if we are debugging
   conv $ registerPartialExpr e
+  navigatePartialExpr move
   x <- m
   conv $ navigateUpPartialExpr
   return x
 
-hole :: Expr () ()
-hole = Hole ns () False [] Nothing
+navigatePartialExpr ::
+    (Zipper (Expr () ()) -> Maybe (Zipper (Expr () ())))
+    -> Synthesiser ()
+navigatePartialExpr nav =
+  conv $ modify (\st ->
+    st { partialSynthExpr =
+      case nav (partialSynthExpr st) of
+        Just z -> z
+        Nothing -> (partialSynthExpr st) }
+    )
+
+-- Move to the next expression on the right (for a zipper over an expression)
+rightExpr :: Zipper (Expr () ()) -> Maybe (Zipper (Expr () ()))
+rightExpr z =
+  case right z of
+    Nothing -> Nothing
+    Just z' ->
+      if query isExpr z'
+        then Just z'
+        else rightExpr z'
+  where
+
+-- Generic dynamic typing query on whether a value of type `a` is an `Expr`
+isExpr :: Typeable a => a -> Bool
+isExpr = (\_ -> False) `extQ` isExpr'
+  where
+    isExpr' :: Expr () () -> Bool
+    isExpr' _ = True
+
+-- Move down into the left-most children expression (for a zipper over an expression)
+downExpr :: Zipper (Expr () ()) -> Maybe (Zipper (Expr () ()))
+downExpr z =
+  -- Go down to left-most child
+  case down' z of
+    Nothing -> Nothing
+    Just z' ->
+      if query isExpr z'
+        then Just z'
+        -- Not an expr so go right till it is!
+        else rightExpr z'
+
+upExpr :: Zipper (Expr () ()) -> Maybe (Zipper (Expr () ()))
+upExpr = up
+
+-- Used when returning at the end of a Synthesiser rule
+-- register the expression in the return result
+leafExpr :: (Expr () (), b, c, d, e)
+        -> Synthesiser (Expr () (), b, c, d, e)
+leafExpr (e, x, y, z, w) = do
+  conv $ registerFinalExpr e
+  return (e, x, y, z, w)

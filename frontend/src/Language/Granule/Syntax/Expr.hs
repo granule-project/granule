@@ -140,14 +140,14 @@ data Operator
   deriving (Generic, Eq, Ord, Show, Rp.Data)
 
 
-data Hints = 
+data Hints =
   Hints {
     hSubtractive :: Bool,
     hPruning     :: Bool,
     hNoTimeout   :: Bool,
     hGradeOnRule :: Bool,
-    hLinHaskell  :: Maybe Span, -- The location of the hole in the original Haskell file 
-    hTimeout     :: Maybe Int, 
+    hLinHaskell  :: Maybe Span, -- The location of the hole in the original Haskell file
+    hTimeout     :: Maybe Int,
     hIndex       :: Maybe Int
   }
   deriving (Generic, Eq, Show, Rp.Data)
@@ -222,11 +222,11 @@ pattern Case :: --forall {g :: * -> * -> * -> * -> *} {ev} {a}.
 pattern Case sp a rf swexp arms = (ExprFix2 (CaseF sp a rf swexp arms))
 
 pattern Hole :: -- forall {g :: * -> * -> * -> * -> *} {ev} {a}.
-                Span 
-                -> a 
-                -> Bool 
-                -> [Id] 
-                -> Maybe Hints 
+                Span
+                -> a
+                -> Bool
+                -> [Id]
+                -> Maybe Hints
                 -> ExprFix2 ExprF g ev a
 pattern Hole sp a rf vs hs = ExprFix2 (HoleF sp a rf vs hs)
 {-# COMPLETE App, Binop, LetDiamond, TryCatch, Val, Case, Hole #-}
@@ -321,6 +321,10 @@ typedPair left right =
 pairType :: Type -> Type -> Type
 pairType leftType rightType =
     TyApp (TyApp (TyCon (Id "," ",")) leftType) rightType
+
+-- let p = e1 in e2
+letExpr :: Span -> Pattern () -> Expr ev () -> Expr ev () -> Expr ev ()
+letExpr s p e1 e2 = App s () False (Val s () False (Abs () p Nothing e2)) e1
 
 class Substitutable t where
   -- Syntactic substitution of a term into an expression

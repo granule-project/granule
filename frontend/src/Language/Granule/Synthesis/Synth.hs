@@ -635,20 +635,23 @@ varRule gamma (Focused left) (Focused (var@(name, assumption) : right)) goal = d
                 (kind, _, _) <- conv $ synthKind ns grade
                 delta <- ctxtMultByCoeffect (TyGrade (Just kind) 0) (left ++ right)
                 let singleUse = (name, SVar (Discharged t (TyGrade (Just kind) 1)) mSInfo)
-                return (Val ns () False (Var () name), singleUse:delta, subst, isDecr mSInfo, Nothing)
+                leafExpr (Val ns () False (Var () name), singleUse:delta, subst, isDecr mSInfo, Nothing)
+
               (True, Just grade) -> do
                 synSt <- getSynthState
                 if not $ name `elem` currDef synSt then do
                   (kind, _, _) <- conv $ synthKind ns grade
                   delta <- ctxtMultByCoeffect (TyGrade (Just kind) 0) (left ++ right)
                   let singleUse = (name, SDef tySch (Just $ TyGrade (Just kind) 1))
-                  return (Val ns () False (Var () name), singleUse:delta, subst, False, Nothing)
+                  leafExpr (Val ns () False (Var () name), singleUse:delta, subst, False, Nothing)
+
                 else none
               (True, Nothing) -> do
                 synSt <- getSynthState
                 if not $ name `elem` currDef synSt then do
                   delta <- ctxtMultByCoeffect (TyGrade Nothing 0) (left ++ right)
-                  return (Val ns () False (Var () name), var:delta, subst, False, Nothing)
+                  leafExpr (Val ns () False (Var () name), var:delta, subst, False, Nothing)
+
                 else none
           else none
         else none
@@ -677,7 +680,7 @@ absRule sParams focusPhase gamma (Focused omega) goal@(FunTy name gradeM tyA tyB
 
   (t, delta, subst, struct, scrutinee) <-
      -- Recursive call
-     withPartialExpr
+     withPartialExprAt downExpr
        (Val ns () False (Abs () (PVar ns () False x) Nothing hole))
        (gSynthInner sParams focusPhase gamma' (Focused omega') tyB)
 
@@ -688,6 +691,7 @@ absRule sParams focusPhase gamma (Focused omega) goal@(FunTy name gradeM tyA tyB
       modifyPred $ addConstraintViaConjunction (ApproximatedBy ns grade_r grade kind)
       res <- solve
       boolToSynthesiser res (Val ns () False (Abs () (PVar ns () False x) Nothing t), delta', subst, struct, scrutinee)
+
     Nothing -> do
       modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (TyGrade (Just kind) 0) grade kind)
       res <- solve
@@ -703,6 +707,8 @@ absRule _ _ _ _ _ = none
 Γ, x :_r1 A^q → B ⊢ A => t₂ | Δ₂, x :_s3 : A^q → B
 ----------------------------------------------------------------------------------------------:: app
 Γ, x : A → B ⊢ C => [(x t₂) / y] t₁ | (Δ₁ + s2 · q · Δ₂), x :_s2 + s1 + (s2 · q · s3) A^q → B
+
+let x2 = x1 t2 in t1
 
 -}
 appRule :: (?globals :: Globals) => SearchParameters -> FocusPhase -> Ctxt SAssumption -> FocusedCtxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
@@ -727,7 +733,10 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
         let (gamma', omega') = bindToContext (x2, SVar (Discharged tyB grade_r) Nothing) (gamma ++ [var]) omega (isLAsync tyB)
 
         -- Synthesises the function arg
-        (t1, delta1, subst1, struct1, scrutinee) <- gSynthInner (incrG sParams) focusPhase gamma' (Focused omega') goal
+        (t1, delta1, subst1, struct1, scrutinee) <-
+          withPartialExprAt (downExpr >=> rightExpr)
+          (letExpr ns (PVar ns () False x2) (App ns () False (Val ns () False (Var () x1)) hole) hole)
+          (gSynthInner (incrG sParams) focusPhase gamma' (Focused omega') goal)
 
         case lookupAndCutout x2 delta1 of
           Just (delta1', SVar (Discharged _ s2) _) ->
@@ -740,6 +749,7 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
                   let isScrutinee = case scrutinee of Just scr -> scr == x2 ; _ -> False
                   (t2, delta2, subst2, struct2, _) <- do
 
+                    navigatePartialExpr (upExpr >=> rightExpr)
                     if isScrutinee
                     then gSynthInner (incrG $ sParams { scrutCurrent = (scrutCurrent sParams) + 1 }) RightSync (gamma ++ omega ++ [var]) (Focused []) tyA
                     else gSynthInner (incrG sParams)  RightSync (omega ++ gamma ++ [var]) (Focused []) tyA
@@ -789,7 +799,11 @@ boxRule :: (?globals :: Globals) => SearchParameters -> FocusPhase -> Ctxt SAssu
 boxRule sParams focusPhase gamma goal@(Box grade_r goal_inner) = do
   debugM "boxRule, goal is" (pretty goal)
 
-  (t, delta, subst, struct, scrutinee) <- gSynthInner sParams focusPhase gamma (Focused []) goal_inner
+  (t, delta, subst, struct, scrutinee) <-
+    withPartialExprAt downExpr
+    (Val ns () False (Promote () hole))
+    (gSynthInner sParams focusPhase gamma (Focused []) goal_inner)
+
   delta' <- ctxtMultByCoeffect grade_r delta
   let boxExpr = Val ns () False (Promote () t)
   return (boxExpr, delta', subst, struct, scrutinee)
@@ -815,7 +829,10 @@ unboxRule sParams focusPhase gamma (Focused left) (Focused (var_x@(x, SVar (Disc
 
     let (gamma', omega') = bindToContext (y, SVar (Discharged ty (grade_r `gTimes` grade_q)) Nothing) (var_x:gamma) omega (isLAsync ty)
 
-    (t, delta, subst, struct, scrutinee) <- gSynthInner sParams focusPhase gamma' (Focused omega') goal
+    (t, delta, subst, struct, scrutinee) <-
+        withPartialExprAt downExpr 
+        (makeUnboxUntyped y (makeVarUntyped x) hole)
+        (gSynthInner sParams focusPhase gamma' (Focused omega') goal)
 
     case lookupAndCutout y delta of
       Just (delta', SVar (Discharged _ grade_s1) _) ->
@@ -877,12 +894,12 @@ constrRule sParams focusPhase gamma goal = do
               -- Nullary constructor
               [] -> do
                 delta <- ctxtMultByCoeffect (TyGrade Nothing 0) gamma
-                return (Val ns () False (Constr () cName []), delta, [], False, Nothing)
+                leafExpr (Val ns () False (Constr () cName []), delta, [], False, Nothing)
 
               -- N-ary constructor
               args@(_:_) -> do
                 (ts, delta, substOut, structs) <- synthArgs args subst
-                return (makeConstrUntyped ts cName, delta, substOut, structs, Nothing)
+                leafExpr (makeConstrUntyped ts cName, delta, substOut, structs, Nothing)
           _ -> none
       `try` tryDatacons dtName (con:right) left goal
 
@@ -1098,11 +1115,12 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
         grade_final <- case grade_s_out of
                   -- Add the usages of each branch to the usages of x inside each branch
                   Just grade_s_out' -> return $ grade_r_out `gPlus` grade_s_out'
-                  -- Not sure when this case should arise, since nullary constructors get a 1 grade
+                  -- Not sure when this case should arise, since nullary constrguctors get a 1 grade
                   Nothing -> return grade_r_out
         -- Focussed variable output assumption
         let var_x_out = (x, SVar (Discharged ty grade_final) sInfo)
 
+        debugM "synth candidate" (pretty $ makeCaseUntyped x patExprs)
         solved <-
           ifM (conv $ polyShaped ty)
             (do
