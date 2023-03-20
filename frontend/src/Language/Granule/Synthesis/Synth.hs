@@ -656,7 +656,6 @@ absRule sParams focusPhase gamma (Focused omega) goal@(FunTy name gradeM tyA tyB
     Just (delta', SVar (Discharged _ grade_r) _) -> do
       modifyPred $ addConstraintViaConjunction (ApproximatedBy ns grade_r grade kind)
       res <- solve
-      _ <- if res then error (pretty t) else return ()
       boolToSynthesiser res (Val ns () False (Abs () (PVar ns () False x) Nothing t), delta', subst, struct, scrutinee)
     Nothing -> do
       modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (TyGrade (Just kind) 0) grade kind)
