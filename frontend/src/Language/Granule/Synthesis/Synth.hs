@@ -509,38 +509,46 @@ gSynthInner sParams focusPhase gamma (Focused omega) goal | guessCurrent sParams
       transitionToLeftAsync sParams gamma omega goal
 
     (LeftAsync, _:_) -> do
-      -- unboxRule sParams LeftAsync gamma (Focused []) (Focused omega) goal
-      -- `try`
+      unboxRule sParams LeftAsync gamma (Focused []) (Focused omega) goal
+      `try`
       caseRule sParams LeftAsync gamma (Focused []) (Focused omega) goal
     -- Focus / shift to Sync phases
     (LeftAsync, []) -> do
       foc sParams goal gamma $ isRSync goal
 
     (RightSync, []) -> do
-      -- varRule [] (Focused []) (Focused gamma) goal
-      -- `try`
+      varRule [] (Focused []) (Focused $ omega ++ gamma) goal
+      `try`
       if isRSync goal then do
         boxRule sParams RightSync gamma goal
-        `try`
+        `try` 
         constrRule sParams RightSync gamma goal
-      -- else none
       else
         gSynthInner (incrG sParams) RightAsync gamma (Focused []) goal
 
-    (LeftSync, [var]) -> do
-        varRule [] (Focused []) (Focused $ omega ++ gamma) goal
-        `try`
-        appRule sParams LeftSync gamma (Focused []) (Focused omega) goal
+    (LeftSync, [(_, var)]) -> 
+      case tyAndGrade var of 
+        Just (ty, _) -> 
+          if isLSync ty || isAtomic ty then do
+            varRule [] (Focused []) (Focused $ omega ++ gamma) goal
+            `try`
+            appRule sParams LeftSync gamma (Focused []) (Focused omega) goal
+          else 
+            gSynthInner (incrG sParams) LeftAsync gamma (Focused omega) goal
+        _ -> none
 
-    (LeftSync, []) -> do
-      gSynthInner (incrG sParams) RightAsync gamma (Focused []) goal
+    (LeftSync, _) -> 
+        gSynthInner (incrG sParams) RightAsync gamma (Focused []) goal
 
   where
 
     foc sParams goal gamma True =
-      focLeft sParams [] gamma goal
-      `try`
-      focRight sParams gamma goal
+      if isRSync goal then do
+        focRight sParams gamma goal
+        `try`
+        focLeft sParams [] gamma goal
+      else 
+        focLeft sParams [] gamma goal
     foc sParams goal gamma False =
       focLeft sParams [] gamma goal
 
@@ -635,19 +643,12 @@ absRule sParams focusPhase gamma (Focused omega) goal@(FunTy name gradeM tyA tyB
   x <-  useBinderNameOrFreshen name
   st <- getSynthState
 
-  -- traceM $ "isLASync: " <> (show $ isLAsync tyA)
-  -- traceM $ "matchMax: " <> (show $ matchMax sParams)
-  -- traceM $ "matchCurrent: " <> (show $ matchCurrent sParams)
-  -- traceM $ "reached max: " <> (show $ (matchCurrent sParams >= matchMax sParams))
-  -- traceM $ "isrec: " <> (show $ isRecursiveType tyA (constructors st))
-  let (gamma', omega') = bindToContext (x, SVar (Discharged tyA grade) (Just NonDecreasing)) gamma omega (isLAsync tyA && ((matchCurrent sParams < matchMax sParams)))
-  -- traceM $ "omega': " <> (show $ omega')
-  traceM $ "gamma': " <> (show $ gamma')
+  -- We bind the argument to Omega (focus on it) if it is a left asynchronous type, and we haven't reached the match depth if 
+  -- it is a recursive type 
+  let bindToOmgea = isLAsync tyA && (((matchCurrent sParams) <= matchMax sParams) || not (isRecursiveType tyA (constructors st)))
+  let (gamma', omega') = bindToContext (x, SVar (Discharged tyA grade) (Just NonDecreasing)) gamma omega bindToOmgea -- (isLAsync tyA && ((matchCurrent sParams < matchMax sParams)))
 
   (t, delta, subst, struct, scrutinee) <- gSynthInner sParams focusPhase gamma' (Focused omega') tyB
-  -- traceM $ "t: " <> (pretty t)
-  -- traceM $ "max: " <> (show $ maxReached st)
-  -- traceM $ "reached max: " <> (show $ (matchCurrent sParams >= matchMax sParams))
 
 
   cs <- conv get
@@ -690,11 +691,8 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
         let omega = left ++ right
         x2 <- freshIdentifier
 
-        -- let assumption@(_, SVar _ sInfo) = if isRecursiveCon tyB (x2, (Forall ns [] [] arg, []))
-        --                                    then (y, SVar (Discharged arg' grade_rq) (Just $ Decreasing 1))
-        --                                    else (y, SVar (Discharged arg' grade_rq) (Just NonDecreasing))
-
-        let (gamma', omega') = bindToContext (x2, SVar (Discharged tyB grade_r) Nothing) (gamma ++ [var]) omega (isLAsync tyB && (matchCurrent sParams < matchMax sParams))
+        let bindToOmgea = isLAsync tyA && ((matchCurrent sParams <= matchMax sParams) || not (isRecursiveType tyA (constructors st)))
+        let (gamma', omega') = bindToContext (x2, SVar (Discharged tyB grade_r) Nothing) (gamma ++ [var]) omega bindToOmgea 
 
         -- Synthesises the function arg
         (t1, delta1, subst1, struct1, scrutinee) <- gSynthInner (incrG sParams) focusPhase gamma' (Focused omega') goal
@@ -711,7 +709,7 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
                   (t2, delta2, subst2, struct2, _) <- do
 
                     if isScrutinee
-                    then gSynthInner (incrG $ sParams { scrutCurrent = (scrutCurrent sParams) + 1 }) RightSync (gamma ++ omega ++ [var]) (Focused []) tyA
+                    then gSynthInner (incrG $ sParams { scrutCurrent = (scrutCurrent sParams) + 1 }) RightSync (omega ++ gamma ++ [var]) (Focused []) tyA
                     else gSynthInner (incrG sParams)  RightSync (omega ++ gamma ++ [var]) (Focused []) tyA
 
                   case lookupAndCutout x1 delta2 of
@@ -783,7 +781,9 @@ unboxRule sParams focusPhase gamma (Focused left) (Focused (var_x@(x, SVar (Disc
     let omega = left ++ right
     y <- freshIdentifier
 
-    let (gamma', omega') = bindToContext (y, SVar (Discharged ty (grade_r `gTimes` grade_q)) Nothing) (var_x:gamma) omega (isLAsync ty)
+    st <- getSynthState
+    let bindToOmgea = isLAsync ty && ((matchCurrent sParams < matchMax sParams) || not (isRecursiveType ty (constructors st)))
+    let (gamma', omega') = bindToContext (y, SVar (Discharged ty (grade_r `gTimes` grade_q)) Nothing) (var_x:gamma) omega bindToOmgea -- (isLAsync ty)
 
     (t, delta, subst, struct, scrutinee) <- gSynthInner sParams focusPhase gamma' (Focused omega') goal
 
@@ -853,8 +853,6 @@ constrRule sParams focusPhase gamma goal = do
               -- N-ary constructor
               args@(_:_) -> do
                 (ts, delta, substOut, structs) <- synthArgs args subst
-                traceM $ "sParams: " <> (show sParams)
-                traceM $ "conT: " <> (pretty $ makeConstrUntyped ts cName)
                 return (makeConstrUntyped ts cName, delta, substOut, structs, Nothing)
           _ -> none
       `try` tryDatacons dtName (con:right) left goal
@@ -951,6 +949,7 @@ casePatternMatchBranchSynth
                             Nothing      -> grade_r
           -- (iii) type
           argTy' <- conv $ substitute subst argTy
+          st <- getSynthState
 
           -- Create an assumption for the variable and work out which synthesis environment
           -- to insert it into
@@ -962,17 +961,15 @@ casePatternMatchBranchSynth
 
           -- TODO: explain the extra condition here.
           -- traceM $ "binder condition: " <> (show (isLAsync argTy' && ((matchCurrent sParams + 1) < matchMax sParams)))
+          let bindToOmgea = isLAsync argTy' && (((matchCurrent sParams + 1) < matchMax sParams) || not (isRecursiveType argTy' (constructors st)))
           let (gamma', omega') =
-                bindToContext assumption gamma omega (isLAsync argTy' && ((matchCurrent sParams + 1) < matchMax sParams))
+                bindToContext assumption gamma omega bindToOmgea -- (isLAsync argTy' && ((matchCurrent sParams + 1) < matchMax sParams))
           return (gamma', omega', (var, (getGradeFromArrow mGrade_q, grade_rq)):vars)
         )
 
       let (vars, _) = unzip branchBoundVarsAndGrades
       let constrPat = PConstr ns () False cName (map (PVar ns () False) $ reverse vars)
 
-      -- traceM $ "caseing on: " <> (pretty x)
-      -- traceM $ "in case with gamma': " <> (show gamma')
-      -- traceM $ "in case with omega': " <> (show omega')
       -- Synthesise the body of the branch which produces output context `delta`
       (t, delta, subst, _, _) <-
          gSynthInner sParams { matchCurrent = (matchCurrent sParams) + 1} focusPhase gamma' (Focused omega') goal
