@@ -226,7 +226,7 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
 
     synthesiseHoles :: (?globals :: Globals) => AST () () -> [(CheckerError, Maybe Measurement, Int)] -> Bool -> IO [(CheckerError, Maybe Measurement, Int)]
     synthesiseHoles _ [] _ = return []
-    synthesiseHoles astSrc ((HoleMessage sp goal ctxt tyVars hVars synthCtxt@(Just (cs, defs, (Just defId, spec), index, hints)) hcases, aggregate, attemptNo):holes) isGradedBase = do
+    synthesiseHoles astSrc ((HoleMessage sp goal ctxt tyVars hVars synthCtxt@(Just (cs, defs, (Just defId, spec), index, hints, constructors)) hcases, aggregate, attemptNo):holes) isGradedBase = do
       -- TODO: this magic number shouldn't here I don't think...
       let timeout = if interactiveDebugging then maxBound :: Int else 10000000
       rest <- synthesiseHoles astSrc holes isGradedBase
@@ -240,14 +240,14 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
                   _ -> (unres, res)
                 ) ([], []) comps
             _ -> ([], [])
-      res <- liftIO $ System.Timeout.timeout timeout $ if not isGradedBase
-                 then synthesiseProgram hints index unrestricted restricted defId ctxt (Forall nullSpan [] [] goal) cs
-                 else synthesiseGradedBase hints index unrestricted restricted defId ctxt (Forall nullSpan [] [] goal) cs
+      res <- liftIO $ System.Timeout.timeout timeout $ 
+                synthesiseGradedBase hints index unrestricted restricted defId constructors ctxt (Forall nullSpan [] [] goal) cs 
+                -- if not isGradedBase
+                --  then synthesiseProgram hints index unrestricted restricted defId ctxt (Forall nullSpan [] [] goal) cs
       case (res, spec, holes) of
         (Just ([], measurement), _, _) -> do
           return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt hcases, measurement, attemptNo) : rest
         (Nothing, _ , _) -> do
-          -- end    <- liftIO $ Clock.getTime Clock.Monotonic
           printInfo $ "No programs synthesised - Timeout after: " <> show (fromIntegral timeout / (10^(6 :: Integer)::Double))  <> "s"
           return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt hcases, Nothing, attemptNo) : rest
         (Just (programs@(_:_), measurement), Just (Spec _ _ examples@(_:_) _), []) -> do
@@ -263,7 +263,7 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
           success <- System.Timeout.timeout timeout $ runExamples astChanged examples defId
           case (success, attemptNo < exampleLimit) of
             (Just False, True) -> do
-              let synthCtxt' = Just (cs, defs, (Just defId, spec), index + 1, hints)
+              let synthCtxt' = Just (cs, defs, (Just defId, spec), index + 1, hints, constructors)
               rest' <- synthesiseHoles astSrc [(HoleMessage sp goal ctxt tyVars hVars synthCtxt' hcases, aggregate', attemptNo+1)] isGradedBase
               return $ rest ++ rest'
             (Just False, False) -> do
@@ -285,7 +285,6 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
                 -> Id
                 -> IO Bool
     runExamples ast@(AST decls defs imports hidden mod) examples defId = do
-        -- _ <- error "asdasda"
         let exampleMainExprs =
               -- map (\(Example input output) -> makeEquality (App nullSpanNoFile () False (Val nullSpanNoFile () False (Var () defId))  input) output) examples
               map (\(Example input output) -> makeEquality input output) examples

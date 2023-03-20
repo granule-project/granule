@@ -49,7 +49,6 @@ import Data.Maybe (fromMaybe)
 -- import Control.Monad.Omega
 import System.Clock (TimeSpec)
 
-import Debug.Trace
 -- import Control.Monad.Except
 -- import Control.Monad.Logic
 -- import Data.Ord
