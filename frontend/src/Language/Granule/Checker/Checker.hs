@@ -602,17 +602,28 @@ checkExpr defs ctxt _ _ t (Hole s _ _ vars hints) = do
       -- Running in synthesis mode
       case globalsSynthesise ?globals of
         Just True -> do
+
+          relevantConstructors <- do
+            let snd3 (a, b, c) = b
+                tripleToTup (a, b, c) = (a, b)
+            st <- get
+            let pats = map (second snd3) (typeConstructors st)
+            mapM (\ (a, b) -> do
+              dc <- mapM (lookupDataConstructor nullSpanNoFile) b
+              let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
+              return (a, ctxtMap tripleToTup sd)) pats
+
           let holeVars = map (\id -> (id, id `elem` boundVariables)) (map fst ctxt)
           -- Check to see if this hole is something we are interested in
           case globalsHolePosition ?globals of
             -- Synth everything mode
             Nothing -> do 
-              throw $ HoleMessage s t ctxt (tyVarContext st) holeVars (Just (st, defs, currentDef st, hindex, hints)) [([], hexpr)]
+              throw $ HoleMessage s t ctxt (tyVarContext st) holeVars (Just (st, defs, currentDef st, hindex, hints, relevantConstructors)) [([], hexpr)]
             Just pos ->
               if spanContains pos s
               -- This is a hole we want to synth on
               then do 
-                throw $ HoleMessage s t ctxt (tyVarContext st) holeVars (Just (st, defs, currentDef st, hindex, hints)) [([], hexpr)]
+                throw $ HoleMessage s t ctxt (tyVarContext st) holeVars (Just (st, defs, currentDef st, hindex, hints, relevantConstructors)) [([], hexpr)]
                 -- This is not a hole we want to synth on
               else  
                 throw $ HoleMessage s t ctxt (tyVarContext st) holeVars Nothing [([], hexpr)]

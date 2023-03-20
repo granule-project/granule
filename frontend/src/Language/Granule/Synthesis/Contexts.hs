@@ -21,6 +21,7 @@ import Control.Monad.State.Strict
 
 
 import Language.Granule.Utils
+import Language.Granule.Checker.Coeffects (getGradeFromArrow)
 
 
 -- An SAssumption is an assumption used for synthesis:
@@ -31,6 +32,11 @@ data SAssumption =
     | SDef TypeScheme (Maybe Coeffect)
   deriving (Show)
 
+
+tyAndGrade :: SAssumption -> Maybe (Type, Coeffect)
+tyAndGrade (SVar (Discharged ty g) _) = Just (ty, g)
+tyAndGrade (SDef (Forall _ _ _ ty) g) = Just (ty, getGradeFromArrow g)
+tyAndGrade _ = Nothing 
 
 
 newtype FocusedCtxt a = Focused (Ctxt a)

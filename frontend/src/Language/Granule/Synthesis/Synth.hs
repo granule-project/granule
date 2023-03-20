@@ -373,19 +373,9 @@ synthesiseGradedBase hints index unrestricted restricted currentDef constructors
                             return (tyId, (dataCons, hasRecCon))) constructors
 
 
-  -- let timeout = case hints of
-  --                   Just h -> case (hTimeout h, hNoTimeout h) of (_, True) -> -1 ; (Just lim, _) -> lim * 1000
-  --                   Nothing -> defaultTimeout
-
   -- Initialise input context with
   -- local synthesis context
   let gamma = map (\(v, a)  -> (v, SVar a $ Just NonDecreasing)) ctxt ++
-  -- restricted definition given as hints
-
-  -- restricted definition given as hints
-              
-  -- restricted definition given as hints
-
   -- restricted definition given as hints
               map (\(v, (tySch, grade)) -> (v, SDef tySch (Just grade))) restricted ++
   -- unrestricted definitions given as hints
@@ -436,34 +426,6 @@ synthesiseGradedBase hints index unrestricted restricted currentDef constructors
           return (programs, Nothing)
 
 
--- synLoop :: (?globals :: Globals)
---         => Int
---         -> SearchParameters
---         -> Int
---         -> Ctxt SAssumption
---         -> SynthesisData
---         -> CheckerState
---         -> Type
---         -> IO ([(Either (NonEmpty CheckerError) (Expr () ()), CheckerState)], SynthesisData, Int)
--- synLoop step sParams index gamma synthState checkerState goal = do
---   traceM $ "synLoop: " <> show step
---   let synRes = gSynth (adjustParams (step + 1) sParams) RightAsync gamma (Focused []) goal
---   (res, agg) <- runStateT (runSynthesiser index synRes checkerState) synthState
---   if not (solved res) then -- &&r(maxReached agg) then
---     -- error "stop"
---     synLoop (step+1) sParams  index gamma agg { maxReached = False } checkerState goal
---   else return (res, agg, step)
-
---   where
---     solved res = case res of ((Right (expr), _):_) -> True ; _ -> False
-
---     adjustParams 0 sParams = sParams { matchMax = (matchMax sParams) + 1}
---     adjustParams 1 sParams = sParams { matchMax = (matchMax sParams) + 1}
---     adjustParams 2 sParams = sParams { scrutMax = (scrutMax sParams) + 5}
---     adjustParams 3 sParams = sParams { matchMax = (matchMax sParams) + 1}
---     adjustParams _ sParams = sParams
-
-
 
 
 
@@ -477,8 +439,6 @@ synLoop :: (?globals :: Globals)
         -> Type
         -> Synthesiser (Expr () ())
 synLoop constrs sParams step index gamma omega goal = do
-  traceM $ "step: " <> (show step)
-  traceM $ "index: " <> (show index)
   Synthesiser $ lift $ lift $ lift $ modify (\state ->
             state {
              constructors = constrs
@@ -488,24 +448,17 @@ synLoop constrs sParams step index gamma omega goal = do
   cs <- conv $ get
   (res, _) <- liftIO $ runStateT (runSynthesiser index (gSynthInner sParams RightAsync gamma (Focused omega) goal) cs) synthState
   case res of
-    ((Right (expr, delta, _, _, _), _):_) -> do
-        traceM "here"
-        consumed <- outerContextConsumed (gamma ++ omega) delta
-        if consumed
-        then do 
-          traceM $ "expr: " <> pretty expr
-          return expr
-        else synLoop constrs (adjustParams step sParams) (step+1) index gamma omega goal
-    _ ->    
+    (_:_) -> 
+      case last res of 
+        (Right (expr, delta, _, _, _), _) -> do 
+          consumed <- outerContextConsumed (gamma ++ omega) delta
+          if consumed
+          then return expr 
+          else synLoop constrs (adjustParams step sParams) (step+1) index gamma omega goal
+        _ -> none
+    _ ->
       synLoop constrs (adjustParams step sParams) (step+1) index gamma omega goal
-    -- do
-    --   if consumed 
-    --   then return expr 
-    --   else synLoop constrs sParams (step+1) gamma omega goal 
-
-  -- result@(expr, delta, subst, _, _) <- gSynthInner sParams RightAsync gamma (Focused omega) goal 
   where
-    -- solved res = case res of ((Right (expr), _):_) -> True ; _ -> False
 
     adjustParams 0 sParams = sParams { matchMax = (matchMax sParams) + 1}
     adjustParams 1 sParams = sParams { matchMax = (matchMax sParams) + 1}
@@ -604,17 +557,6 @@ gSynthInner sParams focusPhase gamma (Focused omega) goal | guessCurrent sParams
 
 gSynthInner _ _ _ _ _ = none
 
-    -- (LeftSync, [var@(x, SVar (Discharged ty g) _)]) -> do
-    --   -- if not (isLSync ty) && not (isAtomic ty) then do
-    --     -- gSynthInner (incrG sParams) LeftAsync gamma (Focused [var]) goal
-    --   -- else do
-    --     varRule [] (Focused []) (Focused $ omega ++ gamma) goal
-    --     `try`
-    --     appRule sParams LeftSync gamma (Focused []) (Focused omega) goal
-
-
-incrG :: SearchParameters -> SearchParameters
-incrG sParams = sParams { guessCurrent = (guessCurrent sParams) + 1}
 
 
 {-

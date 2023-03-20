@@ -95,9 +95,12 @@ defaultSearchParams =
   , matchCurrent = 0
   , matchMax = 0
   , guessCurrent = 0
-  , guessMax = 13
+  , guessMax = 18
     }
 
+
+incrG :: SearchParameters -> SearchParameters
+incrG sParams = sParams { guessCurrent = (guessCurrent sParams) + 1}
 
 -- # Key focusing characterisation functions
 

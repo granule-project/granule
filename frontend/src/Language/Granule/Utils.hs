@@ -110,7 +110,7 @@ solverTimeoutMillis = fromMaybe 10000 $ globalsSolverTimeoutMillis ?globals
 
 -- | Limit to how many times we run the examples before giving up
 exampleLimit :: (?globals :: Globals) => Int
-exampleLimit = fromMaybe 10 $ globalsExampleLimit ?globals
+exampleLimit = fromMaybe 25 $ globalsExampleLimit ?globals
 
 -- | Accessors for global file paths with default values
 includePath, sourceFilePath :: (?globals :: Globals) => FilePath
