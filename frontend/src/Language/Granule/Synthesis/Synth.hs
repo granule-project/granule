@@ -1113,10 +1113,10 @@ computeJoin maybeK g1 g2 = do
          Nothing -> conv $ do { (k, _, _) <- synthKind ns g1; return k }
          Just k  -> return k
   upperBoundGradeVarId <- conv $ freshIdentifierBase $ "ub"
-  let upperBoundGradeVar = mkId upperBoundGradeVarId
+  let upperBoundGradeVar =x mkId upperBoundGradeVarId
   modify (\st -> st { tyVarContext = (upperBoundGradeVar, (k, InstanceQ)) : tyVarContext st })
   let upperBoundGrade = TyVar upperBoundGradeVar
-  conv $ addConstraint (Lub ns g1 g2 upperBoundGrade k)
+  modifyPred $ addConstraintViaConjunction (Lub ns g1 g2 upperBoundGrade k)
   return upperBoundGrade
 
 -- Version of computeJoin' where the inputs may be Nothing i.e.,
