@@ -124,7 +124,8 @@ partialExpressionZipperTests = do
               st <- get
               let z = partialSynthExpr st
               liftIO $ putStrLn $ show $
-                 ((Z.down' z >>= Z.right >>= Z.right >>= Z.right >>= Z.getHole) :: Maybe (Value () ()))
+                 ((Z.down' z >>= Z.right >>= Z.right >>= Z.right >>= Z.down' >>= Z.down' >>= Z.right >>= Z.getHole) :: Maybe (Expr () ())
+                 )
               return (downExpr z >>= Z.getHole)
       exprHole `shouldBe` [Just (Just hole)]
 

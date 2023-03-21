@@ -439,6 +439,7 @@ isExpr = (\_ -> False) `extQ` isExpr'
     isExpr' :: Expr () () -> Bool
     isExpr' _ = True
 
+
 -- Move down into the left-most children expression (for a zipper over an expression)
 downExpr :: Zipper (Expr () ()) -> Maybe (Zipper (Expr () ()))
 downExpr z =
@@ -446,10 +447,38 @@ downExpr z =
   case down' z of
     Nothing -> Nothing
     Just z' ->
-      if query isExpr z'
-        then Just z'
-        -- Not an expr so go right till it is!
-        else rightExpr z'
+      -- if we are at an exprFix2 then go down'
+      -- again before moving on to the right
+      nextWithPreMove z'
+        (\z' ->
+          if query isExpr z'
+            then Just z'
+            -- Not an expr so go right till it is!
+            else rightExpr z')
+  where
+    -- Combinator for taking some step
+    -- but only after trying to do a query and additional
+    -- naviation step if that query fails
+    -- nextWithPreMove :: Typeable a => (a -> Bool)
+    --  -> (Zipper a -> Maybe (Zipper a))
+    --  -> Zipper a
+    --  -> (Zipper a -> Maybe b)
+    --  -> Maybe b
+    nextWithPreMove z next =
+      if query isExprFix2 z
+        then
+          case down' z of
+            Nothing -> Nothing
+            Just z' -> next z'
+        else next z
+
+-- Generic dynamic typing query on whether a value of type `a` is an `Expr`
+isExprFix2 :: Typeable a => a -> Bool
+isExprFix2 = (\_ -> False) `extQ` isExprFix2'
+  where
+    isExprFix2' :: ExprFix2 ValueF ExprF () () -> Bool
+    isExprFix2' _ = True
+
 
 upExpr :: Zipper (Expr () ()) -> Maybe (Zipper (Expr () ()))
 upExpr = up
