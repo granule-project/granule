@@ -407,3 +407,10 @@ modifyM f = do
 -- when the inductive part is long
 forallM :: Monad m => [a] -> b -> (b -> a -> m b) -> m b
 forallM xs b h = foldM h b xs
+
+-- implies
+infixr 2 ==>
+(==>) :: Bool -> Bool -> Bool
+True  ==> True   = True
+True  ==> False = False
+False ==> _     = True

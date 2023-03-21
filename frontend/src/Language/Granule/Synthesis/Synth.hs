@@ -957,11 +957,15 @@ casePatternMatchBranchSynth
                 then (var, SVar (Discharged argTy' grade_rq) (Just $ Decreasing 1))
                 else (var, SVar (Discharged argTy' grade_rq) (Just $ NonDecreasing))
 
-          -- TODO: explain the extra condition here.
-          -- traceM $ "binder condition: " <> (show (isLAsync argTy' && ((matchCurrent sParams + 1) < matchMax sParams)))
-          let bindToOmgea = isLAsync argTy' && (((matchCurrent sParams + 1) < matchMax sParams) || not (isRecursiveType argTy' (constructors st)))
-          let (gamma', omega') =
-                bindToContext assumption gamma omega bindToOmgea -- (isLAsync argTy' && ((matchCurrent sParams + 1) < matchMax sParams))
+          -- predicate on whether we want to focus on the argument type or delay
+          let bindToOmega =
+                 -- argument type must be left async type
+                   (isLAsync argTy')
+                 -- if we are a recursive type then check whether we are below max depth
+                && ((isRecursiveType argTy' (constructors st)) ==> (matchCurrent sParams + 1) < matchMax sParams)
+
+          -- construct focussing contexts
+          let (gamma', omega') = bindToContext assumption gamma omega bindToOmega
           return (gamma', omega', (var, (getGradeFromArrow mGrade_q, grade_rq)):vars)
         )
 
