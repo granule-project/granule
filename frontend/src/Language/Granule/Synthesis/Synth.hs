@@ -447,12 +447,12 @@ synLoop constrs sParams step index gamma omega goal = do
   cs <- conv $ get
   (res, _) <- liftIO $ runStateT (runSynthesiser index (gSynthInner sParams RightAsync gamma (Focused omega) goal) cs) synthState
   case res of
-    (_:_) -> 
-      case last res of 
-        (Right (expr, delta, _, _, _), _) -> do 
+    (_:_) ->
+      case last res of
+        (Right (expr, delta, _, _, _), _) -> do
           consumed <- outerContextConsumed (gamma ++ omega) delta
           if consumed
-          then return expr 
+          then return expr
           else synLoop constrs (adjustParams step sParams) (step+1) index gamma omega goal
         _ -> none
     _ ->
@@ -520,23 +520,23 @@ gSynthInner sParams focusPhase gamma (Focused omega) goal | guessCurrent sParams
       `try`
       if isRSync goal then do
         boxRule sParams RightSync gamma goal
-        `try` 
+        `try`
         constrRule sParams RightSync gamma goal
       else
         gSynthInner (incrG sParams) RightAsync gamma (Focused []) goal
 
-    (LeftSync, [(_, var)]) -> 
-      case tyAndGrade var of 
-        Just (ty, _) -> 
+    (LeftSync, [(_, var)]) ->
+      case tyAndGrade var of
+        Just (ty, _) ->
           if isLSync ty || isAtomic ty then do
             varRule [] (Focused []) (Focused $ omega ++ gamma) goal
             `try`
             appRule sParams LeftSync gamma (Focused []) (Focused omega) goal
-          else 
+          else
             gSynthInner (incrG sParams) LeftAsync gamma (Focused omega) goal
         _ -> none
 
-    (LeftSync, _) -> 
+    (LeftSync, _) ->
         gSynthInner (incrG sParams) RightAsync gamma (Focused []) goal
 
   where
@@ -546,7 +546,7 @@ gSynthInner sParams focusPhase gamma (Focused omega) goal | guessCurrent sParams
         focRight sParams gamma goal
         `try`
         focLeft sParams [] gamma goal
-      else 
+      else
         focLeft sParams [] gamma goal
     foc sParams goal gamma False =
       focLeft sParams [] gamma goal
@@ -642,8 +642,8 @@ absRule sParams focusPhase gamma (Focused omega) goal@(FunTy name gradeM tyA tyB
   x <-  useBinderNameOrFreshen name
   st <- getSynthState
 
-  -- We bind the argument to Omega (focus on it) if it is a left asynchronous type, and we haven't reached the match depth if 
-  -- it is a recursive type 
+  -- We bind the argument to Omega (focus on it) if it is a left asynchronous type, and we haven't reached the match depth if
+  -- it is a recursive type
   let bindToOmgea = isLAsync tyA && (((matchCurrent sParams) <= matchMax sParams) || not (isRecursiveType tyA (constructors st)))
   let (gamma', omega') = bindToContext (x, SVar (Discharged tyA grade) (Just NonDecreasing)) gamma omega bindToOmgea -- (isLAsync tyA && ((matchCurrent sParams < matchMax sParams)))
 
@@ -690,7 +690,7 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
         x2 <- freshIdentifier
 
         let bindToOmgea = isLAsync tyA && ((matchCurrent sParams <= matchMax sParams) || not (isRecursiveType tyA (constructors st)))
-        let (gamma', omega') = bindToContext (x2, SVar (Discharged tyB grade_r) Nothing) (gamma ++ [var]) omega bindToOmgea 
+        let (gamma', omega') = bindToContext (x2, SVar (Discharged tyB grade_r) Nothing) (gamma ++ [var]) omega bindToOmgea
 
         -- Synthesises the function arg
         (t1, delta1, subst1, struct1, scrutinee) <- gSynthInner (incrG sParams) focusPhase gamma' (Focused omega') goal
@@ -1057,12 +1057,10 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
         -- TODO: more clear names here
         let (grade_rs, grade_ss)                = unzip grades
 
-          -- join contexts
-        -- TODO: generalise ctxtMergeFromPure so it can take a side-effectful operator
-
+        -- join contexts
         delta <- foldM (ctxtMerge (computeJoin Nothing)) (head deltas) (tail deltas)
 
-          -- join grades
+        -- join grades
         grade_r_out <- foldM (computeJoin Nothing)  (head grade_rs) (tail grade_rs)
         grade_s_out <- foldM (computeJoin' Nothing) (head grade_ss) (tail grade_ss)
 
@@ -1113,7 +1111,7 @@ computeJoin maybeK g1 g2 = do
          Nothing -> conv $ do { (k, _, _) <- synthKind ns g1; return k }
          Just k  -> return k
   upperBoundGradeVarId <- conv $ freshIdentifierBase $ "ub"
-  let upperBoundGradeVar =x mkId upperBoundGradeVarId
+  let upperBoundGradeVar = mkId upperBoundGradeVarId
   modify (\st -> st { tyVarContext = (upperBoundGradeVar, (k, InstanceQ)) : tyVarContext st })
   let upperBoundGrade = TyVar upperBoundGradeVar
   modifyPred $ addConstraintViaConjunction (Lub ns g1 g2 upperBoundGrade k)
