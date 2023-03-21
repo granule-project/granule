@@ -1,0 +1,7 @@
+language GradedBase 
+
+data Maybe a = Just a | Nothing
+
+pair : forall a . (Maybe a) %2 -> (Maybe a, Maybe a)
+pair Nothing = (Nothing, Nothing);
+pair (Just y) = (Just y, Just y) 

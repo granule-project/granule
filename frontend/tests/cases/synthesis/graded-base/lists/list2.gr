@@ -1,8 +1,0 @@
-language GradedBase
-
-data List a = Nil | Cons a (List a) 
-
-map : forall a b . (a % 1 -> b) % 0..∞ -> List a % 1..∞ -> List b
-map = ?
--- map f (Cons x xs) = Cons (f x) (map f xs);
--- map f Nil = Nil

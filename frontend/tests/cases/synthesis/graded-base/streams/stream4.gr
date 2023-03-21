@@ -1,0 +1,8 @@
+language GradedBase 
+
+data Stream a = Next a (Stream a) 
+
+map_stream : forall a b . Stream a %1..∞ -> (a %1..∞ -> b) %0..∞ -> Stream b
+spec 
+    map_stream % 1..∞
+map_stream = ?
