@@ -421,16 +421,25 @@ navigatePartialExpr nav =
         Nothing -> (partialSynthExpr st) }
     )
 
+-- Move to the next expression
+navToNextExpr :: Zipper (Expr () ()) -> Maybe (Zipper (Expr () ()))
+navToNextExpr = downExpr
+
 -- Move to the next expression on the right (for a zipper over an expression)
 rightExpr :: Zipper (Expr () ()) -> Maybe (Zipper (Expr () ()))
 rightExpr z =
   case right z of
     Nothing -> Nothing
     Just z' ->
+      -- Found an expr?
       if query isExpr z'
         then Just z'
-        else rightExpr z'
-  where
+        else
+          -- Found a value?
+          if query isValue z'
+            -- Need to jump over one more layer (the ExprFix2 part)
+            then down' z' >>= downExpr
+            else rightExpr z'
 
 -- Generic dynamic typing query on whether a value of type `a` is an `Expr`
 isExpr :: Typeable a => a -> Bool
@@ -438,6 +447,13 @@ isExpr = (\_ -> False) `extQ` isExpr'
   where
     isExpr' :: Expr () () -> Bool
     isExpr' _ = True
+
+-- Generic dynamic typing query on whether a value of type `a` is a `Value`
+isValue :: Typeable a => a -> Bool
+isValue = (\_ -> False) `extQ` isValue'
+  where
+    isValue' :: Value () () -> Bool
+    isValue' _ = True
 
 
 -- Move down into the left-most children expression (for a zipper over an expression)
@@ -459,11 +475,6 @@ downExpr z =
     -- Combinator for taking some step
     -- but only after trying to do a query and additional
     -- naviation step if that query fails
-    -- nextWithPreMove :: Typeable a => (a -> Bool)
-    --  -> (Zipper a -> Maybe (Zipper a))
-    --  -> Zipper a
-    --  -> (Zipper a -> Maybe b)
-    --  -> Maybe b
     nextWithPreMove z next =
       if query isExprFix2 z
         then
@@ -472,12 +483,19 @@ downExpr z =
             Just z' -> next z'
         else next z
 
--- Generic dynamic typing query on whether a value of type `a` is an `Expr`
+-- Generic dynamic typing query on whether a value of type `a` is an `ExprFix2`
 isExprFix2 :: Typeable a => a -> Bool
 isExprFix2 = (\_ -> False) `extQ` isExprFix2'
   where
-    isExprFix2' :: ExprFix2 ValueF ExprF () () -> Bool
+    isExprFix2' :: ExprFix2 ExprF ValueF () () -> Bool
     isExprFix2' _ = True
+
+-- Generic dynamic typing query on whether a value of type `a` is an `ExprFix2` for values
+isValueFix2 :: Typeable a => a -> Bool
+isValueFix2 = (\_ -> False) `extQ` isValueFix2'
+  where
+    isValueFix2' :: ExprFix2 ValueF ExprF () () -> Bool
+    isValueFix2' _ = True
 
 
 upExpr :: Zipper (Expr () ()) -> Maybe (Zipper (Expr () ()))
