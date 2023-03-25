@@ -17,7 +17,6 @@ import qualified System.Clock as Clock
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.SubstitutionContexts (Substitution)
 import Language.Granule.Syntax.Expr
-import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Type (TypeScheme)
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Utils
@@ -122,8 +121,6 @@ try m n = do
 -- In --interactive mode it also pauses execution waiting for the user
 none :: (?globals :: Globals) => Synthesiser a
 none = do
-  partialExpr <- getCurrentPartialExpr
-  debugM "[Partial expression]" (pretty partialExpr)
   when interactiveDebugging $ do
     liftIO $ putStrLn "<<< none HERE. Press any key to continue"
     _ <- liftIO $ getLine

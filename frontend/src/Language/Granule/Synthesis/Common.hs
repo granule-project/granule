@@ -24,6 +24,7 @@ import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
+import Language.Granule.Syntax.Pretty
 import Language.Granule.Synthesis.Monad
 import Language.Granule.Synthesis.Contexts
 import Language.Granule.Utils
@@ -325,6 +326,10 @@ relevantConstructors id ((typeId, (dCons, _)):tys) =
 -- Call the solver on the internally generated predicate and get boolean result
 solve :: (?globals :: Globals) => Synthesiser Bool
 solve = do
+  -- show partial expression
+  partialExpr <- getCurrentPartialExpr
+  debugM "[Partial expression]" (pretty partialExpr)
+
   cs <- conv get
 
   tyVars <- conv $ includeOnlyGradeVariables ns (tyVarContext cs)
