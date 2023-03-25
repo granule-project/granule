@@ -1,0 +1,6 @@
+language GradedBase
+
+data List a =  Cons a (List a) | Nil 
+
+cons5 : forall { a : Type} . a %5 -> List a 
+cons5 = ?

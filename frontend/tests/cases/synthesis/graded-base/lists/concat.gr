@@ -1,0 +1,6 @@
+language GradedBase
+
+data List a = Nil | Cons a (List a) 
+
+concat : forall a . List a % 0..1 -> List a % 1..∞ -> List a
+concat = ?

@@ -1,0 +1,6 @@
+language GradedBase 
+
+data Stream a = Next a (Stream a) 
+
+elim3Stream : forall { a : Type } . Stream a %(0..1) -> (a, (a, a))
+elim3Stream = ?

@@ -1,0 +1,6 @@
+language GradedBase
+
+data Bool = True | False
+
+f : Bool %2 -> (Bool, Bool)
+f x y = (y x, y x)

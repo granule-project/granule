@@ -546,7 +546,7 @@ data CheckerError
       -- Tracks whether a variable is split
       holeVars :: Ctxt Bool,
       -- Used for synthesising programs
-      synthCtxt   :: Maybe (CheckerState, Ctxt TypeScheme, (Maybe Id, Maybe (Spec () ())), Int, Maybe Hints),
+      synthCtxt   :: Maybe (CheckerState, Ctxt TypeScheme, (Maybe Id, Maybe (Spec () ())), Int, Maybe Hints, Ctxt (Ctxt (TypeScheme, Substitution))),
       cases       :: [([Pattern ()], Expr () ())] }
   | TypeError
     { errLoc :: Span, tyExpected :: Type, tyActual :: Type }

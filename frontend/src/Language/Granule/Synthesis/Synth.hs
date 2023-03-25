@@ -15,7 +15,7 @@ import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Span
 
-import Data.List.NonEmpty (NonEmpty(..))
+-- import Data.List.NonEmpty (NonEmpty(..))
 
 import Language.Granule.Context
 
@@ -44,12 +44,13 @@ import qualified System.Timeout
 -- import qualified Data.List.Ordered as Ordered
 
 import Language.Granule.Utils
-import Data.Maybe (fromJust, catMaybes, fromMaybe)
-import Control.Arrow (second)
+import Data.Maybe (fromMaybe)
+-- import Control.Arrow (second)
 -- import Control.Monad.Omega
 import System.Clock (TimeSpec)
 
--- import Debug.Trace
+-- import Control.Monad.Except
+-- import Control.Monad.Logic
 -- import Data.Ord
 
 ------------------------------
@@ -340,13 +341,13 @@ synthesiseGradedBase :: (?globals :: Globals)
   -> Ctxt TypeScheme  -- Unrestricted Defs
   -> Ctxt (TypeScheme, Type) -- Restricted Defs
   -> Id
+  -> Ctxt (Ctxt (TypeScheme, Substitution))
   -> Ctxt Assumption    -- (unfocused) free variables
   -> TypeScheme           -- type from which to synthesise
   -> CheckerState
   -> IO ([Expr () ()], Maybe Measurement)
-synthesiseGradedBase hints index unrestricted restricted currentDef ctxt (Forall _ _ constraints goalTy) cs = do
+synthesiseGradedBase hints index unrestricted restricted currentDef constructors ctxt (Forall _ _ constraints goalTy) cs = do
 
-  -- let defaultTimeout = 100000
 
   -- Start timing and initialise state
   start <- liftIO $ Clock.getTime Clock.Monotonic
@@ -363,9 +364,13 @@ synthesiseGradedBase hints index unrestricted restricted currentDef ctxt (Forall
                       }
   let sParams = defaultSearchParams
 
-  -- let timeout = case hints of
-  --                   Just h -> case (hTimeout h, hNoTimeout h) of (_, True) -> -1 ; (Just lim, _) -> lim * 1000
-  --                   Nothing -> defaultTimeout
+  constructorsWithRecLabels <- mapM (\(tyId, dataCons) ->
+                          do
+                            hasRecCon <- foldM (\a (dataConName, (Forall _ _ _ dataTy, _)) ->
+                              (if a then return True else return $ markRecursiveType tyId dataTy)
+                              ) False dataCons
+                            return (tyId, (dataCons, hasRecCon))) constructors
+
 
   -- Initialise input context with
   -- local synthesis context
@@ -385,69 +390,74 @@ synthesiseGradedBase hints index unrestricted restricted currentDef ctxt (Forall
            s { predicateContext = ImplConsequent [] (Conj $ implContext : lefts preds) Top }
         _ -> s { predicateContext = ImplConsequent [] (Conj $ lefts preds) Top })
 
-  result <- liftIO $ synLoop 0 sParams index gamma synthState cs' goalTy
 
-  case result of
-      (synthResult, aggregate) -> do
-        let programs = nub $ rights (map fst synthResult)
-        end    <- liftIO $ Clock.getTime Clock.Monotonic
+  let synRes = synLoop constructorsWithRecLabels sParams 0 index gamma [] goalTy
+  (res, agg) <- runStateT (runSynthesiser index synRes cs') synthState
+
+  let programs = nub $ rights (map fst res)
+  end    <- liftIO $ Clock.getTime Clock.Monotonic
         -- <benchmarking-output>
-        if benchmarking then
-          if benchmarkingRawData then
-            let measurement = Measurement
-                                { smtCalls = smtCallsCount aggregate
-                                , synthTime = fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double)
-                                , proverTime = proveTime aggregate
-                                , solverTime = Language.Granule.Synthesis.Monad.smtTime aggregate
-                                , meanTheoremSize = if smtCallsCount aggregate == 0 then 0 else fromInteger (theoremSizeTotal aggregate) / fromInteger (smtCallsCount aggregate)
-                                , success = if null programs then False else True
-                                , timeout = False
-                                , pathsExplored = paths aggregate
-                                } in
+  if benchmarking then
+    if benchmarkingRawData then
+      let measurement = Measurement
+                        { smtCalls = smtCallsCount agg
+                        , synthTime = fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double)
+                        , proverTime = proveTime agg
+                        , solverTime = Language.Granule.Synthesis.Monad.smtTime agg
+                        , meanTheoremSize = if smtCallsCount agg == 0 then 0 else fromInteger (theoremSizeTotal agg) / fromInteger (smtCallsCount agg)
+                        , success = if null programs then False else True
+                        , timeout = False
+                        , pathsExplored = paths agg
+                        } in
                 return (programs, Just measurement)
-            -- putStrLn $ "Measurement "
-            --   <> "{ smtCalls = " <> show (smtCallsCount aggregate)
-            --   <> ", synthTime = " <> show (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double))
-            --   <> ", proverTime = " <> show (proverTime aggregate)
-            --   <> ", solverTime = " <> show (Language.Granule.Synthesis.Monad.smtTime aggregate)
-            --   <> ", meanTheoremSize = " <> show (if smtCallsCount aggregate == 0 then 0 else fromInteger (theoremSizeTotal aggregate) / fromInteger (smtCallsCount aggregate))
-            --   <> ", success = " <> (if null programs then "False" else "True")
-            --   <> ", timeout = False"
-            --   <> ", pathsExplored = " <> show (pathsExplored aggregate)
-            --   <> " } "
           else do
             -- Output benchmarking info
             putStrLn "-------------------------------------------------"
-            putStrLn $ "Result = " ++ (case synthResult of ((Right expr, _):_) -> pretty expr; _ -> "NO SYNTHESIS")
+            putStrLn $ "Result = " ++ (case res of ((Right expr, _):_) -> pretty expr; _ -> "NO SYNTHESIS")
             putStrLn $ "-------- Synthesiser benchmarking data (" ++ "Additive NonPruning" ++  ") -------"
-            putStrLn $ "Total smtCalls     = " ++ show (smtCallsCount aggregate)
-            putStrLn $ "Total smtTime    (ms) = "  ++ show (Language.Granule.Synthesis.Monad.smtTime aggregate)
-            putStrLn $ "Total proverTime (ms) = "  ++ show (proveTime aggregate)
+            putStrLn $ "Total smtCalls     = " ++ show (smtCallsCount agg)
+            putStrLn $ "Total smtTime    (ms) = "  ++ show (Language.Granule.Synthesis.Monad.smtTime agg)
+            putStrLn $ "Total proverTime (ms) = "  ++ show (proveTime agg)
             putStrLn $ "Total synth time (ms) = "  ++ show (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double))
-            putStrLn $ "Mean theoremSize   = " ++ show ((if smtCallsCount aggregate == 0 then 0 else fromInteger $ theoremSizeTotal aggregate) / fromInteger (smtCallsCount aggregate))
+            putStrLn $ "Mean theoremSize   = " ++ show ((if smtCallsCount agg == 0 then 0 else fromInteger $ theoremSizeTotal agg) / fromInteger (smtCallsCount agg))
             return (programs, Nothing)
         else
           return (programs, Nothing)
 
 
+
+
+
 synLoop :: (?globals :: Globals)
-        => Int
+        => Ctxt (Ctxt (TypeScheme, Substitution), Bool)
         -> SearchParameters
         -> Int
+        -> Int
         -> Ctxt SAssumption
-        -> SynthesisData
-        -> CheckerState
+        -> Ctxt SAssumption
         -> Type
-        -> IO ([(Either (NonEmpty CheckerError) (Expr () ()), CheckerState)], SynthesisData)
-synLoop step sParams index gamma synthState checkerState goal = do
-  let synRes = gSynth sParams RightAsync gamma (Focused []) goal
-  (res, agg) <- runStateT (runSynthesiser index synRes checkerState) synthState
-  if not (solved res) && (maxReached agg) then
-    synLoop (step+1) (adjustParams step sParams) index gamma agg { maxReached = False } checkerState goal
-  else return (res, agg)
+        -> Synthesiser (Expr () ())
+synLoop constrs sParams step index gamma omega goal = do
+  Synthesiser $ lift $ lift $ lift $ modify (\state ->
+            state {
+             constructors = constrs
+                  })
 
+  synthState <- getSynthState
+  cs <- conv $ get
+  (res, _) <- liftIO $ runStateT (runSynthesiser index (gSynthInner sParams RightAsync gamma (Focused omega) goal) cs) synthState
+  case res of
+    (_:_) ->
+      case last res of
+        (Right (expr, delta, _, _, _), _) -> do
+          consumed <- outerContextConsumed (gamma ++ omega) delta
+          if consumed
+          then return expr
+          else synLoop constrs (adjustParams step sParams) (step+1) index gamma omega goal
+        _ -> none
+    _ ->
+      synLoop constrs (adjustParams step sParams) (step+1) index gamma omega goal
   where
-    solved res = case res of ((Right (expr), _):_) -> True ; _ -> False
 
     adjustParams 0 sParams = sParams { matchMax = (matchMax sParams) + 1}
     adjustParams 1 sParams = sParams { matchMax = (matchMax sParams) + 1}
@@ -457,42 +467,10 @@ synLoop step sParams index gamma synthState checkerState goal = do
 
 
 
-gSynth :: (?globals :: Globals)
-  => SearchParameters
-  -> FocusPhase
-  -> Ctxt SAssumption
-  -> FocusedCtxt SAssumption
-  -> Type
-  -> Synthesiser (Expr () ())
-gSynth sParams focusPhase gamma (Focused omega) goal = do
-
-  relevantConstructors <- do
-      let snd3 (a, b, c) = b
-          tripleToTup (a, b, c) = (a, b)
-      st <- get
-      let pats = map (second snd3) (typeConstructors st)
-      mapM (\ (a, b) -> do
-          dc <- conv $ mapM (lookupDataConstructor ns) b
-          let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
-          return (a, ctxtMap tripleToTup sd)) pats
-
-  relevantConstructorsWithRecLabels <- mapM (\(tyId, dataCons) ->
-                          do
-                            hasRecCon <- foldM (\a (dataConName, (Forall _ _ _ dataTy, _)) ->
-                              (if a then return True else return $ markRecursiveType tyId dataTy)
-                              ) False dataCons
-                            return (tyId, (dataCons, hasRecCon))) relevantConstructors
-
-  Synthesiser $ lift $ lift $ lift $ modify (\state ->
-            state {
-             constructors = relevantConstructorsWithRecLabels
-                  })
-
-  result@(expr, ctxt, subst, _, _) <- gSynthInner sParams RightAsync gamma (Focused omega) goal
-
-  consumed <- mapM (\(id, a) -> do
-                    -- traceM (show id)
-                    case lookup id ctxt of
+outerContextConsumed :: (?globals::Globals) => Ctxt SAssumption -> Ctxt SAssumption -> Synthesiser Bool
+outerContextConsumed input delta = do
+  res <- mapM (\(id, a) -> do
+                    case lookup id delta of
                       Just (SVar (Discharged _ gradeUsed) _) ->
                         case a of
                           (SVar (Discharged _ gradeSpec) _) -> do
@@ -509,10 +487,9 @@ gSynth sParams focusPhase gamma (Focused omega) goal = do
                           _ -> return False
                       Just (SDef _ Nothing) -> return True
                       Nothing -> return False
-                      ) (gamma ++ omega)
-  if and consumed
-    then return expr
-    else none
+                      ) input
+  return $ and res
+
 
 
 gSynthInner :: (?globals :: Globals)
@@ -526,15 +503,11 @@ gSynthInner sParams focusPhase gamma (Focused omega) goal | guessCurrent sParams
 
   case (focusPhase, omega) of
     (RightAsync, _) -> do
-      varRule [] (Focused []) (Focused (omega ++ gamma)) goal
-      `try`
       absRule sParams RightAsync gamma (Focused omega) goal
       `try`
       transitionToLeftAsync sParams gamma omega goal
 
     (LeftAsync, _:_) -> do
-      varRule [] (Focused []) (Focused $ omega ++ gamma) goal
-      `try`
       unboxRule sParams LeftAsync gamma (Focused []) (Focused omega) goal
       `try`
       caseRule sParams LeftAsync gamma (Focused []) (Focused omega) goal
@@ -542,41 +515,39 @@ gSynthInner sParams focusPhase gamma (Focused omega) goal | guessCurrent sParams
     (LeftAsync, []) -> do
       foc sParams goal gamma $ isRSync goal
 
-    (RightSync, []) ->
+    (RightSync, []) -> do
+      varRule [] (Focused []) (Focused $ omega ++ gamma) goal
+      `try`
       if isRSync goal then do
-        varRule [] (Focused []) (Focused $ omega ++ gamma) goal
-        `try`
         boxRule sParams RightSync gamma goal
         `try`
         constrRule sParams RightSync gamma goal
-      else do
+      else
         gSynthInner (incrG sParams) RightAsync gamma (Focused []) goal
 
-    (LeftSync, [var@(x, SVar (Discharged ty g) _)]) -> do
-      if not (isLSync ty) && not (isAtomic ty) then do
-        gSynthInner (incrG sParams) LeftAsync gamma (Focused [var]) goal
-      else do
-        varRule [] (Focused []) (Focused $ omega ++ gamma) goal
-        `try`
-        appRule sParams LeftSync gamma (Focused []) (Focused omega) goal
+    (LeftSync, [(_, var)]) ->
+      case tyAndGrade var of
+        Just (ty, _) ->
+          if isLSync ty || isAtomic ty then do
+            varRule [] (Focused []) (Focused $ omega ++ gamma) goal
+            `try`
+            appRule sParams LeftSync gamma (Focused []) (Focused omega) goal
+          else
+            gSynthInner (incrG sParams) LeftAsync gamma (Focused omega) goal
+        _ -> none
 
-    (LeftSync, [var@(x, SDef (Forall _ _ _ ty) g)]) -> do
-      if not (isLSync ty) && not (isAtomic ty) then do
-        gSynthInner (incrG sParams) LeftAsync gamma (Focused [var]) goal
-      else do
-        varRule [] (Focused []) (Focused $ omega ++ gamma) goal
-        `try`
-        appRule sParams LeftSync gamma (Focused []) (Focused omega) goal
-
-    (LeftSync, []) ->
-      gSynthInner (incrG sParams) RightAsync gamma (Focused []) goal
+    (LeftSync, _) ->
+        gSynthInner (incrG sParams) RightAsync gamma (Focused []) goal
 
   where
 
     foc sParams goal gamma True =
-      focRight sParams gamma goal
-      `try`
-      focLeft sParams [] gamma goal
+      if isRSync goal then do
+        focRight sParams gamma goal
+        `try`
+        focLeft sParams [] gamma goal
+      else
+        focLeft sParams [] gamma goal
     foc sParams goal gamma False =
       focLeft sParams [] gamma goal
 
@@ -593,8 +564,6 @@ gSynthInner sParams focusPhase gamma (Focused omega) goal | guessCurrent sParams
 
 gSynthInner _ _ _ _ _ = none
 
-incrG :: SearchParameters -> SearchParameters
-incrG sParams = sParams { guessCurrent = (guessCurrent sParams) + 1}
 
 
 {-
@@ -673,9 +642,13 @@ absRule sParams focusPhase gamma (Focused omega) goal@(FunTy name gradeM tyA tyB
   -- Extract the graded arrow, or use generic 1 if there is no grade
   let grade = getGradeFromArrow gradeM
 
-  x <- useBinderNameOrFreshen name
+  x <-  useBinderNameOrFreshen name
+  st <- getSynthState
 
-  let (gamma', omega') = bindToContext (x, SVar (Discharged tyA grade) (Just NonDecreasing)) gamma omega (isLAsync tyA)
+  -- We bind the argument to Omega (focus on it) if it is a left asynchronous type, and we haven't reached the match depth if
+  -- it is a recursive type
+  let bindToOmgea = isLAsync tyA && (((matchCurrent sParams) <= matchMax sParams) || not (isRecursiveType tyA (constructors st)))
+  let (gamma', omega') = bindToContext (x, SVar (Discharged tyA grade) (Just NonDecreasing)) gamma omega bindToOmgea -- (isLAsync tyA && ((matchCurrent sParams < matchMax sParams)))
 
 
   (t, delta, subst, struct, scrutinee) <-
@@ -683,6 +656,7 @@ absRule sParams focusPhase gamma (Focused omega) goal@(FunTy name gradeM tyA tyB
      withPartialExprAt downExpr
        (Val ns () False (Abs () (PVar ns () False x) Nothing hole))
        (gSynthInner sParams focusPhase gamma' (Focused omega') tyB)
+
 
   cs <- conv get
   (kind, _, _) <- conv $ synthKind nullSpan grade
@@ -726,11 +700,8 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
         let omega = left ++ right
         x2 <- freshIdentifier
 
-        -- let assumption@(_, SVar _ sInfo) = if isRecursiveCon tyB (x2, (Forall ns [] [] arg, []))
-        --                                    then (y, SVar (Discharged arg' grade_rq) (Just $ Decreasing 1))
-        --                                    else (y, SVar (Discharged arg' grade_rq) (Just NonDecreasing))
-
-        let (gamma', omega') = bindToContext (x2, SVar (Discharged tyB grade_r) Nothing) (gamma ++ [var]) omega (isLAsync tyB)
+        let bindToOmgea = isLAsync tyA && ((matchCurrent sParams <= matchMax sParams) || not (isRecursiveType tyA (constructors st)))
+        let (gamma', omega') = bindToContext (x2, SVar (Discharged tyB grade_r) Nothing) (gamma ++ [var]) omega bindToOmgea
 
         -- Synthesises the function arg
         (t1, delta1, subst1, struct1, scrutinee) <-
@@ -751,7 +722,7 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
 
                     navigatePartialExpr (upExpr >=> rightExpr)
                     if isScrutinee
-                    then gSynthInner (incrG $ sParams { scrutCurrent = (scrutCurrent sParams) + 1 }) RightSync (gamma ++ omega ++ [var]) (Focused []) tyA
+                    then gSynthInner (incrG $ sParams { scrutCurrent = (scrutCurrent sParams) + 1 }) RightSync (omega ++ gamma ++ [var]) (Focused []) tyA
                     else gSynthInner (incrG sParams)  RightSync (omega ++ gamma ++ [var]) (Focused []) tyA
 
                   case lookupAndCutout x1 delta2 of
@@ -827,7 +798,9 @@ unboxRule sParams focusPhase gamma (Focused left) (Focused (var_x@(x, SVar (Disc
     let omega = left ++ right
     y <- freshIdentifier
 
-    let (gamma', omega') = bindToContext (y, SVar (Discharged ty (grade_r `gTimes` grade_q)) Nothing) (var_x:gamma) omega (isLAsync ty)
+    st <- getSynthState
+    let bindToOmgea = isLAsync ty && ((matchCurrent sParams < matchMax sParams) || not (isRecursiveType ty (constructors st)))
+    let (gamma', omega') = bindToContext (y, SVar (Discharged ty (grade_r `gTimes` grade_q)) Nothing) (var_x:gamma) omega bindToOmgea -- (isLAsync ty)
 
     (t, delta, subst, struct, scrutinee) <-
         withPartialExprAt downExpr 
@@ -995,18 +968,25 @@ casePatternMatchBranchSynth
                             Nothing      -> grade_r
           -- (iii) type
           argTy' <- conv $ substitute subst argTy
+          st <- getSynthState
 
           -- Create an assumption for the variable and work out which synthesis environment
           -- to insert it into
-          let assumption@(_, SVar _ sInfo) =
+          let assumption@(_, SVar _ _) =
                 -- Check if the constructor here is recursive
                 if positivePosition datatypeName argTy'
                 then (var, SVar (Discharged argTy' grade_rq) (Just $ Decreasing 1))
                 else (var, SVar (Discharged argTy' grade_rq) (Just $ NonDecreasing))
 
-          -- TODO: explain the extra condition here.
-          let (gamma', omega') =
-                bindToContext assumption gamma omega (isLAsync argTy' && not (isDecr sInfo || matchCurrent sParams <= matchMax sParams))
+          -- predicate on whether we want to focus on the argument type or delay
+          let bindToOmega =
+                 -- argument type must be left async type
+                   (isLAsync argTy')
+                 -- if we are a recursive type then check whether we are below max depth
+                && ((isRecursiveType argTy' (constructors st)) ==> (matchCurrent sParams + 1) < matchMax sParams)
+
+          -- construct focussing contexts
+          let (gamma', omega') = bindToContext assumption gamma omega bindToOmega
           return (gamma', omega', (var, (getGradeFromArrow mGrade_q, grade_rq)):vars)
         )
 
@@ -1016,6 +996,7 @@ casePatternMatchBranchSynth
       -- Synthesise the body of the branch which produces output context `delta`
       (t, delta, subst, _, _) <-
          gSynthInner sParams { matchCurrent = (matchCurrent sParams) + 1} focusPhase gamma' (Focused omega') goal
+      -- _ <- error ""
 
       (delta', grade_si) <- forallM delta ([], Nothing) (\(delta', mGrade) dVar@(dName, dAssumption) ->
         case dAssumption of
@@ -1073,7 +1054,8 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
   do
     debugM "caseRule, goal is" (pretty goal)
 
-    case (matchCurrent sParams <= matchMax sParams, leftmostOfApplication ty) of
+    -- traceM $ "sParams: " <> (show sParams)
+    case (matchCurrent sParams < matchMax sParams,leftmostOfApplication ty) of
       (True, TyCon datatypeName) -> do
 
         let omega = left ++ right
@@ -1100,12 +1082,10 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
         -- TODO: more clear names here
         let (grade_rs, grade_ss)                = unzip grades
 
-          -- join contexts
-        -- TODO: generalise ctxtMergeFromPure so it can take a side-effectful operator
-
+        -- join contexts
         delta <- foldM (ctxtMerge (computeJoin Nothing)) (head deltas) (tail deltas)
 
-          -- join grades
+        -- join grades
         grade_r_out <- foldM (computeJoin Nothing)  (head grade_rs) (tail grade_rs)
         grade_s_out <- foldM (computeJoin' Nothing) (head grade_ss) (tail grade_ss)
 
@@ -1131,6 +1111,9 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Dischar
               debugM "solver result" (show res)
               return res)
             solve
+        -- traceM $ "gamma: " <> (show $ gamma)
+        -- traceM $ "omega: " <> (show $ omega)
+        -- traceM $ "case: " <> (pretty $ makeCaseUntyped x patExprs)
 
         if solved && not (null patExprs)
           then return (makeCaseUntyped x patExprs, var_x_out:delta, subst, False, Just x)
@@ -1157,7 +1140,7 @@ computeJoin maybeK g1 g2 = do
   let upperBoundGradeVar = mkId upperBoundGradeVarId
   modify (\st -> st { tyVarContext = (upperBoundGradeVar, (k, InstanceQ)) : tyVarContext st })
   let upperBoundGrade = TyVar upperBoundGradeVar
-  conv $ addConstraint (Lub ns g1 g2 upperBoundGrade k)
+  modifyPred $ addConstraintViaConjunction (Lub ns g1 g2 upperBoundGrade k)
   return upperBoundGrade
 
 -- Version of computeJoin' where the inputs may be Nothing i.e.,

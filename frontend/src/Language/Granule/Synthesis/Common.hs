@@ -104,9 +104,12 @@ defaultSearchParams =
   , matchCurrent = 0
   , matchMax = 0
   , guessCurrent = 0
-  , guessMax = 13
+  , guessMax = 18
     }
 
+
+incrG :: SearchParameters -> SearchParameters
+incrG sParams = sParams { guessCurrent = (guessCurrent sParams) + 1}
 
 -- # Key focusing characterisation functions
 
@@ -222,6 +225,17 @@ bindToContext ::
   -> (Ctxt SAssumption, Ctxt SAssumption)
 bindToContext var gamma omega True = (gamma, var:omega)
 bindToContext var gamma omega _         = (var:gamma, omega)
+
+
+
+isRecursiveType :: Type -> Ctxt (Ctxt (TypeScheme, Substitution), Bool) -> Bool 
+isRecursiveType t tyConstrs = 
+  case isADTorGADT t of 
+    Just name -> 
+      case lookup name tyConstrs of 
+        Just (dataCons, recursive) -> recursive
+        Nothing -> False
+    _ -> False 
 
 -- Given inputs:
 -- `isRecursiveCon dataTypeName (dataConstructorName, (dataConstrType,  coercions))`

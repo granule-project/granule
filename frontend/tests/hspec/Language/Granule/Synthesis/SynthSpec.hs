@@ -30,9 +30,50 @@ spec :: Test.Spec
 spec =
   checkCasePatterns
 
+      
+      
+mkPairTy :: [(Id, Kind)] -> Id -> [Type] -> Type
+mkPairTy tyVars tName params = foldr (FunTy Nothing Nothing) (returnTy (TyCon tName) tyVars) params
+  where 
+    returnTy t [] = t
+    returnTy t (v:vs) = returnTy (TyApp t ((TyVar . fst) v)) vs
+
+
+
 checkCasePatterns :: Test.Spec
 checkCasePatterns = let ?globals = mempty in do
+
+  describe "Test for casing on a pair" $ do
+      it "Case on (a, b)" $ do
+        (results, synthData) <- let ?globals = mempty :: Globals in do
+            testSynthesiser $ do
+
+                tyVarA <- conv $ freshTyVarInContextWithBinding (mkId "a") (Type 0) ForallQ
+                tyVarB <- conv $ freshTyVarInContextWithBinding (mkId "b") (Type 0) ForallQ
+                x <- freshIdentifier
+
+                Synthesiser $ lift $ lift $ modify (\s -> s { constructors = [(mkId ",", ([(mkId ",", (Forall ns [] [] (mkPairTy [(tyVarA, Type 0),(tyVarB, Type 0)] (mkId ",") [TyVar tyVarA, TyVar tyVarB]) , [] :: Substitution))], False))] })
+                let pairTy = TyApp (TyApp (TyCon $ mkId ",") (TyVar tyVarA)) (TyVar tyVarB)
+                let grade_r = TyInfix TyOpInterval (TyGrade Nothing 0) (TyGrade Nothing 1)
+                let sParams = SearchParams 0 0 0 1 0 10
+                let var = (x, SVar (Discharged pairTy grade_r) Nothing)
+                let gamma = []
+                let omega = [var]
+                let goal = TyVar tyVarA
+
+                (expr, _, _, _, _) <- caseRule sParams LeftAsync gamma (Focused []) (Focused omega) goal 
+                return (Just expr >>= (\res' -> Just (res', grade_r)))
+
+        let expr = map (fmap fst . fst) results
+        expr 
+          `shouldBe`
+            [Just (Case ns () False (Val ns () False (Var () (Id "x" "x"))) 
+              [(PConstr ns () False (Id "," ",") 
+                [ PVar ns () False (Id "y" "y"),
+                  PVar ns () False (Id "z" "z") ] ,(Val ns () False (Var () (Id "y" "y"))))])]
+
   describe "Simple constructor test for Bool" $ do
+
       it "Branch on (True : Bool)" $ do
         let true = Forall ns [] [] (TyCon $ mkId "Bool")
         let nat = TyCon $ mkId "Nat"

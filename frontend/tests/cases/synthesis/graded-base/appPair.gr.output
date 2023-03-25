@@ -1,0 +1,4 @@
+language GradedBase
+
+appPair : forall a b . a %2 -> (a %1 -> b) %2 -> (b, b)
+appPair x y = (y x, y x)

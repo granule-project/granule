@@ -1,4 +1,0 @@
-language GradedBase
-
-f : forall a . a % 1 -> a
-f = ?
