@@ -1015,7 +1015,7 @@ casePatternMatchBranchSynth
                 modifyPred $ (ExistsHere grade_id_s' kind)
 
                 -- s' \/ ...
-                grade_si <- computeJoin (Just kind) (getGradeFromArrow mGrade) (grade_s')
+                grade_si <- computeJoin (Just kind) (fromMaybe grade_s' mGrade) (grade_s')
                 -- now do not include in the result as this is being bound
                 return (delta', Just grade_si)
               -- Not a variable bound in the scope
