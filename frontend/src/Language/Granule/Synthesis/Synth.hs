@@ -581,6 +581,7 @@ varRule :: (?globals :: Globals)
 varRule _ _ (Focused []) _ = none
 -- varRule gamma (Focused left) (Focused (var@(name, SVar (Discharged t grade) sInfo) : right)) goal = do
 varRule gamma (Focused left) (Focused (var@(name, assumption) : right)) goal = do
+    modifyPath ("varRule: "  <> (pretty goal))
     debugM "varRule, goal is" (pretty goal)
     assumptionTy <- getSAssumptionType assumption
     case assumptionTy of
@@ -637,7 +638,10 @@ varRule gamma (Focused left) (Focused (var@(name, assumption) : right)) goal = d
 -}
 absRule :: (?globals :: Globals) => SearchParameters ->  FocusPhase -> Ctxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
 absRule sParams focusPhase gamma (Focused omega) goal@(FunTy name gradeM tyA tyB) = do
-  debugM "varRule, goal is" (pretty goal)
+  debugM "absRule, goal is" (pretty goal)
+  modifyPath ("absRule: "  <> (pretty goal))
+
+
 
   -- Extract the graded arrow, or use generic 1 if there is no grade
   let grade = getGradeFromArrow gradeM
@@ -664,6 +668,8 @@ absRule sParams focusPhase gamma (Focused omega) goal@(FunTy name gradeM tyA tyB
     Just (delta', SVar (Discharged _ grade_r) _) -> do
       modifyPred $ addConstraintViaConjunction (ApproximatedBy ns grade_r grade kind)
       res <- solve
+
+      debugM "Path taken: \n" (printSynthesisPath (reverse $ synthesisPath cs) 0)
       boolToSynthesiser res (Val ns () False (Abs () (PVar ns () False x) Nothing t), delta', subst, struct, scrutinee)
 
     Nothing -> do
@@ -690,6 +696,7 @@ appRule _ _ _ _ (Focused []) _ = none
 appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) : right)) goal =
   do
     debugM "appRule, goal is" (pretty goal)
+    modifyPath ("appRule: " <> (pretty goal))
 
     assumptionTy <- getSAssumptionType assumption
     st <- getSynthState
@@ -769,6 +776,7 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
 boxRule :: (?globals :: Globals) => SearchParameters -> FocusPhase -> Ctxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
 boxRule sParams focusPhase gamma goal@(Box grade_r goal_inner) = do
   debugM "boxRule, goal is" (pretty goal)
+  modifyPath ("boxRule: "  <> (pretty goal))
 
   (t, delta, subst, struct, scrutinee) <-
     withPartialExprAt downExpr
@@ -844,6 +852,7 @@ unboxRule _ _ _ _ _ _ = none
 constrRule :: (?globals :: Globals) => SearchParameters -> FocusPhase -> Ctxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id)
 constrRule sParams focusPhase gamma goal = do
   debugM "constrRule, goal is" (pretty goal)
+  modifyPath ("constrRule: "  <> (pretty goal))
   case (guessCurrent sParams <= guessMax sParams, isADTorGADT goal) of
     (True, Just datatypeName) -> do
       synthState <- getSynthState
@@ -936,7 +945,9 @@ casePatternMatchBranchSynth
   goal
   con@(cName, (tySc@(Forall s bs constraints cTy), cSubst)) = do
   -- Debugging
+
   debugM "case - constructor" (pretty con)
+  modifyPath ("caseBranchStart")
 
   -- Check that we can use a constructor here
   -- uses peekChecker so that we can roll back any state updates
@@ -1028,6 +1039,7 @@ casePatternMatchBranchSynth
       -- Concludes the implication
       -- TODO: maybe run solve here per branch
       modifyPred $ moveToNewConjunct
+      modifyPath ("caseBranchEnd")
 
       case lookupAndCutout x delta' of
         (Just (delta'', SVar (Discharged _ grade_r') sInfo)) -> do
@@ -1053,6 +1065,7 @@ caseRule _ _ _ _ (Focused []) _ = none
 caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, SVar (Discharged ty grade_r) sInfo):right)) goal =
   do
     debugM "caseRule, goal is" (pretty goal)
+    modifyPath ("caseRule: "  <> (pretty goal))
 
     -- traceM $ "sParams: " <> (show sParams)
     case (matchCurrent sParams < matchMax sParams,leftmostOfApplication ty) of

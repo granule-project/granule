@@ -69,6 +69,7 @@ data Depth = Depth
 --               Right Async when finished.
 -- * Left Sync:  applications and variables.
 data FocusPhase = RightAsync | RightSync | LeftAsync | LeftSync
+  deriving (Show, Eq)
 
 -- Represents a renaming for the purposes of
 -- pushing a fresh variable name from an unboxing up to

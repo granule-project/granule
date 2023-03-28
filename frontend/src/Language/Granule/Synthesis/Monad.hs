@@ -10,6 +10,7 @@ import Language.Granule.Checker.Monad
 
 import qualified Data.Generics.Zipper as Z
 import Data.List.NonEmpty (NonEmpty(..))
+import Data.List (isInfixOf)
 import Control.Monad.Except
 import Control.Monad.State.Strict
 import Control.Monad.Logic
@@ -152,6 +153,19 @@ getSynthState = Synthesiser $ lift $ lift $ get
 
 modifyPred :: (PredContext -> PredContext) -> Synthesiser ()
 modifyPred f = Synthesiser $ lift $ modify (\s -> s { predicateContext = f $ predicateContext s })
+
+modifyPath :: String -> Synthesiser ()
+modifyPath r = Synthesiser $ lift $ modify (\s -> s { synthesisPath = r : synthesisPath s })
+
+printSynthesisPath :: [String] -> Int -> String 
+printSynthesisPath [] _  = ""
+printSynthesisPath (p:path) depth | "caseBranchStart" `isInfixOf` p = printSynthesisPath path (depth+1)
+printSynthesisPath (p:path) depth | "caseBranchEnd" `isInfixOf` p = "\n" <>  printSynthesisPath path (depth-1)
+printSynthesisPath (p:path) depth = (tabs depth) <>  p <> "\n" <> printSynthesisPath path depth
+
+tabs :: Int -> String
+tabs i = (concat $ replicate i ("\t"))
+
 
 data Measurement =
   Measurement {

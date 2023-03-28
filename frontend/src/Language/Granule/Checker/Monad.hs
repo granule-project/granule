@@ -200,6 +200,7 @@ data CheckerState = CS
             , addedConstraints :: Bool
             , predicateContext :: PredContext
             , partialSynthExpr  :: Zipper (Expr () ())
+            , synthesisPath :: [String] 
             }
   deriving (Eq, Show)
 
@@ -259,6 +260,7 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , addedConstraints = False
                , predicateContext = Top
                , partialSynthExpr = toZipper (Hole nullSpan () False [] Nothing)
+               , synthesisPath = []
                }
 
 -- *** Various helpers for manipulating the context
