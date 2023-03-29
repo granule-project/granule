@@ -7,6 +7,7 @@ module Language.Granule.Synthesis.Contexts where
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Span
+import Language.Granule.Syntax.Pretty
 
 import Language.Granule.Context
 
