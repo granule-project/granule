@@ -76,6 +76,7 @@ library:
   - Language.Granule.Syntax.Type
   - Language.Granule.Synthesis.Builders
   - Language.Granule.Synthesis.Contexts
+  - Language.Granule.Synthesis.DebugTree
   - Language.Granule.Synthesis.LinearHaskell
   - Language.Granule.Synthesis.Monad
   - Language.Granule.Synthesis.Splitting
@@ -107,6 +108,7 @@ library:
   - split
   - logict >= 0.7.1.0
   - clock
+  - blaze-html
   - monad-memo
   - data-ordlist
 

@@ -36,6 +36,77 @@ import Data.Generics.Zipper
 import Data.Generics.Aliases
 import Data.Typeable
 
+-- import Debug.Trace
+
+-- # Data types for debugging rules
+data RuleInfo = 
+    VarRule 
+      Id -- Var Name 
+      SAssumption -- Type and grade  
+      Type -- Goal
+      (Ctxt SAssumption) -- Gamma 
+      (Ctxt SAssumption) -- Delta
+  | AbsRule 
+      FocusPhase 
+      Type -- Goal 
+      (Ctxt SAssumption) -- Gamma
+      (Ctxt SAssumption) -- Omega
+      (Id, SAssumption) -- Bound Var
+      (Expr () ()) -- Term 
+      RuleInfo -- Path of sub expression 
+      (Ctxt SAssumption) -- Delta
+  | AppRule 
+      FocusPhase 
+      (Id, SAssumption)
+      Type -- Goal 
+
+      (Ctxt SAssumption) -- Gamma 
+      (Ctxt SAssumption) -- Omega
+      (Id, SAssumption) -- Bound var 
+      (Expr () ()) -- First term 
+      RuleInfo -- Path of first sub expression 
+
+      (Expr () ()) -- Second term 
+      RuleInfo -- Path of second sub expression 
+
+      (Ctxt SAssumption) -- Delta
+  | BoxRule 
+      FocusPhase  
+      Type -- Goal
+      (Ctxt SAssumption) -- Gamma 
+      (Expr () ()) -- Sub term 
+      RuleInfo 
+      (Ctxt SAssumption) -- Delta
+  | UnboxRule 
+      FocusPhase 
+      (Id, SAssumption) 
+      Type -- Goal
+      (Ctxt SAssumption) -- Gamma 
+      (Ctxt SAssumption) -- Omega
+      (Id, SAssumption) -- Bound var 
+      (Expr () ()) -- Sub term
+      RuleInfo 
+      (Ctxt SAssumption) -- Delta
+  | ConstrRule 
+      FocusPhase 
+      Id -- Constructor Id 
+      Type -- Goal
+      (Ctxt SAssumption) -- Gamma 
+      (Expr () ()) 
+      [RuleInfo]
+      (Ctxt SAssumption) -- Delta
+  | CaseRule 
+      FocusPhase
+      (Id, SAssumption) -- Var name 
+      Type -- Goal 
+      (Ctxt SAssumption) -- Gamma 
+      (Ctxt SAssumption) -- Omega
+      (Expr () ()) -- Sub term
+      [(Id, Ctxt SAssumption, Ctxt SAssumption, RuleInfo)] -- Branch info
+      (Ctxt SAssumption) -- Delta
+  deriving (Show)
+    
+
 -- # Key data types for controlling synthesis
 
 data PruningScheme = NonPruning | Pruning
@@ -523,8 +594,8 @@ upExpr = up
 
 -- Used when returning at the end of a Synthesiser rule
 -- register the expression in the return result
-leafExpr :: (Expr () (), b, c, d, e)
-        -> Synthesiser (Expr () (), b, c, d, e)
-leafExpr (e, x, y, z, w) = do
+leafExpr :: (Expr () (), b, c, d, e, f)
+        -> Synthesiser (Expr () (), b, c, d, e, f)
+leafExpr (e, x, y, z, w, u) = do
   conv $ registerFinalExpr e
-  return (e, x, y, z, w)
+  return (e, x, y, z, w, u)

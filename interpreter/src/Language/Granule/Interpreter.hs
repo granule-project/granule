@@ -54,6 +54,7 @@ import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Preprocessor.Ascii
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
+import Language.Granule.Synthesis.DebugTree
 import Language.Granule.Synthesis.RewriteHoles
 import Language.Granule.Synthesis.Synth
 import Language.Granule.Synthesis.Builders
@@ -251,7 +252,7 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
           printInfo $ "No programs synthesised - Timeout after: " <> show (fromIntegral timeout / (10^(6 :: Integer)::Double))  <> "s"
           return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt hcases, Nothing, attemptNo) : rest
         (Just (programs@(_:_), measurement), Just (Spec _ _ examples@(_:_) _), []) -> do
-          let hole = HoleMessage sp goal ctxt tyVars hVars synthCtxt [([], last $ programs)]
+          let hole = HoleMessage sp goal ctxt tyVars hVars synthCtxt [([], fst $ last $ programs)]
           let holeCases = concatMap (\h -> map (\(pats, e) -> (errLoc h, zip (getCtxtIds (holeVars h)) pats, e)) (cases h)) [hole]
 
           let astChanged = holeRefactor holeCases astSrc
@@ -270,9 +271,12 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
               -- Example limit reached
               return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt hcases, Nothing, attemptNo) : rest
             _ -> do
+              -- Success   
+              printSynthOutput $ pathToHtml (snd $ last $ programs) 
               return $ (hole, aggregate', attemptNo) : rest
         (Just (programs@(_:_), measurement), _, _) -> do
-          return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt [([], last $ programs)], measurement, attemptNo) : rest
+          printSynthOutput $ pathToHtml (snd $ last $ programs) 
+          return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt [([], fst $ last $ programs)], measurement, attemptNo) : rest
 
 
     synthesiseHoles ast (hole:holes) isGradedBase = do

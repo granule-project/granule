@@ -159,12 +159,12 @@ modifyPath r = Synthesiser $ lift $ modify (\s -> s { synthesisPath = r : synthe
 
 printSynthesisPath :: [String] -> Int -> String 
 printSynthesisPath [] _  = ""
-printSynthesisPath (p:path) depth | "caseBranchStart" `isInfixOf` p = printSynthesisPath path (depth+1)
-printSynthesisPath (p:path) depth | "caseBranchEnd" `isInfixOf` p = "\n" <>  printSynthesisPath path (depth-1)
+printSynthesisPath (p:path) depth | "BranchStart" `isInfixOf` p = printSynthesisPath path (depth+1)
+printSynthesisPath (p:path) depth | "BranchEnd" `isInfixOf` p =  printSynthesisPath path (depth-1)
 printSynthesisPath (p:path) depth = (tabs depth) <>  p <> "\n" <> printSynthesisPath path depth
 
 tabs :: Int -> String
-tabs i = (concat $ replicate i ("\t"))
+tabs i = (concat $ replicate i ("   "))
 
 
 data Measurement =

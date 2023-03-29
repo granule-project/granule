@@ -32,6 +32,11 @@ data SAssumption =
     | SDef TypeScheme (Maybe Coeffect)
   deriving (Show)
 
+instance Pretty SAssumption where 
+  pretty (SVar (Linear ty) _) = pretty ty
+  pretty (SVar (Discharged ty g) _) = pretty ty <> " % " <> pretty g
+  pretty (SDef tyS _) = pretty tyS
+
 
 tyAndGrade :: SAssumption -> Maybe (Type, Coeffect)
 tyAndGrade (SVar (Discharged ty g) _) = Just (ty, g)
