@@ -45,6 +45,7 @@ data RuleInfo =
       SAssumption -- Type and grade  
       Type -- Goal
       (Ctxt SAssumption) -- Gamma 
+      (Ctxt SAssumption) -- Omega 
       (Ctxt SAssumption) -- Delta
   | AbsRule 
       FocusPhase 
@@ -65,9 +66,11 @@ data RuleInfo =
       (Id, SAssumption) -- Bound var 
       (Expr () ()) -- First term 
       RuleInfo -- Path of first sub expression 
+      (Ctxt SAssumption) -- Delta1
 
       (Expr () ()) -- Second term 
       RuleInfo -- Path of second sub expression 
+      (Ctxt SAssumption) -- Delta2
 
       (Ctxt SAssumption) -- Delta
   | BoxRule 
@@ -102,7 +105,7 @@ data RuleInfo =
       (Ctxt SAssumption) -- Gamma 
       (Ctxt SAssumption) -- Omega
       (Expr () ()) -- Sub term
-      [(Id, Ctxt SAssumption, Ctxt SAssumption, RuleInfo)] -- Branch info
+      [(Id, Ctxt SAssumption, Expr () (), Ctxt SAssumption, RuleInfo)] -- Branch info
       (Ctxt SAssumption) -- Delta
   deriving (Show)
     

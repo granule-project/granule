@@ -272,10 +272,10 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
               return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt hcases, Nothing, attemptNo) : rest
             _ -> do
               -- Success   
-              printSynthOutput $ pathToHtml (snd $ last $ programs) 
+              printSynthOutput $ synthTreeToHtml (fst $ last $ programs) (snd $ last $ programs) 
               return $ (hole, aggregate', attemptNo) : rest
         (Just (programs@(_:_), measurement), _, _) -> do
-          printSynthOutput $ pathToHtml (snd $ last $ programs) 
+          printSynthOutput $ synthTreeToHtml (fst $ last $ programs) (snd $ last $ programs) 
           return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt [([], fst $ last $ programs)], measurement, attemptNo) : rest
 
 

@@ -606,7 +606,7 @@ varRule gamma (Focused left) (Focused (var@(name, assumption) : right)) goal = d
                 (kind, _, _) <- conv $ synthKind ns grade
                 delta <- ctxtMultByCoeffect (TyGrade (Just kind) 0) (left ++ right)
                 let singleUse = (name, SVar (Discharged t (TyGrade (Just kind) 1)) mSInfo)
-                let rInfo = VarRule name assumption goal gamma (singleUse:delta)
+                let rInfo = VarRule name assumption goal gamma (left ++ right) (singleUse:delta)
                 leafExpr (Val ns () False (Var () name), singleUse:delta, subst, isDecr mSInfo, Nothing, rInfo)
 
               (True, Just grade) -> do
@@ -615,7 +615,7 @@ varRule gamma (Focused left) (Focused (var@(name, assumption) : right)) goal = d
                   (kind, _, _) <- conv $ synthKind ns grade
                   delta <- ctxtMultByCoeffect (TyGrade (Just kind) 0) (left ++ right)
                   let singleUse = (name, SDef tySch (Just $ TyGrade (Just kind) 1))
-                  let rInfo = VarRule name assumption goal gamma (singleUse:delta)
+                  let rInfo = VarRule name assumption goal gamma (left ++ right) (singleUse:delta)
                   leafExpr (Val ns () False (Var () name), singleUse:delta, subst, False, Nothing, rInfo)
 
                 else none
@@ -623,7 +623,7 @@ varRule gamma (Focused left) (Focused (var@(name, assumption) : right)) goal = d
                 synSt <- getSynthState
                 if not $ name `elem` currDef synSt then do
                   delta <- ctxtMultByCoeffect (TyGrade Nothing 0) (left ++ right)
-                  let rInfo = VarRule name assumption goal gamma (var:delta)
+                  let rInfo = VarRule name assumption goal gamma (left ++ right) (var:delta)
                   leafExpr (Val ns () False (Var () name), var:delta, subst, False, Nothing, rInfo)
 
                 else none
@@ -773,7 +773,7 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
                                 -- (possibly related to the caseRule)
                                 else (x1, SVar (Discharged (FunTy bName gradeM tyA tyB) outputGrade) sInfo)
 
-                            let rInfo' = AppRule focusPhase var goal gamma omega (x2, SVar (Discharged tyB grade_r) Nothing) t1 rInfo1 t2 rInfo2 (assumption':delta3)
+                            let rInfo' = AppRule focusPhase var goal gamma omega (x2, SVar (Discharged tyB grade_r) Nothing) t1 rInfo1 delta1 t2 rInfo2 delta2 (assumption':delta3)
                             return (Language.Granule.Syntax.Expr.subst appExpr x2 t1, assumption':delta3, substOut, struct1 || struct2, if isScrutinee then Nothing else scrutinee, rInfo')
                           _ -> none
                         else none
@@ -970,7 +970,7 @@ casePatternMatchBranchSynth :: (?globals :: Globals) =>
   -> Type                                  -- branch goal type
   -> (Id, (TypeScheme, Substitution))      -- constructor info
   -> Synthesiser
-       (Maybe ((Pattern (), Expr () ()), (Ctxt SAssumption, (Substitution, (Coeffect, Maybe Coeffect), (Id, Ctxt SAssumption, Ctxt SAssumption, RuleInfo)))))
+       (Maybe ((Pattern (), Expr () ()), (Ctxt SAssumption, (Substitution, (Coeffect, Maybe Coeffect), (Id, Ctxt SAssumption, Expr () (), Ctxt SAssumption, RuleInfo)))))
 casePatternMatchBranchSynth
   sParams
   focusPhase
@@ -1088,10 +1088,10 @@ casePatternMatchBranchSynth
         (Just (delta'', SVar (Discharged _ grade_r') sInfo)) -> do
           if null args then do
             (kind, _, _) <- conv $ synthKind ns grade_r
-            let branchInfo = (cName, branchCtxt, delta'', rInfo)
+            let branchInfo = (cName, branchCtxt, t, delta'', rInfo)
             return $ Just ((constrPat, t), (delta'', (subst, (grade_r', Just (TyGrade (Just kind) 1)), branchInfo )))
           else do
-            let branchInfo = (cName, branchCtxt, delta'', rInfo)
+            let branchInfo = (cName, branchCtxt, t, delta'', rInfo)
             return $ Just ((constrPat, t), (delta'', (subst, (grade_r', grade_si), branchInfo)))
 
         _ -> error "Granule bug in synthesiser. Please report on GitHub: scrutinee not in the output context"
