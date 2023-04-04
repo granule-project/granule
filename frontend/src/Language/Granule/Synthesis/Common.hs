@@ -26,7 +26,6 @@ import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Synthesis.Monad
-import Language.Granule.Synthesis.Contexts
 import Language.Granule.Utils
 
 import qualified Data.Map as M
@@ -110,6 +109,50 @@ data RuleInfo =
   deriving (Show)
     
 
+-- An SAssumption is an assumption used for synthesis:
+--  * It is either a standard Granule assumption OR
+--  * a top level definition (with a possible restriction on use, given by a coeffect)
+data SAssumption =
+      SVar Assumption (Maybe StructInfo) Int
+    | SDef TypeScheme (Maybe Coeffect) Int
+  deriving (Show, Eq)
+
+-- A structurally decreasing type is a recursive instance of a recursive data
+-- type. For example in the list data type:
+-- List a = Next (List a) | Empty
+-- the (List a) to the left of the equals is structurally decreasing, while
+-- the Empty is not. Likewise the Next (List a) is also not decreasing.
+data StructInfo =  NonDecreasing Int | Decreasing Int
+  deriving (Show, Eq, Ord)
+
+currentDepth :: SAssumption -> Int
+currentDepth (SVar _ _ depth) = depth
+currentDepth (SDef _ _ depth) = depth
+
+increaseDepth :: (Id, SAssumption) -> (Id, SAssumption)
+increaseDepth (x, SVar ty sInfo depth) = (x, SVar ty sInfo (depth+1))
+increaseDepth (x, SDef tyS coeff depth) = (x, SDef tyS coeff (depth+1))
+
+instance Pretty SAssumption where 
+  pretty (SVar (Linear ty) _ _) = pretty ty
+  pretty (SVar (Discharged ty g) _ _) = pretty ty <> " % " <> pretty g
+  pretty (SDef tyS _ _) = pretty tyS
+  pretty x = error "undefined"
+
+-- Phases of focusing, in brief:
+-- * Right Async: (initial phase) introduction rule abstraction, when abs
+--                rule can no longer be applied, tranasition to:
+-- * Left Async: elimination rules for constructors and graded modalities
+--               when these are all decomposed, transition to focusing where
+--               one of the sync phases is chosen:
+-- * Right Sync: constructor and graded modality introductions. Transitions back
+--               Right Async when finished.
+-- * Left Sync:  applications and variables.
+data FocusPhase = RightAsync | RightSync | LeftAsync | LeftSync
+  deriving (Show, Eq)
+
+
+
 -- # Key data types for controlling synthesis
 
 data PruningScheme = NonPruning | Pruning
@@ -133,17 +176,6 @@ data Depth = Depth
   }
   deriving (Show, Eq)
 
--- Phases of focusing, in brief:
--- * Right Async: (initial phase) introduction rule abstraction, when abs
---                rule can no longer be applied, tranasition to:
--- * Left Async: elimination rules for constructors and graded modalities
---               when these are all decomposed, transition to focusing where
---               one of the sync phases is chosen:
--- * Right Sync: constructor and graded modality introductions. Transitions back
---               Right Async when finished.
--- * Left Sync:  applications and variables.
-data FocusPhase = RightAsync | RightSync | LeftAsync | LeftSync
-  deriving (Show, Eq)
 
 -- Represents a renaming for the purposes of
 -- pushing a fresh variable name from an unboxing up to
@@ -162,12 +194,13 @@ type Bindings = Ctxt (Id, Type)
 
 data SearchParameters =
   SearchParams {
-    scrutCurrent  :: Integer
-  , scrutMax      :: Integer
-  , matchCurrent  :: Integer
-  , matchMax      :: Integer
-  , guessCurrent  :: Integer
-  , guessMax      :: Integer
+    scrutCurrent  :: Int
+  , scrutMax      :: Int
+  , matchCurrent  :: Int
+  , matchMax      :: Int
+  , introCurrent  :: Int
+  , introMax      :: Int
+  , appMax        :: Int 
   }
   deriving (Show, Eq)
 
@@ -178,13 +211,12 @@ defaultSearchParams =
   , scrutMax = 1
   , matchCurrent = 0
   , matchMax = 0
-  , guessCurrent = 0
-  , guessMax = 18
+  , introCurrent = 0
+  , introMax = 1
+  , appMax = 1
     }
 
 
-incrG :: SearchParameters -> SearchParameters
-incrG sParams = sParams { guessCurrent = (guessCurrent sParams) + 1}
 
 -- # Key focusing characterisation functions
 
@@ -274,14 +306,14 @@ useBinderNameOrFreshen Nothing  = freshIdentifier
 useBinderNameOrFreshen (Just n) = return n
 
 getSAssumptionType :: (?globals :: Globals) =>
-  SAssumption -> Synthesiser (Type, Bool, Maybe Type, Maybe StructInfo, TypeScheme)
-getSAssumptionType (SVar (Linear t) sInfo) = return (t, False, Nothing, sInfo, Forall ns [] [] t)
-getSAssumptionType (SVar (Discharged t g) sInfo) = return (t, False, Just g, sInfo, Forall ns [] [] t)
-getSAssumptionType (SDef tySch usage) = do
+  SAssumption -> Synthesiser (Type, Bool, Maybe Type, Maybe StructInfo, TypeScheme, Int)
+getSAssumptionType (SVar (Linear t) sInfo depth) = return (t, False, Nothing, sInfo, Forall ns [] [] t, depth)
+getSAssumptionType (SVar (Discharged t g) sInfo depth) = return (t, False, Just g, sInfo, Forall ns [] [] t, depth)
+getSAssumptionType (SDef tySch usage depth) = do
   -- If this is a top level definition, we should freshen it
   (freshTy, tyVarsFreshD, substFromFreshening, constraints', _) <- conv $ freshPolymorphicInstance InstanceQ False tySch [] []
-  return $ (freshTy, True, usage, Nothing, tySch)
-getSAssumptionType (SVar (Ghost _) sInfo) =
+  return $ (freshTy, True, usage, Nothing, tySch, depth)
+getSAssumptionType (SVar (Ghost _) sInfo _) =
   error "Cannot synthesis in the context of Ghost variables (i.e., for language SecurityLevels)"
 
 -- Simple hole expressions

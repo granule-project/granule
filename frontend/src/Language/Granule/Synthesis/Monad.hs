@@ -154,6 +154,11 @@ getSynthState = Synthesiser $ lift $ lift $ get
 modifyPred :: (PredContext -> PredContext) -> Synthesiser ()
 modifyPred f = Synthesiser $ lift $ modify (\s -> s { predicateContext = f $ predicateContext s })
 
+-- modifySearchTree :: (SearchTree -> SearchTree) -> Synthesiser ()
+-- modifySearchTree f = Synthesiser $ lift $ modify (\s -> s { searchTree = f $ searchTree s })
+
+
+
 modifyPath :: String -> Synthesiser ()
 modifyPath r = Synthesiser $ lift $ modify (\s -> s { synthesisPath = r : synthesisPath s })
 

@@ -13,6 +13,7 @@ import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Span
+import Language.Granule.Checker.Monad
 
 import Language.Granule.Synthesis.Monad
 import Language.Granule.Synthesis.Contexts
@@ -21,6 +22,7 @@ import Language.Granule.Utils
 
 import Control.Monad (forM_, zipWithM_)
 import System.FilePath ((-<.>))
+
 
 
 printSynthOutput :: (?globals :: Globals) => Html -> IO ()
@@ -46,13 +48,15 @@ synthTreeToHtml result path =
       H.p ! A.style (stringValue "display: inline;") $ (toHtml $ "is used for goal types.")
       H.p $ toHtml "The tree can be expanded/collapsed by clicking nodes marked with an arrow."
       ul ! A.id (stringValue "outer") $ li $ do 
-        ruleToHtml path
+        successfulSynthPathToHtml path
+      -- ul ! A.id (stringValue "outer") $ li $ do 
+        -- fullSynthPathToHtml path
       
       H.script $ toHtml javaScript
 
 
-ruleToHtml :: (?globals :: Globals) => RuleInfo -> Html 
-ruleToHtml (VarRule name assumption goal gamma omega delta) = do 
+successfulSynthPathToHtml :: (?globals :: Globals) => RuleInfo -> Html 
+successfulSynthPathToHtml (VarRule name assumption goal gamma omega delta) = do 
     H.span ! A.class_ (stringValue "caret") $ do toHtml ("Var, using var:") 
       ; H.p ! A.style (stringValue "color: green; display: inline;") $ toHtml (pretty name <> " : " <> pretty assumption)
       ; H.p ! A.style (stringValue "display: inline;") $ toHtml (" with goal: ")
@@ -71,7 +75,7 @@ ruleToHtml (VarRule name assumption goal gamma omega delta) = do
         ul ! A.class_ (stringValue "nested") $ li $ do 
           contextToHtml delta
 
-ruleToHtml (AbsRule focusPhase goal gamma omega (x, assumption) expr ruleInfo delta) = do 
+successfulSynthPathToHtml (AbsRule focusPhase goal gamma omega (x, assumption) expr ruleInfo delta) = do 
     H.span ! A.class_ (stringValue "caret") $ do toHtml "Abs, with goal:"
       ; H.p ! A.style (stringValue "color: red; display: inline;") $ (toHtml $ pretty goal)
     ul ! A.class_ (stringValue "nested") $ do
@@ -92,14 +96,14 @@ ruleToHtml (AbsRule focusPhase goal gamma omega (x, assumption) expr ruleInfo de
           ; H.p ! A.style (stringValue "display: inline;") $ (toHtml " bound in ")
           ; H.p ! A.style (stringValue "color: blue; display: inline;") $ (toHtml $ pretty expr)
 
-        li $ ruleToHtml ruleInfo
+        li $ successfulSynthPathToHtml ruleInfo
  
       li $ do 
         H.span ! A.class_ (stringValue (if null delta then "notCaret" else "caret")) $ toHtml (if null delta then "Δ = ∅" else "Δ")
         ul ! A.class_ (stringValue "nested") $ li $ do 
           contextToHtml delta
 
-ruleToHtml (AppRule focusPhase (x1, assumption1) goal gamma omega (x2, assumption2) expr1 ruleInfo1 delta1 expr2 ruleInfo2 delta2 delta) = do 
+successfulSynthPathToHtml (AppRule focusPhase (x1, assumption1) goal gamma omega (x2, assumption2) expr1 ruleInfo1 delta1 expr2 ruleInfo2 delta2 delta) = do 
     H.span ! A.class_ (stringValue "caret") $ do toHtml ("App, using var:") 
       ; H.p ! A.style (stringValue "color: green; display: inline;") $ toHtml (pretty x1 <> " : " <> pretty assumption1)
       ; H.p ! A.style (stringValue "display: inline;") $ toHtml (" with goal: ")
@@ -122,14 +126,14 @@ ruleToHtml (AppRule focusPhase (x1, assumption1) goal gamma omega (x2, assumptio
           ; H.p ! A.style (stringValue "color: green; display: inline;") $ (toHtml $ pretty x2 <> " : " <> pretty assumption2)
           ; H.p ! A.style (stringValue "display: inline;") $ (toHtml " bound in ")
           ; H.p ! A.style (stringValue "color: blue; display: inline;") $ (toHtml $ pretty expr1)
-        li $ ruleToHtml ruleInfo1
+        li $ successfulSynthPathToHtml ruleInfo1
 
       -- Arg sub-term
       li $ toHtml "Arg-term: "
       ul $ do 
         li $ do 
           ; H.p ! A.style (stringValue "color: blue; display: inline;") $ (toHtml $ pretty expr2)
-        li $ ruleToHtml ruleInfo2
+        li $ successfulSynthPathToHtml ruleInfo2
 
       li $ do 
         H.span ! A.class_ (stringValue (if null delta then "notCaret" else "caret")) $ toHtml (if null delta then "Δ = ∅" else "Δ")
@@ -137,7 +141,7 @@ ruleToHtml (AppRule focusPhase (x1, assumption1) goal gamma omega (x2, assumptio
           contextToHtml delta
 
 
-ruleToHtml (BoxRule focusPhase goal gamma expr ruleInfo delta) = do 
+successfulSynthPathToHtml (BoxRule focusPhase goal gamma expr ruleInfo delta) = do 
     H.span ! A.class_ (stringValue "caret") $ do toHtml "Box, with goal: "
       ; H.p ! A.style (stringValue "color: red; display: inline;") $ (toHtml $ pretty goal)
     ul ! A.class_ (stringValue "nested") $ do 
@@ -157,7 +161,7 @@ ruleToHtml (BoxRule focusPhase goal gamma expr ruleInfo delta) = do
         ul ! A.class_ (stringValue "nested") $ li $ do 
           contextToHtml delta
 
-ruleToHtml (UnboxRule focusPhase (x1, assumption1) goal gamma omega (x2, assumption2) expr ruleInfo delta) = do 
+successfulSynthPathToHtml (UnboxRule focusPhase (x1, assumption1) goal gamma omega (x2, assumption2) expr ruleInfo delta) = do 
     H.span ! A.class_ (stringValue "caret") $ do toHtml "Unbox, using var:"
       ; H.p ! A.style (stringValue "color: green; display: inline;") $ toHtml (pretty x1 <> " : " <> pretty assumption1)
       ; H.p ! A.style (stringValue "display: inline;") $ toHtml (" with goal: ")
@@ -181,7 +185,7 @@ ruleToHtml (UnboxRule focusPhase (x1, assumption1) goal gamma omega (x2, assumpt
           ; H.p ! A.style (stringValue "display: inline;") $ (toHtml " bound in ")
           ; H.p ! A.style (stringValue "color: blue; display: inline;") $ (toHtml $ pretty expr)
 
-        li $ ruleToHtml ruleInfo
+        li $ successfulSynthPathToHtml ruleInfo
 
       li $ do 
         H.span ! A.class_ (stringValue (if null delta then "notCaret" else "caret")) $ toHtml (if null delta then "Δ = ∅" else "Δ")
@@ -190,7 +194,7 @@ ruleToHtml (UnboxRule focusPhase (x1, assumption1) goal gamma omega (x2, assumpt
 
 
 
-ruleToHtml (ConstrRule focusPhase conId goal gamma expr ruleInfos delta) = do 
+successfulSynthPathToHtml (ConstrRule focusPhase conId goal gamma expr ruleInfos delta) = do 
     H.span ! A.class_ (stringValue "caret") $ do toHtml "Constr, using con: "
       ; H.p ! A.style (stringValue "color: blue; display: inline;") $ (toHtml $ pretty conId)
       ; H.p ! A.style (stringValue "display: inline;") $ (toHtml " with goal: ")
@@ -206,14 +210,14 @@ ruleToHtml (ConstrRule focusPhase conId goal gamma expr ruleInfos delta) = do
       ul $ do 
         li $ do 
           ; H.p ! A.style (stringValue "color: blue; display: inline;") $ (toHtml $ pretty expr)
-        li $ forM_ ruleInfos ruleToHtml
+        li $ forM_ ruleInfos successfulSynthPathToHtml
 
       li ! A.id (stringValue "context") $ do 
         H.span ! A.class_ (stringValue (if null delta then "notCaret" else "caret")) $ toHtml (if null delta then "Δ = ∅" else "Δ")
         ul ! A.class_ (stringValue "nested") $ li $ do 
           contextToHtml delta
 
-ruleToHtml (CaseRule focusPhase (x, assumption) goal gamma omega expr ruleInfos delta) = do 
+successfulSynthPathToHtml (CaseRule focusPhase (x, assumption) goal gamma omega expr ruleInfos delta) = do 
     H.span ! A.class_ (stringValue "caret") $ do toHtml "Case, using var:"
       ; H.p ! A.style (stringValue "color: green; display: inline;") $ toHtml (pretty x <> " : " <> pretty assumption)
       ; H.p ! A.style (stringValue "display: inline;") $ toHtml (" with goal: ")
@@ -244,7 +248,7 @@ ruleToHtml (CaseRule focusPhase (x, assumption) goal gamma omega expr ruleInfos 
                   ) boundVars [0..]
                 H.p ! A.style (stringValue "display: inline;") $ toHtml (if null boundVars then "No bindings in" else "")
                 H.p ! A.style (stringValue "color: blue; display: inline;") $ toHtml $ (if null boundVars then pretty bExpr else "")
-                li $ ruleToHtml ruleInfo
+                li $ successfulSynthPathToHtml ruleInfo
           )
       li $ do 
         H.span ! A.class_ (stringValue (if null delta then "notCaret" else "caret")) $ toHtml (if null delta then "Δ = ∅" else "Δ")

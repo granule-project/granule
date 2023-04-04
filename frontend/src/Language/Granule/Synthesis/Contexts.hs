@@ -7,7 +7,6 @@ module Language.Granule.Synthesis.Contexts where
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Span
-import Language.Granule.Syntax.Pretty
 
 import Language.Granule.Context
 
@@ -17,6 +16,7 @@ import Language.Granule.Checker.Kinding
 import Language.Granule.Checker.Variables
     ( freshIdentifierBase, freshTyVarInContext )
 import Language.Granule.Synthesis.Monad
+import Language.Granule.Synthesis.Common
 
 import Control.Monad.State.Strict
 
@@ -25,36 +25,17 @@ import Language.Granule.Utils
 import Language.Granule.Checker.Coeffects (getGradeFromArrow)
 
 
--- An SAssumption is an assumption used for synthesis:
---  * It is either a standard Granule assumption OR
---  * a top level definition (with a possible restriction on use, given by a coeffect)
-data SAssumption =
-      SVar Assumption (Maybe StructInfo)
-    | SDef TypeScheme (Maybe Coeffect)
-  deriving (Show)
-
-instance Pretty SAssumption where 
-  pretty (SVar (Linear ty) _) = pretty ty
-  pretty (SVar (Discharged ty g) _) = pretty ty <> " % " <> pretty g
-  pretty (SDef tyS _) = pretty tyS
 
 
 tyAndGrade :: SAssumption -> Maybe (Type, Coeffect)
-tyAndGrade (SVar (Discharged ty g) _) = Just (ty, g)
-tyAndGrade (SDef (Forall _ _ _ ty) g) = Just (ty, getGradeFromArrow g)
+tyAndGrade (SVar (Discharged ty g) _ _) = Just (ty, g)
+tyAndGrade (SDef (Forall _ _ _ ty) g _) = Just (ty, getGradeFromArrow g)
 tyAndGrade _ = Nothing 
 
 
 newtype FocusedCtxt a = Focused (Ctxt a)
 
 
--- A structurally decreasing type is a recursive instance of a recursive data
--- type. For example in the list data type:
--- List a = Next (List a) | Empty
--- the (List a) to the left of the equals is structurally decreasing, while
--- the Empty is not. Likewise the Next (List a) is also not decreasing.
-data StructInfo =  NonDecreasing | Decreasing Int
-  deriving (Show, Eq, Ord)
 
 
 isDecr :: Maybe StructInfo -> Bool
@@ -65,17 +46,17 @@ isDecr _ = False
 
 ctxtSubtract :: (?globals :: Globals) => Ctxt SAssumption  -> Ctxt SAssumption -> Synthesiser (Ctxt SAssumption)
 ctxtSubtract gam [] = return gam
-ctxtSubtract gam ((x, SVar (Linear t) _):del) =
+ctxtSubtract gam ((x, SVar (Linear t) _ _):del) =
   case lookupAndCutout x gam of
     Just (gam', _) -> ctxtSubtract gam' del
     Nothing -> none
 
-ctxtSubtract gam ((x, SVar (Discharged t g2) _):del) =
+ctxtSubtract gam ((x, SVar (Discharged t g2) _ _):del) =
   case lookupAndCutout x gam of
-    Just (gam', SVar (Discharged t2 g1) sInf) -> do
+    Just (gam', SVar (Discharged t2 g1) sInf depth) -> do
       g3 <- g1 `gradeSub` g2
       ctx <- ctxtSubtract gam' del
-      return ((x, SVar (Discharged t g3) sInf):ctx)
+      return ((x, SVar (Discharged t g3) sInf depth):ctx)
     _ -> none
     where
       gradeSub g g' = do
@@ -101,14 +82,14 @@ ctxtSubtract gam (var@(x, SDef{}):del) = do
 
 ctxtMultByCoeffect :: (?globals :: Globals) => Type -> Ctxt SAssumption -> Synthesiser (Ctxt SAssumption)
 ctxtMultByCoeffect _ [] = return []
-ctxtMultByCoeffect g1 ((x, SVar (Discharged t g2) sInf):xs) = do
+ctxtMultByCoeffect g1 ((x, SVar (Discharged t g2) sInf depth):xs) = do
   ctxt <- ctxtMultByCoeffect g1 xs
-  return ((x, SVar (Discharged t (TyInfix TyOpTimes g1 g2)) sInf): ctxt)
+  return ((x, SVar (Discharged t (TyInfix TyOpTimes g1 g2)) sInf depth): ctxt)
 
-ctxtMultByCoeffect g1 (var@(x, SDef tySch (Just g2)):xs) = do
+ctxtMultByCoeffect g1 (var@(x, SDef tySch (Just g2) depth):xs) = do
   ctxt <- ctxtMultByCoeffect g1 xs
-  return $ (x, SDef tySch (Just $ TyInfix TyOpTimes g1 g2)):ctxt
-ctxtMultByCoeffect g (var@(x, SDef tySch Nothing):xs) = do
+  return $ (x, SDef tySch (Just $ TyInfix TyOpTimes g1 g2) depth):ctxt
+ctxtMultByCoeffect g (var@(x, SDef tySch Nothing depth):xs) = do
   ctxt <- ctxtMultByCoeffect g xs
   return $ var:ctxt
 
@@ -116,11 +97,11 @@ ctxtMultByCoeffect _ _ = none
 
 ctxtDivByCoeffect :: (?globals :: Globals) => Type -> Ctxt SAssumption -> Synthesiser (Ctxt SAssumption)
 ctxtDivByCoeffect _ [] = return []
-ctxtDivByCoeffect g1 ((x, SVar (Discharged t g2) sInf):xs) =
+ctxtDivByCoeffect g1 ((x, SVar (Discharged t g2) sInf depth):xs) =
     do
       ctxt <- ctxtDivByCoeffect g1 xs
       var <- gradeDiv g1 g2
-      return ((x, SVar (Discharged t var) sInf): ctxt)
+      return ((x, SVar (Discharged t var) sInf depth): ctxt)
   where
     gradeDiv g g' = do
       (kind, _, _) <- conv $ synthKind nullSpan g
@@ -159,63 +140,63 @@ ctxtMerge :: (?globals :: Globals)
 ctxtMerge _ [] [] = return []
 
 --  * Can meet/join an empty context to one that has graded assumptions
-ctxtMerge operator [] ((x, SVar (Discharged t g) sInf) : ctxt) = do
+ctxtMerge operator [] ((x, SVar (Discharged t g) sInf depth) : ctxt) = do
   -- Left context has no `x`, so assume it has been weakened (0 gade)
   ctxt' <- ctxtMerge operator [] ctxt
-  return $ (x, SVar (Discharged t g) sInf) : ctxt'
+  return $ (x, SVar (Discharged t g) sInf depth) : ctxt'
 --  return $ (x, Discharged t (operator (TyGrade (Just kind) 0) g)) : ctxt'
 
 --  * Cannot meet/join an empty context to one with linear assumptions
-ctxtMerge operator [] ((x, SVar (Linear t) sInf) : ctxt) = do
+ctxtMerge operator [] ((x, SVar (Linear t) sInf depth) : ctxt) = do
   ctxt' <- ctxtMerge operator [] ctxt
-  return $ ((x, SVar (Linear t) sInf) : ctxt')
+  return $ ((x, SVar (Linear t) sInf depth) : ctxt')
 
-ctxtMerge operator [] (var@(x, SDef tySch g) : ctxt) = do
+ctxtMerge operator [] (var@(x, SDef tySch g depth) : ctxt) = do
   ctxt' <- ctxtMerge operator [] ctxt
   return $ var : ctxt'
 
 
 -- Inductive cases
-ctxtMerge operator ((x, SVar (Discharged t1 g1) sInf) : ctxt1') ctxt2 =
+ctxtMerge operator ((x, SVar (Discharged t1 g1) sInf depth) : ctxt1') ctxt2 =
   case lookupAndCutout x ctxt2 of
-    Just (ctxt2', SVar (Discharged t2 g2) sInf') ->
+    Just (ctxt2', SVar (Discharged t2 g2) sInf' depth) ->
       if t1 == t2 -- Just in case but should always be true
         then do
           ctxt' <- ctxtMerge operator ctxt1' ctxt2'
           merged <- operator g1 g2
-          return $ (x, SVar (Discharged t1 merged) sInf') : ctxt'
+          return $ (x, SVar (Discharged t1 merged) sInf' depth) : ctxt'
         else none
 
-    Just (_, SVar (Linear _) _) -> none -- mode mismatch
+    Just (_, SVar (Linear _) _ _) -> none -- mode mismatch
     Just (_, SDef{}) -> none -- mode mismatch
 
     Nothing -> do
       -- Right context has no `x`, so assume it has been weakened (0 gade)
       ctxt' <- ctxtMerge operator ctxt1' ctxt2
-      return $ (x, SVar (Discharged t1 g1) sInf) : ctxt'
+      return $ (x, SVar (Discharged t1 g1) sInf depth) : ctxt'
       --return $ (x, Discharged t1 (operator g1 (TyGrade (Just kind) 0))) : ctxt'
 
-ctxtMerge operator ((x, SVar (Linear t1) sInf) : ctxt1') ctxt2 =
+ctxtMerge operator ((x, SVar (Linear t1) sInf depth) : ctxt1') ctxt2 =
   case lookupAndCutout x ctxt2 of
-    Just (ctxt2', SVar (Linear t2) sInf') ->
+    Just (ctxt2', SVar (Linear t2) sInf' depth) ->
       if t1 == t2 -- Just in case but should always be true
         then do
           ctxt' <- ctxtMerge operator ctxt1' ctxt2'
-          return $ (x, SVar (Linear t1) sInf') : ctxt1'
+          return $ (x, SVar (Linear t1) sInf' depth) : ctxt1'
         else none
 
-    Just (_, SVar (Discharged{}) _) -> none -- mode mismatch
+    Just (_, SVar (Discharged{}) _ _) -> none -- mode mismatch
     Just (_, SDef{}) -> none -- mode mismatch
     Nothing -> none                     -- Cannot weaken a linear thing
 
-ctxtMerge operator (var@(x, SDef tySch (Just g)) : ctxt1') ctxt2 =
+ctxtMerge operator (var@(x, SDef tySch (Just g) depth) : ctxt1') ctxt2 =
   case lookupAndCutout x ctxt2 of
-    Just (ctxt2', SDef tySch' (Just g')) -> do
+    Just (ctxt2', SDef tySch' (Just g') depth) -> do
       ctxt' <- ctxtMerge operator ctxt1' ctxt2'
       merged <- operator g g'
-      return $ (x, SDef tySch (Just merged)) :ctxt'
+      return $ (x, SDef tySch (Just merged) depth) :ctxt'
 
-ctxtMerge operator (var@(x, SDef tySch Nothing) : ctxt1') ctxt2 = do
+ctxtMerge operator (var@(x, SDef tySch Nothing depth) : ctxt1') ctxt2 = do
     ctxt' <- ctxtMerge operator ctxt1' ctxt2
     return $ var:ctxt'
 
@@ -226,28 +207,28 @@ ctxtMerge operator (var@(x, SDef tySch Nothing) : ctxt1') ctxt2 = do
 
 ctxtAdd :: Ctxt SAssumption -> Ctxt SAssumption -> Maybe (Ctxt SAssumption)
 ctxtAdd [] y = Just y
-ctxtAdd ((x, SVar (Discharged t1 g1) sInf):xs) ys =
+ctxtAdd ((x, SVar (Discharged t1 g1) sInf depth):xs) ys =
   case lookupAndCutout x ys of
-    Just (ys', SVar (Discharged t2 g2) sInf') -> do
+    Just (ys', SVar (Discharged t2 g2) sInf' depth) -> do
       ctxt <- ctxtAdd xs ys'
-      return $ (x, SVar (Discharged t1 (TyInfix TyOpPlus g1 g2)) sInf') : ctxt
+      return $ (x, SVar (Discharged t1 (TyInfix TyOpPlus g1 g2)) sInf' depth) : ctxt
     Nothing -> do
       ctxt <- ctxtAdd xs ys
-      return $ (x, SVar (Discharged t1 g1) sInf) : ctxt
+      return $ (x, SVar (Discharged t1 g1) sInf depth) : ctxt
     _ -> Nothing
-ctxtAdd ((x, SVar (Linear t1) sInf):xs) ys =
+ctxtAdd ((x, SVar (Linear t1) sInf depth):xs) ys =
   case lookup x ys of
-    Just (SVar (Linear t2) sInf') -> Nothing
+    Just (SVar (Linear t2) sInf' depth) -> Nothing
     Nothing -> do
       ctxt <- ctxtAdd xs ys
-      return $ (x, (SVar (Linear t1) sInf)) : ctxt
+      return $ (x, (SVar (Linear t1) sInf depth)) : ctxt
     _ -> Nothing
-ctxtAdd (var@(x, SDef tySch Nothing):xs) ys = do
+ctxtAdd (var@(x, SDef tySch Nothing depth):xs) ys = do
   ctxt <- ctxtAdd xs ys
   return $ var:ctxt
-ctxtAdd (var@(x, SDef tySch (Just g1)):xs) ys =
+ctxtAdd (var@(x, SDef tySch (Just g1) depth):xs) ys =
   case lookupAndCutout x ys of
-    Just (ys', SDef tySch' (Just g1')) -> do
+    Just (ys', SDef tySch' (Just g1') depth) -> do
       ctxt <- ctxtAdd xs ys'
-      return $ (x, SDef tySch (Just $ TyInfix TyOpPlus g1 g1')) : ctxt
+      return $ (x, SDef tySch (Just $ TyInfix TyOpPlus g1 g1') depth) : ctxt
     _ -> Nothing
