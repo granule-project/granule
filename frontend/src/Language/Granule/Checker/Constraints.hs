@@ -301,7 +301,7 @@ compile vars (Hsup _ c1 c2 t) =
   bindM2And' (\c1' c2' -> (symGradeHsup c1' c2')) (compileCoeffect (normalise c1) t vars) (compileCoeffect (normalise c2) t vars)
 
 -- Assumes that c3 is already existentially bound
-compile vars (Lub _ c1 c2 c3@(TyVar v) t) =
+compile vars (Lub _ c1 c2 c3@(TyVar v) t doLeastCheck) =
   case t of
     {-
     -- An alternate procedure for computing least-upper bounds
@@ -324,14 +324,18 @@ compile vars (Lub _ c1 c2 c3@(TyVar v) t) =
       -- s3 is an upper bound
       pa1 <- approximatedByOrEqualConstraint s1 s3
       pb1 <- approximatedByOrEqualConstraint s2 s3
-      --- and it is the least such upper bound
-      pc <- freshSolverVarScoped compileQuantScoped (internalName v <> ".up") t ForallQ
-              (\(py, y) -> do
-                pc1 <- approximatedByOrEqualConstraint s1 y
-                pc2 <- approximatedByOrEqualConstraint s2 y
-                pc3 <- approximatedByOrEqualConstraint s3 y
-                return ((py .&& pc1 .&& pc2) .=> pc3))
-      return (p1 .&& p2 .&& p3 .&& pa1 .&& pb1 .&& pc)
+      if doLeastCheck then do
+           --- and it is the least such upper bound
+          pc <- freshSolverVarScoped compileQuantScoped (internalName v <> ".up") t ForallQ
+                  (\(py, y) -> do
+                    pc1 <- approximatedByOrEqualConstraint s1 y
+                    pc2 <- approximatedByOrEqualConstraint s2 y
+                    pc3 <- approximatedByOrEqualConstraint s3 y
+                    return ((py .&& pc1 .&& pc2) .=> pc3))
+          return (p1 .&& p2 .&& p3 .&& pa1 .&& pb1 .&& pc)
+        else
+          -- no least check, just some upper bound
+          return (p1 .&& p2 .&& p3 .&& pa1 .&& pb1)
 
 compile vars (ApproximatedBy _ c1 c2 t) =
   bindM2And' approximatedByOrEqualConstraint (compileCoeffect (normalise c1) t vars) (compileCoeffect (normalise c2) t vars)

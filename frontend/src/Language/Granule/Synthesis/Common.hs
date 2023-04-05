@@ -38,76 +38,76 @@ import Data.Typeable
 -- import Debug.Trace
 
 -- # Data types for debugging rules
-data RuleInfo = 
-    VarRule 
-      Id -- Var Name 
-      SAssumption -- Type and grade  
+data RuleInfo =
+    VarRule
+      Id -- Var Name
+      SAssumption -- Type and grade
       Type -- Goal
-      (Ctxt SAssumption) -- Gamma 
-      (Ctxt SAssumption) -- Omega 
+      (Ctxt SAssumption) -- Gamma
+      (Ctxt SAssumption) -- Omega
       (Ctxt SAssumption) -- Delta
-  | AbsRule 
-      FocusPhase 
-      Type -- Goal 
+  | AbsRule
+      FocusPhase
+      Type -- Goal
       (Ctxt SAssumption) -- Gamma
       (Ctxt SAssumption) -- Omega
       (Id, SAssumption) -- Bound Var
-      (Expr () ()) -- Term 
-      RuleInfo -- Path of sub expression 
+      (Expr () ()) -- Term
+      RuleInfo -- Path of sub expression
       (Ctxt SAssumption) -- Delta
-  | AppRule 
-      FocusPhase 
+  | AppRule
+      FocusPhase
       (Id, SAssumption)
-      Type -- Goal 
+      Type -- Goal
 
-      (Ctxt SAssumption) -- Gamma 
+      (Ctxt SAssumption) -- Gamma
       (Ctxt SAssumption) -- Omega
-      (Id, SAssumption) -- Bound var 
-      (Expr () ()) -- First term 
-      RuleInfo -- Path of first sub expression 
+      (Id, SAssumption) -- Bound var
+      (Expr () ()) -- First term
+      RuleInfo -- Path of first sub expression
       (Ctxt SAssumption) -- Delta1
 
-      (Expr () ()) -- Second term 
-      RuleInfo -- Path of second sub expression 
+      (Expr () ()) -- Second term
+      RuleInfo -- Path of second sub expression
       (Ctxt SAssumption) -- Delta2
 
       (Ctxt SAssumption) -- Delta
-  | BoxRule 
-      FocusPhase  
+  | BoxRule
+      FocusPhase
       Type -- Goal
-      (Ctxt SAssumption) -- Gamma 
-      (Expr () ()) -- Sub term 
-      RuleInfo 
-      (Ctxt SAssumption) -- Delta
-  | UnboxRule 
-      FocusPhase 
-      (Id, SAssumption) 
-      Type -- Goal
-      (Ctxt SAssumption) -- Gamma 
-      (Ctxt SAssumption) -- Omega
-      (Id, SAssumption) -- Bound var 
+      (Ctxt SAssumption) -- Gamma
       (Expr () ()) -- Sub term
-      RuleInfo 
+      RuleInfo
       (Ctxt SAssumption) -- Delta
-  | ConstrRule 
-      FocusPhase 
-      Id -- Constructor Id 
+  | UnboxRule
+      FocusPhase
+      (Id, SAssumption)
       Type -- Goal
-      (Ctxt SAssumption) -- Gamma 
-      (Expr () ()) 
+      (Ctxt SAssumption) -- Gamma
+      (Ctxt SAssumption) -- Omega
+      (Id, SAssumption) -- Bound var
+      (Expr () ()) -- Sub term
+      RuleInfo
+      (Ctxt SAssumption) -- Delta
+  | ConstrRule
+      FocusPhase
+      Id -- Constructor Id
+      Type -- Goal
+      (Ctxt SAssumption) -- Gamma
+      (Expr () ())
       [RuleInfo]
       (Ctxt SAssumption) -- Delta
-  | CaseRule 
+  | CaseRule
       FocusPhase
-      (Id, SAssumption) -- Var name 
-      Type -- Goal 
-      (Ctxt SAssumption) -- Gamma 
+      (Id, SAssumption) -- Var name
+      Type -- Goal
+      (Ctxt SAssumption) -- Gamma
       (Ctxt SAssumption) -- Omega
       (Expr () ()) -- Sub term
       [(Id, Ctxt SAssumption, Expr () (), Ctxt SAssumption, RuleInfo)] -- Branch info
       (Ctxt SAssumption) -- Delta
   deriving (Show)
-    
+
 
 -- An SAssumption is an assumption used for synthesis:
 --  * It is either a standard Granule assumption OR
@@ -335,14 +335,14 @@ bindToContext var gamma omega _         = (var:gamma, omega)
 
 
 
-isRecursiveType :: Type -> Ctxt (Ctxt (TypeScheme, Substitution), Bool) -> Bool 
-isRecursiveType t tyConstrs = 
-  case isADTorGADT t of 
-    Just name -> 
-      case lookup name tyConstrs of 
+isRecursiveType :: Type -> Ctxt (Ctxt (TypeScheme, Substitution), Bool) -> Bool
+isRecursiveType t tyConstrs =
+  case isADTorGADT t of
+    Just name ->
+      case lookup name tyConstrs of
         Just (dataCons, recursive) -> recursive
         Nothing -> False
-    _ -> False 
+    _ -> False
 
 -- Given inputs:
 -- `isRecursiveCon dataTypeName (dataConstructorName, (dataConstrType,  coercions))`
@@ -506,7 +506,7 @@ sizeOfConstraint (Eq _ c1 c2 _) = 1 + sizeOfCoeffect c1 + sizeOfCoeffect c2
 sizeOfConstraint (Neq _ c1 c2 _) = 1 + sizeOfCoeffect c1 + sizeOfCoeffect c2
 sizeOfConstraint (ApproximatedBy _ c1 c2 _) = 1 + sizeOfCoeffect c1 + sizeOfCoeffect c2
 sizeOfConstraint (Hsup _ c1 c2 _) = 1 + sizeOfCoeffect c1 + sizeOfCoeffect c2
-sizeOfConstraint (Lub _ c1 c2 c3 _) = 1 + sizeOfCoeffect c1 + sizeOfCoeffect c2 + sizeOfCoeffect c3
+sizeOfConstraint (Lub _ c1 c2 c3 _ _) = 1 + sizeOfCoeffect c1 + sizeOfCoeffect c2 + sizeOfCoeffect c3
 sizeOfConstraint (Lt _ c1 c2) = 1 + sizeOfCoeffect c1 + sizeOfCoeffect c2
 sizeOfConstraint (Gt _ c1 c2) = 1 + sizeOfCoeffect c1 + sizeOfCoeffect c2
 sizeOfConstraint (LtEq _ c1 c2) = 1 + sizeOfCoeffect c1 + sizeOfCoeffect c2

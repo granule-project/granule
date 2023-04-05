@@ -1315,7 +1315,7 @@ computeJoin maybeK g1 g2 = do
   let upperBoundGradeVar = mkId upperBoundGradeVarId
   modify (\st -> st { tyVarContext = (upperBoundGradeVar, (k, InstanceQ)) : tyVarContext st })
   let upperBoundGrade = TyVar upperBoundGradeVar
-  modifyPred $ addConstraintViaConjunction (Lub ns g1 g2 upperBoundGrade k)
+  modifyPred $ addConstraintViaConjunction (Lub ns g1 g2 upperBoundGrade k False)
   return upperBoundGrade
 
 -- Version of computeJoin' where the inputs may be Nothing i.e.,

@@ -2072,13 +2072,13 @@ relateByLUB _ (_, Linear _) (_, Linear _) (_, Linear _) = return []
 -- Discharged coeffect assumptions
 relateByLUB s (_, Discharged _ c1) (_, Discharged _ c2) (_, Discharged _ c3) = do
   (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c1 c2
-  addConstraint (Lub s (inj1 c1) (inj2 c2) c3 kind)
+  addConstraint (Lub s (inj1 c1) (inj2 c2) c3 kind True)
   return subst
 
 -- TODO: handle new ghost variables
 relateByLUB s (_, Ghost c1) (_, Ghost c2) (_, Ghost c3) = do
   (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c1 c2
-  addConstraint (Lub s (inj1 c1) (inj2 c2) c3 kind)
+  addConstraint (Lub s (inj1 c1) (inj2 c2) c3 kind True)
   return subst
 
 -- Linear binding and a graded binding (likely from a promotion)

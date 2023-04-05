@@ -53,8 +53,10 @@ data Constraint =
   | Neq Span Type Type Type
   | ApproximatedBy Span Type Type Type
 
-  -- Least upper bound
-  | Lub Span Coeffect Type Type Type
+  -- (Least) upper bound; the last argument controls whether
+  -- we do a check for leastness of the third argument (True) or not (False)
+  -- Lub _ _ c1 c2 c3 means check that c1 <= c3 and c2 <= c3
+  | Lub Span Coeffect Type Type Type Bool
 
   -- Used for user-predicates, and also effect types
   | Lt Span   Type Type -- Must be Nat kinded
@@ -75,7 +77,7 @@ instance FirstParameter Constraint Span
 normaliseConstraint :: Constraint -> Constraint
 normaliseConstraint (Eq s c1 c2 t)   = Eq s (normalise c1) (normalise c2) t
 normaliseConstraint (Neq s c1 c2 t)  = Neq s (normalise c1) (normalise c2) t
-normaliseConstraint (Lub s c1 c2 c3 t) = Lub s (normalise c1) (normalise c2) (normalise c3) t
+normaliseConstraint (Lub s c1 c2 c3 t b) = Lub s (normalise c1) (normalise c2) (normalise c3) t b
 normaliseConstraint (ApproximatedBy s c1 c2 t) = ApproximatedBy s (normalise c1) (normalise c2) t
 normaliseConstraint (Lt s c1 c2) = Lt s (normalise c1) (normalise c2)
 normaliseConstraint (Gt s c1 c2) = Gt s (normalise c1) (normalise c2)
@@ -99,11 +101,11 @@ instance Monad m => Freshenable m Constraint where
     c2 <- freshen c2
     return $ ApproximatedBy s' c1 c2 t
 
-  freshen (Lub s' c1 c2 c3 t) = do
+  freshen (Lub s' c1 c2 c3 t checkLeast) = do
     c1 <- freshen c1
     c2 <- freshen c2
     c3 <- freshen c3
-    return $ Lub s' c1 c2 c3 t
+    return $ Lub s' c1 c2 c3 t checkLeast
 
   freshen (Lt s c1 c2) = do
     c1 <- freshen c1
@@ -201,7 +203,7 @@ instance Pretty Constraint where
 
         _ -> "(" <> pretty c1 <> " ≤ " <> pretty c2 <> ")" -- <> " @ " <> pretty k
 
-    pretty (Lub _ c1 c2 c3 _) =
+    pretty (Lub _ c1 c2 c3 _ _) =
       "(" <> pretty c1 <> " ⊔ " <> pretty c2 <> " = " <> pretty c3 <> ")"
 
     pretty (Lt _ c1 c2) =
@@ -222,7 +224,7 @@ instance Pretty Constraint where
 varsConstraint :: Constraint -> [Id]
 varsConstraint (Eq _ c1 c2 _) = freeVars c1 <> freeVars c2
 varsConstraint (Neq _ c1 c2 _) = freeVars c1 <> freeVars c2
-varsConstraint (Lub _ c1 c2 c3 _) = freeVars c1 <> freeVars c2 <> freeVars c3
+varsConstraint (Lub _ c1 c2 c3 _ _) = freeVars c1 <> freeVars c2 <> freeVars c3
 varsConstraint (ApproximatedBy _ c1 c2 _) = freeVars c1 <> freeVars c2
 varsConstraint (Lt _ c1 c2) = freeVars c1 <> freeVars c2
 varsConstraint (Gt _ c1 c2) = freeVars c1 <> freeVars c2
@@ -434,11 +436,11 @@ rewriteBindersInPredicate ctxt =
           TyVar ckindVar' | ckindVar == ckindVar' -> ckind
           _  -> k)
 
-    updateConstraint ckindVar (ckind, _) (Lub s c1 c2 c3 k) =
+    updateConstraint ckindVar (ckind, _) (Lub s c1 c2 c3 k checkLeast) =
       Lub s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2) (updateCoeffect ckindVar ckind c3)
         (case k of
           TyVar ckindVar' | ckindVar == ckindVar' -> ckind
-          _  -> k)
+          _  -> k) checkLeast
 
     updateConstraint ckindVar (ckind, _) (Lt s c1 c2) =
         Lt s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)

@@ -133,7 +133,7 @@ partialExpressionZipperTests = do
           _ <- withPartialExprAt downExpr
             (Val ns () False (Promote () hole))
             -- leaf expr is a variable, which should replace the hole
-            (leafExpr (var, (), (), (), ()))
+            (leafExpr (var, (), (), (), (), ()))
           getCurrentPartialExpr
       synthExprP `shouldBe` [Just (Val ns () False (Promote () var))]
 
