@@ -1185,7 +1185,7 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, assumption@(S
             (do
               (kind, _, _) <- conv $ synthKind ns grade_r
               debugM ("polyShaped for " ++ pretty goal) (pretty grade_r)
-              -- modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (TyGrade (Just kind) 1) grade_final kind)
+              modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (TyGrade (Just kind) 1) (getGradeFromArrow grade_s_out) kind)
               res <- solve
               debugM "solver result" (show res)
               return res)
