@@ -133,7 +133,7 @@ increaseDepth :: (Id, SAssumption) -> (Id, SAssumption)
 increaseDepth (x, SVar ty sInfo depth) = (x, SVar ty sInfo (depth+1))
 increaseDepth (x, SDef tyS coeff depth) = (x, SDef tyS coeff (depth+1))
 
-instance Pretty SAssumption where 
+instance Pretty SAssumption where
   pretty (SVar (Linear ty) _ _) = pretty ty
   pretty (SVar (Discharged ty g) _ _) = pretty ty <> " % " <> pretty g
   pretty (SDef tyS _ _) = pretty tyS
@@ -200,7 +200,7 @@ data SearchParameters =
   , matchMax      :: Int
   , introCurrent  :: Int
   , introMax      :: Int
-  , appMax        :: Int 
+  , appMax        :: Int
   }
   deriving (Show, Eq)
 

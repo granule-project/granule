@@ -30,11 +30,11 @@ spec :: Test.Spec
 spec =
   checkCasePatterns
 
-      
-      
+
+
 mkPairTy :: [(Id, Kind)] -> Id -> [Type] -> Type
 mkPairTy tyVars tName params = foldr (FunTy Nothing Nothing) (returnTy (TyCon tName) tyVars) params
-  where 
+  where
     returnTy t [] = t
     returnTy t (v:vs) = returnTy (TyApp t ((TyVar . fst) v)) vs
 
