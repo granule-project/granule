@@ -34,12 +34,13 @@ data SynthesisData =
   , constructors              :: Ctxt (Ctxt (TypeScheme, Substitution), Bool)
   , currDef                   :: [Id]
   , maxReached                :: Bool
+  , attempts                  :: Integer
   }
   deriving Show
 
 instance Semigroup SynthesisData where
- (SynthesisData c smt t s p st cons def max) <>
-    (SynthesisData c' smt' t' s' p' st' cons' def' max') =
+ (SynthesisData c smt t s p st cons def max atps) <>
+    (SynthesisData c' smt' t' s' p' st' cons' def' max' atps') =
       SynthesisData
         (c + c')
         (smt + smt')
@@ -50,9 +51,10 @@ instance Semigroup SynthesisData where
         (cons ++ cons')
         (def ++ def')
         (max || max')
+        (atps + atps)
 
 instance Monoid SynthesisData where
-  mempty  = SynthesisData 0 0 0 0 0 0 [] [] False
+  mempty  = SynthesisData 0 0 0 0 0 0 [] [] False 0
   mappend = (<>)
 
 -- Synthesiser monad

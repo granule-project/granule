@@ -1,12 +1,15 @@
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE RankNTypes #-}
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 
 
 {-# options_ghc -fno-warn-unused-imports #-}
 {-# options_ghc -fno-warn-incomplete-uni-patterns #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Redundant return" #-}
 module Language.Granule.Synthesis.Synth where
 
-import Data.List (sortBy,nub, nubBy, intercalate)
+import Data.List (sortBy,nub, nubBy, intercalate, find)
 
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Type
@@ -54,6 +57,10 @@ import System.Clock (TimeSpec)
 -- import Control.Monad.Except
 -- import Control.Monad.Logic
 import Data.Ord
+import Debug.Trace
+import Language.Granule.Syntax.Def
+import Control.Exception (SomeException)
+import Language.Granule.Synthesis.RewriteHoles (holeRefactor)
 
 ------------------------------
 
@@ -187,6 +194,7 @@ synthesiseProgram hints index unrComps rComps defId ctxt goalTy checkerState = d
                       ,  constructors=[]
                       ,  currDef = [defId]
                       ,  maxReached = False
+                      ,  attempts = 0
                       }
 
   let (hintELim, hintILim) = (1, 1) -- case (hasElimHint hints, hasIntroHint hints) of
@@ -338,7 +346,11 @@ elapsedTime start end = round $ fromIntegral (Clock.toNanoSecs (Clock.diffTimeSp
 
 
 synthesiseGradedBase :: (?globals :: Globals)
-  => Maybe Hints
+  => AST () ()
+  -> CheckerError
+  -> Maybe (Spec () ())
+  -> ((?globals :: Globals) => AST () () -> IO Bool)
+  -> Maybe Hints
   -> Int
   -> Ctxt TypeScheme  -- Unrestricted Defs
   -> Ctxt (TypeScheme, Type) -- Restricted Defs
@@ -348,7 +360,7 @@ synthesiseGradedBase :: (?globals :: Globals)
   -> TypeScheme           -- type from which to synthesise
   -> CheckerState
   -> IO ([(Expr () (), RuleInfo)], Maybe Measurement)
-synthesiseGradedBase hints index unrestricted restricted currentDef constructors ctxt (Forall _ _ constraints goalTy) cs = do
+synthesiseGradedBase ast hole spec eval hints index unrestricted restricted currentDef constructors ctxt (Forall _ _ constraints goalTy) cs = do
 
 
   -- Start timing and initialise state
@@ -363,6 +375,7 @@ synthesiseGradedBase hints index unrestricted restricted currentDef constructors
                       ,  constructors=[]
                       ,  currDef = [currentDef]
                       ,  maxReached = False
+                      ,  attempts = 0
                       }
 
   constructorsWithRecLabels <- mapM (\(tyId, dataCons) ->
@@ -376,6 +389,8 @@ synthesiseGradedBase hints index unrestricted restricted currentDef constructors
   -- Initialise input context with
   -- local synthesis context
   let gamma = map (\(v, a)  -> (v, SVar a (Just $ NonDecreasing 0) 0)) ctxt ++
+  -- restricted definition given as hints
+              
   -- restricted definition given as hints
               map (\(v, (tySch, grade)) -> (v, SDef tySch (Just grade) 0)) restricted ++
   -- unrestricted definitions given as hints
@@ -396,10 +411,11 @@ synthesiseGradedBase hints index unrestricted restricted currentDef constructors
   let lims = mergeByNorm (map mergeByNorm [[[(x,y) | x <- [0..10]] | y <- [0..10]]])
   let sParamList = map (\(elim,intro) -> defaultSearchParams { matchMax = elim, introMax = intro }) lims
 
-  let synRes = synLoop constructorsWithRecLabels index gamma [] goalTy sParamList
+  let synRes = synLoop ast hole spec eval constructorsWithRecLabels index gamma [] goalTy sParamList
   (res, agg) <- runStateT (runSynthesiser index synRes cs') synthState
 
   let programs = nubBy (\(expr1, _) (expr2, _) -> expr1 == expr2) $ rights (map fst res)
+  traceM $ "programs: "  <> (pretty $ map fst programs)
   end    <- liftIO $ Clock.getTime Clock.Monotonic
         -- <benchmarking-output>
   if benchmarking then
@@ -433,16 +449,64 @@ synthesiseGradedBase hints index unrestricted restricted currentDef constructors
 
 
 
+runExamples :: (?globals :: Globals)
+            => ((?globals :: Globals) => AST () () -> IO Bool)
+            -> AST () ()
+            -> [Example () ()]
+            -> Id
+            -> IO Bool
+runExamples eval last@(AST decls defs imports hidden mod) examples defId = do
+  let exampleMainExprs =
+        map (\(Example input output) -> makeEquality input output) examples
+    -- remove the existing main function (should probably keep the main function so we can stitch it back in after)
+
+  let defsWithoutMain = filter (\(Def _ mIdent _ _ _ _) -> mIdent /= mkId entryPoint) defs
+
+  let foundBoolDecl = find (\(DataDecl _ dIdent _ _ _) ->  dIdent == mkId "Bool") decls
+  let declsWithBool = case foundBoolDecl of
+                        Just decl -> decls
+                        Nothing -> boolDecl : decls
+
+  let exampleMainExprsCombined = foldr (\mainExpr acc -> case acc of Just acc' -> Just $ makeAnd mainExpr acc' ; Nothing -> Just mainExpr) Nothing exampleMainExprs
+  case exampleMainExprsCombined of
+    Nothing -> error "Could not construct main definition for example AST!"
+    Just exampleMainExprsCombined' -> do
+      -- exmapleMainDef:
+      --    (&&') : Bool -> Bool [0..1] -> Bool
+      --    (&&') True [y] = y;
+      --    (&&') False [_] = False
+      --
+      --    main : IO ()
+      --    main = (example_in_1 == example_out_1) (&&') ... (&&') (example_in_n == example_out_n)
+      let exampleMainDef = Def nullSpanNoFile (mkId entryPoint) False Nothing
+                              (EquationList nullSpanNoFile (mkId entryPoint) False
+                                [(Equation nullSpanNoFile (mkId entryPoint) () False [] exampleMainExprsCombined')]) (Forall nullSpanNoFile [] [] (TyInt 0))
+      let astWithExampleMain = AST declsWithBool (defsWithoutMain ++ [exampleMainDef]) imports hidden mod
+      eval astWithExampleMain
+
+  where
+    boolDecl :: DataDecl
+    boolDecl =
+      DataDecl nullSpanNoFile (mkId "Bool") [] Nothing
+        [ DataConstrNonIndexed nullSpanNoFile (mkId "True") []
+        , DataConstrNonIndexed nullSpanNoFile (mkId "False") [] ]
+
+
+
 synLoop :: (?globals :: Globals)
-        => Ctxt (Ctxt (TypeScheme, Substitution), Bool)
+        => AST () ()
+        -> CheckerError
+        -> Maybe (Spec () ())
+        -> ((?globals :: Globals) => AST () () -> IO Bool)
+        -> Ctxt (Ctxt (TypeScheme, Substitution), Bool)
         -> Int
         -> Ctxt SAssumption
         -> Ctxt SAssumption
         -> Type
         -> [SearchParameters]
         -> Synthesiser (Expr () (), RuleInfo)
-synLoop constrs index gamma omega goal [] = none
-synLoop constrs index gamma omega goal (sParams:rest) = do
+synLoop ast hole spec eval constrs index gamma omega goal [] = none
+synLoop ast hole spec eval constrs index gamma omega goal (sParams:rest) = do
   Synthesiser $ lift $ lift $ lift $ modify (\state ->
             state {
              constructors = constrs
@@ -450,27 +514,59 @@ synLoop constrs index gamma omega goal (sParams:rest) = do
 
   synthState <- getSynthState
   cs <- conv $ get
-  (res, _) <- liftIO $ runStateT (runSynthesiser index (gSynthOuter sParams gamma omega goal) cs) synthState
+  (res, _) <- liftIO $ runStateT (runSynthesiser index (gSynthOuter ast hole spec eval sParams gamma omega goal) cs) synthState
   case res of
     (_:_) ->
       case last res of
         (Right (expr, delta, _, _, _, ruleInfo), _) -> return (expr, ruleInfo)
         _ -> none
     _ ->
-      synLoop constrs index gamma omega goal rest
+      synLoop ast hole spec eval constrs index gamma omega goal rest
 
-gSynthOuter :: (?globals :: Globals) 
-            => SearchParameters 
-            -> Ctxt SAssumption 
-            -> Ctxt SAssumption 
-            -> Type 
+gSynthOuter :: (?globals :: Globals)
+            => AST () ()
+            -> CheckerError
+            -> Maybe (Spec () ())
+            -> ((?globals :: Globals) => AST () () -> IO Bool)
+            -> SearchParameters
+            -> Ctxt SAssumption
+            -> Ctxt SAssumption
+            -> Type
             -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id, RuleInfo)
-gSynthOuter sParams gamma omega goal = do 
-  res@(_, delta, _, _, _, _) <- gSynthInner sParams RightAsync gamma (Focused omega) goal
+gSynthOuter
+  ast
+  (HoleMessage sp hgoal hctxt htyVars hVars synthCtxt _)
+  spec
+  eval
+  sParams
+  gamma
+  omega
+  goal = do
+  res@(expr, delta, _, _, _, _) <- gSynthInner sParams RightAsync gamma (Focused omega) goal
   consumed <- outerContextConsumed (gamma ++ omega) delta
-  if consumed 
-    then return res 
+  if consumed
+    then case spec of
+      Just (Spec _ _ examples@(_:_) _) -> do
+        st <- getSynthState
+        let hole = HoleMessage sp hgoal hctxt htyVars hVars synthCtxt [([], expr)]
+        let holeCases = concatMap (\h -> map (\(pats, e) -> (errLoc h, zip (getCtxtIds (holeVars h)) pats, e)) (cases h)) [hole]
+        let ast' = holeRefactor holeCases ast
+        let [def] = currDef st
+
+        success <- liftIO $ runExamples eval ast' examples def
+
+        Synthesiser $ lift $ lift $ lift $ modify (\state ->
+            state {
+             attempts = attempts st + 1
+                })
+        case (success, attempts st < toInteger exampleLimit) of
+          (True, _) -> return res
+          (False, True) -> none
+          (False, False) -> error "example lim reached"
+      _ -> return res
+
     else none
+gSynthOuter _ _ _ _ _ _ _ _ = none
 
 
 

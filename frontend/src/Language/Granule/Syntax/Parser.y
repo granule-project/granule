@@ -718,7 +718,8 @@ parseHints hints =
     hNoTimeout   = ("nt", 0) `elem` hints,
     hGradeOnRule = ("g", 0) `elem` hints,
     hTimeout     = lookup "t" hints,
-    hIndex       = lookup "i" hints
+    hIndex       = lookup "i" hints,
+    hLinHaskell  = Nothing
   }
 
 parseAndDoImportsAndFreshenDefs :: (?globals :: Globals) => String -> IO (AST () (), [Extension])

@@ -25,7 +25,7 @@ import Control.Monad -- ((<=<), forM, forM_)
 import Development.GitRev
 import Data.Char (isSpace)
 import Data.Either (isRight)
-import Data.List (intercalate, isPrefixOf, stripPrefix, find)
+import Data.List (intercalate, isPrefixOf, stripPrefix)
 import Data.List.Extra (breakOn)
 import Data.List.NonEmpty (NonEmpty, toList)
 import qualified Data.List.NonEmpty as NonEmpty (filter)
@@ -57,7 +57,6 @@ import Language.Granule.Syntax.Span
 import Language.Granule.Synthesis.DebugTree
 import Language.Granule.Synthesis.RewriteHoles
 import Language.Granule.Synthesis.Synth
-import Language.Granule.Synthesis.Builders
 import Language.Granule.Synthesis.Monad (Measurement)
 import Language.Granule.Synthesis.LinearHaskell
 import Language.Granule.Utils
@@ -227,7 +226,7 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
 
     synthesiseHoles :: (?globals :: Globals) => AST () () -> [(CheckerError, Maybe Measurement, Int)] -> Bool -> IO [(CheckerError, Maybe Measurement, Int)]
     synthesiseHoles _ [] _ = return []
-    synthesiseHoles astSrc ((HoleMessage sp goal ctxt tyVars hVars synthCtxt@(Just (cs, defs, (Just defId, spec), index, hints, constructors)) hcases, aggregate, attemptNo):holes) isGradedBase = do
+    synthesiseHoles astSrc ((hole@(HoleMessage sp goal ctxt tyVars hVars synthCtxt@(Just (cs, defs, (Just defId, spec), index, hints, constructors)) hcases), aggregate, attemptNo):holes) isGradedBase = do
       -- TODO: this magic number shouldn't here I don't think...
       let timeout = if interactiveDebugging then maxBound :: Int else 10000000
       rest <- synthesiseHoles astSrc holes isGradedBase
@@ -242,39 +241,14 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
                 ) ([], []) comps
             _ -> ([], [])
       res <- liftIO $ System.Timeout.timeout timeout $ 
-                synthesiseGradedBase hints index unrestricted restricted defId constructors ctxt (Forall nullSpan [] [] goal) cs 
-                -- if not isGradedBase
-                --  then synthesiseProgram hints index unrestricted restricted defId ctxt (Forall nullSpan [] [] goal) cs
-      case (res, spec, holes) of
-        (Just ([], measurement), _, _) -> do
+                synthesiseGradedBase astSrc hole spec synEval hints index unrestricted restricted defId constructors ctxt (Forall nullSpan [] [] goal) cs 
+      case res of
+        Just ([], measurement) -> do
           return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt hcases, measurement, attemptNo) : rest
-        (Nothing, _ , _) -> do
+        Nothing -> do
           printInfo $ "No programs synthesised - Timeout after: " <> show (fromIntegral timeout / (10^(6 :: Integer)::Double))  <> "s"
           return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt hcases, Nothing, attemptNo) : rest
-        (Just (programs@(_:_), measurement), Just (Spec _ _ examples@(_:_) _), []) -> do
-          let hole = HoleMessage sp goal ctxt tyVars hVars synthCtxt [([], fst $ last $ programs)]
-          let holeCases = concatMap (\h -> map (\(pats, e) -> (errLoc h, zip (getCtxtIds (holeVars h)) pats, e)) (cases h)) [hole]
-
-          let astChanged = holeRefactor holeCases astSrc
-          let aggregate' = case (aggregate, measurement) of
-                    (Just agg, Just mes) -> Just $ agg <> mes
-                    (Just agg, _) -> Just agg
-                    (_, Just mes) -> Just mes
-                    _ -> Nothing
-          success <- System.Timeout.timeout timeout $ runExamples astChanged examples defId
-          case (success, attemptNo < exampleLimit) of
-            (Just False, True) -> do
-              let synthCtxt' = Just (cs, defs, (Just defId, spec), index + 1, hints, constructors)
-              rest' <- synthesiseHoles astSrc [(HoleMessage sp goal ctxt tyVars hVars synthCtxt' hcases, aggregate', attemptNo+1)] isGradedBase
-              return $ rest ++ rest'
-            (Just False, False) -> do
-              -- Example limit reached
-              return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt hcases, Nothing, attemptNo) : rest
-            _ -> do
-              -- Success   
-              printSynthOutput $ synthTreeToHtml (fst $ last $ programs) (snd $ last $ programs) 
-              return $ (hole, aggregate', attemptNo) : rest
-        (Just (programs@(_:_), measurement), _, _) -> do
+        Just (programs@(_:_), measurement) -> do
           printSynthOutput $ synthTreeToHtml (fst $ last $ programs) (snd $ last $ programs) 
           return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt [([], fst $ last $ programs)], measurement, attemptNo) : rest
 
@@ -283,54 +257,15 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
       rest <- synthesiseHoles ast holes isGradedBase
       return $ hole : rest
 
-    runExamples :: (?globals :: Globals)
-                => AST () ()
-                -> [Example () ()]
-                -> Id
-                -> IO Bool
-    runExamples ast@(AST decls defs imports hidden mod) examples defId = do
-        let exampleMainExprs =
-              -- map (\(Example input output) -> makeEquality (App nullSpanNoFile () False (Val nullSpanNoFile () False (Var () defId))  input) output) examples
-              map (\(Example input output) -> makeEquality input output) examples
-        -- remove the existing main function (should probably keep the main function so we can stitch it back in after)
+synEval :: (?globals :: Globals) => AST () () -> IO Bool 
+synEval ast = do 
+  res <- try $ eval ast 
+  case res of 
+    Left (e :: SomeException) -> do
+      return False
+    Right (Just (Constr _ idv [])) | mkId "True" == idv -> return True
+    Right _ -> return False
 
-        let defsWithoutMain = filter (\(Def _ mIdent _ _ _ _) -> mIdent /= mkId entryPoint) defs
-
-        let foundBoolDecl = find (\(DataDecl _ dIdent _ _ _) ->  dIdent == mkId "Bool") decls
-        let declsWithBool = case foundBoolDecl of
-                              Just decl -> decls
-                              Nothing -> boolDecl : decls
-
-        let exampleMainExprsCombined =
-              foldr (\mainExpr acc -> case acc of Just acc' -> Just $ makeAnd mainExpr acc' ; Nothing -> Just mainExpr) Nothing exampleMainExprs
-        case exampleMainExprsCombined of
-          Nothing -> error "Could not construct main definition for example AST!"
-          Just exampleMainExprsCombined' -> do
-            -- exmapleMainDef:
-            --    (&&') : Bool -> Bool [0..1] -> Bool
-            --    (&&') True [y] = y;
-            --    (&&') False [_] = False
-            --
-            --    main : IO ()
-            --    main = (example_in_1 == example_out_1) (&&') ... (&&') (example_in_n == example_out_n)
-            let exampleMainDef = Def nullSpanNoFile (mkId entryPoint) False Nothing
-                                    (EquationList nullSpanNoFile (mkId entryPoint) False
-                                        [(Equation nullSpanNoFile (mkId entryPoint) () False [] exampleMainExprsCombined')]) (Forall nullSpanNoFile [] [] (TyInt 0))
-            let astWithExampleMain = AST declsWithBool (defsWithoutMain ++ [exampleMainDef]) imports hidden mod
-            result <- try $ eval astWithExampleMain
-            case result of
-              -- If an example fails, rerun the synthesis and take the next program.
-              Left (e :: SomeException) -> do
-                return False
-              Right (Just (Constr _ idv [])) | mkId "True" == idv -> return True
-              Right _ -> return False
-
-          where
-            boolDecl :: DataDecl
-            boolDecl =
-              DataDecl nullSpanNoFile (mkId "Bool") [] Nothing
-                [ DataConstrNonIndexed nullSpanNoFile (mkId "True") []
-                , DataConstrNonIndexed nullSpanNoFile (mkId "False") [] ]
 
 
 

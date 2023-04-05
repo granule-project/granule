@@ -72,7 +72,8 @@ synthLinearHoles :: (?globals :: Globals) => [CheckerError] -> IO [CheckerError]
 synthLinearHoles [] = return []
 synthLinearHoles ((HoleMessage sp goal ctxt tyVars holeVars synthCtxt@(Just (cs, defs, (Just defId, _), index, hints, constructors)) cases):holes) = do
     rest <- synthLinearHoles holes
-    synRes <- synthesiseGradedBase hints index [] [] defId constructors ctxt (GrType.Forall nullSpan [] [] goal) cs
+    synRes <- undefined
+    -- synRes <- synthesiseGradedBase hints index [] [] defId constructors ctxt (GrType.Forall nullSpan [] [] goal) cs
     case synRes of
         ([], _)    -> return $ HoleMessage sp goal ctxt tyVars holeVars synthCtxt cases : rest
         (res@(_:_), _) -> return $ HoleMessage sp goal ctxt tyVars holeVars synthCtxt [([], fst $ last $ res)] : rest
