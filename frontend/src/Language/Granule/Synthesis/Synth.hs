@@ -450,19 +450,27 @@ synLoop constrs index gamma omega goal (sParams:rest) = do
 
   synthState <- getSynthState
   cs <- conv $ get
-  (res, _) <- liftIO $ runStateT (runSynthesiser index (gSynthInner sParams RightAsync gamma (Focused omega) goal) cs) synthState
+  (res, _) <- liftIO $ runStateT (runSynthesiser index (gSynthOuter sParams gamma omega goal) cs) synthState
   case res of
     (_:_) ->
       case last res of
-        (Right (expr, delta, _, _, _, ruleInfo), _) -> do
-          consumed <- outerContextConsumed (gamma ++ omega) delta
-          if consumed
-          then do
-            return (expr, ruleInfo)
-          else synLoop constrs index gamma omega goal rest
+        (Right (expr, delta, _, _, _, ruleInfo), _) -> return (expr, ruleInfo)
         _ -> none
     _ ->
       synLoop constrs index gamma omega goal rest
+
+gSynthOuter :: (?globals :: Globals) 
+            => SearchParameters 
+            -> Ctxt SAssumption 
+            -> Ctxt SAssumption 
+            -> Type 
+            -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id, RuleInfo)
+gSynthOuter sParams gamma omega goal = do 
+  res@(_, delta, _, _, _, _) <- gSynthInner sParams RightAsync gamma (Focused omega) goal
+  consumed <- outerContextConsumed (gamma ++ omega) delta
+  if consumed 
+    then return res 
+    else none
 
 
 
