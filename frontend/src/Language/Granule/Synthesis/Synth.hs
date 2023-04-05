@@ -934,8 +934,7 @@ boxRule _ _ _ _ = none
 -}
 unboxRule :: (?globals :: Globals) => SearchParameters -> FocusPhase -> Ctxt SAssumption -> FocusedCtxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id, RuleInfo)
 unboxRule _ _ _ _ (Focused []) _ = none
-unboxRule sParams focusPhase gamma (Focused left) (Focused (var_x@(x, SVar (Discharged (Box grade_q ty) grade_r) sInfo depth):right)) goal =
-  unboxRule sParams focusPhase gamma (Focused (var_x:left)) (Focused right) goal `try` do
+unboxRule sParams focusPhase gamma (Focused left) (Focused (var_x@(x, SVar (Discharged (Box grade_q ty) grade_r) sInfo depth):right)) goal = do 
     debugM "unboxRule, goal is" (pretty goal)
     modifyPath ("unbox: "  <> (pretty goal))
 
@@ -1296,7 +1295,7 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, assumption@(S
           else none
       (False, _) -> noneWithMaxReached
       _ -> none
-  `try` caseRule sParams focusPhase gamma (Focused (var : left)) (Focused right) goal
+  -- `try` caseRule sParams focusPhase gamma (Focused (var : left)) (Focused right) goal
 
 caseRule _ _ _ _ _ _ = none
 
