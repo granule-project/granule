@@ -606,9 +606,9 @@ gSynthInner sParams focusPhase gamma (Focused omega) goal = do
 
   case (focusPhase, omega) of
     (RightAsync, _) -> do
-      -- let (funs, gamma') = funVars (gamma ++ omega)
-      -- varRule gamma' (Focused []) (Focused $ funs) goal
-      -- `try`
+      let (funs, gamma') = funVars (gamma ++ omega)
+      varRule gamma' (Focused []) (Focused $ funs) goal
+      `try`
       absRule sParams RightAsync gamma (Focused omega) goal
       `try`
       transitionToLeftAsync sParams gamma omega goal
@@ -662,13 +662,13 @@ gSynthInner sParams focusPhase gamma (Focused omega) goal = do
     transitionToLeftAsync sParams gamma omega goal = gSynthInner sParams LeftAsync gamma (Focused omega) goal
 
 
-    -- funVars [] = ([], [])
-    -- funVars (v@(_, SVar (Discharged (FunTy{}) _) _ _):vars) = 
-    --   let (funVars', rest) = funVars vars in
-    --   (v:funVars', rest)
-    -- funVars (v:vars) =
-    --   let (funVars', rest) = funVars vars in
-    --   (funVars', v:rest)
+    funVars [] = ([], [])
+    funVars (v@(_, SVar (Discharged (FunTy{}) _) _ _):vars) = 
+      let (funVars', rest) = funVars vars in
+      (v:funVars', rest)
+    funVars (v:vars) =
+      let (funVars', rest) = funVars vars in
+      (funVars', v:rest)
 
 
 
