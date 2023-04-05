@@ -30,11 +30,11 @@ spec :: Test.Spec
 spec =
   checkCasePatterns
 
-      
-      
+
+
 mkPairTy :: [(Id, Kind)] -> Id -> [Type] -> Type
 mkPairTy tyVars tName params = foldr (FunTy Nothing Nothing) (returnTy (TyCon tName) tyVars) params
-  where 
+  where
     returnTy t [] = t
     returnTy t (v:vs) = returnTy (TyApp t ((TyVar . fst) v)) vs
 
@@ -55,20 +55,20 @@ checkCasePatterns = let ?globals = mempty in do
                 Synthesiser $ lift $ lift $ modify (\s -> s { constructors = [(mkId ",", ([(mkId ",", (Forall ns [] [] (mkPairTy [(tyVarA, Type 0),(tyVarB, Type 0)] (mkId ",") [TyVar tyVarA, TyVar tyVarB]) , [] :: Substitution))], False))] })
                 let pairTy = TyApp (TyApp (TyCon $ mkId ",") (TyVar tyVarA)) (TyVar tyVarB)
                 let grade_r = TyInfix TyOpInterval (TyGrade Nothing 0) (TyGrade Nothing 1)
-                let sParams = SearchParams 0 0 0 1 0 10
-                let var = (x, SVar (Discharged pairTy grade_r) Nothing)
+                let sParams = SearchParams 0 0 0 1 0 10 0
+                let var = (x, SVar (Discharged pairTy grade_r) Nothing 0)
                 let gamma = []
                 let omega = [var]
                 let goal = TyVar tyVarA
 
-                (expr, _, _, _, _) <- caseRule sParams LeftAsync gamma (Focused []) (Focused omega) goal 
+                (expr, _, _, _, _, _) <- caseRule sParams LeftAsync gamma (Focused []) (Focused omega) goal
                 return (Just expr >>= (\res' -> Just (res', grade_r)))
 
         let expr = map (fmap fst . fst) results
-        expr 
+        expr
           `shouldBe`
-            [Just (Case ns () False (Val ns () False (Var () (Id "x" "x"))) 
-              [(PConstr ns () False (Id "," ",") 
+            [Just (Case ns () False (Val ns () False (Var () (Id "x" "x")))
+              [(PConstr ns () False (Id "," ",")
                 [ PVar ns () False (Id "y" "y"),
                   PVar ns () False (Id "z" "z") ] ,(Val ns () False (Var () (Id "y" "y"))))])]
 
@@ -84,8 +84,8 @@ checkCasePatterns = let ?globals = mempty in do
                 tyVarS <- conv $ freshTyVarInContextWithBinding (mkId "s") nat ForallQ
                 let var = (mkId "x", SVar (Discharged
                                 (TyCon (mkId "Bool"))
-                                (TyVar tyVarR)) Nothing)
-                let gamma = [(mkId "y", SVar (Discharged (TyVar tyVarA) (TyVar tyVarS)) Nothing)]
+                                (TyVar tyVarR)) Nothing 0)
+                let gamma = [(mkId "y", SVar (Discharged (TyVar tyVarA) (TyVar tyVarS)) Nothing 0)]
                 let omega = []
 
                 casePatternMatchBranchSynth
@@ -123,7 +123,7 @@ checkCasePatterns = let ?globals = mempty in do
               tyVarR <- conv $ freshTyVarInContextWithBinding (mkId "r") nat ForallQ
               -- Scrutinee
               let eitherAB = TyApp (TyApp (TyCon $ mkId "Either") (TyVar tyVarA)) (TyVar tyVarB)
-              let var = (mkId "scrutinee", SVar (Discharged eitherAB (TyVar tyVarR)) Nothing)
+              let var = (mkId "scrutinee", SVar (Discharged eitherAB (TyVar tyVarR)) Nothing 0)
               let gamma = []
               -- alternate for the test
               -- (mkId "y", SVar (Discharged (TyVar tyVarA) (TyVar tyVarS)) Nothing)]

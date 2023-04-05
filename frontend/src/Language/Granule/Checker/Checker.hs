@@ -318,7 +318,7 @@ checkDef defCtxt (Def s defName rf spec el@(EquationList _ _ _ equations)
     case duplicates (map (sourceName . fst) foralls) of
       [] -> pure ()
       (d:ds) -> throwError $ fmap (DuplicateBindingError s_t) (d :| ds)
-   
+
     -- _ <- checkSpec defCtxt spec ty
 
     -- Clean up knowledge shared between equations of a definition
@@ -387,33 +387,33 @@ checkDef defCtxt (Def s defName rf spec el@(EquationList _ _ _ equations)
 
         pure elaboratedEq
 
--- checkSpec :: (?globals :: Globals) => 
-checkSpec :: 
-     Ctxt TypeScheme 
+-- checkSpec :: (?globals :: Globals) =>
+checkSpec ::
+     Ctxt TypeScheme
   -> Maybe (Spec () ())
   -> Type
   -> Checker (Maybe (Spec () Type))
 checkSpec defCtxt Nothing defTy = return Nothing
-checkSpec defCtxt (Just (Spec span refactored examples components)) defTy = undefined -- do 
+checkSpec defCtxt (Just (Spec span refactored examples components)) defTy = undefined -- do
 
   -- elaboratedExamples :: [Example () Type] <- runAll elaborateExample examples
 
-  -- forM_ components (\(ident, _) -> do 
-  --     case lookup ident defCtxt of 
+  -- forM_ components (\(ident, _) -> do
+  --     case lookup ident defCtxt of
   --         Just _ -> return ()
-  --         _ -> throw UnboundVariableError{ errLoc = span, errId = ident}) 
+  --         _ -> throw UnboundVariableError{ errLoc = span, errId = ident})
 
   -- return (Just (Spec span refactored elaboratedExamples components))
 
   -- where
   --   elaborateExample :: Example () () -> Checker (Example () Type)
-  --   elaborateExample (Example input output) = do 
+  --   elaborateExample (Example input output) = do
   --     (_, _, elaboratedInput) <- checkExpr defCtxt [] Positive True (resultType defTy) input
   --     (_, _, elaboratedOutput) <- checkExpr defCtxt [] Positive True (resultType defTy) output
   --     return (Example elaboratedInput elaboratedOutput)
 
 
-  
+
 
 
 checkEquation :: (?globals :: Globals) =>
@@ -508,21 +508,21 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
   where
 
 
-    -- TODO: Rewrite this function so it's less confusing as to what info is being 
+    -- TODO: Rewrite this function so it's less confusing as to what info is being
     --       passed to the splitter here.
 
-    -- Given a context of patterns, and the type of the equation, uses 
+    -- Given a context of patterns, and the type of the equation, uses
     -- these to calculate a type which represents the arguments which are to
-    -- be split on by deconstructing patterns into their constituent patterns     
-    
+    -- be split on by deconstructing patterns into their constituent patterns
+
     -- e.g. Given a pattern: Cons x xs
     --      and a type:      Vec (n+1) t -> Vec n t
     --      returns:         t -> Vec n t -> Vec n t
 
     -- i.e. If Vec (n+1) t -> Vec n t is the type of the equation
-    -- and the pattern we're splitting on is (Cons x xs) then we 
+    -- and the pattern we're splitting on is (Cons x xs) then we
     -- take the types of each sub-pattern of Cons:
-    --      x  : t 
+    --      x  : t
     --      xs : Vec n t
     -- and use these to build a function from these sub-patterns to
     -- the return type of our input type.
@@ -591,9 +591,9 @@ checkExpr defs ctxt _ _ t (Hole s _ _ vars hints) = do
 
   -- elaborated hole
   let hexpr = Hole s () False vars hints
-  let hindex = case hints of 
-        Just hints' -> fromMaybe 1 $ hIndex hints' 
-        _ -> 1 
+  let hindex = case hints of
+        Just hints' -> fromMaybe 1 $ hIndex hints'
+        _ -> 1
 
   case unboundVariables of
     (v:_) -> throw UnboundVariableError{ errLoc = s, errId = v }
@@ -617,15 +617,15 @@ checkExpr defs ctxt _ _ t (Hole s _ _ vars hints) = do
           -- Check to see if this hole is something we are interested in
           case globalsHolePosition ?globals of
             -- Synth everything mode
-            Nothing -> do 
+            Nothing -> do
               throw $ HoleMessage s t ctxt (tyVarContext st) holeVars (Just (st, defs, currentDef st, hindex, hints, relevantConstructors)) [([], hexpr)]
             Just pos ->
               if spanContains pos s
               -- This is a hole we want to synth on
-              then do 
+              then do
                 throw $ HoleMessage s t ctxt (tyVarContext st) holeVars (Just (st, defs, currentDef st, hindex, hints, relevantConstructors)) [([], hexpr)]
                 -- This is not a hole we want to synth on
-              else  
+              else
                 throw $ HoleMessage s t ctxt (tyVarContext st) holeVars Nothing [([], hexpr)]
 
 
@@ -635,7 +635,7 @@ checkExpr defs ctxt _ _ t (Hole s _ _ vars hints) = do
                   dc <- mapM (lookupDataConstructor s) b
                   let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
                   return (a, sd)) pats
-              (_, cases) <- generateCases s constructors ctxt boundVariables 
+              (_, cases) <- generateCases s constructors ctxt boundVariables
 
               -- If we are in synthesise mode, also try to synthesise a
               -- term for each case split goal *if* this is also a hole
@@ -802,7 +802,7 @@ checkExpr defs gam pol topLevel tau
       subst'' <- combineSubstitutions s subst subst'
 
       -- Create elborated AST
-      let scaleTy = FunTy Nothing Nothing floatTy 
+      let scaleTy = FunTy Nothing Nothing floatTy
                       (FunTy Nothing Nothing (Box (TyRational (toRational x)) floatTy) floatTy)
       let elab' = App s floatTy rf
                     (App s' scaleTy rf' (Val s'' floatTy rf'' (Var floatTy v)) (Val s3 floatTy rf3 (NumFloat x))) elab
@@ -1382,7 +1382,7 @@ synthExpr defs gam pol (App s _ rf e e') | not (usingExtension GradedBase) = do
          -- Not a function type
       t -> throw LhsOfApplicationNotAFunction{ errLoc = s, errTy = fTy }
 
--- Application 
+-- Application
 -- GRADED BASE
 
 synthExpr defs gam pol (App s _ rf e1 e2) | usingExtension GradedBase = do
@@ -2072,13 +2072,13 @@ relateByLUB _ (_, Linear _) (_, Linear _) (_, Linear _) = return []
 -- Discharged coeffect assumptions
 relateByLUB s (_, Discharged _ c1) (_, Discharged _ c2) (_, Discharged _ c3) = do
   (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c1 c2
-  addConstraint (Lub s (inj1 c1) (inj2 c2) c3 kind)
+  addConstraint (Lub s (inj1 c1) (inj2 c2) c3 kind True)
   return subst
 
 -- TODO: handle new ghost variables
 relateByLUB s (_, Ghost c1) (_, Ghost c2) (_, Ghost c3) = do
   (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c1 c2
-  addConstraint (Lub s (inj1 c1) (inj2 c2) c3 kind)
+  addConstraint (Lub s (inj1 c1) (inj2 c2) c3 kind True)
   return subst
 
 -- Linear binding and a graded binding (likely from a promotion)

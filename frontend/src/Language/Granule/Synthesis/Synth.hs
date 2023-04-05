@@ -390,7 +390,7 @@ synthesiseGradedBase ast hole spec eval hints index unrestricted restricted curr
   -- local synthesis context
   let gamma = map (\(v, a)  -> (v, SVar a (Just $ NonDecreasing 0) 0)) ctxt ++
   -- restricted definition given as hints
-              
+
   -- restricted definition given as hints
               map (\(v, (tySch, grade)) -> (v, SDef tySch (Just grade) 0)) restricted ++
   -- unrestricted definitions given as hints
@@ -619,39 +619,39 @@ gSynthInner sParams focusPhase gamma (Focused omega) goal = do
       caseRule sParams LeftAsync gamma (Focused []) (Focused omega) goal
     -- Focus / shift to Sync phases
     (LeftAsync, []) -> do
-      foc sParams goal gamma 
+      foc sParams goal gamma
 
     (RightSync, []) -> do
       boxRule sParams RightSync gamma goal
-      `try` 
+      `try`
       constrRule sParams RightSync gamma goal
 
 
     (LeftSync, [(_, var)]) ->
       case tyAndGrade var of
-        Just (ty, _) -> 
+        Just (ty, _) ->
           varRule gamma (Focused []) (Focused omega) goal
           `try`
           appRule sParams LeftSync gamma (Focused []) (Focused omega) goal
         _ -> none
 
-    (LeftSync, _) ->  
+    (LeftSync, _) ->
         gSynthInner sParams RightAsync gamma (Focused []) goal
 
   where
 
-    foc sParams goal gamma | not (isAtomic goal) && isRSync goal = do 
+    foc sParams goal gamma | not (isAtomic goal) && isRSync goal = do
         focLeft sParams [] gamma goal
         `try`
         focRight sParams gamma goal
     foc sParams goal gamma =
       focLeft sParams [] gamma goal
 
-    focRight sParams gamma = do 
+    focRight sParams gamma = do
       gSynthInner sParams RightSync gamma (Focused [])
 
     focLeft _ _ [] goal = none
-    focLeft sParams left (var:right) goal = do 
+    focLeft sParams left (var:right) goal = do
       -- Try focusing first on var first
       gSynthInner sParams LeftSync (left ++ right) (Focused [var]) goal
       `try`
@@ -775,7 +775,7 @@ absRule sParams focusPhase gamma (Focused omega) goal@(FunTy name gradeM tyA tyB
           (isLAsync tyA)
       -- if we are a recursive type then check whether we are below max depth
         && ((isRecursiveType tyA (constructors st)) ==> (matchCurrent sParams) <= matchMax sParams)
-  let (gamma', omega') = bindToContext (x, SVar (Discharged tyA grade) (Just $ NonDecreasing 0) 0) gamma omega bindToOmega 
+  let (gamma', omega') = bindToContext (x, SVar (Discharged tyA grade) (Just $ NonDecreasing 0) 0) gamma omega bindToOmega
 
 
   (t, delta, subst, struct, scrutinee, rInfo) <-
@@ -792,7 +792,7 @@ absRule sParams focusPhase gamma (Focused omega) goal@(FunTy name gradeM tyA tyB
     Just (delta', SVar (Discharged _ grade_r) _ _) -> do
       modifyPred $ addConstraintViaConjunction (ApproximatedBy ns grade_r grade kind)
       res <- solve
-      let rInfo' = AbsRule focusPhase goal gamma omega (x, SVar (Discharged tyA grade) (Just $ NonDecreasing 0) 0) t rInfo delta' 
+      let rInfo' = AbsRule focusPhase goal gamma omega (x, SVar (Discharged tyA grade) (Just $ NonDecreasing 0) 0) t rInfo delta'
       debugM "Path taken: \n" (printSynthesisPath (reverse $ synthesisPath cs) 0)
       boolToSynthesiser res (Val ns () False (Abs () (PVar ns () False x) Nothing t), delta', subst, struct, scrutinee, rInfo')
 
@@ -824,7 +824,7 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
     st <- getSynthState
     case (assumptionTy, scrutCurrent sParams < scrutMax sParams) of
       ((FunTy bName gradeM tyA tyB, funDef, Just grade_r, sInfo, tySch, depth), _) -> do
-        if depth < appMax sParams then do 
+        if depth < appMax sParams then do
           let grade_q = getGradeFromArrow gradeM
 
           let omega = left ++ right
@@ -845,7 +845,7 @@ appRule sParams focusPhase gamma (Focused left) (Focused (var@(x1, assumption) :
             -- withPartialExprAt (downExpr >=> rightExpr)
             -- (letExpr ns (PVar ns () False x2) (App ns () False (Val ns () False (Var () x1)) hole) hole)
             (gSynthInner sParams { scrutCurrent = (scrutCurrent sParams) + 1} focusPhase gamma' (Focused omega') goal)
-        
+
 
           case lookupAndCutout x2 delta1 of
             -- If the bound variable has a zero grade, then we didn't use it in the applicaton
@@ -934,7 +934,7 @@ boxRule _ _ _ _ = none
 -}
 unboxRule :: (?globals :: Globals) => SearchParameters -> FocusPhase -> Ctxt SAssumption -> FocusedCtxt SAssumption -> FocusedCtxt SAssumption -> Type -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id, RuleInfo)
 unboxRule _ _ _ _ (Focused []) _ = none
-unboxRule sParams focusPhase gamma (Focused left) (Focused (var_x@(x, SVar (Discharged (Box grade_q ty) grade_r) sInfo depth):right)) goal = do 
+unboxRule sParams focusPhase gamma (Focused left) (Focused (var_x@(x, SVar (Discharged (Box grade_q ty) grade_r) sInfo depth):right)) goal = do
     debugM "unboxRule, goal is" (pretty goal)
     modifyPath ("unbox: "  <> (pretty goal))
 
@@ -952,7 +952,7 @@ unboxRule sParams focusPhase gamma (Focused left) (Focused (var_x@(x, SVar (Disc
     let (gamma', omega') = bindToContext (y, SVar (Discharged ty (grade_r `gTimes` grade_q)) Nothing 0) (var_x:gamma) omega bindToOmega
 
     (t, delta, subst, struct, scrutinee, rInfo) <-
-        -- withPartialExprAt downExpr 
+        -- withPartialExprAt downExpr
         -- (makeUnboxUntyped y (makeVarUntyped x) hole)
         (gSynthInner sParams focusPhase gamma' (Focused omega') goal)
 
@@ -1000,7 +1000,7 @@ constrRule sParams focusPhase gamma goal = do
       synthState <- getSynthState
       let (recDatacons, datacons) = relevantConstructors datatypeName $ constructors synthState
       let datacons' = sortBy compareArity (recDatacons ++ datacons)
-      tryDatacons datatypeName [] datacons' goal reachedLim 
+      tryDatacons datatypeName [] datacons' goal reachedLim
 
     -- (_, Just _) -> noneWithMaxReached
     _ -> none
@@ -1019,7 +1019,7 @@ constrRule sParams focusPhase gamma goal = do
               -- Nullary constructor
               ([], _) -> do
                 delta <- ctxtMultByCoeffect (TyGrade Nothing 0) gamma
-                let rInfo = ConstrRule focusPhase cName goal gamma (Val ns () False (Constr () cName [])) [] delta 
+                let rInfo = ConstrRule focusPhase cName goal gamma (Val ns () False (Constr () cName [])) [] delta
                 leafExpr (Val ns () False (Constr () cName []), delta, [], False, Nothing, rInfo)
 
               -- N-ary constructor
@@ -1028,8 +1028,8 @@ constrRule sParams focusPhase gamma goal = do
                 let sParams' = if isRecursiveType goal (constructors st)
                                then sParams { introCurrent = (introCurrent sParams) + 1 }
                                else sParams
-                (ts, delta, substOut, structs, rInfos) <- synthArgs args subst sParams' 
-                let rInfo = ConstrRule focusPhase cName goal gamma (makeConstrUntyped ts cName) rInfos delta 
+                (ts, delta, substOut, structs, rInfos) <- synthArgs args subst sParams'
+                let rInfo = ConstrRule focusPhase cName goal gamma (makeConstrUntyped ts cName) rInfos delta
                 leafExpr (makeConstrUntyped ts cName, delta, substOut, False, Nothing, rInfo)
               _ -> none
           _ -> none
@@ -1099,7 +1099,7 @@ casePatternMatchBranchSynth
   -- Debugging
 
   debugM "case - constructor" (pretty con)
-  
+
 
   -- Check that we can use a constructor here
   -- uses peekChecker so that we can roll back any state updates
@@ -1153,10 +1153,10 @@ casePatternMatchBranchSynth
           return (gamma', omega', (var, (argTy', getGradeFromArrow mGrade_q, grade_rq, sInfo)):vars)
         )
 
-      -- let boundVarsForPrinting = 
+      -- let boundVarsForPrinting =
       modifyPath ("caseBranchStart")
-      modifyPath 
-        ("case branch with con: " <> (pretty cName) <> ", binding: " <> 
+      modifyPath
+        ("case branch with con: " <> (pretty cName) <> ", binding: " <>
           (intercalate ", " $ map (\(x, (argTy, _, grade_rq, _)) -> pretty x <> " : " <> pretty argTy <> " % " <> pretty grade_rq) branchBoundVarsAndGrades))
       let (vars, _) = unzip branchBoundVarsAndGrades
       let constrPat = PConstr ns () False cName (map (PVar ns () False) $ reverse vars)
@@ -1287,7 +1287,7 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, assumption@(S
             solve
 
         if solved && not (null patExprs)
-          then do 
+          then do
 
             -- let branchInfos = undefined
             let rInfo = CaseRule focusPhase var goal gamma omega (makeCaseUntyped x patExprs) branchInfos (var_x_out:delta)
@@ -1315,7 +1315,7 @@ computeJoin maybeK g1 g2 = do
   let upperBoundGradeVar = mkId upperBoundGradeVarId
   modify (\st -> st { tyVarContext = (upperBoundGradeVar, (k, InstanceQ)) : tyVarContext st })
   let upperBoundGrade = TyVar upperBoundGradeVar
-  modifyPred $ addConstraintViaConjunction (Lub ns g1 g2 upperBoundGrade k)
+  modifyPred $ addConstraintViaConjunction (Lub ns g1 g2 upperBoundGrade k False)
   return upperBoundGrade
 
 -- Version of computeJoin' where the inputs may be Nothing i.e.,
@@ -1350,4 +1350,4 @@ valueFold s newExpr (Nec a e) = Nec a (exprFold s newExpr e)
 valueFold s newExpr (Constr a ident vals) = Constr a ident $ map (valueFold s newExpr) vals
 valueFold s newExpr v = v
 
-  
+

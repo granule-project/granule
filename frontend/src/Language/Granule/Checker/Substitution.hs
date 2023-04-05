@@ -300,12 +300,12 @@ substituteConstraintHelper substType ctxt (Neq s c1 c2 k) = do
   k <- substitute ctxt k
   return $ Neq s c1 c2 k
 
-substituteConstraintHelper substType ctxt (Lub s c1 c2 c3 k) = do
+substituteConstraintHelper substType ctxt (Lub s c1 c2 c3 k checkLeast) = do
   c1 <- substType ctxt c1
   c2 <- substType ctxt c2
   c3 <- substType ctxt c3
   k <- substitute ctxt k
-  return $ Lub s c1 c2 c3 k
+  return $ Lub s c1 c2 c3 k checkLeast
 
 substituteConstraintHelper substType ctxt (ApproximatedBy s c1 c2 k) = do
   c1 <- substType ctxt c1
