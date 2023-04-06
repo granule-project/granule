@@ -1293,7 +1293,7 @@ caseRule sParams focusPhase gamma (Focused left) (Focused (var@(x, assumption@(S
             let rInfo = CaseRule focusPhase var goal gamma omega (makeCaseUntyped x patExprs) branchInfos (var_x_out:delta)
             return (makeCaseUntyped x patExprs, var_x_out:delta, subst, False, Just x, rInfo)
           else none
-      (False, _) -> noneWithMaxReached
+      (False, TyCon _) -> gSynthInner sParams focusPhase (var:gamma) (Focused $ left ++ right) goal 
       _ -> none
   -- `try` caseRule sParams focusPhase gamma (Focused (var : left)) (Focused right) goal
 
