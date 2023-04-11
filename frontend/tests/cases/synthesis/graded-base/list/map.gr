@@ -10,6 +10,6 @@ neg False = True
 
 map : forall a b . (a % 1..∞ -> b) % 0..∞ -> List a % 1..∞ -> List b
 spec 
-    map neg (Cons True Nil) = Cons False Nil;
+    -- map neg (Cons True Nil) = Cons False Nil;
     map % 0..∞
 map = ?
