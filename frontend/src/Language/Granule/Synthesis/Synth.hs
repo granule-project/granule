@@ -1,5 +1,6 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 
 
@@ -59,10 +60,14 @@ import System.Clock (TimeSpec)
 import Data.Ord
 import Debug.Trace
 import Language.Granule.Syntax.Def
-import Control.Exception (SomeException)
+import qualified Control.Exception as Ex
 import Language.Granule.Synthesis.RewriteHoles (holeRefactor)
 import qualified Data.SBV.Control as System
 import qualified Control.Monad
+import Data.List.NonEmpty (NonEmpty)
+import qualified Data.List.NonEmpty as NonEmpty
+import Language.Granule.Checker.Checker (checkExpr, Polarity (Positive, Negative), checkDef, check)
+import qualified Language.Granule.Checker.Primitives as Primitives
 
 ------------------------------
 
@@ -388,10 +393,10 @@ synthesiseGradedBase ast hole spec eval hints index unrestricted restricted curr
 
   -- Initialise input context with
   -- local synthesis context
-  let gamma = map (\(v, a)  -> case (a, cartesianSynth) of 
+  let gamma = map (\(v, a)  -> case (a, cartesianSynth) of
           (Linear t, True) -> (v, SVar (Linear (toCart t)) (Just $ NonDecreasing 0) 0)
           (Discharged t a, True) -> (v, SVar (Discharged (toCart t) (toCart a)) (Just $ NonDecreasing 0) 0)
-          (a, _)  -> (v, SVar a (Just $ NonDecreasing 0) 0) 
+          (a, _)  -> (v, SVar a (Just $ NonDecreasing 0) 0)
           ) ctxt ++
 
               map (\(v, (tySch, grade)) -> (v, SDef tySch (if cartesianSynth then Just anyG else Just grade) 0)) restricted ++
@@ -413,7 +418,9 @@ synthesiseGradedBase ast hole spec eval hints index unrestricted restricted curr
   let lims = mergeByNorm (map mergeByNorm [[[(x,y) | x <- [0..10]] | y <- [0..10]]])
   let sParamList = map (\(elim,intro) -> defaultSearchParams { matchMax = elim, introMax = intro }) lims
 
-  let synRes = synLoop ast hole spec eval constructorsWithRecLabels index gamma [] (if cartesianSynth then (toCart goalTy) else goalTy) sParamList
+  let (goal, originalGoal) = if cartesianSynth then (toCart goalTy, Just goalTy) else (goalTy, Nothing)
+
+  let synRes = synLoop ast hole spec eval constructorsWithRecLabels index gamma [] originalGoal goal sParamList
   (res, agg1) <- runStateT (runSynthesiser index synRes cs') synthState
 
   end    <- liftIO $ Clock.getTime Clock.Monotonic
@@ -462,19 +469,17 @@ synthesiseGradedBase ast hole spec eval hints index unrestricted restricted curr
 
 
 toCart :: Type -> Type
-toCart (FunTy id coeff t1 t2) = FunTy id (Just anyG) (toCart t1) (toCart t2) 
+toCart (FunTy id coeff t1 t2) = FunTy id (Just anyG) (toCart t1) (toCart t2)
 toCart (Box coeff t) = Box anyG (toCart t)
 toCart (Diamond ef t) = Diamond (toCart ef)  (toCart t)
 toCart (Star g t) = Star (toCart g) (toCart t)
 toCart (TyApp t1 t2) = (TyApp (toCart t1) (toCart t2))
 toCart t@TyGrade{} = anyG
 toCart (TyInfix op t1 t2) = TyInfix op (toCart t1) (toCart t2)
-toCart (TySet pol ts) = TySet pol (map toCart ts) 
+toCart (TySet pol ts) = TySet pol (map toCart ts)
 toCart (TyCase t ts) = TyCase (toCart t) $ map (\(x,y) -> (toCart x, toCart y)) ts
 toCart (TySig t k) = TySig (toCart t) k
 toCart t = t
-
-
 
 anyG :: Coeffect
 anyG = TyCon $ mkId "Any"
@@ -488,7 +493,7 @@ runExamples :: (?globals :: Globals)
             -> [Example () ()]
             -> Id
             -> IO Bool
-runExamples eval last@(AST decls defs imports hidden mod) examples defId = do
+runExamples eval ast@(AST decls defs imports hidden mod) examples defId = do
   let examples' = filter (\(Example input output cartOnly) -> cartesianSynth || not cartOnly ) examples
   let exampleMainExprs =
         map (\(Example input output _) -> makeEquality input output) examples'
@@ -540,11 +545,12 @@ synLoop :: (?globals :: Globals)
         -> Int
         -> Ctxt SAssumption
         -> Ctxt SAssumption
+        -> Maybe Type
         -> Type
         -> [SearchParameters]
         -> Synthesiser (Expr () (), RuleInfo, SynthesisData)
-synLoop ast hole spec eval constrs index gamma omega goal [] = none
-synLoop ast hole spec eval constrs index gamma omega goal (sParams:rest) = do
+synLoop ast hole spec eval constrs index gamma omega originalGoal goal [] = none
+synLoop ast hole spec eval constrs index gamma omega originalGoal goal (sParams:rest) = do
   Synthesiser $ lift $ lift $ lift $ modify (\state ->
             state {
              constructors = constrs
@@ -553,15 +559,15 @@ synLoop ast hole spec eval constrs index gamma omega goal (sParams:rest) = do
   synthState <- getSynthState
   cs <- conv $ get
   let sParams' = sParams -- { matchMax = 1, introMax = 1 }
-  (res, agg) <- liftIO $ runStateT (runSynthesiser index (gSynthOuter ast hole spec eval sParams' gamma omega goal) cs) synthState
-  -- _ <- error ""
+
+  (res, agg) <- liftIO $ runStateT (runSynthesiser index (gSynthOuter ast hole spec eval sParams' gamma omega originalGoal goal) cs) synthState
   case res of
     (_:_) ->
       case last res of
         (Right (expr, delta, _, _, _, ruleInfo), _) -> return (expr, ruleInfo, agg)
         _ -> none
     _ -> do
-      (res, ruleInfo, agg') <- synLoop ast hole spec eval constrs index gamma omega goal rest
+      (res, ruleInfo, agg') <- synLoop ast hole spec eval constrs index gamma omega originalGoal goal rest
       return (res, ruleInfo, agg <> agg')
 
 gSynthOuter :: (?globals :: Globals)
@@ -572,6 +578,7 @@ gSynthOuter :: (?globals :: Globals)
             -> SearchParameters
             -> Ctxt SAssumption
             -> Ctxt SAssumption
+            -> Maybe Type
             -> Type
             -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id, RuleInfo)
 gSynthOuter
@@ -582,32 +589,49 @@ gSynthOuter
   sParams
   gamma
   omega
+  originalGoal
   goal = do
+
   res@(expr, delta, _, _, _, _) <- gSynthInner sParams False RightAsync gamma (Focused omega) goal
   consumed <- outerContextConsumed (gamma ++ omega) delta
   if consumed
-    then case spec of
-      Just (Spec _ _ examples@(_:_) _) -> do
+    then do
+      -- Run the type checker if we used cartesian/"Any" mode
+      -- Only accept programs which check with the original non-cartesian semiring type
+      checked <- if not cartesianSynth then return True else do
         st <- getSynthState
-        let hole = HoleMessage sp hgoal hctxt htyVars hVars synthCtxt [([], expr)]
-        let holeCases = concatMap (\h -> map (\(pats, e) -> (errLoc h, zip (getCtxtIds (holeVars h)) pats, e)) (cases h)) [hole]
-        let ast' = holeRefactor holeCases ast
-        let [def] = currDef st
+        liftIO $ do
+          let hole = HoleMessage sp hgoal hctxt htyVars hVars synthCtxt [([], expr)]
+          let holeCases = concatMap (\h -> map (\(pats, e) -> (errLoc h, zip (getCtxtIds (holeVars h)) pats, e)) (cases h)) [hole]
+          let ast' = holeRefactor holeCases ast
+          res <- Ex.try $ check ast'
+          case res of
+            Left (e :: Ex.SomeException) -> return False
+            Right (Left errs) -> do
+              let holeErrors = getHoleMessages errs
+              return $ length holeErrors == length errs
+            Right (Right _) -> return True
 
-        success <- liftIO $ runExamples eval ast' examples def
-
-        Synthesiser $ lift $ lift $ lift $ modify (\state ->
-            state {
-             attempts = attempts st + 1
-                })
-        case (success, (attempts st < toInteger exampleLimit || True)) of
-          (True, _) -> return res
-          (False, True) -> none
-          (False, False) -> error "example lim reached"
-      _ -> return res
-
+      if checked then
+        case spec of
+          Just (Spec _ _ examples@(_:_) _) -> do
+            st <- getSynthState
+            let hole = HoleMessage sp hgoal hctxt htyVars hVars synthCtxt [([], expr)]
+            let holeCases = concatMap (\h -> map (\(pats, e) -> (errLoc h, zip (getCtxtIds (holeVars h)) pats, e)) (cases h)) [hole]
+            let ast' = holeRefactor holeCases ast
+            let [def] = currDef st
+            success <- liftIO $ runExamples eval ast' examples def
+            if success
+              then return res
+            else none
+          _ -> return res
+      else none
     else none
-gSynthOuter _ _ _ _ _ _ _ _ = none
+
+  where
+    getHoleMessages :: NonEmpty CheckerError -> [CheckerError]
+    getHoleMessages = NonEmpty.filter (\ e -> case e of HoleMessage{} -> True; _ -> False)
+gSynthOuter _ _ _ _ _ _ _ _ _ = none
 
 
 

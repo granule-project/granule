@@ -391,7 +391,7 @@ ifM condM f g = do
 whenM :: Monad m => m Bool -> m () -> m ()
 whenM condM f = ifM condM f (return ())
 
-mapMaybeM :: Monad m => (a -> m (Maybe b)) -> [a] -> m [b]
+mapMaybeM :: (Monad m) => (a -> m (Maybe b)) -> [a] -> m [b]
 mapMaybeM f [] = return []
 mapMaybeM f (x : xs) = do
   my <- f x
