@@ -413,9 +413,9 @@ synthesiseGradedBase ast hole spec eval hints index unrestricted restricted curr
   (res, agg1) <- runStateT (runSynthesiser index synRes cs') synthState
 
   end    <- liftIO $ Clock.getTime Clock.Monotonic
-  let (programs) = map (\(x1, x2, _) -> (x1, x2)) 
+  let (programs) = map (\(x1, x2, _) -> (x1, x2))
         $ nubBy (\(expr1, _, _) (expr2, _, _) -> expr1 == expr2) $ rights (map fst res)
-  let datas = map (\(x1, x2, x3) -> x3) 
+  let datas = map (\(x1, x2, x3) -> x3)
         $ nubBy (\(expr1, _, _) (expr2, _, _) -> expr1 == expr2) $ rights (map fst res)
         -- <benchmarking-output>
   let agg = case datas of (_:_) -> (last datas <> agg1) ; _ -> agg1
@@ -458,8 +458,9 @@ runExamples :: (?globals :: Globals)
             -> Id
             -> IO Bool
 runExamples eval last@(AST decls defs imports hidden mod) examples defId = do
+  let examples' = filter (\(Example input output cartOnly) -> cartesianSynth || not cartOnly ) examples
   let exampleMainExprs =
-        map (\(Example input output) -> makeEquality input output) examples
+        map (\(Example input output _) -> makeEquality input output) examples'
     -- remove the existing main function (should probably keep the main function so we can stitch it back in after)
 
   let defsWithoutMain = filter (\(Def _ mIdent _ _ _ _) -> mIdent /= mkId entryPoint) defs
@@ -810,7 +811,7 @@ absRule sParams inIntroPhase focusPhase gamma (Focused omega) goal@(FunTy name g
      -- Recursive call
     --  withPartialExprAt downExpr
       --  (Val ns () False (Abs () (PVar ns () False x) Nothing hole))
-       (gSynthInner sParams inIntroPhase focusPhase gamma' (Focused omega') tyB) 
+       (gSynthInner sParams inIntroPhase focusPhase gamma' (Focused omega') tyB)
 
   cs <- conv get
   (kind, _, _) <- conv $ synthKind nullSpan grade
@@ -1080,7 +1081,7 @@ constrRule sParams inIntroPhase focusPhase gamma goal = do
             case (args, underLim) of
               -- Nullary constructor
               ([], _) -> do
-                let kind = if cartesianSynth 
+                let kind = if cartesianSynth
                            then Just $ TyCon $ mkId "Cartesian"
                            else Nothing
                 delta <- ctxtMultByCoeffect (TyGrade kind 0) gamma
@@ -1321,7 +1322,7 @@ caseRule sParams inIntroPhase focusPhase gamma (Focused left) (Focused (var@(x, 
           -- TODO: more clear names here
           let (grade_rs, grade_ss)                = unzip grades
 
-          (kind, _,_ ) <- conv $ synthKind ns grade_r 
+          (kind, _,_ ) <- conv $ synthKind ns grade_r
           -- join contexts
           delta <- foldM (ctxtMerge (computeJoin (Just kind))) (head deltas) (tail deltas)
 

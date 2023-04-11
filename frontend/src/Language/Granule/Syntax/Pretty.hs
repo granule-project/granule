@@ -211,7 +211,7 @@ instance Pretty v => Pretty (Spec v a) where
     pretty (Spec _ _ exs comps) = "spec" <> "\n" <> (intercalate "\n\t" $ map pretty exs) <> "\t" <> (intercalate "," $ map prettyComp comps)
 
 instance Pretty v => Pretty (Example v a) where
-    pretty (Example input output) = pretty input <> " = " <> pretty output
+    pretty (Example input output _) = pretty input <> " = " <> pretty output
 
 instance Pretty v => Pretty (EquationList v a) where
   pretty (EquationList _ v _ eqs) = intercalate ";\n" $ map pretty eqs

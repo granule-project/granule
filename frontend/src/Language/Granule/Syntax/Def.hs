@@ -130,7 +130,8 @@ data Spec v a =
 data Example v a = 
   Example {
     input  :: Expr v a,
-    output :: Expr v a
+    output :: Expr v a,
+    cartesianOnly :: Bool
   }
   deriving (Generic)
 
