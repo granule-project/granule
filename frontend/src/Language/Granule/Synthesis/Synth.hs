@@ -434,6 +434,16 @@ synthesiseGradedBase ast hole spec eval hints index unrestricted restricted curr
                         , success = if null programs then False else True
                         , timeout = False
                         , pathsExplored = paths agg
+                        , programSize =
+                            case programs of
+                              (_:_) -> sizeOfExpr $ fst $ last $ programs
+                              _ -> 0
+                        , contextSize = toInteger $ length gamma
+                        , examplesUsed =
+                            case spec of
+                              Just (Spec _ _ exs _) -> toInteger $ length $ filter (\(Example _ _ cartOnly)-> cartesianSynth || not cartOnly ) exs
+                              Nothing -> 0
+                        , cartesian = cartesianSynth
                         } in
                 return (programs, Just measurement)
           else do

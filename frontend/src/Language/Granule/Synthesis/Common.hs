@@ -34,6 +34,7 @@ import Control.Monad.State.Strict(modify,lift,liftIO,get,put)
 import Data.Generics.Zipper
 import Data.Generics.Aliases
 import Data.Typeable
+import Language.Granule.Syntax.Pattern
 
 -- import Debug.Trace
 
@@ -518,6 +519,33 @@ sizeOfCoeffect (TyGrade _ _) = 0
 sizeOfCoeffect (TyInt _) = 0
 sizeOfCoeffect (TyVar _) = 0
 sizeOfCoeffect _ = 0
+
+sizeOfExpr :: Expr () () -> Integer
+sizeOfExpr (App _ _ _ e1 e2) = 1 + sizeOfExpr e1 + sizeOfExpr e2
+sizeOfExpr (AppTy _ _ _ e1 _) = 1 + sizeOfExpr e1
+sizeOfExpr (Binop _ _ _ _ e1 e2) = 1 + sizeOfExpr e1 + sizeOfExpr e2
+sizeOfExpr (LetDiamond _ _ _ pat _ e1 e2) = 1 + sizeOfPat pat + sizeOfExpr e1 + sizeOfExpr e2
+sizeOfExpr (TryCatch _ _ _ e1 pat _ e2 e3) = 1 + sizeOfExpr e1 + sizeOfPat pat + sizeOfExpr e2 + sizeOfExpr e3
+sizeOfExpr (Val _ _ _ val) = sizeOfVal val
+sizeOfExpr (Case _ _ _ e patExprs) =
+  let (pats, exprs) = unzip patExprs in
+    1 + sizeOfExpr e + sum (map sizeOfPat pats) + sum (map sizeOfExpr exprs)
+sizeOfExpr Hole{} = 1
+
+sizeOfVal :: Value () () -> Integer
+sizeOfVal (Abs _ p _ e) = 1 + sizeOfExpr e
+sizeOfVal (Promote _ e) = 1 + sizeOfExpr e
+sizeOfVal (Pure _ e) = 1 + sizeOfExpr e
+sizeOfVal (Nec _ e) = 1 + sizeOfExpr e
+sizeOfVal (Constr _ _ vals) = 1 + sum (map sizeOfVal vals)
+sizeOfVal _ = 1
+
+
+sizeOfPat :: Pattern () -> Integer
+sizeOfPat (PBox _ _ _ p) = 1 + sizeOfPat p
+sizeOfPat (PConstr _ _ _ _ ps) = 1 + sum (map sizeOfPat ps)
+sizeOfPat _ = 1
+
 
 -- # Functions for building partial expressions in the synthesiser (using a zipper)
 
