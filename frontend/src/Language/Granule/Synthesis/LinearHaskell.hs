@@ -440,10 +440,10 @@ spanToHaskell (Span (sl, sc) (el, ec) fn) = SrcSpanInfo (SrcSpan fn sl sc el ec)
 -- At the moment we only convert typed holes that are at the top-level of the rhs in a funBind
 exprToGranule :: Exp SrcSpanInfo -> Span -> Maybe (GrExpr.Expr () ())
 exprToGranule (Con sp (Special _ (ExprHole _))) loc =
-    let hints = GrExpr.Hints False False False False (Just loc) Nothing Nothing
+    let hints = GrExpr.Hints False False False (Just loc) Nothing Nothing
     in Just $ GrExpr.Hole (srcSpanInfoToGranule sp) () False [] (Just $ hints)
 exprToGranule (Var _ (Special _ (ExprHole _))) loc =
-    let hints = GrExpr.Hints False False False False (Just loc) Nothing Nothing
+    let hints = GrExpr.Hints False False False (Just loc) Nothing Nothing
     in Just $ GrExpr.Hole ns () False [] (Just $ hints)
 exprToGranule e _                 = Nothing -- error $ show e
 

@@ -240,8 +240,8 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
                   _ -> (unres, res)
                 ) ([], []) comps
             _ -> ([], [])
-      res <- liftIO $ System.Timeout.timeout timeout $ 
-                synthesiseGradedBase astSrc hole spec synEval hints index unrestricted restricted defId constructors ctxt (Forall nullSpan [] [] goal) cs 
+      res <- liftIO $ System.Timeout.timeout timeout $
+                synthesiseGradedBase astSrc hole spec synEval hints index unrestricted restricted defId constructors ctxt (Forall nullSpan [] [] goal) cs
       case res of
         Just ([], measurement) -> do
           return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt hcases, measurement, attemptNo) : rest
@@ -249,7 +249,8 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
           printInfo $ "No programs synthesised - Timeout after: " <> show (fromIntegral timeout / (10^(6 :: Integer)::Double))  <> "s"
           return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt hcases, Nothing, attemptNo) : rest
         Just (programs@(_:_), measurement) -> do
-          printSynthOutput $ synthTreeToHtml (fst $ last $ programs) (snd $ last $ programs) 
+          when synthHtml $ do
+            printSynthOutput $ uncurry synthTreeToHtml (last programs)
           return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt [([], fst $ last $ programs)], measurement, attemptNo) : rest
 
 
@@ -257,10 +258,10 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
       rest <- synthesiseHoles ast holes isGradedBase
       return $ hole : rest
 
-synEval :: (?globals :: Globals) => AST () () -> IO Bool 
-synEval ast = do 
-  res <- try $ eval ast 
-  case res of 
+synEval :: (?globals :: Globals) => AST () () -> IO Bool
+synEval ast = do
+  res <- try $ eval ast
+  case res of
     Left (e :: SomeException) -> do
       return False
     Right (Just (Constr _ idv [])) | mkId "True" == idv -> return True
@@ -494,15 +495,20 @@ parseGrConfig = info (go <**> helper) $ briefDesc
            $ long "alternate"
             <> help "Use alternate mode for synthesis (subtractive divisive, additive naive)"
 
-        globalsGradeOnRule <-
+        globalsCartesianSynth <-
           flag Nothing (Just True)
-           $ long "gradeonrule"
-            <> help "Use alternate grade-on-rule mode for synthesis"
+           $ long "cart-synth"
+            <> help "Synthesise using cartesian semiring"
 
         globalsHaskellSynth <-
           flag Nothing (Just True)
            $ long "linear-haskell"
             <> help "Synthesise Linear Haskell programs"
+
+        globalsSynthHtml <-
+          flag Nothing (Just True)
+           $ long "synth-html"
+            <> help "Output synthesis tree as HTML file"
 
         grRewriter
           <- flag'
@@ -562,8 +568,9 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsBenchmarkRaw
               , globalsSubtractiveSynthesis
               , globalsAlternateSynthesisMode
-              , globalsGradeOnRule
+              , globalsCartesianSynth
               , globalsHaskellSynth
+              , globalsSynthHtml
               , globalsExampleLimit
               , globalsExtensions = []
               }

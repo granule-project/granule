@@ -145,7 +145,6 @@ data Hints =
     hSubtractive :: Bool,
     hPruning     :: Bool,
     hNoTimeout   :: Bool,
-    hGradeOnRule :: Bool,
     hLinHaskell  :: Maybe Span, -- The location of the hole in the original Haskell file
     hTimeout     :: Maybe Int,
     hIndex       :: Maybe Int

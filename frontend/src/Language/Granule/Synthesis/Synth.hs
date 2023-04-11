@@ -164,27 +164,25 @@ synthesiseProgram hints index unrComps rComps defId ctxt goalTy checkerState = d
 
   start <- liftIO $ Clock.getTime Clock.Monotonic
 
-  let (timeoutLim, index, gradeOnRule, resourceScheme) =
+  let (timeoutLim, index, resourceScheme) =
          case hints of
             Just hints' -> ( case (hTimeout hints', hNoTimeout hints') of
                                   (_, True) -> -1
                                   (Just lim, _) -> lim * 1000,
                             index + (fromMaybe 0 $ hIndex hints'),
-                            hGradeOnRule hints' || fromMaybe False (globalsGradeOnRule ?globals),
                             let mode = if (hPruning hints' || alternateSynthesisMode) then Pruning else NonPruning
                             in
                             if (hSubtractive hints' || subtractiveSynthesisMode) then Subtractive else Additive mode
                           )
             Nothing ->    ( -1,
                             index,
-                            fromMaybe False (globalsGradeOnRule ?globals),
                             let mode = if alternateSynthesisMode then Pruning else NonPruning
                             in
                             if subtractiveSynthesisMode then Subtractive else Additive mode)
 
   let gamma = map (\(v, a)  -> (v, (SVar a $ Just $ NonDecreasing 0 ))) ctxt ++
               map (\(v, (Forall _ _ _ ty, grade)) -> (v, (SVar (Discharged ty grade) $ Just $ NonDecreasing 0))) rComps
-  let initialGrade = if gradeOnRule then Just (TyGrade Nothing 1)  else Nothing
+  let initialGrade = Nothing -- if gradeOnRule then Just (TyGrade Nothing 1)  else Nothing
 
   let initialState = SynthesisData {
                          smtCallsCount= 0
@@ -812,7 +810,7 @@ absRule sParams inIntroPhase focusPhase gamma (Focused omega) goal@(FunTy name g
      -- Recursive call
     --  withPartialExprAt downExpr
       --  (Val ns () False (Abs () (PVar ns () False x) Nothing hole))
-       (gSynthInner sParams inIntroPhase focusPhase gamma' (Focused omega') tyB)
+       (gSynthInner sParams inIntroPhase focusPhase gamma' (Focused omega') tyB) 
 
   cs <- conv get
   (kind, _, _) <- conv $ synthKind nullSpan grade
@@ -1082,7 +1080,10 @@ constrRule sParams inIntroPhase focusPhase gamma goal = do
             case (args, underLim) of
               -- Nullary constructor
               ([], _) -> do
-                delta <- ctxtMultByCoeffect (TyGrade Nothing 0) gamma
+                let kind = if cartesianSynth 
+                           then Just $ TyCon $ mkId "Cartesian"
+                           else Nothing
+                delta <- ctxtMultByCoeffect (TyGrade kind 0) gamma
                 let rInfo = ConstrRule focusPhase cName goal gamma (Val ns () False (Constr () cName [])) [] delta
                 leafExpr (Val ns () False (Constr () cName []), delta, [], False, Nothing, rInfo)
 
@@ -1320,12 +1321,13 @@ caseRule sParams inIntroPhase focusPhase gamma (Focused left) (Focused (var@(x, 
           -- TODO: more clear names here
           let (grade_rs, grade_ss)                = unzip grades
 
+          (kind, _,_ ) <- conv $ synthKind ns grade_r 
           -- join contexts
-          delta <- foldM (ctxtMerge (computeJoin Nothing)) (head deltas) (tail deltas)
+          delta <- foldM (ctxtMerge (computeJoin (Just kind))) (head deltas) (tail deltas)
 
           -- join grades
-          grade_r_out <- foldM (computeJoin Nothing)  (head grade_rs) (tail grade_rs)
-          grade_s_out <- foldM (computeJoin' Nothing) (head grade_ss) (tail grade_ss)
+          grade_r_out <- foldM (computeJoin (Just kind))  (head grade_rs) (tail grade_rs)
+          grade_s_out <- foldM (computeJoin' (Just kind)) (head grade_ss) (tail grade_ss)
 
 
 
@@ -1422,5 +1424,6 @@ valueFold s newExpr (Pure a e) = Pure a (exprFold s newExpr e)
 valueFold s newExpr (Nec a e) = Nec a (exprFold s newExpr e)
 valueFold s newExpr (Constr a ident vals) = Constr a ident $ map (valueFold s newExpr) vals
 valueFold s newExpr v = v
+
 
 

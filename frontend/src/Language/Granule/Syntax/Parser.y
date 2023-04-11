@@ -716,7 +716,6 @@ parseHints hints =
     hSubtractive = ("s", 0) `elem` hints,
     hPruning     = ("p", 0) `elem` hints,
     hNoTimeout   = ("nt", 0) `elem` hints,
-    hGradeOnRule = ("g", 0) `elem` hints,
     hTimeout     = lookup "t" hints,
     hIndex       = lookup "i" hints,
     hLinHaskell  = Nothing

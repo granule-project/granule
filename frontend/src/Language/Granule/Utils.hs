@@ -50,8 +50,8 @@ data Globals = Globals
   , globalsBenchmarkRaw        :: Maybe Bool
   , globalsSubtractiveSynthesis   :: Maybe Bool
   , globalsAlternateSynthesisMode :: Maybe Bool
-  , globalsGradeOnRule         :: Maybe Bool
   , globalsHaskellSynth            :: Maybe Bool
+  , globalsCartesianSynth           :: Maybe Bool
   , globalsSynthHtml        :: Maybe Bool
   , globalsExampleLimit         :: Maybe Int
   , globalsExtensions           :: [Extension]
@@ -87,7 +87,7 @@ usingExtension e = elem e $ globalsExtensions ?globals
 
 -- | Accessors for global flags with default values
 debugging, interactiveDebugging, noColors, alternativeColors, noEval, suppressInfos, suppressErrors,
-  timestamp, testing, ignoreHoles, benchmarking, benchmarkingRawData, subtractiveSynthesisMode, alternateSynthesisMode, gradeOnRule, haskellSynth, synthHtml :: (?globals :: Globals) => Bool
+  timestamp, testing, ignoreHoles, benchmarking, benchmarkingRawData, subtractiveSynthesisMode, alternateSynthesisMode, haskellSynth, synthHtml, cartesianSynth :: (?globals :: Globals) => Bool
 debugging         = fromMaybe False $ globalsDebugging ?globals
 interactiveDebugging         = fromMaybe False $ globalsInteractiveDebugging ?globals
 noColors          = fromMaybe False $ globalsNoColors ?globals
@@ -102,9 +102,9 @@ benchmarking      = fromMaybe False $ globalsBenchmark ?globals
 benchmarkingRawData = fromMaybe False $ globalsBenchmarkRaw ?globals
 subtractiveSynthesisMode = fromMaybe False $ globalsSubtractiveSynthesis ?globals
 alternateSynthesisMode = fromMaybe False $ globalsAlternateSynthesisMode ?globals
-gradeOnRule = fromMaybe False $ globalsGradeOnRule ?globals
 haskellSynth = fromMaybe False $ globalsHaskellSynth ?globals
 synthHtml = fromMaybe False $ globalsSynthHtml ?globals
+cartesianSynth = fromMaybe False $ globalsCartesianSynth ?globals
 
 -- | Accessor for the solver timeout with a default value
 solverTimeoutMillis :: (?globals :: Globals) => Integer
@@ -147,8 +147,8 @@ instance Semigroup Globals where
       , globalsBenchmarkRaw        = globalsBenchmarkRaw        g1 <|> globalsBenchmarkRaw        g2
       , globalsSubtractiveSynthesis   = globalsSubtractiveSynthesis   g1 <|> globalsSubtractiveSynthesis   g2
       , globalsAlternateSynthesisMode = globalsAlternateSynthesisMode g1 <|> globalsAlternateSynthesisMode g2
-      , globalsGradeOnRule = globalsGradeOnRule g1 <|> globalsGradeOnRule g2
       , globalsHaskellSynth = globalsHaskellSynth g1 <|> globalsHaskellSynth g2
+      , globalsCartesianSynth = globalsCartesianSynth g1 <|> globalsCartesianSynth g2
       , globalsSynthHtml = globalsSynthHtml g1 <|> globalsSynthHtml g2
       , globalsExampleLimit = globalsExampleLimit g1 <|> globalsExampleLimit g2
       , globalsExtensions = nub (globalsExtensions g1 <> globalsExtensions g2)
@@ -177,8 +177,8 @@ instance Monoid Globals where
     , globalsBenchmarkRaw        = Nothing
     , globalsSubtractiveSynthesis   = Nothing
     , globalsAlternateSynthesisMode = Nothing
-    , globalsGradeOnRule = Nothing
     , globalsHaskellSynth = Nothing
+    , globalsCartesianSynth = Nothing
     , globalsSynthHtml = Nothing
     , globalsExampleLimit = Nothing
     , globalsExtensions = [Base]

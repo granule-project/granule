@@ -307,6 +307,11 @@ parseGrConfig = info (go <**> helper) $ briefDesc
            $ long "linear-haskell"
             <> help "Synthesise Linear Haskell programs"
 
+        globalsCartesianSynth <-
+          flag Nothing (Just True)
+           $ long "cart-synth"
+            <> help "Synthesise the using the cartesian semiring"
+
         globalsSynthHtml <-
           flag Nothing (Just True)
            $ long "synth-html"
@@ -321,11 +326,6 @@ parseGrConfig = info (go <**> helper) $ briefDesc
           flag Nothing (Just True)
            $ long "alternate"
             <> help "Use alternate mode for synthesis (subtractive divisive, additive naive)"
-
-        globalsGradeOnRule <-
-          flag Nothing (Just True)
-           $ long "gradeonrule"
-            <> help "Use alternate grade-on-rule mode for synthesis"
 
         grRewriter
           <- flag'
@@ -385,8 +385,8 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsBenchmarkRaw
               , globalsSubtractiveSynthesis
               , globalsAlternateSynthesisMode
-              , globalsGradeOnRule
               , globalsHaskellSynth
+              , globalsCartesianSynth
               , globalsSynthHtml
               , globalsExampleLimit
               , globalsExtensions = []
