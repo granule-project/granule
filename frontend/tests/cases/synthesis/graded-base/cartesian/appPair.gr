@@ -1,0 +1,4 @@
+language GradedBase
+
+appPair : forall a b . a %Any -> (a %Any -> b) %Any -> (b, b)
+appPair = ?

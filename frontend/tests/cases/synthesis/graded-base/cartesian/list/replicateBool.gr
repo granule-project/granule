@@ -1,0 +1,11 @@
+language GradedBase 
+
+data List a =  Cons a (List a) | Nil 
+
+data Bool = True | False
+
+consBool : Bool %Any -> List Bool
+spec 
+    consBool True = Cons True Nil;
+    consBool False = Cons False Nil;
+consBool = ?

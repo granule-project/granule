@@ -1,0 +1,6 @@
+language GradedBase 
+
+data Stream a = Next a (Stream a) 
+
+mkStream : forall a . a %Any -> (Stream a) %Any -> Stream a
+mkStream = ?

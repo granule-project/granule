@@ -391,9 +391,7 @@ synthesiseGradedBase ast hole spec eval hints index unrestricted restricted curr
   -- Initialise input context with
   -- local synthesis context
   let gamma = map (\(v, a)  -> (v, SVar a (Just $ NonDecreasing 0) 0)) ctxt ++
-  -- restricted definition given as hints
 
-  -- restricted definition given as hints
               map (\(v, (tySch, grade)) -> (v, SDef tySch (Just grade) 0)) restricted ++
   -- unrestricted definitions given as hints
               map (\(v, tySch) -> (v, SDef tySch Nothing 0)) unrestricted
@@ -871,6 +869,8 @@ appRule sParams inIntroPhase focusPhase gamma (Focused [var@(x1, assumption)]) g
                   isLAsync tyB
                 -- && not (isRecursiveType tyB (constructors st))
               -- if we are a recursive type then check whether we are below max depth
+
+          -- This is a temporary hack - allows us to track which app-generated assumptions belong to a multi-term recursive application 
           let sInfo' = if x1 `elem` currDef st then Just $ NonDecreasing 42 else Nothing
           let (gamma', omega') = bindToContext (x2, SVar (Discharged tyB grade_r) sInfo' 0) (gamma ++ [increaseDepth var]) [] bindToOmega
 
@@ -1365,6 +1365,7 @@ caseRule sParams inIntroPhase focusPhase gamma (Focused left) (Focused (var@(x, 
 
   where
 
+    -- Temporarily disallow casing on the result of a recursive function call : This is broken and needs a substantial fix!
     isScrutinee :: Maybe StructInfo -> Bool
     isScrutinee (Just (NonDecreasing 42)) = True
     isScrutinee Nothing = True

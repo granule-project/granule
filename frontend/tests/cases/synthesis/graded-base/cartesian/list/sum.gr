@@ -1,0 +1,20 @@
+language GradedBase 
+
+data N = S N | Z 
+
+data List a = Cons a (List a) | Nil 
+
+fold : List N %Any -> (N %Any -> N %Any -> N) %Any -> N %Any -> N 
+fold Nil f acc = acc;
+fold (Cons x xs) f acc =  fold xs f (f acc x)
+
+add : N %Any -> N %Any -> N
+add Z n2 = n2; 
+add (S n1) n2 = S (add n1 n2)
+
+sum : List N %Any -> N 
+spec 
+    sum Nil = Z;
+    sum (Cons (S Z) (Cons (S Z) Nil)) = (S (S Z));
+    fold %Any, add %Any
+sum = ?

@@ -9,5 +9,4 @@ isNothing : forall {a : Type} . (Maybe a) %0..1 -> Bool
 spec
     isNothing (Just 1) = False;
     isNothing Nothing = True;
-isNothing Nothing = True;
-isNothing (Just y) = False
+isNothing = ?

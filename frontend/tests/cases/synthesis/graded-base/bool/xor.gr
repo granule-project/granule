@@ -2,10 +2,10 @@ language GradedBase
 
 data Bool = True | False
 
-xor : Bool %0..∞ -> Bool %0..∞ -> Bool
+xor : Bool %1 -> Bool %1 -> Bool
 spec 
     xor True True = False;
     xor False True = True;
     xor True False = True;
     xor False False = False;
-xor = ? 
+xor = ?

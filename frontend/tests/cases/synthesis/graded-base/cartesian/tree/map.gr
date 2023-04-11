@@ -1,0 +1,8 @@
+language GradedBase
+
+data Tree a = Leaf | Node (Tree a) a (Tree a)
+
+map : forall a b . Tree a %Any -> (a %Any -> b) %Any -> Tree b
+spec
+    map %Any
+map = ?

@@ -1,6 +1,0 @@
-language GradedBase
-
-data List a =  Cons a (List a) | Nil 
-
-cons : forall { a : Type} . a -> List a 
-cons x = (Cons x) Nil

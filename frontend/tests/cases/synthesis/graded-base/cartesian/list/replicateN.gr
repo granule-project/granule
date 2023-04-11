@@ -1,0 +1,11 @@
+language GradedBase
+
+data List a =  Cons a (List a) | Nil 
+data N = S N | Z
+
+replicateN : forall { a : Type} . N %Any -> a %Any -> List a
+spec
+    replicateN (S Z) 1 = (Cons 1 Nil); 
+    replicateN (S (S Z)) 2 = (Cons 2 (Cons 2 Nil));
+    replicateN %Any
+replicateN = ?

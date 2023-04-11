@@ -1,0 +1,6 @@
+language GradedBase
+
+data List a = Nil | Cons a (List a)
+
+append : forall {a : Type} . (List a) %Any -> a %Any -> List a
+append = ?

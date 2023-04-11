@@ -1,0 +1,9 @@
+language GradedBase
+
+data Tree a = Leaf | Node (Tree a) a (Tree a)
+
+map : forall a b . Tree a % 1..∞ -> (a %1..∞ -> b) %0..∞ -> Tree b
+spec
+    map %0..∞
+map Leaf y = Leaf;
+map (Node z u v) y = ((Node ((map z) y)) (y u)) ((map v) y)

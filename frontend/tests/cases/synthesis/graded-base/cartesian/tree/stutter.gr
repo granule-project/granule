@@ -1,0 +1,8 @@
+language GradedBase
+
+data Tree a = Leaf | Node (Tree a) a (Tree a)
+
+stutter : forall a b . Tree (a [Any]) %Any -> Tree (a, a)
+spec
+    stutter %Any
+stutter = ?

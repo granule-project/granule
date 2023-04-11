@@ -1,0 +1,18 @@
+language GradedBase
+
+data List a = Cons a (List a) | Nil
+
+data Maybe a = Just a | Nothing
+
+
+last : forall a . (List a) %0..∞ -> Maybe a 
+spec
+    last Nil = Nothing; 
+    last (Cons (S Z) Nil) = Just (S Z);
+    last (Cons (S Z) (Cons (S (S Z)) Nil)) = Just (S (S Z));
+    last %0..∞
+last Nil = Nothing;
+last (Cons y z) = 
+    (case z of
+      Nil -> Just y;
+      Cons u v -> last z)

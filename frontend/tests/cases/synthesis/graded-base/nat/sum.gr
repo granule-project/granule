@@ -1,0 +1,10 @@
+language GradedBase 
+
+data N = S N | Z
+
+sum : N %1..∞ -> N %1..∞ -> N
+spec 
+    sum (S Z) Z = (S Z); 
+    sum (S Z) (S Z) = (S (S Z));
+    sum % 0..∞
+sum = ?

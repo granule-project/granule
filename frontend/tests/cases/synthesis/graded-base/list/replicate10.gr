@@ -1,0 +1,6 @@
+language GradedBase
+
+data List a =  Cons a (List a) | Nil 
+
+replicate : forall { a : Type} . a %10 -> List a 
+replicate = ?

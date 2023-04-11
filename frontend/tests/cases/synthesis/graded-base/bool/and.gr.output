@@ -10,5 +10,11 @@ spec
     and False False = False;
 and x y = 
     (case y of
-      True -> x;
-      False -> y)
+      True -> 
+    (case x of
+      True -> y;
+      False -> x);
+      False -> 
+    (case x of
+      True -> y;
+      False -> y))

@@ -1,7 +1,0 @@
-language GradedBase
-
-data Maybe a = Nothing | Just a
-
-maybe : forall {a : Type} . Maybe a % (1..1) -> a % (0..1) -> a
-maybe Nothing y = y;
-maybe (Just z) y = z

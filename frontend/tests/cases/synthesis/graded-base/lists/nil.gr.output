@@ -1,7 +1,0 @@
-language GradedBase
-
-data List a = Nil | Cons a (List a) 
-
-nil : forall a b . (List a) % 0..∞ -> List b 
-nil Nil = Nil;
-nil (Cons y z) = Nil

@@ -2,13 +2,13 @@ language GradedBase
 
 data Bool = True | False
 
-or : Bool %0..∞ -> Bool %0..∞ -> Bool
+or : Bool %1 -> Bool %1 -> Bool
 spec
     or True True = True;
     or False True = True;
     or True False = True;
     or False False = False;
-or x y = 
-    (case y of
-      True -> y;
-      False -> x)
+or True True = True;
+or False True = True;
+or True False = True;
+or False False = False

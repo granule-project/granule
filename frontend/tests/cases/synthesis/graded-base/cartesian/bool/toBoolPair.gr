@@ -1,0 +1,6 @@
+language GradedBase
+
+data Bool = True | False
+
+f : forall a . a %Any -> (a %Any -> Bool) %Any -> (Bool, Bool)
+f = ?

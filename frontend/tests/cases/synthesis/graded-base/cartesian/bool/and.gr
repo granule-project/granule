@@ -1,0 +1,11 @@
+language GradedBase
+
+data Bool = True | False
+
+and : Bool %Any -> Bool %Any -> Bool
+spec
+    and True True = True;
+    and False True = False;
+    and True False = False;
+    and False False = False;
+and = ?

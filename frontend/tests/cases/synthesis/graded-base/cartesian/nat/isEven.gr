@@ -1,0 +1,13 @@
+language GradedBase 
+
+data N = S N | Z
+
+data Bool = True | False
+
+isEven : N %Any -> Bool  
+spec 
+    isEven (S Z) = False; 
+    isEven (S (S Z)) = True;
+    isEven (S (S (S Z))) = False;
+    isEven %Any
+isEven = ?

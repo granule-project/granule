@@ -1,0 +1,6 @@
+language GradedBase
+
+data Maybe a = Just a | Nothing
+
+bind : forall {a : Type, b : Type} . Maybe a %Any -> (a %Any -> Maybe b) %Any -> Maybe b
+bind = ?

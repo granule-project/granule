@@ -1,0 +1,17 @@
+language GradedBase
+
+data List a = Nil | Cons a (List a)
+
+data N = S N | Z
+
+snoc : forall {a : Type} . (List a) % 1..∞ -> a % 1..∞ -> List a
+spec 
+    snoc Nil Z = Cons Z Nil; 
+    snoc Nil (S Z) = (Cons (S Z)) Nil; 
+    snoc (Cons Z Nil) Z = (Cons Z (Cons Z Nil));
+    snoc (Cons Z Nil) (S Z) = (Cons Z (Cons (S Z) Nil));
+    snoc % 0..∞
+snoc x y = 
+    (case x of
+      Nil -> (Cons y) x;
+      Cons z u -> (Cons z) ((snoc u) y))

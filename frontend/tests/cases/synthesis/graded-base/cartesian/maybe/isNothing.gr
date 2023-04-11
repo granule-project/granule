@@ -1,0 +1,12 @@
+language GradedBase
+
+data Maybe a = Just a | Nothing 
+
+data Bool = True | False 
+
+
+isNothing : forall {a : Type} . (Maybe a) %Any -> Bool
+spec
+    isNothing (Just 1) = False;
+    isNothing Nothing = True;
+isNothing = ?

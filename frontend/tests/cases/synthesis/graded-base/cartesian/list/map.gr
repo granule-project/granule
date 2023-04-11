@@ -1,0 +1,15 @@
+language GradedBase
+
+data List a = Nil | Cons a (List a) 
+
+data Bool = True | False; 
+
+neg : Bool %Any -> Bool 
+neg True = False;
+neg False = True 
+
+map : forall a b . (a %Any -> b) %Any -> List a %Any -> List b
+spec 
+    map neg (Cons True Nil) = Cons False Nil;
+    map %Any
+map = ?

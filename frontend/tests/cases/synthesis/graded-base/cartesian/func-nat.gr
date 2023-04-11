@@ -1,0 +1,4 @@
+language GradedBase 
+
+push : forall {a : Type, b : Type, c : Nat} . (a -> b) %Any -> a %Any -> b [Any]
+push = ?
