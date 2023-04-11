@@ -1,6 +1,0 @@
-language GradedBase
-
-data Bool = True | False
-
-f : Bool %Any -> (Bool, Bool)
-f = ?

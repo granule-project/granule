@@ -1,7 +1,0 @@
-data Either a b = Left a | Right b
-
-fromEither : forall {a : Type, b : Type, c : Type} .
-            (a % 1..1 -> c) %Any ->
-            (b % 1..1 -> c) %Any ->
-            Either a b %Any -> c
-fromEither = ?

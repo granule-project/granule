@@ -1,6 +1,0 @@
-language GradedBase
-data Maybe a = Nothing | Just a
-
-map : forall {a : Type, b : Type} . (a -> b) % (0..1) -> (Maybe a) % (1..1) -> Maybe b
-map x Nothing = Nothing;
-map x (Just z) = Just (x z)

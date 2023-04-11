@@ -1,6 +1,0 @@
-language GradedBase
-
-data List a = Nil | Cons a (List a)
-
-append : forall {a : Type} . (List a) % 1 -> a % 1 -> List a
-append x y = (Cons y) x

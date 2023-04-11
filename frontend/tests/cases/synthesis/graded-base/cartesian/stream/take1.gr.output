@@ -1,6 +1,0 @@
-language GradedBase 
-
-data Stream a = Next a (Stream a) 
-
-elimStream : forall { a : Type } . Stream a %(0..1) -> a 
-elimStream (Next y z) = y

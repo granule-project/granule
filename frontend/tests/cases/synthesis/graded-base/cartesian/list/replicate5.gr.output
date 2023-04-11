@@ -1,6 +1,0 @@
-language GradedBase
-
-data List a =  Cons a (List a) | Nil 
-
-replicate : forall { a : Type} . a %5 -> List a 
-replicate x = (Cons x) ((Cons x) ((Cons x) ((Cons x) ((Cons x) Nil))))

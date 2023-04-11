@@ -1,4 +1,0 @@
-language GradedBase
-
-share : forall { a : Type } . (a -> a -> a) %Any -> a %Any -> (a [Any], a [Any])
-share = ?

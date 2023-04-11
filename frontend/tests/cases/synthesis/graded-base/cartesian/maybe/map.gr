@@ -1,5 +1,0 @@
-language GradedBase
-data Maybe a = Nothing | Just a
-
-map : forall {a : Type, b : Type} . (a -> b) %Any -> (Maybe a) %Any -> Maybe b
-map = ?

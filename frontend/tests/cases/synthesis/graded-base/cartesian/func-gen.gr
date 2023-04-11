@@ -1,4 +1,0 @@
-language GradedBase
-
-push : forall {a : Type, b : Type, k : Coeffect, c : k} . (a -> b) %Any -> a % Any -> b [Any]
-push = ?

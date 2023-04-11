@@ -1,8 +1,0 @@
-language GradedBase 
-
-data Stream a = Next a (Stream a) 
-
-map_stream : forall a b . Stream a %Any -> (a %Any -> b) %Any -> Stream b
-spec 
-    map_stream %Any
-map_stream = ?

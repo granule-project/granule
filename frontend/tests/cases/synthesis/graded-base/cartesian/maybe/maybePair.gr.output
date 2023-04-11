@@ -1,9 +1,0 @@
-language GradedBase 
-
-data Maybe a = Just a | Nothing
-
-pair : forall a . (Maybe a) %1..2 -> (Maybe a, Maybe a)
-pair x = 
-    (case x of
-      Nothing -> (x, Nothing);
-      Just y -> (x, Just y))
