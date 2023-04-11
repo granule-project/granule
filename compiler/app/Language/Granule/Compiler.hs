@@ -307,6 +307,11 @@ parseGrConfig = info (go <**> helper) $ briefDesc
            $ long "linear-haskell"
             <> help "Synthesise Linear Haskell programs"
 
+        globalsSynthHtml <-
+          flag Nothing (Just True)
+           $ long "synth-html"
+            <> help "Output synthesis tree as HTML file"
+
         globalsSubtractiveSynthesis <-
           flag Nothing (Just True)
            $ long "subtractive"
@@ -382,6 +387,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsAlternateSynthesisMode
               , globalsGradeOnRule
               , globalsHaskellSynth
+              , globalsSynthHtml
               , globalsExampleLimit
               , globalsExtensions = []
               }

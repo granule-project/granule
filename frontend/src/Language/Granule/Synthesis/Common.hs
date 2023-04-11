@@ -208,7 +208,7 @@ defaultSearchParams :: SearchParameters
 defaultSearchParams =
   SearchParams {
     scrutCurrent = 0
-  , scrutMax = 1
+  , scrutMax = 3
   , matchCurrent = 0
   , matchMax = 0
   , introCurrent = 0
