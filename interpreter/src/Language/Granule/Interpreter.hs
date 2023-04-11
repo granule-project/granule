@@ -230,10 +230,16 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
       -- TODO: this magic number shouldn't here I don't think...
       let timeout = if interactiveDebugging then maxBound :: Int else 10000000
       rest <- synthesiseHoles astSrc holes isGradedBase
+
+      let defs' = map (\(x, (Forall tSp con bind ty)) ->
+              if cartesianSynth
+                then (x,  (Forall tSp con bind (toCart ty)))
+                else (x, (Forall tSp con bind ty))
+                 ) defs
       let (unrestricted, restricted) = case spec of
             Just (Spec _ _ _ comps) ->
               foldr (\(id, compTy) (unres, res) ->
-                case lookup id defs of
+                case lookup id defs' of
                   Just tySch -> case compTy of
                         Just usage -> (unres, (id, (tySch, usage)):res)
                         _ -> ((id, tySch):unres, res)

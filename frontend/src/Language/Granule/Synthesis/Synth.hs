@@ -388,11 +388,15 @@ synthesiseGradedBase ast hole spec eval hints index unrestricted restricted curr
 
   -- Initialise input context with
   -- local synthesis context
-  let gamma = map (\(v, a)  -> (v, SVar a (Just $ NonDecreasing 0) 0)) ctxt ++
+  let gamma = map (\(v, a)  -> case (a, cartesianSynth) of 
+          (Linear t, True) -> (v, SVar (Linear (toCart t)) (Just $ NonDecreasing 0) 0)
+          (Discharged t a, True) -> (v, SVar (Discharged (toCart t) (toCart a)) (Just $ NonDecreasing 0) 0)
+          (a, _)  -> (v, SVar a (Just $ NonDecreasing 0) 0) 
+          ) ctxt ++
 
-              map (\(v, (tySch, grade)) -> (v, SDef tySch (Just grade) 0)) restricted ++
+              map (\(v, (tySch, grade)) -> (v, SDef tySch (if cartesianSynth then Just anyG else Just grade) 0)) restricted ++
   -- unrestricted definitions given as hints
-              map (\(v, tySch) -> (v, SDef tySch Nothing 0)) unrestricted
+              map (\(v, tySch) -> (v, SDef tySch (if cartesianSynth then Just anyG else Nothing) 0)) unrestricted
 
   -- Add constraints from type scheme and from checker so far as implication
   (_, cs') <- runChecker cs $ do
@@ -409,7 +413,7 @@ synthesiseGradedBase ast hole spec eval hints index unrestricted restricted curr
   let lims = mergeByNorm (map mergeByNorm [[[(x,y) | x <- [0..10]] | y <- [0..10]]])
   let sParamList = map (\(elim,intro) -> defaultSearchParams { matchMax = elim, introMax = intro }) lims
 
-  let synRes = synLoop ast hole spec eval constructorsWithRecLabels index gamma [] goalTy sParamList
+  let synRes = synLoop ast hole spec eval constructorsWithRecLabels index gamma [] (if cartesianSynth then (toCart goalTy) else goalTy) sParamList
   (res, agg1) <- runStateT (runSynthesiser index synRes cs') synthState
 
   end    <- liftIO $ Clock.getTime Clock.Monotonic
@@ -446,7 +450,24 @@ synthesiseGradedBase ast hole spec eval hints index unrestricted restricted curr
         else
           return (programs, Nothing)
 
-  where
+
+toCart :: Type -> Type
+toCart (FunTy id coeff t1 t2) = FunTy id (Just anyG) (toCart t1) (toCart t2) 
+toCart (Box coeff t) = Box anyG (toCart t)
+toCart (Diamond ef t) = Diamond (toCart ef)  (toCart t)
+toCart (Star g t) = Star (toCart g) (toCart t)
+toCart (TyApp t1 t2) = (TyApp (toCart t1) (toCart t2))
+toCart t@TyGrade{} = anyG
+toCart (TyInfix op t1 t2) = TyInfix op (toCart t1) (toCart t2)
+toCart (TySet pol ts) = TySet pol (map toCart ts) 
+toCart (TyCase t ts) = TyCase (toCart t) $ map (\(x,y) -> (toCart x, toCart y)) ts
+toCart (TySig t k) = TySig (toCart t) k
+toCart t = t
+
+
+
+anyG :: Coeffect
+anyG = TyCon $ mkId "Any"
 
 
 
