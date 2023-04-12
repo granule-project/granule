@@ -10,4 +10,4 @@ spec
     length (Cons 1 Nil) = S Z;
     length (Cons 1 (Cons 1 Nil)) = S (S Z);
     length %0..∞
-lenght = ?
+length = ?

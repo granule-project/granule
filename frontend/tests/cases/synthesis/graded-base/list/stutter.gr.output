@@ -6,4 +6,4 @@ stutter : forall a . List (a [2]) %1..∞ -> List a
 spec
     stutter % 0..∞
 stutter Nil = Nil;
-stutter (Cons y z) = let [u] = y in (Cons u) ((Cons u) (stutter z))
+stutter (Cons [u] z) = (Cons u) ((Cons u) (stutter z))

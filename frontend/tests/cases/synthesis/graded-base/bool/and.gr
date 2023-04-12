@@ -2,7 +2,7 @@ language GradedBase
 
 data Bool = True | False
 
-and : Bool %0..∞ -> Bool %0..∞ -> Bool
+and : Bool %1 -> Bool %1 -> Bool
 spec
     and True True = True;
     and False True = False;

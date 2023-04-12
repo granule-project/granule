@@ -8,13 +8,7 @@ spec
     and False True = False;
     and True False = False;
     and False False = False;
-and x y = 
-    (case y of
-      True -> 
-    (case x of
-      True -> y;
-      False -> x);
-      False -> 
-    (case x of
-      True -> y;
-      False -> y))
+and True True = True;
+and False True = False;
+and True False = False;
+and False False = False
