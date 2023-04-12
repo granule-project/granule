@@ -245,7 +245,7 @@ main = do
                   , report1 results pathsExplored
                   , putStr " & "
                   -- , report1 results smtCalls
-                  , report1 results programSize ]
+                  , if mode == "--cart-synth" then report1 results cartAttempts else report1 results programSize ]
               else
                 [ report1 results success
                 , report results synthTime
