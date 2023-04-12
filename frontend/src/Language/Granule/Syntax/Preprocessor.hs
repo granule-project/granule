@@ -41,8 +41,9 @@ preprocess mbRewriter keepOldFile file env
 
     -- (file extension, (stripNonGranule, destructive preprocessor))
     acceptedFormats =
-      [ ("gr",    (id,             id))
-      , ("md",    (unMarkdown env, processGranuleMarkdown id env))
-      , ("tex",   (unLatex env,    processGranuleLatex id env))
-      , ("latex", (unLatex env,    processGranuleLatex id env))
+      [ ("gr",     (id,             id))
+      , ("output", (id,             id))
+      , ("md",     (unMarkdown env, processGranuleMarkdown id env))
+      , ("tex",    (unLatex env,    processGranuleLatex id env))
+      , ("latex",  (unLatex env,    processGranuleLatex id env))
       ]

@@ -21,6 +21,7 @@ import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Type (TypeScheme)
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Utils
+import Language.Granule.Syntax.Def
 
 -- Data structure for collecting information about synthesis
 data SynthesisData =
@@ -35,12 +36,13 @@ data SynthesisData =
   , currDef                   :: [Id]
   , maxReached                :: Bool
   , attempts                  :: Integer
+  , gradedProgram             :: Maybe (Def () ())
   }
   deriving Show
 
 instance Semigroup SynthesisData where
- (SynthesisData c smt t s p st cons def max atps) <>
-    (SynthesisData c' smt' t' s' p' st' cons' def' max' atps') =
+ (SynthesisData c smt t s p st cons def max atps gp) <>
+    (SynthesisData c' smt' t' s' p' st' cons' def' max' atps' gp') =
       SynthesisData
         (c + c')
         (smt + smt')
@@ -52,9 +54,10 @@ instance Semigroup SynthesisData where
         (def ++ def')
         (max || max')
         (atps + atps)
+        gp
 
 instance Monoid SynthesisData where
-  mempty  = SynthesisData 0 0 0 0 0 0 [] [] False 0
+  mempty  = SynthesisData 0 0 0 0 0 0 [] [] False 0 Nothing
   mappend = (<>)
 
 -- Synthesiser monad

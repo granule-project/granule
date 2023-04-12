@@ -68,6 +68,7 @@ import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NonEmpty
 import Language.Granule.Checker.Checker (checkExpr, Polarity (Positive, Negative), checkDef, check)
 import qualified Language.Granule.Checker.Primitives as Primitives
+import Language.Granule.Synthesis.Monad (SynthesisData(gradedProgram))
 
 ------------------------------
 
@@ -200,6 +201,7 @@ synthesiseProgram hints index unrComps rComps defId ctxt goalTy checkerState = d
                       ,  currDef = [defId]
                       ,  maxReached = False
                       ,  attempts = 0
+                      ,  gradedProgram = Nothing
                       }
 
   let (hintELim, hintILim) = (1, 1) -- case (hasElimHint hints, hasIntroHint hints) of
@@ -352,6 +354,7 @@ elapsedTime start end = round $ fromIntegral (Clock.toNanoSecs (Clock.diffTimeSp
 
 synthesiseGradedBase :: (?globals :: Globals)
   => AST () ()
+  -> Maybe (Def () ())
   -> CheckerError
   -> Maybe (Spec () ())
   -> ((?globals :: Globals) => AST () () -> IO Bool)
@@ -365,7 +368,7 @@ synthesiseGradedBase :: (?globals :: Globals)
   -> TypeScheme           -- type from which to synthesise
   -> CheckerState
   -> IO ([(Expr () (), RuleInfo)], Maybe Measurement)
-synthesiseGradedBase ast hole spec eval hints index unrestricted restricted currentDef constructors ctxt (Forall _ _ constraints goalTy) cs = do
+synthesiseGradedBase ast gradedProgram hole spec eval hints index unrestricted restricted currentDef constructors ctxt (Forall _ _ constraints goalTy) cs = do
 
 
   -- Start timing and initialise state
@@ -381,6 +384,7 @@ synthesiseGradedBase ast hole spec eval hints index unrestricted restricted curr
                       ,  currDef = [currentDef]
                       ,  maxReached = False
                       ,  attempts = 0
+                      ,  gradedProgram = gradedProgram
                       }
 
   constructorsWithRecLabels <- mapM (\(tyId, dataCons) ->
@@ -430,6 +434,7 @@ synthesiseGradedBase ast hole spec eval hints index unrestricted restricted curr
         $ nubBy (\(expr1, _, _) (expr2, _, _) -> expr1 == expr2) $ rights (map fst res)
         -- <benchmarking-output>
   let agg = case datas of (_:_) -> (last datas <> agg1) ; _ -> agg1
+
   if benchmarking then
     if benchmarkingRawData then
       let measurement = Measurement
@@ -483,7 +488,6 @@ toCart t = t
 
 anyG :: Coeffect
 anyG = TyCon $ mkId "Any"
-
 
 
 
@@ -600,19 +604,32 @@ gSynthOuter
       -- Only accept programs which check with the original non-cartesian semiring type
       checked <- if not cartesianSynth then return True else do
         st <- getSynthState
-        liftIO $ do
-          let hole = HoleMessage sp hgoal hctxt htyVars hVars synthCtxt [([], expr)]
-          let holeCases = concatMap (\h -> map (\(pats, e) -> (errLoc h, zip (getCtxtIds (holeVars h)) pats, e)) (cases h)) [hole]
-          let ast' = holeRefactor holeCases ast
-          let timeout = 100000
-          res <- liftIO $ System.Timeout.timeout timeout $ Ex.try $ check ast'
-          case res of 
-            Just (Left (e :: Ex.SomeException)) -> return False
-            Just (Right (Left errs)) -> do
-                  let holeErrors = getHoleMessages errs
-                  return $ length holeErrors == length errs
-            Just (Right (Right _)) -> return True
-            Nothing -> return False
+        case gradedProgram st of
+          Nothing -> return True
+          Just prog -> do
+            let hole = HoleMessage sp hgoal hctxt htyVars hVars synthCtxt [([], expr)]
+            let holeCases = concatMap (\h -> map (\(pats, e) -> (errLoc h, zip (getCtxtIds (holeVars h)) pats, e)) (cases h)) [hole]
+            let (AST _ defs' _ _ _) = holeRefactor holeCases ast
+            let [defId] = currDef st
+            case (find (\(Def _ id _ _ _ _) -> id == defId) defs', prog) of
+              (Just (Def _ _ _ _ (EquationList _ _ _ eqs) _), Def _ _ _ _ (EquationList _ _ _ eqs') _) -> 
+                return $ pretty eqs == pretty eqs'
+              _ -> return False
+
+        -- st <- getSynthState
+        -- liftIO $ do
+        --   let hole = HoleMessage sp hgoal hctxt htyVars hVars synthCtxt [([], expr)]
+        --   let holeCases = concatMap (\h -> map (\(pats, e) -> (errLoc h, zip (getCtxtIds (holeVars h)) pats, e)) (cases h)) [hole]
+        --   let ast' = holeRefactor holeCases ast
+        --   let timeout = 100000
+        --   res <- liftIO $ System.Timeout.timeout timeout $ Ex.try $ check ast'
+        --   case res of 
+        --     Just (Left (e :: Ex.SomeException)) -> return False
+        --     Just (Right (Left errs)) -> do
+        --           let holeErrors = getHoleMessages errs
+        --           return $ length holeErrors == length errs
+        --     Just (Right (Right _)) -> return True
+        --     Nothing -> return False
 
       if checked then
         case spec of
@@ -630,9 +647,9 @@ gSynthOuter
       else none
     else none
 
-  where
-    getHoleMessages :: NonEmpty CheckerError -> [CheckerError]
-    getHoleMessages = NonEmpty.filter (\ e -> case e of HoleMessage{} -> True; _ -> False)
+  -- where
+    -- getHoleMessages :: NonEmpty CheckerError -> [CheckerError]
+    -- getHoleMessages = NonEmpty.filter (\ e -> case e of HoleMessage{} -> True; _ -> False)
 gSynthOuter _ _ _ _ _ _ _ _ _ = none
 
 

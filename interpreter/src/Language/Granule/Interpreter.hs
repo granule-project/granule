@@ -25,11 +25,11 @@ import Control.Monad -- ((<=<), forM, forM_)
 import Development.GitRev
 import Data.Char (isSpace)
 import Data.Either (isRight)
-import Data.List (intercalate, isPrefixOf, stripPrefix)
+import Data.List (intercalate, isPrefixOf, stripPrefix, find)
 import Data.List.Extra (breakOn)
 import Data.List.NonEmpty (NonEmpty, toList)
 import qualified Data.List.NonEmpty as NonEmpty (filter)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, fromJust)
 import Data.Version (showVersion)
 import System.Exit
 
@@ -159,11 +159,11 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
                   (Just True, holes@(_:_)) ->
                     case (globalsSynthesise ?globals, length holeErrors == length errs) of
                       (Just True, True) -> do
-                        holes' <- runSynthesiser holes ast (GradedBase `elem` globalsExtensions ?globals)
+                        holes' <- runSynthesiser config holes ast (GradedBase `elem` globalsExtensions ?globals)
                         runHoleSplitter input config errs holes'
                       _ -> runHoleSplitter input config errs holes
                   _ ->  if fromMaybe False (globalsSynthesise ?globals) && not (null holeErrors) then do
-                          _ <- runSynthesiser holeErrors ast (GradedBase `elem` globalsExtensions ?globals)
+                          _ <- runSynthesiser config holeErrors ast (GradedBase `elem` globalsExtensions ?globals)
                           return $ Right NoEval
                           -- return . Left $ CheckerError errs
                         else return . Left $ CheckerError errs
@@ -215,23 +215,24 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
     holeInPosition _ _ = False
 
 
-    runSynthesiser :: (?globals :: Globals) => [CheckerError] -> AST () () -> Bool -> IO [CheckerError]
-    runSynthesiser holes ast isGradedBase = do
+    runSynthesiser :: (?globals :: Globals) => GrConfig -> [CheckerError] -> AST () () -> Bool -> IO [CheckerError]
+    runSynthesiser config holes ast isGradedBase = do
       let holesWithEmptyMeasurements = map (\h -> (h, Nothing, 0)) holes
-      res <- synthesiseHoles ast holesWithEmptyMeasurements isGradedBase
+      res <- synthesiseHoles config ast holesWithEmptyMeasurements isGradedBase
       let (holes', measurements, _) = unzip3 res
       when benchmarkingRawData $ do 
         forM_ measurements (\m -> case m of (Just m') -> putStrLn $ show m' ; _ -> return ()) 
       return holes'
 
 
-    synthesiseHoles :: (?globals :: Globals) => AST () () -> [(CheckerError, Maybe Measurement, Int)] -> Bool -> IO [(CheckerError, Maybe Measurement, Int)]
-    synthesiseHoles _ [] _ = return []
-    synthesiseHoles astSrc ((hole@(HoleMessage sp goal ctxt tyVars hVars synthCtxt@(Just (cs, defs, (Just defId, spec), index, hints, constructors)) hcases), aggregate, attemptNo):holes) isGradedBase = do
+    synthesiseHoles :: (?globals :: Globals) => GrConfig -> AST () () -> [(CheckerError, Maybe Measurement, Int)] -> Bool -> IO [(CheckerError, Maybe Measurement, Int)]
+    synthesiseHoles config _ [] _ = return []
+    synthesiseHoles config astSrc ((hole@(HoleMessage sp goal ctxt tyVars hVars synthCtxt@(Just (cs, defs, (Just defId, spec), index, hints, constructors)) hcases), aggregate, attemptNo):holes) isGradedBase = do
       -- TODO: this magic number shouldn't here I don't think...
       let timeout = if interactiveDebugging then maxBound :: Int else 10000000
-      rest <- synthesiseHoles astSrc holes isGradedBase
+      rest <- synthesiseHoles config astSrc holes isGradedBase
 
+      gradedExpr <- if cartesianSynth then getGradedExpr config defId else return Nothing
       let defs' = map (\(x, (Forall tSp con bind ty)) ->
               if cartesianSynth
                 then (x,  (Forall tSp con bind (toCart ty)))
@@ -248,7 +249,7 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
                 ) ([], []) comps
             _ -> ([], [])
       res <- liftIO $ System.Timeout.timeout timeout $
-                synthesiseGradedBase astSrc hole spec synEval hints index unrestricted restricted defId constructors ctxt (Forall nullSpan [] [] goal) cs
+                synthesiseGradedBase astSrc gradedExpr hole spec synEval hints index unrestricted restricted defId constructors ctxt (Forall nullSpan [] [] goal) cs
       case res of
         Just ([], measurement) -> do
           return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt hcases, measurement, attemptNo) : rest
@@ -263,8 +264,8 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
           return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt [([], fst $ last $ programs)], measurement, attemptNo) : rest
 
 
-    synthesiseHoles ast (hole:holes) isGradedBase = do
-      rest <- synthesiseHoles ast holes isGradedBase
+    synthesiseHoles config ast (hole:holes) isGradedBase = do
+      rest <- synthesiseHoles config ast holes isGradedBase
       return $ hole : rest
 
 synEval :: (?globals :: Globals) => AST () () -> IO Bool
@@ -277,7 +278,16 @@ synEval ast = do
     Right _ -> return False
 
 
-
+getGradedExpr :: (?globals :: Globals) => GrConfig -> Id -> IO (Maybe (Def () ()))
+getGradedExpr config def = do 
+  let file = (fromJust $ globalsSourceFilePath ?globals) <> ".output"
+  src <- preprocess
+          (rewriter config)
+          (keepBackup config)
+          file
+          (literateEnvName config) 
+  ((AST _ defs _ _ _), _) <- parseDefsAndDoImports src
+  return $ find (\(Def _ id _ _ _ _) -> id == def) defs
 
 
 -- | Get the flags embedded in the first line of a file, e.g.
