@@ -354,12 +354,12 @@ symGradeJoin (SExt r isInf) (SExt r' isInf') = do
     ite isInf (SExt r isInf)
       (ite isInf' (SExt r' isInf')
         (SExt join sFalse))
-        
+
 symGradeJoin s@(SLNL n) t@(SLNL m) = return $ SLNL (n `smax` m)
 
-  
--- symGradeJoin s@(SLNL n) t@(SLNL m) = 
---   return $ ite (n .== literal manyRep) 
+
+-- symGradeJoin s@(SLNL n) t@(SLNL m) =
+--   return $ ite (n .== literal manyRep)
 --                (SLNL $ literal manyRep)
 --                (ite (n .== literal zeroRep .&& m .== literal zeroRep )
 --                     (SLNL $ literal zeroRep)

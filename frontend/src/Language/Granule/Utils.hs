@@ -418,3 +418,9 @@ infixr 2 ==>
 True  ==> True   = True
 True  ==> False = False
 False ==> _     = True
+
+(<.*>) :: Monad m => m a -> m b -> m (a, b)
+m <.*> n = do
+  x <- m
+  y <- n
+  return (x, y)
