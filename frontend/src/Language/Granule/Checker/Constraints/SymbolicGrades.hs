@@ -126,7 +126,7 @@ sLtTree (SynJoin s s') (SynJoin t t')   = liftM2 (.&&) (sLtTree s t) (sLtTree s'
 sLtTree (SynMerge sb s s') (SynMerge sb' t t') =
   fmap (((.&&)) (sb .== sb')) (liftM2 (.&&) (sLtTree s t) (sLtTree s' t'))
 sLtTree (SynLeaf Nothing) (SynLeaf Nothing) = return sFalse
-sLtTree (SynLeaf (Just n)) (SynLeaf (Just n')) = return $ n .< n'
+sLtTree (SynLeaf (Just n)) (SynLeaf (Just n')) = return sFalse
 sLtTree _ _ = return sFalse
 
 ---- SGrade operations
