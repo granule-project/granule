@@ -253,7 +253,7 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
           dataConstructorIndexRewrittenAndSpecialised <- substitute coercions' dataConstructorIndexRewritten
 
           -- dataConstructorIndexRewrittenAndSpecialised = N a`2 n.0.0 -> N a`2 n`1
-          
+
           -- Debugging
           debugM "ctxt" $ "\n\t### unifiers = " <> pretty unifiers <> "\n"
                         <> "\n\t### drewrit = " <> pretty dataConstructorIndexRewritten
@@ -336,7 +336,7 @@ flattenCoeffects :: (?globals :: Globals) => Span -> Maybe (Coeffect, Type) -> M
 flattenCoeffects s Nothing Nothing | usingExtension GradedBase = do
   one <- generatePolymorphicGrade1 s
   return (Just one, [])
-  
+
 flattenCoeffects _ Nothing r = return (r, [])
 flattenCoeffects _ r Nothing = return (r, [])
 flattenCoeffects s (Just (outerCoeff, outerCoeffTy)) (Just (innerCoeff, innerCoeffTy)) = do
