@@ -5,4 +5,4 @@ data Stream a = Next a (Stream a)
 map_stream : forall a b . Stream a %1..∞ -> (a %1..∞ -> b) %1..∞ -> Stream b
 spec 
     map_stream % 1..∞
-map_stream (Next z u) y = (Next (y z)) ((map_stream u) y)
+map_stream = ?

@@ -61,7 +61,7 @@ checkCasePatterns = let ?globals = mempty in do
                 let omega = [var]
                 let goal = TyVar tyVarA
 
-                (expr, _, _, _, _, _) <- caseRule sParams LeftAsync gamma (Focused []) (Focused omega) goal
+                (expr, _, _, _, _, _) <- caseRule sParams False LeftAsync gamma (Focused []) (Focused omega) goal
                 return (Just expr >>= (\res' -> Just (res', grade_r)))
 
         let expr = map (fmap fst . fst) results
@@ -90,6 +90,7 @@ checkCasePatterns = let ?globals = mempty in do
 
                 casePatternMatchBranchSynth
                     defaultSearchParams
+                    False
                     RightAsync
                     gamma
                     omega
@@ -131,6 +132,7 @@ checkCasePatterns = let ?globals = mempty in do
 
               res <- casePatternMatchBranchSynth
                   defaultSearchParams
+                  False
                   RightAsync
                   gamma
                   omega
