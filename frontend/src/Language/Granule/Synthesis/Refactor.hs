@@ -2,7 +2,7 @@
 module Language.Granule.Synthesis.Refactor where
 
 import Language.Granule.Syntax.Def
-import Language.Granule.Syntax.Expr 
+import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Helpers (freeVars)
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Identifiers
@@ -27,7 +27,7 @@ bubbleUpPatterns :: [Id] -> Expr v a -> [Pattern a] -> ([Pattern a], Expr v a)
 bubbleUpPatterns gradedVars (Val _ _ _ (Abs _ p _ e)) pats =
   bubbleUpPatterns gradedVars e (pats ++ [p])
 
--- Handles pattern refactoring for double unboxing 
+-- Handles pattern refactoring for double unboxing
 -- " let [id] = x in let [id'] = id in e === let [[id']] = x in e WHEN id == e "
 bubbleUpPatterns gradedVars (App _ _ _ (Val _ _ _ (Abs _ p@(PBox _ _ _ (PVar _ _ _ id)) _ ( (App _ _ _ (Val _ _ _ (Abs _ p'@(PBox s a rf (PVar _ _ _ id')) _ e)) (Val _ _ _ (Var _ y)))))) (Val _ _ _ (Var _ x))) pats | y == id =
   bubbleUpPatterns (id' : gradedVars) e (replaceInPats pats x (PBox s a rf p') )
@@ -57,16 +57,19 @@ bubbleUpPatterns gradedVars (Case _ _ _ (Val _ _ _ (Var _ name)) [(p, expr)]) pa
 bubbleUpPatterns _ e pats = (pats, e)
 
 refactorCase :: Eq a => [Pattern a] -> Expr v a -> [([Pattern a], Expr v a)]
-refactorCase pats e@(Case _ _ _ (Val _ _ _ (Var _ name)) casePats) = do 
-  let (_, exprs) = unzip casePats 
+refactorCase pats e@(Case _ _ _ (Val _ _ _ (Var _ name)) casePats) = do
+  let (_, exprs) = unzip casePats
   let fvBody = concatMap (\body -> freeVars body) exprs
-  if not $ name `elem` fvBody then 
+  if not $ name `elem` fvBody then
     concatMap (\(pat, body) -> refactorCase (replaceInPats pats name pat) body) casePats
-  else 
+  else
     [(pats, e)]
 refactorCase pats (Case _ _ _ (Val _ _ _ (Promote _ (Val _ _ _ (Var _ name)))) casePats) = do
   concatMap (\(pat, body) -> refactorCase (replaceInPats pats name pat) body) casePats
-refactorCase pats e = [(pats, e)]
+
+refactorCase pats e =
+  let (pats', e') = bubbleUpPatterns [] e pats
+  in [(pats', e')]
 
 -- Refactors a case expression to pattern match on the ADT at the function equation level
 refactorCaseEqn :: Eq a => Equation v a -> [Equation v a]
