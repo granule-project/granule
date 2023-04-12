@@ -604,13 +604,15 @@ gSynthOuter
           let hole = HoleMessage sp hgoal hctxt htyVars hVars synthCtxt [([], expr)]
           let holeCases = concatMap (\h -> map (\(pats, e) -> (errLoc h, zip (getCtxtIds (holeVars h)) pats, e)) (cases h)) [hole]
           let ast' = holeRefactor holeCases ast
-          res <- Ex.try $ check ast'
-          case res of
-            Left (e :: Ex.SomeException) -> return False
-            Right (Left errs) -> do
-              let holeErrors = getHoleMessages errs
-              return $ length holeErrors == length errs
-            Right (Right _) -> return True
+          let timeout = 100000
+          res <- liftIO $ System.Timeout.timeout timeout $ Ex.try $ check ast'
+          case res of 
+            Just (Left (e :: Ex.SomeException)) -> return False
+            Just (Right (Left errs)) -> do
+                  let holeErrors = getHoleMessages errs
+                  return $ length holeErrors == length errs
+            Just (Right (Right _)) -> return True
+            Nothing -> return False
 
       if checked then
         case spec of

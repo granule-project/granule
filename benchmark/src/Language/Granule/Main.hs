@@ -25,7 +25,7 @@ import qualified Data.Time as T
 import qualified System.IO.Strict as SIO
 import System.Environment (getArgs)
 
-import Language.Granule.Benchmarks 
+import Language.Granule.Benchmarks
 
 
 data Measurement = Measurement {
@@ -37,6 +37,10 @@ data Measurement = Measurement {
    , success         :: Bool
    , timeout         :: Bool
    , pathsExplored   :: Integer
+   , programSize     :: Integer
+   , contextSize     :: Integer
+   , examplesUsed    :: Integer
+   , cartesian       :: Bool
     -- To extend with other info...
    }
    deriving (Read, Show)
@@ -83,19 +87,7 @@ instance Report Double where
 modes :: [(String, (String, String))]
 modes = [
       ("graded", ("Graded", ""))
-    , ("ungraded", ("Ungraded", ""))
---  , ("addp", ("Additive pruning", "--alternate"))
---  , ("sub", ("Subtractive", "--subtractive"))
---  , ("addg", ("Additive - grade-on-rule", " --gradeonrule"))
---  , ("addpg", ("Additive pruning - grade-on-rule", "--alternate --gradeonrule"))
---  , ("subg", ("Subtractive - grade-on-rule", "--subtractive --gradeonrule"))
---  , ("add'", ("Additive - new-structuring", " --altsynthstructuring"))
---  , ("addp'", ("Additive pruning - newstructuring", "--alternate --altsynthstructuring"))
---  , ("sub'", ("Subtractive - new-structuring", "--subtractive --altsynthstructuring"))
---  , ("addg'", ("Additive - grade-on-rule new-structuring", " --gradeonrule --altsynthstructuring"))
---  , ("addpg'", ("Additive pruning - grade-on-rule new-structuring", "--alternate --gradeonrule --altsynthstructuring"))
---  , ("subg'", ("Subtractive - grade-on-rule new-structuring", "--subtractive --gradeonrule --altsynthstructuring"))]
--- , ("subd", ("Subtractive with division", "--subtractive --alternate"))
+    , ("cartesian", ("Cartesian", "--cart-synth"))
       ]
 
 defaultRepeatTrys = 10
@@ -117,52 +109,52 @@ getRecursiveContents topPath = do
 
 fileArgs :: [String] -> ([String], [String])
 fileArgs [] = ([], [])
-fileArgs (arg:args) 
+fileArgs (arg:args)
   | "--" `isPrefixOf` arg = ([], arg:args)
   | "-" `isPrefixOf` arg  = ([], arg:args)
   | otherwise = let (files, args') = fileArgs args
                 in (arg:files, args')
 
 
-processArgs :: [String] 
+processArgs :: [String]
             -> ([String] {- Files -}, [String] {- Categories -}, Bool {- FilesPerMode -}, Int {- Repeat -})
 processArgs [] = ([], [], False, defaultRepeatTrys)
-processArgs (arg:args) 
-  | arg == "--categories" = 
-      let (categories, args') = fileArgs args 
-          (files, categories', fpm, repeats) = processArgs args' 
-      in (files, categories ++ categories', fpm, repeats) 
-  | arg == "-c" = 
-      let (categories, args') = fileArgs args 
-          (files, categories', fpm, repeats) = processArgs args' 
-      in (files, categories ++ categories', fpm, repeats) 
+processArgs (arg:args)
+  | arg == "--categories" =
+      let (categories, args') = fileArgs args
+          (files, categories', fpm, repeats) = processArgs args'
+      in (files, categories ++ categories', fpm, repeats)
+  | arg == "-c" =
+      let (categories, args') = fileArgs args
+          (files, categories', fpm, repeats) = processArgs args'
+      in (files, categories ++ categories', fpm, repeats)
   | arg == "--files" =
-      let (files, args') = fileArgs args 
-          (files', categories, fpm, repeats) = processArgs args' 
+      let (files, args') = fileArgs args
+          (files', categories, fpm, repeats) = processArgs args'
       in (files ++ files', categories, fpm, repeats)
   | arg == "-f" =
-      let (files, args') = fileArgs args 
-          (files', categories, fpm, repeats) = processArgs args' 
+      let (files, args') = fileArgs args
+          (files', categories, fpm, repeats) = processArgs args'
       in (files ++ files', categories, fpm, repeats)
-  | arg == "--per-mode" = 
-      let (files, categories, fpm, repeats) = processArgs args 
+  | arg == "--per-mode" =
+      let (files, categories, fpm, repeats) = processArgs args
       in (files, categories, True, repeats)
-  | arg == "-p" = 
-      let (files, categories, fpm, repeats) = processArgs args 
+  | arg == "-p" =
+      let (files, categories, fpm, repeats) = processArgs args
       in (files, categories, True, repeats)
   | arg == "--repeats" =
-      case args of 
-        (arg':args') -> 
+      case args of
+        (arg':args') ->
           let (files, categories, fpm, repeats) = processArgs args'
           in (files, categories, fpm, fromInteger $ read arg')
         _ -> error "--repeats must be given an integer argument"
-  | arg == "-n" = 
-      case args of 
-        (arg':args') -> 
+  | arg == "-n" =
+      case args of
+        (arg':args') ->
           let (files, categories, fpm, repeats) = processArgs args'
           in (files, categories, fpm, fromInteger $ read arg')
         _ -> error "-n must be given an integer argument"
-  | otherwise = error $ printUsage 
+  | otherwise = error $ printUsage
 
 printUsage :: String
 printUsage = ""
@@ -178,12 +170,10 @@ main = do
 
   (files, categories, fpm, repeatTimes) <- return $ processArgs argsMain
 
-  items <- return $
-    case (files, categories) of 
-      ([], []) -> (benchmarkList, sPointBenchmarkList) -- run all examples
-      ([], categories) -> (benchmarksByCategory categories, sPointBenchmarksByCategory categories)
-      (files, _) -> undefined
-  doModes <- return ["graded", "ungraded"]
+  let items = benchmarksToRun benchmarkList
+  let doModes = ["graded", "cartesian"]
+  let fpm = True
+  let repeatTime = defaultRepeatTrys
 
   let relevantModes = lookupMany doModes modes
 
@@ -191,12 +181,10 @@ main = do
   resultsPerMode <-
     forM relevantModes $ \(modeTitle, mode) -> do
 
-      let items' = if mode == "ungraded" then snd items else fst items
-      forM (filter (\(_, _, path) -> ".gr" `isSuffixOf` path) items') $ \(texName, category, file) -> do
+      forM (filter (\(_, _, path, _) -> ".gr" `isSuffixOf` path) items) $ \(texName, category, file, _) -> do
           -- Run granule
           results <- measureSynthesis repeatTimes file mode logIdent
           return (texName, category, file, mode, results)
-
 
       -- Paper view
       -- Transpose the results to get per-file rather than per-mode
@@ -204,53 +192,85 @@ main = do
   let splitTimeAndSMT = True
   let resultsPerFile = transpose resultsPerMode
 
+  putStrLn "\\begin{table}[t]"
+  putStrLn "{\\small{"
+  putStrLn "\\begin{center}"
+  putStrLn "\\setlength{\\tabcolsep}{0.3em}"
+  let seps = replicate (length relevantModes) "p{0.75em}rccc"
+  putStrLn $ "\\begin{tabular}{p{1.25em}cc|" <> intercalate "|" seps <> "} & & & "
 
-  res <- foldM (\seq@(resultsFormattedPrev, prevCategory) resultsPerModePerFile -> do 
-          let category = show $ snd5 $ head resultsPerModePerFile
-          let texName =  show $ fst5 $ head resultsPerModePerFile
-          let categoryMessage = if fromMaybe "" prevCategory /= category 
-                                then "\\hline \\multirow{5}{*}{{\\rotatebox{90}{\\textbf{" <> (show category) <> "}}}}"
+  let colHeadings = map (\(modeTitle, _) -> "\\multicolumn{5}{c|}{"<> modeTitle <> "}") relevantModes
+  putStrLn $ intercalate "&" colHeadings <> "\\\\ \\hline"
+
+  let subHeadings = replicate (length relevantModes) "\\multicolumn{1}{c}{$\\mu{T}$ (ms)} & \\multicolumn{1}{c}{\\textsc{SMT}} & \\multicolumn{1}{c}{Paths} & \\multicolumn{1}{r|}{\\textsc{N}}"
+  putStrLn $ "\\multicolumn{2}{r}{{Problem}}& \\multicolumn{1}{c|}{{Exs}} & & " <> intercalate " & & " subHeadings <> "\\\\ \\hline"
+
+  res <- foldM (\seq@(resultsFormattedPrev, prevCategory) resultsPerModePerFile -> do
+          let category = snd5 $ head resultsPerModePerFile
+          let texName = fst5 $ head resultsPerModePerFile
+          let categoryMessage = if fromMaybe "" prevCategory /= category
+                                then "\\hline \\multirow{" <> show (categorySize category True) <> "}{*}{{\\rotatebox{90}{\\textbf{" <> category <> "}}}}"
                                 else ""
-          putStr categoryMessage        
-          putStrLn " & "
 
-          putStr $ texName <> " & "
+          putStr categoryMessage
+          putStrLn " & "
+          putStr texName 
+          putStr " & "
+          let examples = fifth5 $ head resultsPerModePerFile
+          report1 examples examplesUsed
+
           leadTime <- foldM (\(lead :: Maybe (String, Double) ) (texName, category, fileName, mode, results@(meausurements, aggregate)) -> do
             let currentTime = read $ report1String results synthTime
-            case lead of 
+            case lead of
               Nothing -> return $ Just (mode, currentTime)
-              Just (_, leadTime) -> 
-                if (not $ timeout aggregate) && leadTime > currentTime then 
+              Just (_, leadTime) ->
+                if not (timeout aggregate) && leadTime > currentTime then
                   return $ Just (mode, currentTime)
                 else
                   return lead
             ) Nothing resultsPerModePerFile
 
           resultsFormatted <- forM resultsPerModePerFile $ (\(texName, category, fileName, mode, results@(measurements, aggregate)) -> do
-            return $  sequence (intersperse (putStr " & ") (
-              if splitTimeAndSMT then
-                if timeout aggregate then
-                  [ putStr "\\fail{}",  putStr "Timeout", putStr "-" ]
+            return $  sequence (if splitTimeAndSMT then
+                if not $ success aggregate then
+                  [ putStr " & " , putStr "\\fail{}", putStr " & ",  putStr "Timeout", putStr " & ", putStr "-", putStr " & ", putStr "-" , putStr " & ",  putStr "-" ]
                 else
-                  [ report1 results success
+                  [ putStr " & ", report1 results success
+                  , putStr " & "
                   , if fromMaybeFst "" leadTime == mode then reportLead results synthTime else report results synthTime
+                  , putStr " & "
                   , report1 results smtCalls
-                  , report1 results pathsExplored ]
+                  , putStr " & "
+                  , report1 results pathsExplored
+                  , putStr " & "
+                  -- , report1 results smtCalls
+                  , report1 results programSize ]
               else
                 [ report1 results success
                 , report results synthTime
                 , report results solverTime
                 , report1 results smtCalls
                 , report1 results meanTheoremSize
-                , report1 results pathsExplored] )))
+                , report1 results pathsExplored]))
 
           forM_ resultsFormatted $ \res -> do res
           putStrLn "\\\\ \n%"
           return (resultsFormatted:resultsFormattedPrev, Just category)
           ) ([], Nothing) resultsPerFile
-  putStrLn "\\\\ \n%"
+
+
+
+  putStrLn "\\end{tabular}"
+  putStrLn "\\end{center}}}"
+  putStrLn "\\caption{Results. $\\mu{T}$ in \\emph{ms} to 2 d.p. with standard sample error in brackets}"
+  putStrLn "\\label{tab:results}"
+  putStrLn "\\vspace{-2.5em}"
+  putStrLn "\\end{table}"
+  -- removeFile $ "log-" <> logIdent
+
 
 fst5 (x, _, _, _, _) = x
+fifth5 (_, _, _, _, x) = x
 snd5 (_, x, _, _, _) = x
 
 fromMaybeFst x Nothing  = x
@@ -286,7 +306,11 @@ measureSynthesis repeatTimes file mode logIdent = do
            , meanTheoremSize = 0.00
            , success = False
            , timeout = True
-           , pathsExplored = 0}
+           , pathsExplored = 0
+           , programSize = 0
+           , contextSize = 0
+           , examplesUsed = 0
+           , cartesian = False }
        ExitSuccess -> do
          logData <- SIO.readFile $ "log-" <> logIdent
          -- Read off the current results which should be on the second last line of the log file
@@ -295,7 +319,7 @@ measureSynthesis repeatTimes file mode logIdent = do
         --  putStrLn "STOP"
         --  putStrLn $ show $ (head $ drop (k - 1) $ lines logData)
         --  putStrLn "BLAH"
-       
+
          return $ read (head $ drop (k - 1) $ lines logData)
 
 -- Aggregate the results from multiple runs
@@ -303,13 +327,23 @@ aggregate :: [Measurement] -> Measurement
 aggregate results =
   let n = fromIntegral $ length results
   in Measurement
-      { smtCalls = the (map smtCalls results)
+      { smtCalls = fromMaybe 0 $ the' (map smtCalls results)
       , synthTime  = sum (map synthTime results) / n
       , proverTime = sum (map proverTime results) / n
       , solverTime = sum (map solverTime results) / n
-      , meanTheoremSize = the (map meanTheoremSize results)
-      , success = the (map success results)
-      , timeout = the (map timeout results)
-      , pathsExplored = the (map pathsExplored results)
+      , meanTheoremSize = fromMaybe 0 $ the' (map meanTheoremSize results)
+      , success = fromMaybe False $ the' (map success results)
+      , timeout = fromMaybe True $ the' (map timeout results)
+      , pathsExplored = fromMaybe 0 $ the' (map pathsExplored results)
+      , programSize = fromMaybe 0 $ the' (map programSize results)
+      , contextSize = fromMaybe 0 $ the' (map pathsExplored results)
+      , examplesUsed = fromMaybe 0 $ the' (map examplesUsed results)
+      , cartesian = fromMaybe False $ the' (map cartesian results)
       }
 
+
+the' :: Eq a => [a] -> Maybe a
+the' (x:xs)
+  | all (x ==) xs = Just x
+  | otherwise      = Nothing
+the' []            = Nothing

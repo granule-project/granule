@@ -220,7 +220,8 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
       let holesWithEmptyMeasurements = map (\h -> (h, Nothing, 0)) holes
       res <- synthesiseHoles ast holesWithEmptyMeasurements isGradedBase
       let (holes', measurements, _) = unzip3 res
-      forM_ measurements (\m -> case m of (Just m') -> putStrLn $ show m' ; _ -> return ())
+      when benchmarkingRawData $ do 
+        forM_ measurements (\m -> case m of (Just m') -> putStrLn $ show m' ; _ -> return ()) 
       return holes'
 
 
@@ -252,8 +253,10 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
         Just ([], measurement) -> do
           return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt hcases, measurement, attemptNo) : rest
         Nothing -> do
-          printInfo $ "No programs synthesised - Timeout after: " <> show (fromIntegral timeout / (10^(6 :: Integer)::Double))  <> "s"
-          return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt hcases, Nothing, attemptNo) : rest
+          _ <- if benchmarkingRawData 
+            then return ()
+            else printInfo $ "No programs synthesised - Timeout after: " <> show (fromIntegral timeout / (10^(6 :: Integer)::Double))  <> "s"
+          return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt hcases, Just mempty, attemptNo) : rest
         Just (programs@(_:_), measurement) -> do
           when synthHtml $ do
             printSynthOutput $ uncurry synthTreeToHtml (last programs)

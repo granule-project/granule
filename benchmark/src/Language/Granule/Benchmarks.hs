@@ -3,82 +3,138 @@ module Language.Granule.Benchmarks where
 rootDir :: String
 rootDir = "frontend/tests/cases/synthesis/"
 
-benchmarkList :: [(String, String, String)]
+benchmarkList :: [(String, String, String, Bool)]
 benchmarkList = [
-    -- Comp
-    ("0/1",                                 "Comp", "comp/01.gr"),
-    ("CBN",                                 "Comp", "comp/cbn.gr"),
-    ("CBV",                                 "Comp", "comp/cbv.gr"),
-    ("$\\circ\\textit{coK}_\\mathbb{N}$",   "Comp", "comp/con.gr"), 
-    ("$\\circ\\textit{coK}_\\mathcal{R}$",  "Comp", "comp/cok.gr"), 
-    ("Mult",                                "Comp", "comp/mult.gr"),
+    -- -- Comp
+    -- ("0/1",                                 "Comp", "comp/01.gr",               False),
+    -- ("CBN",                                 "Comp", "comp/cbn.gr",              False),
+    -- ("CBV",                                 "Comp", "comp/cbv.gr",              False),
+    -- ("$\\circ\\textit{coK}_\\mathbb{N}$",   "Comp", "comp/con.gr",              False),
+    -- ("$\\circ\\textit{coK}_\\mathcal{R}$",  "Comp", "comp/cok.gr",              False),
+    -- ("Mult",                                "Comp", "comp/mult.gr",             False),
 
-    -- Hilbert
-    ("SKI",                  "Hilbert", "hilbert/ski.gr"),
-    ("$\\otimes$-Intro",     "Hilbert", "hilbert/andIntro.gr"),
-    ("$\\otimes$-Elim",      "Hilbert", "hilbert/andElim.gr"),
-    ("$\\oplus$-Intro",      "Hilbert", "hilbert/orIntro.gr"),
-    ("$\\oplus$-Elim",       "Hilbert", "hilbert/orElim.gr"),
+    -- -- Hilbert
+    -- ("SKI",                  "Hilbert", "hilbert/ski.gr",                       False),
+    -- ("$\\otimes$-Intro",     "Hilbert", "hilbert/andIntro.gr",                  False),
+    -- ("$\\otimes$-Elim",      "Hilbert", "hilbert/andElim.gr",                   False),
+    -- ("$\\oplus$-Intro",      "Hilbert", "hilbert/orIntro.gr",                   False),
+    -- ("$\\oplus$-Elim",       "Hilbert", "hilbert/orElim.gr",                    False),
 
-    -- Dist 
-    ("$\\multimap$-!",               "Dist", "dist/funBang.gr"),
-    ("$\\multimap$-$\\mathbb{N}$",   "Dist", "dist/funN.gr"),
-    ("$\\multimap$-$\\mathbb{R}$",   "Dist", "dist/funR.gr"),
-    ("$\\oplus$-!",                  "Dist", "dist/sumBang.gr"),
-    ("$\\oplus$-$\\mathbb{N}$",      "Dist", "dist/sumN.gr"),
-    ("$\\oplus$-$\\mathcal{R}$",     "Dist", "dist/sumR.gr"),
-    ("$\\otimes$-!",                 "Dist", "dist/prodBang.gr"),
-    ("$\\otimes$-$\\mathbb{N}$",     "Dist", "dist/prodN.gr"),
-    ("$\\otimes$-$\\mathcal{R}$",    "Dist", "dist/prodR.gr"),
+    -- -- Dist 
+    -- ("$\\multimap$-!",               "Dist", "dist/funBang.gr",                 False),
+    -- ("$\\multimap$-$\\mathbb{N}$",   "Dist", "dist/funN.gr",                    False),
+    -- ("$\\multimap$-$\\mathbb{R}$",   "Dist", "dist/funR.gr",                    False),
+    -- ("$\\oplus$-!",                  "Dist", "dist/sumBang.gr",                 False),
+    -- ("$\\oplus$-$\\mathbb{N}$",      "Dist", "dist/sumN.gr",                    False),
+    -- ("$\\oplus$-$\\mathcal{R}$",     "Dist", "dist/sumR.gr",                    False),
+    -- ("$\\otimes$-!",                 "Dist", "dist/prodBang.gr",                False),
+    -- ("$\\otimes$-$\\mathbb{N}$",     "Dist", "dist/prodN.gr",                   False),
+    -- ("$\\otimes$-$\\mathcal{R}$",    "Dist", "dist/prodR.gr",                   False),
 
-    -- Vec 
-    ("vec5",     "Vec", "vec/vec5.gr"),
-    ("vec10",    "Vec", "vec/vec10.gr"),
-    ("vec15",    "Vec", "vec/vec15.gr"),
-    ("vec20",    "Vec", "vec/vec20.gr"),
+    -- -- Vec 
+    -- ("vec5",     "Vec", "vec/vec5.gr",                                          False),
+    -- ("vec10",    "Vec", "vec/vec10.gr",                                         False),
+    -- ("vec15",    "Vec", "vec/vec15.gr",                                         False),
+    -- ("vec20",    "Vec", "vec/vec20.gr",                                         False),
+
+    -- -- Misc
+    -- ("copy",                "Misc", "misc/copy.gr",                             False),
+    -- ("share",               "Misc", "misc/share.gr",                            False),
+    -- ("split-$\\oplus$",     "Misc", "misc/shareSum.gr",                         False),
+    -- ("split-$\\otimes$",    "Misc", "misc/shareProd.gr",                        False),
+
+    -- -- *** GRADED BASE *** --
+
+    -- -- List
+    ("append",                 "List", "graded-base/list/append.gr",            True),
+    ("concat",                 "List", "graded-base/list/concat.gr",            True),
+    ("empty",                  "List", "graded-base/list/nil.gr",               True),
+    ("snoc",                   "List", "graded-base/list/snoc.gr",              True),
+    ("drop",                   "List", "graded-base/list/drop.gr",              True),
+    ("flatten",                "List", "graded-base/list/flatten.gr",           True),
+    ("bind",                   "List", "graded-base/list/bind.gr",              True),
+    ("return",                 "List", "graded-base/list/return.gr",            True),
+    ("inc",                    "List", "graded-base/list/inc.gr",               True),
+    ("head",                   "List", "graded-base/list/head.gr",              True),
+    ("tail",                   "List", "graded-base/list/tail.gr",              True),
+    ("last",                   "List", "graded-base/list/last.gr",              True),
+    ("length",                 "List", "graded-base/list/length.gr",            True),
+    ("map",                    "List", "graded-base/list/map.gr",               True),
+    ("replicate5",             "List", "graded-base/list/replicate5.gr",        True),
+    ("replicate10",            "List", "graded-base/list/replicate10.gr",       True),
+    ("replicateN",             "List", "graded-base/list/replicateN.gr",        True),
+    ("stutter",                "List", "graded-base/list/stutter.gr",           True),
+    ("sum",                    "List", "graded-base/list/sum.gr",               True),
+
+--     -- Stream 
+    ("build",                  "Stream", "graded-base/stream/build.gr",         True),
+    ("map",                    "Stream", "graded-base/stream/map.gr",           True),
+    ("take1",                  "Stream", "graded-base/stream/take1.gr",         True),
+    ("take2",                  "Stream", "graded-base/stream/take2.gr",         True),
+    ("take3",                  "Stream", "graded-base/stream/take3.gr",         True),
+
+    -- -- Bool 
+    ("neg",                    "Bool", "graded-base/bool/neg.gr",               True),
+    ("and",                    "Bool", "graded-base/bool/and.gr",               True),
+    ("impl",                   "Bool", "graded-base/bool/impl.gr",              True),
+    ("or",                     "Bool", "graded-base/bool/or.gr",                True),
+    ("xor",                    "Bool", "graded-base/bool/xor.gr",               True),
+    ("copy",                   "Bool", "graded-base/bool/boolCopy.gr",          False),
+    ("toBoolPair",             "Bool", "graded-base/bool/toBoolPair.gr",        False),
+    ("toBoolPair2",            "Bool", "graded-base/bool/toBoolPair2.gr",       False),
+
+    -- Maybe
+    ("bind",                    "Maybe", "graded-base/maybe/bind.gr",           True),
+    ("fromMaybe",               "Maybe", "graded-base/maybe/fromMaybe.gr",      True),
+    ("return",                  "Maybe", "graded-base/maybe/toJust.gr",         True),
+    ("isJust",                  "Maybe", "graded-base/maybe/isJust.gr",         True),
+    ("isNothing",               "Maybe", "graded-base/maybe/isNothing.gr",      True),
+    ("map",                     "Maybe", "graded-base/maybe/map.gr",            True),
+    ("maybePair",               "Maybe", "graded-base/maybe/maybePair.gr",      False),
+    ("mplus",                   "Maybe", "graded-base/maybe/mplus.gr",          True),
+    ("safeHead",                "Maybe", "graded-base/maybe/safeHead.gr",       False),
+
+--     -- Nat 
+    ("isEven",                  "Nat", "graded-base/nat/isEven.gr",             True),
+    ("pred",                    "Nat", "graded-base/nat/pred.gr",               True),
+    ("succ",                    "Nat", "graded-base/nat/succ.gr",               True),
+    ("sum",                     "Nat", "graded-base/nat/sum.gr",                True),
+
+--     -- Tree 
+    ("map",                     "Tree", "graded-base/tree/map.gr",              True),
+    ("stutter",                 "Tree", "graded-base/tree/stutter.gr",          True),
+    ("sum",                     "Tree", "graded-base/tree/sum.gr",              True),
 
     -- Misc
-    ("Copy",                "Misc", "misc/copy.gr"),
-    ("share",               "Misc", "misc/share.gr"),
-    ("split-$\\oplus$",     "Misc", "misc/shareSum.gr"),
-    ("split-$\\otimes$",    "Misc", "misc/shareProd.gr"),
-
-    ("Test1",              "Tests", "test/test1.gr"),
-    ("Test2",              "Tests2", "test/test2.gr"),
-
-    -- *** GRADED BASE *** --
-    ("list_append",                     "List", "graded-base/lists/list1.gr"),
-    ("list_map",                        "List", "graded-base/lists/list2.gr"),
-    ("list_concat",                     "List", "graded-base/lists/list3.gr"),
-    ("list_drop",                       "List", "graded-base/lists/list4.gr"),
-    ("list_even_parity",                "List", "graded-base/lists/list5.gr"),
-    ("list_fold",                       "List", "graded-base/lists/list6.gr"),
-    ("list_hd",                         "List", "graded-base/lists/list7.gr")
+    ("compose",                 "Misc", "graded-base/misc/compose.gr",          True),
+    ("copy",                    "Misc", "graded-base/misc/copy.gr",             True),
+    ("push",                    "Misc", "graded-base/misc/push-fun-gen.gr",     True)
+--     ("SKI",                     "Misc", "graded-base/misc/SKI.gr",              False)
 
                 ]
 
 
-sPointBenchmarkList :: [(String, String, String)]
-sPointBenchmarkList = [
-    ("list_append",                     "List", "graded-base/spoint/lists/list1.gr"),
-    ("list_map",                        "List", "graded-base/spoint/lists/list2.gr"),
-    ("list_concat",                     "List", "graded-base/spoint/lists/list3.gr"),
-    ("list_drop",                       "List", "graded-base/spoint/lists/list4.gr"),
-    ("list_even_parity",                "List", "graded-base/spoint/lists/list5.gr"),
-    ("list_fold",                       "List", "graded-base/spoint/lists/list6.gr"),
-    ("list_hd",                         "List", "graded-base/spoint/lists/list7.gr")
-            ]
 
-benchmarkListFullPath :: [(String, String, String)] -> [(String, String, String)]
-benchmarkListFullPath bl = map (\(title, cat, path) -> (title, cat, rootDir <> path)) bl
+benchmarkListFullPath :: [(String, String, String, Bool)] -> [(String, String, String, Bool)]
+benchmarkListFullPath = map (\(title, cat, path, incl) -> (title, cat, rootDir <> path, incl))
 
-benchmarksByCategory :: [String] -> [(String, String, String)]
-benchmarksByCategory [] = []
-benchmarksByCategory (c:cats) = filter (\(_, c', _) -> c' == c) (benchmarkListFullPath benchmarkList) ++ benchmarksByCategory cats
+benchmarksToRun :: [(String, String, String, Bool)] -> [(String, String, String, Bool)]
+benchmarksToRun = benchmarkListFullPath . filter (\(_,_,_,b) -> b) 
 
-sPointBenchmarksByCategory :: [String] -> [(String, String, String)]
-sPointBenchmarksByCategory [] = []
-sPointBenchmarksByCategory (c:cats) = filter (\(_, c', _) -> c' == c) (benchmarkListFullPath sPointBenchmarkList) ++ sPointBenchmarksByCategory cats
+benchmarksByCategory :: [String] -> Bool -> [(String, String, String, Bool)]
+benchmarksByCategory bs onlyIncls = foldr
+      (\ c
+         -> (++)
+              (filter
+                 (\ (_, c', _, incl) -> c' == c && (incl || not onlyIncls))
+                 (benchmarkListFullPath benchmarkList)))
+      []
+      bs 
+
+categorySize :: String -> Bool -> Int
+categorySize cat onlyIncls = length $ benchmarksByCategory [cat] onlyIncls
+
+
 
 
 
