@@ -68,7 +68,7 @@ import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NonEmpty
 import Language.Granule.Checker.Checker (checkExpr, Polarity (Positive, Negative), checkDef, check)
 import qualified Language.Granule.Checker.Primitives as Primitives
-import Language.Granule.Synthesis.Monad (SynthesisData(gradedProgram))
+import Language.Granule.Synthesis.Monad (SynthesisData(gradedProgram), Measurement (cartAttempts))
 
 ------------------------------
 
@@ -456,6 +456,7 @@ synthesiseGradedBase ast gradedProgram hole spec eval hints index unrestricted r
                               Just (Spec _ _ exs _) -> toInteger $ length $ filter (\(Example _ _ cartOnly)-> cartesianSynth || not cartOnly ) exs
                               Nothing -> 0
                         , cartesian = cartesianSynth
+                        , cartAttempts = attempts agg
                         } in
                 return (programs, Just measurement)
           else do
@@ -611,6 +612,12 @@ gSynthOuter
             let holeCases = concatMap (\h -> map (\(pats, e) -> (errLoc h, zip (getCtxtIds (holeVars h)) pats, e)) (cases h)) [hole]
             let (AST _ defs' _ _ _) = holeRefactor holeCases ast
             let [defId] = currDef st
+            Synthesiser $ lift $ lift $ lift $ modify (\state ->
+              state {
+                attempts = 1 + attempts state
+                    })
+
+
             case (find (\(Def _ id _ _ _ _) -> id == defId) defs', prog) of
               (Just (Def _ _ _ _ (EquationList _ _ _ eqs) _), Def _ _ _ _ (EquationList _ _ _ eqs') _) -> 
                 return $ pretty eqs == pretty eqs'

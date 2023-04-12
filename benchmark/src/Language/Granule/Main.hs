@@ -41,6 +41,7 @@ data Measurement = Measurement {
    , contextSize     :: Integer
    , examplesUsed    :: Integer
    , cartesian       :: Bool
+   , cartAttempts    :: Integer
     -- To extend with other info...
    }
    deriving (Read, Show)
@@ -310,7 +311,8 @@ measureSynthesis repeatTimes file mode logIdent = do
            , programSize = 0
            , contextSize = 0
            , examplesUsed = 0
-           , cartesian = False }
+           , cartesian = False
+           , cartAttempts = 0 }
        ExitSuccess -> do
          logData <- SIO.readFile $ "log-" <> logIdent
          -- Read off the current results which should be on the second last line of the log file
@@ -339,6 +341,7 @@ aggregate results =
       , contextSize = fromMaybe 0 $ the' (map pathsExplored results)
       , examplesUsed = fromMaybe 0 $ the' (map examplesUsed results)
       , cartesian = fromMaybe False $ the' (map cartesian results)
+      , cartAttempts = fromMaybe 0 $ the' (map cartAttempts results)
       }
 
 

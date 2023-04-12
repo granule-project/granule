@@ -191,12 +191,13 @@ data Measurement =
   , contextSize     :: Integer
   , examplesUsed    :: Integer
   , cartesian       :: Bool
+  , cartAttempts    :: Integer
 
   } deriving Show
 
 instance Semigroup Measurement where
- (Measurement smt synTime provTime solveTime meanTheorem success timeout paths progs ctxt exs cart) <>
-  (Measurement smt' synTime' provTime' solveTime' meanTheorem' success' timeout' paths' progs' ctxt' exs' cart') =
+ (Measurement smt synTime provTime solveTime meanTheorem success timeout paths progs ctxt exs cart ca) <>
+  (Measurement smt' synTime' provTime' solveTime' meanTheorem' success' timeout' paths' progs' ctxt' exs' cart' ca') =
     Measurement
       (smt + smt')
       (synTime + synTime')
@@ -210,9 +211,10 @@ instance Semigroup Measurement where
       (ctxt + ctxt')
       (exs + exs')
       (cart || cart')
+      (ca + ca')
 
 instance Monoid Measurement where
-  mempty  = Measurement 0 0.0 0.0 0.0 0.0 False False 0 0 0 0 False
+  mempty  = Measurement 0 0.0 0.0 0.0 0.0 False False 0 0 0 0 False 0
   mappend = (<>)
 
 getCurrentPartialExpr :: Synthesiser (Expr () ())
