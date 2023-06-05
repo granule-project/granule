@@ -24,6 +24,8 @@ import System.IO (hClose, hPutStr, hPutStrLn, openTempFile, stderr)
 import System.IO.Unsafe (unsafePerformIO)
 import "Glob" System.FilePath.Glob (glob)
 
+import Control.Monad.IO.Class
+
 
 import Language.Granule.Syntax.Span
 
@@ -53,11 +55,11 @@ data Globals = Globals
   , globalsGradeOnRule         :: Maybe Bool
   , globalsSynthTimeoutMillis  :: Maybe Integer
   , globalsSynthIndex          :: Maybe Integer
-  , globalsExtensions           :: [Extension]
+  , globalsExtensions          :: [Extension]
   } deriving (Read, Show)
 
 -- | Allowed extensions
-data Extension = Base | CBN | NoTopLevelApprox | SecurityLevels
+data Extension = Base | CBN | NoTopLevelApprox | SecurityLevels | Report
  deriving (Eq, Read, Show)
 
 -- | Given a map from `Extension`s to `a` pick the first
@@ -72,6 +74,10 @@ extensionDependent emap def =
       case lookup e emap of
         Just a -> a
         Nothing -> aux es
+
+-- Predicate on whether a particular extension is turned on or not.
+usingExtension :: (?globals :: Globals) => Extension -> Bool
+usingExtension x = x `elem` globalsExtensions ?globals
 
 -- | Parse valid extension names
 parseExtensions :: String -> Maybe Extension
@@ -205,6 +211,12 @@ mkSpan (start, end) = Span start end sourceFilePath
 nullSpan :: (?globals :: Globals) => Span
 nullSpan = Span (0, 0) (0, 0) sourceFilePath
 
+reportM :: (?globals :: Globals, MonadIO f) => String -> f ()
+reportM message =
+  when (usingExtension Report) (liftIO $ putStrLn $ message)
+
+reportMsep :: (?globals :: Globals, MonadIO f) => f ()
+reportMsep = reportM (replicate 80 '-')
 
 debugM :: (?globals :: Globals, Applicative f) => String -> String -> f ()
 debugM explanation message =

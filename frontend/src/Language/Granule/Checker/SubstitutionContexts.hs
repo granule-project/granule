@@ -4,6 +4,8 @@
 
 module Language.Granule.Checker.SubstitutionContexts where
 
+import Data.List (intercalate)
+
 import Language.Granule.Context
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Pretty
@@ -22,8 +24,10 @@ data Substitutors =
     SubstT  Type
   deriving (Eq, Show)
 
-instance Pretty Substitutors where
-  pretty (SubstT t) = pretty t
+instance {-# OVERLAPS #-} Pretty (Ctxt Substitutors) where
+  pretty = (intercalate " | ") . (map prettyCoerce)
+    where 
+      prettyCoerce (v, SubstT t) = pretty v <> " ~ " <> pretty t
 
 instance Term Substitution where
   freeVars [] = []
