@@ -301,6 +301,7 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
           subst <- combineSubstitutions s unifiers us
           subst <- combineSubstitutions s coercions' subst
           debugM "ctxt" $ "\n\t### outSubst = " <> pretty subst <> "\n"
+          reportM $ "Output substitution = " <> pretty subst
 
           -- ### outSubst = n`1 ~ n.0.0 + 1
           --                t.11.0 ~ a.3.0
