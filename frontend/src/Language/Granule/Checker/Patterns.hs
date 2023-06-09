@@ -216,7 +216,7 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
 
       -- <REPORT>
       reportM $ "Matching on constructor " <> pretty dataC <> "\n"
-      reportM $ "Type scheme  = " <> pretty tySch 
+      reportM $ "Type scheme  = " <> pretty tySch
       reportM $ "Coercions    = " <> pretty coercions
       reportM $ "Type indices = " <> pretty indices
       reportMsep
@@ -239,7 +239,7 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
       reportMsep
       reportM $ "Computing equality " <> prettyNested (resultType dataConstructorTypeFresh) <> " == " <> prettyNested ty
       reportM $ " (under type variable context = " <> pretty (tyVarContext st) <> ")"
-      
+
       -- Equality between N t.11.0 t.10.0 ~ N a`2 n`1
       -- where a`2 and n`1 are \forall quantified
 
@@ -257,6 +257,8 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
 
           -- unifiers:   t.10.0 ~ n`1
           --             t.11.0 ~ a`2
+          st <- get
+          reportM $ "Predicate stack" <> (pretty $ predicateStack st)
 
           dataConstructorIndexRewritten <- substitute unifiers dataConstructorTypeFresh
 
@@ -264,10 +266,10 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
           -- dataConstructorIndexRewritten = N a`2 n.0.0 -> N a`2 n`1
 
           dataConstructorIndexRewrittenAndSpecialised <- substitute coercions' dataConstructorIndexRewritten
-
+          reportM $ "Remaining type for the pattern constructor after equality unifiers and freshened coercions are applied" <> pretty dataConstructorIndexRewrittenAndSpecialised
 
           -- dataConstructorIndexRewrittenAndSpecialised = N a`2 n.0.0 -> N a`2 n`1
-          
+
           -- Debugging
           debugM "ctxt" $ "\n\t### unifiers = " <> pretty unifiers <> "\n"
                         <> "\n\t### drewrit = " <> pretty dataConstructorIndexRewritten
@@ -288,7 +290,7 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
           debugM "### pattern" (pretty ty)
           ty <- substitute coercions' ty
           debugM "### pattern" (pretty ty)
-          
+
           -- Unifiers are only those things that include index variables
 
           -- unifiers:   t.10.0 ~ n`1
