@@ -1,0 +1,5 @@
+-- Flip the position of duality for the forkLinear
+-- primitive
+forkLinearAlt : forall {s : Protocol}
+    . (LChan (Dual s) -> ()) -> LChan s
+forkLinearAlt = forkLinear
