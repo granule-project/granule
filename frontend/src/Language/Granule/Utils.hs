@@ -56,7 +56,7 @@ data Globals = Globals
   } deriving (Read, Show)
 
 -- | Allowed extensions
-data Extension = Base | CBN | NoTopLevelApprox | SecurityLevels
+data Extension = Base | CBN | NoTopLevelApprox | SecurityLevels | UnsafePromotion
  deriving (Eq, Read, Show)
 
 -- | Given a map from `Extension`s to `a` pick the first
