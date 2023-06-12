@@ -266,7 +266,7 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
           -- dataConstructorIndexRewritten = N a`2 n.0.0 -> N a`2 n`1
 
           dataConstructorIndexRewrittenAndSpecialised <- substitute coercions' dataConstructorIndexRewritten
-          reportM $ "Remaining type for the pattern constructor after equality unifiers and freshened coercions are applied" <> pretty dataConstructorIndexRewrittenAndSpecialised
+          reportM $ "Remaining type for the pattern constructor after equality unifiers and freshened coercions are applied: " <> pretty dataConstructorIndexRewrittenAndSpecialised
 
           -- dataConstructorIndexRewrittenAndSpecialised = N a`2 n.0.0 -> N a`2 n`1
 
@@ -287,6 +287,7 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
 
           -- TODO: GO BACK TO THIS
           -- Apply the coercions to the type
+          -- (`ty` used for working out definition unification)
           debugM "### pattern" (pretty ty)
           ty <- substitute coercions' ty
           debugM "### pattern" (pretty ty)
