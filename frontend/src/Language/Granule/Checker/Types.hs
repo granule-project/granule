@@ -24,8 +24,9 @@ import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
-
+import Language.Granule.Syntax.Helpers (freeVars)
 import Language.Granule.Utils
+import Language.Granule.Context
 
 import Data.Functor.Const
 
@@ -671,3 +672,38 @@ isEffectType s ty = do
       putChecker
       return $ Right effTy
     Left err -> return $ Left effTy
+
+-- `refineBinderQuantification ctxt ty` 
+-- Given a list of variable-kind information `ctxt` binding over a type `ty`
+-- then calculate based on the usage of the type variables whether they are
+-- truly universal quantifiers, or whether some are actually pi-types.
+refineBinderQuantification :: (?globals :: Globals) => Ctxt Kind -> Type -> Checker (Ctxt (Kind, Quantifier))
+refineBinderQuantification ctxt ty = mapM computeQuantifier ctxt
+  where
+    computeQuantifier (id, kind) = do
+      result <- aux id ty
+      return $ if result then (id, (kind, BoundQ)) else (id, (kind, ForallQ))
+
+    aux :: Id -> Type -> Checker Bool
+    aux id (FunTy _ t1 t2) = liftM2 (||) (aux id t1) (aux id t2)
+    aux id (Box _ t)       = aux id t
+    aux id (Diamond _ t)   = aux id t
+    aux id (Star _ t)      = aux id t
+    aux id t@(TyApp _ _)   =
+      case leftmostOfApplication t of
+        TyCon tyConId -> do
+          st <- get
+          case lookup tyConId (typeConstructors st) of
+            Just (_, _, indices) -> do
+              liftIO $ putStrLn $ "tyConId = " ++ pretty tyConId ++ " params = " ++ show indices ++ " paramtypes = " ++ show (typeArguments t)
+              return $ any (\i -> id `elem` freeVars (typeArguments t !! i)) indices
+              --return True
+            Nothing -> throw UnboundVariableError { errLoc = nullSpan , errId = id }
+        -- unusual- put possible (e.g., `f t`) give up and go for ForallQ
+        _ -> return False
+    aux id (TyInfix _ t1 t2) = liftM2 (||) (aux id t1) (aux id t2)
+    aux id (TySig t k)       = liftM2 (||) (aux id t) (aux id k)
+    aux id (TyCase t ts)     = liftM2 (||) (aux id t) (anyM (\(_, t) -> aux id t) ts)
+      where
+        anyM f xs = mapM f xs >>= (return . or)
+    aux id _ = return False

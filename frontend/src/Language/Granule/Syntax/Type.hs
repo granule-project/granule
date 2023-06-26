@@ -247,6 +247,10 @@ leftmostOfApplication :: Type -> Type
 leftmostOfApplication (TyApp t _) = leftmostOfApplication t
 leftmostOfApplication t = t
 
+typeArguments :: Type -> [Type]
+typeArguments (TyApp t1 t2) = typeArguments t1 ++ [t2]
+typeArguments _            = []
+
 freeAtomsVars :: Type -> [Id]
 freeAtomsVars (TyVar v) = [v]
 freeAtomsVars (TyApp t1 (TyVar v)) = v : freeAtomsVars t1

@@ -384,8 +384,9 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ binders
   -- Check that the lhs doesn't introduce any duplicate binders
   duplicateBinderCheck s pats
 
-  -- Freshen the type context
-  modify (\st -> st { tyVarContext = ctxtMap (\k -> (k, ForallQ)) foralls})
+  -- Initialize the type context with the type variable binders in scope from the signature
+  binders' <- refineBinderQuantification binders defTy
+  modify $ \st -> st { tyVarContext = binders' }
 
   -- Create conjunct to capture the pattern constraints
   newConjunct
@@ -395,7 +396,7 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ binders
   -- Build the binding context for the branch pattern
   st <- get
   (patternGam, tau, localVars, subst, elaborated_pats, consumptions) <-
-     ctxtFromTypedPatterns s InFunctionEquation ty pats (patternConsumption st)
+     ctxtFromTypedPatterns s InFunctionEquation defTy pats (patternConsumption st)
 
   -- Update the consumption information
   modify (\st -> st { patternConsumption =
