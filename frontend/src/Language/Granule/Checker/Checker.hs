@@ -28,6 +28,7 @@ import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Constraints.SymbolicGrades
 import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Constraints
+import Language.Granule.Checker.DataTypes (registerTypeConstructor)
 import Language.Granule.Checker.Exhaustivity
 import Language.Granule.Checker.Effects
 import Language.Granule.Checker.Ghost
@@ -68,11 +69,11 @@ check ast@(AST _ _ _ hidden _) = do
   evalChecker (initState { allHiddenNames = hidden }) $ (do
       ast@(AST dataDecls defs imports hidden name) <- return $ replaceTypeAliases ast
       _    <- checkNameClashes ast
-      _    <- runAll checkTyCon (Primitives.dataTypes ++ dataDecls)
-      _    <- runAll checkDataCons (Primitives.dataTypes ++ dataDecls)
+      _    <- runAll registerTypeConstructor (Primitives.dataTypes <> dataDecls)
+      _    <- runAll checkDataCons (Primitives.dataTypes <> dataDecls)
       debugM "extensions" (show $ globalsExtensions ?globals)
       debugM "check" "kindCheckDef"
-      defs <- runAll kindCheckDef defs
+      defs  <- runAll kindCheckDef defs
       let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
       defs <- runAll (checkDef defCtxt) defs
       -- Add on any definitions computed by the type checker (derived)
@@ -88,7 +89,7 @@ synthExprInIsolation :: (?globals :: Globals)
 synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
   evalChecker (initState { allHiddenNames = hidden }) $ do
       _    <- checkNameClashes ast
-      _    <- runAll checkTyCon (Primitives.dataTypes ++ dataDecls)
+      _    <- runAll registerTypeConstructor (Primitives.dataTypes ++ dataDecls)
       _    <- runAll checkDataCons (Primitives.dataTypes ++ dataDecls)
       defs <- runAll kindCheckDef defs
 
@@ -137,19 +138,6 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
           ty' <- substitute subst ty
           return $ Left (Forall nullSpanNoFile [] [] ty', derivedDefs)
 
--- TODO: we are checking for name clashes again here. Where is the best place
--- to do this check?
-checkTyCon :: DataDecl -> Checker ()
-checkTyCon d@(DataDecl sp name tyVars kindAnn ds)
-  = lookup name <$> gets typeConstructors >>= \case
-    Just _ -> throw TypeConstructorNameClash{ errLoc = sp, errId = name }
-    Nothing -> modify' $ \st ->
-      st{ typeConstructors = (name, (tyConKind, ids, typeIndicesPositions d)) : typeConstructors st }
-  where
-    ids = map dataConstrId ds -- the IDs of data constructors
-    tyConKind = mkKind (map snd tyVars)
-    mkKind [] = case kindAnn of Just k -> k; Nothing -> Type 0 -- default to `Type`
-    mkKind (v:vs) = FunTy Nothing v (mkKind vs)
 
 checkDataCons :: (?globals :: Globals) => DataDecl -> Checker ()
 checkDataCons d@(DataDecl sp name tyVars k dataConstrs) = do
@@ -158,10 +146,9 @@ checkDataCons d@(DataDecl sp name tyVars k dataConstrs) = do
                 Just (kind, _ , _) -> kind
                 _ -> error $ "Internal error. Trying to lookup data constructor " <> pretty name
     modify' $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars] }
+    
     let paramsAndIndices = discriminateTypeIndicesOfDataType d
     mapM_ (checkDataCon name kind tyVars (typeIndices d) paramsAndIndices) dataConstrs
-  where
-
 
 checkDataCon :: (?globals :: Globals)
   => Id -- ^ The type constructor and associated type to check against
