@@ -34,7 +34,7 @@ data Quantifier =
     -- | Unification variables
     | InstanceQ
 
-    -- | Univeral, but bound in a dependent pattern match
+    -- | Pi types
     | BoundQ
   deriving (Show, Eq)
 

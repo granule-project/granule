@@ -354,6 +354,24 @@ ctxtFromTypedPattern' _ s _ t p _ = do
     (Star _ t') -> throw $ UniquenessError { errLoc = s, uniquenessMismatch = UniquePromotion t'}
     otherwise -> throw $ PatternTypingError { errLoc = s, errPat = p, tyExpected = t }
 
+{-
+
+  `ctxtFromTypedPatterns pp ty ps consumption`
+  Parameters
+    - pp = the position in which the pattern is occuring
+    - ty = the types of the inputs and the output (e.g. in the form of a FunTy)
+    - ps = a list of patterns
+    - consumption = consumption information (DEPRECATED) 
+
+  Returns a tuples of a:
+    - binding context
+    - type for the body (with any specialisations applied)
+    - any type variables which have been bound
+    - an outgoing substitution [TODO: is this needed for the predicate in case we need to update any info?]
+    - the type-elaborated patterns
+    - consumption information (DEPRECATED)
+
+-}
 ctxtFromTypedPatterns :: (?globals :: Globals)
   => Span
   -> PatternPosition
@@ -379,7 +397,7 @@ ctxtFromTypedPatterns' outerCoeff s pos (FunTy _ t1 t2) (pat:pats) (cons:consump
   -- Match a pattern
   (localGam, eVars, subst, elabP, consumption) <- ctxtFromTypedPattern' outerCoeff s pos t1 pat cons
 
-  -- Apply substitutions
+  -- Apply substitution to the outgoing type
   t2' <- substitute subst t2
 
   -- Match the rest

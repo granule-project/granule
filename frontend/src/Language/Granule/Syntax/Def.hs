@@ -136,8 +136,6 @@ data DataConstr
     { dataConstrSpan :: Span, dataConstrId :: Id, dataConstrParams :: [Type] } -- ^ ADTs
   deriving (Eq, Show, Generic, Typeable, Data)
 
-
-
 -- | Is the data type an indexed data type, or just a plain ADT?
 isIndexedDataType :: DataDecl -> Bool
 isIndexedDataType d = not ((concatMap snd (typeIndices d)) == [])

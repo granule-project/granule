@@ -7,8 +7,11 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE TupleSections #-}
 
 {-# options_ghc -fno-warn-incomplete-uni-patterns -Wno-deprecations #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Redundant <$>" #-}
 
 -- | Core type checker
 module Language.Granule.Checker.Checker where
@@ -176,8 +179,6 @@ checkDataCon
 
         st <- get
 
-        -- debugM "type indicies" (show $ typeConstructors st)
-
         -- Add the type variables from the data constructor into the environment
         -- The main universal context
         let tyVarsD' = relevantSubCtxt (freeVars $ resultType ty) tyVars_justD
@@ -185,9 +186,7 @@ checkDataCon
         -- This subset of the context is for existentials
         let tyVarsDExists = tyVars_justD `subtractCtxt` tyVarsD'
 
-
-        let tyVarsForall = (tyVarsParams <> tyVarsD')
-
+        let tyVarsForall = tyVarsParams <> tyVarsD'
 
         modify $ \st -> st { tyVarContext =
                [(v, (k, ForallQ)) | (v, k) <- tyVarsForall]
@@ -197,7 +196,6 @@ checkDataCon
 
 
         -- Check we are making something that is actually a type
-        -- _ <- checkKind sp (map (second (\k -> (k, ForallQ))) tyVars) ty ktype
         (_, ty) <- checkKind sp ty ktype
 
         --_ <- synthKindWithConfiguration sp GradeToNat ty
@@ -272,7 +270,7 @@ checkDataCon tName kind tyVars indices info d@DataConstrNonIndexed{}
 checkAndGenerateSubstitution ::
        Span                     -- ^ Location of this application
     -> Id                       -- ^ Name of the type constructor
-    -> Type                -- ^ Type of the data constructor
+    -> Type                     -- ^ Type of the data constructor
     -> [Kind]                   -- ^ Types of the remaining data type indices
     -> Checker (Type, Substitution, Ctxt Kind)
 checkAndGenerateSubstitution sp tName ty ixkinds =
@@ -382,7 +380,7 @@ checkEquation :: (?globals :: Globals) =>
                      --                   list of remaining type constraints (non-graded things)
                     --                    final substitution
 
-checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls constraints ty) = do
+checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ binders constraints defTy) = do
   -- Check that the lhs doesn't introduce any duplicate binders
   duplicateBinderCheck s pats
 
@@ -403,35 +401,30 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
   modify (\st -> st { patternConsumption =
                          zipWith joinConsumption consumptions (patternConsumption st) } )
 
-  -- Determine if matching on type with more than one constructor
-  isPolyShaped <- polyShaped tau
-
   -- Create conjunct to capture the body expression constraints
   newConjunct
 
-{-
-  -- Specialise the return type by the pattern generated substitution
-  debugM "eqn" $ "### -- patternGam = " <> show patternGam
-  debugM "eqn" $ "### -- localVars  = " <> show localVars
-  debugM "eqn" $ "### -- tau = " <> show tau
-  tau' <- substitute subst tau
-  debugM "eqn" $ "### -- tau' = " <> show tau'
--}
+  --tau' <- substitute subst tau
+
+  reportM $ "Body type is " <> pretty tau
+  --reportM $ "Body type with substitution is " <> pretty tau'
+  st <- get
+  reportM $ "Predicate is " <> pretty (predicateStack st)
 
   -- The type of the equation, after substitution.
-  equationTy' <- substitute subst ty
+  equationTy' <- substitute subst defTy
   let equationTy = calculateequationTy patternGam equationTy'
 
   -- Store the equation type in the state in case it is needed when splitting
   -- on a hole.
   modify (\st -> st { equationTy = Just equationTy})
 
-  patternGam <- substitute subst patternGam
+  --patternGam <- substitute subst patternGam
   debugM "context in checkEquation 1" $ (show patternGam)
 
   -- Introduce ambient coeffect
   combinedGam <-
-    if (SecurityLevels `elem` globalsExtensions ?globals)
+    if SecurityLevels `elem` globalsExtensions ?globals
     then ghostVariableContextMeet $ patternGam <> freshGhostVariableContext
     else return patternGam
 
@@ -443,7 +436,7 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
     [] -> do
       localGam <- substitute subst localGam
       -- Check that our consumption context matches the binding
-      subst0 <- if (NoTopLevelApprox `elem` globalsExtensions ?globals)
+      subst0 <- if NoTopLevelApprox `elem` globalsExtensions ?globals
         then ctxtEquals s localGam combinedGam
         else ctxtApprox s localGam combinedGam
       -- ctxtApprox s localGam combinedGam
@@ -453,7 +446,7 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
 
       -- Create elaborated equation
       subst'' <- combineManySubstitutions s [subst0, subst, subst']
-      let elab = Equation s name ty rf elaborated_pats elaboratedExpr
+      let elab = Equation s name defTy rf elaborated_pats elaboratedExpr
 
       elab' <- substitute subst'' elab
       return (elab', providedTypeConstraints, subst'')

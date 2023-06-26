@@ -12,7 +12,7 @@
 {-# options_ghc -fno-warn-incomplete-uni-patterns -Wno-deprecations #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
--- | Core type checker
+-- | Data types in the type checker
 module Language.Granule.Checker.DataTypes where
 
 import Control.Monad.State.Strict
@@ -22,9 +22,8 @@ import Language.Granule.Checker.Monad
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Type hiding (Polarity)
 
-
--- Given a data type declaration
--- check t
+-- Given a data type declaration, register it into the type checker state
+-- (including its kind and whether any of its parameters are type indices)
 registerTypeConstructor :: DataDecl -> Checker ()
 registerTypeConstructor d@(DataDecl sp name tyVars kindAnn ds) = 
   modify' $ \st ->
