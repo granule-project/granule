@@ -11,10 +11,14 @@ All tests can be run via
 
     stack test
 
-Individual parts of the suite can be run by package. For example, the following just runs the unit tests
+Individual parts of the suite can be run by package. For example, the following just runs all the unit tests
 for the frontend:
 
-   stack test granule-frontend
+    stack test granule-frontend
+
+Or individual unit tests files, e.g., the following runs the unit tests in just `TypeSpec`:
+
+    stack test granule-frontend --ta "--match \"TypesSpec\""
 
 # Integration tests
 
