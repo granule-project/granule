@@ -11,7 +11,10 @@ All tests can be run via
 
     stack test
 
-Individual parts of the integration test suite can be run via inclusion or exclusion.
+Individual parts of the integration test suite can be run via inclusion or exclusion, e.g., 
+to run just unit tests is `SynthSpec.hs` run :
+
+    stack test --ta "-m SynthSpec"
 
 # Integration tests
 
