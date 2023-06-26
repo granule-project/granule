@@ -11,10 +11,10 @@ All tests can be run via
 
     stack test
 
-Individual parts of the integration test suite can be run via inclusion or exclusion, e.g., 
-to run just unit tests is `SynthSpec.hs` run :
+Individual parts of the suite can be run by package. For example, the following just runs the unit tests
+for the frontend:
 
-    stack test --ta "-m SynthSpec"
+   stack test granule-frontend
 
 # Integration tests
 
