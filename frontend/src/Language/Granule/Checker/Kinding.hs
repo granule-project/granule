@@ -244,15 +244,18 @@ data ResolutionConfig =
     GradeToNat              -- ^ Resolve untyped grades as Nat
    | GradeToPolyAsCoeffect  -- ^ Resolve untyped grades to a fresh unification variable which is Coeffect kinded
    | GradeToPolyAsEffect    -- ^ Resolve untyped grades to a fresh unification variable which is Effect kinded
-  deriving Eq
+  deriving (Eq, Show)
 
-defaultResolutionBehaviour :: Type -> ResolutionConfig
+defaultResolutionBehaviour :: (?globals :: Globals) => Type -> ResolutionConfig
 defaultResolutionBehaviour t =
-  if (not (containsTypeSig t))
-    -- no type signatures here so try to guess grades as Nat (often a bad choice!)
-    then GradeToNat
-    -- if there is a type signature then try to treat untyped grades as coeffect by default
-    else GradeToPolyAsCoeffect
+  if usingExtension GradedBase
+          then GradeToPolyAsCoeffect
+          else
+            if (not (containsTypeSig t))
+              -- no type signatures here so try to guess grades as Nat (often a bad choice!)
+              then GradeToNat
+              -- if there is a type signature then try to treat untyped grades as coeffect by default
+              else GradeToPolyAsCoeffect
 
 -- Given `synthKind gam t` it synthesis a `k` such that `gam |- t :: k` and
 -- returns a substitution and an elebaroted type `t'` along with it.
@@ -744,7 +747,7 @@ synthKindAssumption s (Ghost c) = do
   (t, subst, _) <- synthKind s c
   return (Just t, subst)
 
--- Find the most general unifier of two coeffects
+-- Find the most general unifier of two grades
 -- This is an effectful operation which can update the coeffect-kind
 -- contexts if a unification resolves a variable
 mguCoeffectTypesFromCoeffects :: (?globals :: Globals)
