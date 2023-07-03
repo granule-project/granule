@@ -16,8 +16,6 @@
 module Language.Granule.Checker.DataTypes where
 
 import Data.List (nub)
-import Data.List.NonEmpty (NonEmpty(..))
-import Control.Monad.Except (throwError)
 import Control.Monad.State.Strict
 
 
