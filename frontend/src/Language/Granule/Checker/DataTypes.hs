@@ -107,30 +107,30 @@ checkDataCon
     let typeIndexPositions = case lookup dName indices of
           Just inds -> inds
           _ -> []
-    let kindsWithIndexInformation = flagTypeIndices typeIndexPositions (parameterTypes kind)
+    --let kindsWithIndexInformation = flagTypeIndices typeIndexPositions (parameterTypes kind)
 
     -- Create new version of the data type with coercions generated for indices
-    (ty', coercions, newTyVars) <- checkAndGenerateSubstitution sp tName ty kindsWithIndexInformation
+    --(ty', coercions, newTyVars) <- checkAndGenerateSubstitution sp tName ty kindsWithIndexInformation
 
     -- Construct new type scheme for the data constructor
-    let dataConTyVarsNew = relevantTyVars <> newTyVars
-    let tySch = Forall sp dataConTyVarsNew constraints ty'
+    let dataConTyVarsNew = relevantTyVars -- <> newTyVars
+    let tySch = Forall sp dataConTyVarsNew constraints ty
     
     -- Register this data constructor into the environment
-    registerDataConstructor tySch coercions typeIndexPositions
+    registerDataConstructor tySch [] typeIndexPositions
 
   where
     -- Given a list (first parameter) of positions explaining which of a list
     -- of kinds (second parameter) are type indices, then output a list
     -- of kinds paired with a boolean where True means it is a type index
-    -- and False means it is a type parameter
-    flagTypeIndices :: [Int] -> [Kind] -> [(Bool, Kind)]
-    flagTypeIndices indexPositions kinds = 
-        flagTypeIndices' indexPositions (zip [0..] kinds)
-      where
-        flagTypeIndices' indexPositions [] = []
-        flagTypeIndices' indexPositions ((n, k):nAndKs) = 
-          (n `elem` indexPositions, k) : flagTypeIndices' indexPositions nAndKs
+    -- -- and False means it is a type parameter
+    -- flagTypeIndices :: [Int] -> [Kind] -> [(Bool, Kind)]
+    -- flagTypeIndices indexPositions kinds = 
+    --     flagTypeIndices' indexPositions (zip [0..] kinds)
+    --   where
+    --     flagTypeIndices' indexPositions [] = []
+    --     flagTypeIndices' indexPositions ((n, k):nAndKs) = 
+    --       (n `elem` indexPositions, k) : flagTypeIndices' indexPositions nAndKs
 
     registerDataConstructor dataConstrTy coercions indexPositions = do
       st <- get
