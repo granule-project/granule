@@ -1098,7 +1098,10 @@ combineSubstitutions sp u1 u2 = do
               Nothing -> return [(v, s)]
               _       -> return []
       let uss = concat uss1 <> concat uss2
-      reduceByTransitivity sp uss
+      res <- reduceByTransitivity sp uss
+      debugM "COMBINING" (pretty u1 <> "\n" <> pretty u2 <> "\n<RES> = " <> pretty res)
+      return res
+
 
 -- checkValid :: [Id] -> Substitution -> Checker (Maybe (Type, Type))
 -- checkValid vars (sub1@(v, (SubstT (TyVar v'))):substs) = do
