@@ -289,14 +289,16 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ binders
         else ctxtApprox s localGam combinedGam
       -- ctxtApprox s localGam combinedGam
 
-      -- Conclude the implication
-      concludeImplication s localVars
 
       -- Create elaborated equation
       subst'' <- combineManySubstitutions s [subst0, subst, subst']
       let elab = Equation s name defTy rf elaborated_pats elaboratedExpr
 
       elab' <- substitute subst'' elab
+
+      -- Conclude the implication
+      concludeImplication s localVars
+
       return (elab', providedTypeConstraints, subst'')
 
     -- Anything that was bound in the pattern but not used up
