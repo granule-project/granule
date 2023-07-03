@@ -374,8 +374,8 @@ buildRelevantASTdefinitions vars defMap = buildAST defMap [] (map sourceName var
 
 buildCheckerState :: (?globals::Globals) => [DataDecl] -> Checker.Checker ()
 buildCheckerState dataDecls = do
-    _ <- Checker.runAll registerTypeConstructor dataDecls
-    _ <- Checker.runAll checkDataCons dataDecls
+    _ <- Checker.runAll registerTypeConstructor  dataDecls
+    _ <- Checker.runAll registerDataConstructors dataDecls
     return ()
 
 buildDef :: Int -> TypeScheme -> Expr () () -> Def () ()

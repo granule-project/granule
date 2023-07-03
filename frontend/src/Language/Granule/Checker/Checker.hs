@@ -20,7 +20,7 @@ import Control.Arrow (second)
 import Control.Monad.State.Strict
 import Control.Monad.Except (throwError)
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.List (isPrefixOf, sort)
+import Data.List (isPrefixOf)
 import Data.List.Split (splitPlaces)
 import qualified Data.List.NonEmpty as NonEmpty (toList)
 import Data.Maybe
@@ -31,7 +31,7 @@ import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Constraints.SymbolicGrades
 import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Constraints
-import Language.Granule.Checker.DataTypes (registerTypeConstructor)
+import Language.Granule.Checker.DataTypes (registerTypeConstructor, registerDataConstructors)
 import Language.Granule.Checker.Exhaustivity
 import Language.Granule.Checker.Effects
 import Language.Granule.Checker.Ghost
@@ -50,7 +50,7 @@ import Language.Granule.Checker.Variables
 import Language.Granule.Context
 
 import Language.Granule.Syntax.Identifiers
-import Language.Granule.Syntax.Helpers (freeVars, hasHole)
+import Language.Granule.Syntax.Helpers (hasHole)
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Pattern (Pattern(..))
@@ -72,11 +72,9 @@ check ast@(AST _ _ _ hidden _) = do
   evalChecker (initState { allHiddenNames = hidden }) $ (do
       ast@(AST dataDecls defs imports hidden name) <- return $ replaceTypeAliases ast
       _    <- checkNameClashes ast
-      _    <- runAll registerTypeConstructor (Primitives.dataTypes <> dataDecls)
-      _    <- runAll checkDataCons (Primitives.dataTypes <> dataDecls)
-      debugM "extensions" (show $ globalsExtensions ?globals)
-      debugM "check" "kindCheckDef"
-      defs  <- runAll kindCheckDef defs
+      _    <- runAll registerTypeConstructor  (Primitives.dataTypes <> dataDecls)
+      _    <- runAll registerDataConstructors (Primitives.dataTypes <> dataDecls)
+      defs <- runAll kindCheckDef defs
       let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
       defs <- runAll (checkDef defCtxt) defs
       -- Add on any definitions computed by the type checker (derived)
@@ -93,7 +91,7 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
   evalChecker (initState { allHiddenNames = hidden }) $ do
       _    <- checkNameClashes ast
       _    <- runAll registerTypeConstructor (Primitives.dataTypes ++ dataDecls)
-      _    <- runAll checkDataCons (Primitives.dataTypes ++ dataDecls)
+      _    <- runAll registerDataConstructors (Primitives.dataTypes ++ dataDecls)
       defs <- runAll kindCheckDef defs
 
       let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
@@ -142,157 +140,6 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
           return $ Left (Forall nullSpanNoFile [] [] ty', derivedDefs)
 
 
-checkDataCons :: (?globals :: Globals) => DataDecl -> Checker ()
-checkDataCons d@(DataDecl sp name tyVars k dataConstrs) = do
-    st <- get
-    let kind = case lookup name (typeConstructors st) of
-                Just (kind, _ , _) -> kind
-                _ -> error $ "Internal error. Trying to lookup data constructor " <> pretty name
-    modify' $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars] }
-    
-    let paramsAndIndices = discriminateTypeIndicesOfDataType d
-    mapM_ (checkDataCon name kind tyVars (typeIndices d) paramsAndIndices) dataConstrs
-
-checkDataCon :: (?globals :: Globals)
-  => Id -- ^ The type constructor and associated type to check against
-  -> Kind -- ^ The kind of the type constructor
-  -> Ctxt Kind -- ^ The type variables
-  -> [(Id, [Int])] -- ^ Type Indices of this data constructor
-  -> ([(Id, Kind)], [(Id, Kind)]) -- ^ type parameters and indices
-  -> DataConstr -- ^ The data constructor to check
-  -> Checker () -- ^ Return @Just ()@ on success, @Nothing@ on failure
-checkDataCon
-  tName
-  kind
-  tyVarsT'
-  indices
-  (tyVarsParams, tyVarsIndices)
-  d@(DataConstrIndexed sp dName tySch@(Forall s tyVarsD constraints ty)) = do
-    case map fst $ intersectCtxts tyVarsT' tyVarsD of
-      [] -> do -- no clashes
-        let tyVarsT = tyVarsParams ++ tyVarsIndices
-        when (sort tyVarsT /= sort tyVarsT') (fail "NOOOOO")
-
-        -- Only relevant type variables get included
-        let tyVars = relevantSubCtxt (freeVars ty) (tyVarsT <> tyVarsD)
-        let tyVars_justD = relevantSubCtxt (freeVars ty) tyVarsD
-
-        st <- get
-
-        -- Add the type variables from the data constructor into the environment
-        -- The main universal context
-        let tyVarsD' = relevantSubCtxt (freeVars $ resultType ty) tyVars_justD
-
-        -- This subset of the context is for existentials
-        let tyVarsDExists = tyVars_justD `subtractCtxt` tyVarsD'
-
-        let tyVarsForall = tyVarsParams <> tyVarsD'
-
-        modify $ \st -> st { tyVarContext =
-               [(v, (k, ForallQ)) | (v, k) <- tyVarsForall]
-            ++ [(v, (k, InstanceQ)) | (v, k) <- tyVarsDExists]
-            ++ [(v, (k, BoundQ)) | (v, k) <- tyVarsIndices]
-            ++ tyVarContext st }
-
-
-        -- Check we are making something that is actually a type
-        (_, ty) <- checkKind sp ty ktype
-
-        --_ <- synthKindWithConfiguration sp GradeToNat ty
-
-        -- Freshen the data type constructors type
-        (ty, tyVarsFreshD, substFromFreshening, constraints, []) <-
-             freshPolymorphicInstance ForallQ False (Forall s tyVars constraints ty) [] []
-
-        -- Create a version of the data constructor that matches the data type head
-        -- but with a list of coercions
-
-        ixKinds <- mapM (substitute substFromFreshening) (indexKinds kind)
-        (ty', coercions, tyVarsNewAndOld) <- checkAndGenerateSubstitution sp tName ty ixKinds
-
-        -- Reconstruct th e data constructor's new type scheme
-        let tyVarsD' = tyVarsFreshD <> tyVarsNewAndOld
-        let tySch = Forall sp tyVarsD' constraints ty'
-        let typeIndices = case lookup dName indices of
-              Just inds -> inds
-              _ -> []
-
-        registerDataConstructor tySch coercions typeIndices
-
-      (v:vs) -> (throwError . fmap mkTyVarNameClashErr) (v:|vs)
-  where
-    indexKinds (FunTy _ k1 k2) = k1 : indexKinds k2
-    indexKinds k = []
-
-    registerDataConstructor dataConstrTy subst boundVars = do
-      st <- get
-      case extend (dataConstructors st) dName (dataConstrTy, subst, boundVars) of
-        Just ds -> put st { dataConstructors = ds, tyVarContext = [] }
-        Nothing -> throw DataConstructorNameClashError{ errLoc = sp, errId = dName }
-
-    mkTyVarNameClashErr v = DataConstructorTypeVariableNameClash
-        { errLoc = sp
-        , errDataConstructorId = dName
-        , errTypeConstructor = tName
-        , errVar = v
-        }
-
-checkDataCon tName kind tyVars indices info d@DataConstrNonIndexed{}
-  = checkDataCon tName kind tyVars indices info
-    $ nonIndexedToIndexedDataConstr tName tyVars d
-
-
-{-
-    Checks whether the type constructor name matches the return constraint
-    of the data constructor
-    and at the same time generate coercions for every parameter of result type type constructor
-    then generate fresh variables for parameter and coercions that are either trivial
-    variable ones or to concrete types
-
-    e.g.
-      checkAndGenerateSubstitution Maybe (a' -> Maybe a') [Type]
-      > (a' -> Maybe a, [a |-> a'], [a : Type])
-
-      checkAndGenerateSubstitution Other (a' -> Maybe a') [Type]
-      > *** fails
-
-      checkAndGenerateSubstitution Vec (Vec 0 t') [Nat, Type]
-      > (Vec n t', [n |-> Subst 0, t |-> t'], [n : Type, ])
-
-      checkAndGenerateSubstitution Vec (t' -> Vec n' t' -> Vec (n'+1) t') [Nat, Type]
-      > (t' -> Vec n' t' -> Vec n t, [n |-> Subst (n'+1), t |-> t'], [])
-
-      checkAndGenerateSubstitution Foo (Int -> Foo Int) [Type]
-      > (Int -> Foo t1, [t1 |-> Subst Int], [t1 : Type])
-
--}
-
-checkAndGenerateSubstitution ::
-       Span                     -- ^ Location of this application
-    -> Id                       -- ^ Name of the type constructor
-    -> Type                     -- ^ Type of the data constructor
-    -> [Kind]                   -- ^ Types of the remaining data type indices
-    -> Checker (Type, Substitution, Ctxt Kind)
-checkAndGenerateSubstitution sp tName ty ixkinds =
-    checkAndGenerateSubstitution' sp tName ty (reverse ixkinds)
-  where
-    checkAndGenerateSubstitution' sp tName (TyCon tC) []
-        | tC == tName = return (TyCon tC, [], [])
-        | otherwise = throw UnexpectedTypeConstructor
-          { errLoc = sp, tyConActual = tC, tyConExpected = tName }
-
-    checkAndGenerateSubstitution' sp tName (FunTy id arg res) kinds = do
-      (res', subst, tyVarsNew) <- checkAndGenerateSubstitution' sp tName res kinds
-      return (FunTy id arg res', subst, tyVarsNew)
-
-    checkAndGenerateSubstitution' sp tName (TyApp fun arg) (kind:kinds) = do
-      varSymb <- freshIdentifierBase "t"
-      let var = mkId varSymb
-      (fun', subst, tyVarsNew) <-  checkAndGenerateSubstitution' sp tName fun kinds
-      return (TyApp fun' (TyVar var), (var, SubstT arg) : subst, (var, kind) : tyVarsNew)
-
-    checkAndGenerateSubstitution' sp _ t _ =
-      throw InvalidTypeDefinition { errLoc = sp, errTy = t }
 
 checkDef :: (?globals :: Globals)
          => Ctxt TypeScheme  -- context of top-level definitions

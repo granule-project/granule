@@ -695,7 +695,6 @@ refineBinderQuantification ctxt ty = mapM computeQuantifier ctxt
           st <- get
           case lookup tyConId (typeConstructors st) of
             Just (_, _, indices) -> do
-              liftIO $ putStrLn $ "tyConId = " ++ pretty tyConId ++ " params = " ++ show indices ++ " paramtypes = " ++ show (typeArguments t)
               return $ any (\i -> id `elem` freeVars (typeArguments t !! i)) indices
               --return True
             Nothing -> throw UnboundVariableError { errLoc = nullSpan , errId = id }
