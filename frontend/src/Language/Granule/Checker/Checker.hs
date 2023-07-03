@@ -257,7 +257,7 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ binders
   reportM $ "Body type is " <> pretty tau
   --reportM $ "Body type with substitution is " <> pretty tau'
   st <- get
-  reportM $ "Predicate is " <> pretty (predicateStack st)
+  reportM $ "Predicate after type checking is " <> pretty (predicateStack st)
 
   -- The type of the equation, after substitution.
   equationTy' <- substitute subst defTy
@@ -298,6 +298,13 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ binders
 
       -- Conclude the implication
       concludeImplication s localVars
+
+
+      st <- get
+      reportMsep
+      reportM $ "Final state of predicate: " <> pretty (predicateStack st)
+      reportMsep
+
 
       return (elab', providedTypeConstraints, subst'')
 

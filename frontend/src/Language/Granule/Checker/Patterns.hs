@@ -220,6 +220,8 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
       reportM $ "Coercions    = " <> pretty coercions
       reportM $ "Type indices = " <> pretty indices
       reportMsep
+      reportM $ "Freshe freshTyVarsCtxt = " <> pretty freshTyVarsCtxt
+      
       reportM $ "Freshened type scheme = " <> pretty dataConstructorTypeFresh
       reportM $ "Freshened coercions   = " <> pretty coercions'
       -- </REPORT>
