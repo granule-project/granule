@@ -39,12 +39,12 @@ import Language.Granule.Utils
 -- Given a data type declaration, register it into the type checker state
 -- (including its kind and whether any of its parameters are type indices)
 registerTypeConstructor :: DataDecl -> Checker ()
-registerTypeConstructor d@(DataDecl sp name tyVars kindAnn ds) = 
+registerTypeConstructor d@(DataDecl sp name tyVars kindAnn ds) =
   modify' $ \st ->
     st { typeConstructors = (name, (tyConKind, dataConstrIds, typeIndicesPositions d)) : typeConstructors st }
   where
     -- the IDs of data constructors
-    dataConstrIds = map dataConstrId ds 
+    dataConstrIds = map dataConstrId ds
     -- Calculate the kind for the type constructor
     tyConKind = mkKind (map snd tyVars)
     mkKind [] = case kindAnn of Just k -> k; Nothing -> Type 0 -- default to `Type`
@@ -85,7 +85,7 @@ checkDataCon
   d@(DataConstrIndexed sp dName tySch@(Forall s dataConTyVars constraints ty)) = do
     -- type variables from the type constructor are the parameters and type indices combined
     let tyConVars = tyConParams ++ tyConIndices
-        
+
     -- Focus on just those bound variables in scope which are used in the type
     let relevantTyVars = relevantSubCtxt (freeVars ty) (tyConVars <> dataConTyVars)
 
@@ -115,7 +115,7 @@ checkDataCon
     -- Construct new type scheme for the data constructor
     let dataConTyVarsNew = relevantTyVars -- <> newTyVars
     let tySch = Forall sp dataConTyVarsNew constraints ty
-    
+
     -- Register this data constructor into the environment
     registerDataConstructor tySch [] typeIndexPositions
 
@@ -125,11 +125,11 @@ checkDataCon
     -- of kinds paired with a boolean where True means it is a type index
     -- -- and False means it is a type parameter
     -- flagTypeIndices :: [Int] -> [Kind] -> [(Bool, Kind)]
-    -- flagTypeIndices indexPositions kinds = 
+    -- flagTypeIndices indexPositions kinds =
     --     flagTypeIndices' indexPositions (zip [0..] kinds)
     --   where
     --     flagTypeIndices' indexPositions [] = []
-    --     flagTypeIndices' indexPositions ((n, k):nAndKs) = 
+    --     flagTypeIndices' indexPositions ((n, k):nAndKs) =
     --       (n `elem` indexPositions, k) : flagTypeIndices' indexPositions nAndKs
 
     registerDataConstructor dataConstrTy coercions indexPositions = do
@@ -146,7 +146,7 @@ checkDataCon tName kind indices tyConParams tyConIndices d@DataConstrNonIndexed{
 {-
     Checks whether the type constructor name matches the return constructor
     of the data constructor
-  
+
     and at the same time generate coercions for every indix of result type constructor
     then generate fresh variables for parameter and coercions that are either trivial
     variable ones or to concrete types
