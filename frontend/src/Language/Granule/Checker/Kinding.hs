@@ -980,15 +980,17 @@ unification s var1 typ2 rel = do
 
                           -- Types which need solver handling (effects and coeffects)
                           -- need to have constraints registered
-                          whenM (requiresSolver s kind)
+                          useSolver <- requiresSolver s kind
+                          if useSolver then do
                             (addConstraint (rel s (TyVar var1) (TyVar var2) kind))
+                            return subst
+                          else do
+                            -- Local substitution of var2 for the universal var1
+                            let localSubst = (var2, SubstT (TyVar var1))
+                            -- Apply thhis unification result to the type variable context
+                            substIntoTyVarContext var2 (TyVar var1)
 
-                          -- Local substitution of var2 for the universal var1
-                          let localSubst = (var2, SubstT (TyVar var1))
-                          -- Apply thhis unification result to the type variable context
-                          substIntoTyVarContext var2 (TyVar var1)
-
-                          return (localSubst : subst)
+                            return (localSubst : subst)
 
                     _ -> do
                       ifM (requiresSolver s kind1)
@@ -1005,7 +1007,7 @@ unification s var1 typ2 rel = do
                 -- This ultimately mostly likely represent a general unification failure
                 (throw $ UnificationFail s var1 typ2 kind1 False)
 
-        -- * Unification variable
+        -- * Unification variable (can unify with BoundQs too)
         _ -> do -- InstanceQ or BoundQ
           -- Join kinds by checking that `typ2` has the same kind as the variable
           (subst1, typ2') <- checkKind s typ2 kind1
@@ -1022,17 +1024,19 @@ unification s var1 typ2 rel = do
 
           -- Types which need solver handling (effects and coeffects)
           -- need to have constraints registered
-          whenM (requiresSolver s kind1)
+          needsSolver <- requiresSolver s kind1
+          if needsSolver then do
               -- Create solver constraint
-              (addConstraint (rel s (TyVar var1) typ2 kind1))
+              addConstraint (rel s (TyVar var1) typ2 kind1)
+              return subst1
+          else do
+            -- Apply thhis unification result to the type variable context
+            substIntoTyVarContext var1 typ2
 
-          -- Apply thhis unification result to the type variable context
-          substIntoTyVarContext var1 typ2
-
-          -- Local substitution
-          let localSubst = (var1, SubstT typ2)
-          --subst <- combineSubstitutions s subst1 subst2
-          return (localSubst : subst1)
+            -- Local substitution
+            let localSubst = (var1, SubstT typ2)
+            --subst <- combineSubstitutions s subst1 subst2
+            return (localSubst : subst1)
 
 -- # Substitutions work
 
