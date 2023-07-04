@@ -412,7 +412,7 @@ equalTypesRelatedCoeffectsInner s rel (TySet _ ts1) (TySet _ ts2) k sp Types =
 
 equalTypesRelatedCoeffectsInner s rel t1 t2 k sp mode = do
   debugM "type Equality: Drop through case "
-    ("t1 = " <> pretty t1 <> " t2 = " <> pretty t2 <> "\n k = " <> pretty k <> "\n mode = " <> show mode)
+    ("t1 = " <> pretty t1 <> ", t2 = " <> pretty t2 <> "\n k = " <> pretty k <> "\n mode = " <> show mode)
   case mode of
     Effects -> do
       (result, putChecker) <- peekChecker (checkKind s k keffect)
@@ -425,24 +425,24 @@ equalTypesRelatedCoeffectsInner s rel t1 t2 k sp mode = do
 
     Types ->
       case k of
-        (TyCon (internalName -> "Nat")) -> do
-          debugM "equality on nats" (pretty t1 ++ " =? " ++ pretty t2)
-          addConstraint $ Eq s t1 t2 (TyCon $ mkId "Nat")
-          return (True, [])
-
-        (TyCon (internalName -> "Q")) -> do
-          debugM "equality on Qs" (pretty t1 ++ " =? " ++ pretty t2)
-          addConstraint $ Eq s t1 t2 (TyCon $ mkId "Q")
-          return (True, [])
 
         (TyCon (internalName -> "Protocol")) ->
           sessionInequality s t1 t2
-        _ ->
-          case sp of
-            FstIsSpec ->
-              throw $ TypeError { errLoc = s, tyExpected = t1, tyActual = t2 }
-            _ ->
-              throw $ TypeError { errLoc = s, tyExpected = t1, tyActual = t2 }
+
+        _ -> do
+          handleBySolver <- requiresSolver s k
+          if handleBySolver then do
+            -- Go to SMT
+            debugM ("equality on types of kind: " <> pretty k) (pretty t1 ++ " =? " ++ pretty t2)
+            addConstraint $ Eq s t1 t2 k
+            return (True, [])
+          else
+            -- No other way to do equality so bail
+            case sp of
+              FstIsSpec ->
+                throw $ TypeError { errLoc = s, tyExpected = t1, tyActual = t2 }
+              _ ->
+                throw $ TypeError { errLoc = s, tyExpected = t1, tyActual = t2 }
 
 
 -- Essentially use to report better error messages when two session type
@@ -673,7 +673,7 @@ isEffectType s ty = do
       return $ Right effTy
     Left err -> return $ Left effTy
 
--- `refineBinderQuantification ctxt ty` 
+-- `refineBinderQuantification ctxt ty`
 -- Given a list of variable-kind information `ctxt` binding over a type `ty`
 -- then calculate based on the usage of the type variables whether they are
 -- truly universal quantifiers, or whether some are actually pi-types.
