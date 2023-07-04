@@ -177,32 +177,29 @@ equalTypesRelatedCoeffectsInner s rel x@(Box c t) y@(Box c' t') k sp Types = do
   kind <- substitute subst kind
   addConstraint (rel s (inj2 c') (inj1 c) kind)
 
-  -- Create a substitution if we can (i.e., if this is an equality and one grade is a variable)
-  -- as this typically greatly improves error messages and repl interaction
-  let substExtra =
-       if isEq (rel s undefined undefined undefined)
-          then
-            case c of
-              TyVar v -> [(v, SubstT c')]
-              _ -> case c' of
-                    TyVar v -> [(v, SubstT c)]
-                    _       -> []
-          else
-            []
-
   (eq, subst') <- equalTypesRelatedCoeffects s rel t t' sp Types
 
-  substU <- combineManySubstitutions s [subst, subst', substExtra]
+  substU <- combineManySubstitutions s [subst, subst']
   return (eq, substU)
 
-equalTypesRelatedCoeffectsInner s rel (TyVar var1) ty _ _ _ = do
-  subst <- unification s var1 ty rel
-  return (True, subst)
+equalTypesRelatedCoeffectsInner s rel ty1@(TyVar var1) ty2 kind _ _ = do
+  useSolver <- requiresSolver s kind
+  reportM ("Equality between " <> pretty ty1 <> " and " <> pretty ty2)
+  if useSolver then do
+    reportM ("Is a solver variable so no substitution just an equality")
+    addConstraint (rel s (TyVar var1) ty2 kind)
+    return (True, [])
+  else do
+    -- If this isn't a solver type then use normal unfication
+    subst <- unification s var1 ty2 rel
+    reportM ("Not a solver therefore subst = " <> pretty subst)
+    return (True, subst)
 
-equalTypesRelatedCoeffectsInner s rel ty (TyVar var2) _ _ _ = do
-  subst <- unification s var2 ty rel
-  return (True, subst)
+equalTypesRelatedCoeffectsInner s rel ty1 (TyVar var2) kind sp mode =
+  -- Use the case above since it is symmetric
+  equalTypesRelatedCoeffectsInner s rel (TyVar var2) ty1 kind sp mode
 
+-- ## UNIQUNESS TYPES
 
 equalTypesRelatedCoeffectsInner s rel (Star g1 t1) (Star g2 t2) _ sp mode = do
   (eq, unif)      <- equalTypesRelatedCoeffects s rel t1 t2 sp mode
