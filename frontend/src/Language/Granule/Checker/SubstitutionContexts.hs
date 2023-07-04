@@ -36,6 +36,7 @@ instance Term Substitution where
 
 -- | For substitutions which are just renaminings
 --   allow the substitution to be inverted
+-- TODO: expunge this one day
 flipSubstitution :: Substitution -> Substitution
 flipSubstitution [] = []
 flipSubstitution ((var, SubstT (TyVar var')):subst) =
