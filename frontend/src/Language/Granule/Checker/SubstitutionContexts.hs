@@ -20,13 +20,13 @@ type Instantiation = Ctxt Substitutors
 
 {-| Substitutors are things we want to substitute in... they may be one
      of several things... -}
-data Substitutors =
+newtype Substitutors =
     SubstT  Type
   deriving (Eq, Show)
 
 instance {-# OVERLAPS #-} Pretty (Ctxt Substitutors) where
   pretty = (intercalate " | ") . (map prettyCoerce)
-    where 
+    where
       prettyCoerce (v, SubstT t) = pretty v <> " ~ " <> pretty t
 
 instance Term Substitution where
