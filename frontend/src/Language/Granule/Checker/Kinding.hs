@@ -953,8 +953,6 @@ unification s var1 typ2 rel = do
       -----------
       -- Case on the quantification mode of this variable
       case quantifier1 of
-        -- * BoundQ
-        --BoundQ -> error $ "boundq deprecated"
 
         -- * Universal quantifier
         ForallQ ->
@@ -1076,7 +1074,11 @@ combineSubstitutions sp u1 u2 = do
       uss1 <- forM u1 $ \(v, s) ->
         case lookupMany v u2 of
           -- Unifier in u1 but not in u2
-          [] -> return [(v, s)]
+          [] -> do
+            -- TODO: perhaps this should be:
+            --s' <- substitute u2 s -- APPLY THE SUBSTITUTION
+            --return [(v, s')]
+            return [(v, s)]
           -- Possible unifications in each part
           alts -> do
               unifs <-

@@ -366,7 +366,7 @@ ctxtFromTypedPattern' _ s _ t p _ = do
     - pp = the position in which the pattern is occuring
     - ty = the types of the inputs and the output (e.g. in the form of a FunTy)
     - ps = a list of patterns
-    - consumption = consumption information (DEPRECATED) 
+    - consumption = consumption information (DEPRECATED)
 
   Returns a tuples of a:
     - binding context
