@@ -11,7 +11,7 @@ import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Helpers
 
-{-| Substitutions map from unification 
+{-| Substitutions map from unification
     variables to type-level things as defined by substitutors -}
 type Substitution = Ctxt Substitutors
 

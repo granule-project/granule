@@ -795,7 +795,7 @@ synthExpr _ gam _ (Val s _ rf (Constr _ c [])) = do
       -- Freshen the constructor
       -- (discarding any fresh type variables, info not needed here)
 
-      (ty, _, _, constraints, coercions') <- freshPolymorphicInstance InstanceQ False tySch coercions []
+      (ty, _, constraints, coercions') <- freshPolymorphicInstance InstanceQ False tySch coercions []
 
       otherTypeConstraints <- enforceConstraints s constraints
       registerWantedTypeConstraints otherTypeConstraints
@@ -1967,13 +1967,13 @@ checkGuardsForImpossibility s name refinementConstraints = do
 --
 freshenTySchemeForVar :: (?globals :: Globals) => Span -> Bool -> Id -> TypeScheme -> Checker (Type, Ctxt Assumption, Substitution, Expr () Type)
 freshenTySchemeForVar s rf id tyScheme = do
-  (ty', _, subst, constraints, []) <- freshPolymorphicInstance InstanceQ False tyScheme [] [] -- discard list of fresh type variables
+  (ty', _, constraints, []) <- freshPolymorphicInstance InstanceQ False tyScheme [] [] -- discard list of fresh type variables
 
   otherTypeConstraints <- enforceConstraints s constraints
   registerWantedTypeConstraints otherTypeConstraints
 
   let elaborated = Val s ty' rf (Var ty' id)
-  return (ty', [], subst, elaborated)
+  return (ty', [], [], elaborated)
 
 
 -- Hook into the synthesis engine.

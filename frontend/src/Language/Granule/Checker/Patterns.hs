@@ -202,7 +202,7 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
         _ -> return ()
 
       -- get fresh instance of the data constructors type
-      (dataConstructorTypeFresh, freshTyVarsCtxt, _freshTyVarSubst, constraints, coercions') <-
+      (dataConstructorTypeFresh, freshTyVarsCtxt, constraints, coercions') <-
           freshPolymorphicInstance InstanceQ True tySch coercions indices
 
       -- register any constraints of the data constructor into the solver
@@ -221,7 +221,7 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
       reportM $ "Type indices = " <> pretty indices
       reportMsep
       reportM $ "Freshe freshTyVarsCtxt = " <> pretty freshTyVarsCtxt
-      
+
       reportM $ "Freshened type scheme = " <> pretty dataConstructorTypeFresh
       reportM $ "Freshened coercions   = " <> pretty coercions'
       -- </REPORT>

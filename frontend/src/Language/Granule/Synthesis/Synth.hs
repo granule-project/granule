@@ -715,7 +715,7 @@ constrIntroHelper (True, allowDef) defs gamma mode grade goalTy@(Forall s binder
     checkConstructor con@(Forall _ binders coercions conTy) subst = do
       (result, local) <- conv $ peekChecker $ do
 
-        (conTyFresh, tyVarsFreshD, substFromFreshening, constraints, coercions') <- freshPolymorphicInstance InstanceQ False con subst []
+        (conTyFresh, tyVarsFreshD, constraints, coercions') <- freshPolymorphicInstance InstanceQ False con subst []
 
         -- Take the rightmost type of the function type, collecting the arguments along the way
         let (conTy'', args) = rightMostFunTy conTyFresh
@@ -743,7 +743,6 @@ constrIntroHelper (True, allowDef) defs gamma mode grade goalTy@(Forall s binder
 
         case result of
           QED -> do -- If the solver succeeds, return the specialised type
-            spec <- substitute substFromFreshening spec
             return (success, Just $ reconstructFunTy spec (reverse args), subst')
           _ ->
             return (False, Nothing, [])
@@ -862,7 +861,7 @@ constrElimHelper (allowRSync, allowDef) defs left (var@(x, (a, structure)):right
     checkConstructor name topLevelDef con@(Forall  _ binders constraints conTy) assumptionTy subst grade = do
       (result, local) <- conv $ peekChecker $ do
 
-        (conTyFresh, tyVarsFreshD, substFromFreshening, constraints, coercions') <- freshPolymorphicInstance InstanceQ False con subst []
+        (conTyFresh, tyVarsFreshD, constraints, coercions') <- freshPolymorphicInstance InstanceQ False con subst []
 
         -- Take the rightmost type of the function type, collecting the arguments along the way
         let (conTy'', args) = rightMostFunTy conTyFresh
@@ -891,7 +890,6 @@ constrElimHelper (allowRSync, allowDef) defs left (var@(x, (a, structure)):right
         case result of
           QED -> do -- If the solver succeeds, return the specialised type
             debugM "success!" (show name)
-            spec <- substitute substFromFreshening spec
 
             -- Construct pattern based on constructor arguments specialised by type equality
             assmps <- mapM (\ arg -> do
