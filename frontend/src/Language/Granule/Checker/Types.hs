@@ -578,8 +578,13 @@ refineBinderQuantification ctxt ty = mapM computeQuantifier ctxt
           st <- get
           case lookup tyConId (typeConstructors st) of
             Just (_, _, indices) -> do
-              return $ any (\i -> id `elem` freeVars (typeArguments t !! i)) indices
-              --return True
+              -- For this type constructor `tyConId`
+              -- if any of its argument positions `i` is an index
+              -- then check if the `id` here is in the term for that argument
+              return $ any (\i ->
+                 if i < length (typeArguments t)
+                  then id `elem` freeVars (typeArguments t !! i)
+                  else False) indices
             Nothing -> throw UnboundVariableError { errLoc = nullSpan , errId = id }
         -- unusual- put possible (e.g., `f t`) give up and go for ForallQ
         _ -> return False
