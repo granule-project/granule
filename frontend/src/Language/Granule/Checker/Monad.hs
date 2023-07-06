@@ -586,7 +586,7 @@ data CheckerError
   | TooManyPatternsError
     { errLoc :: Span, errPats :: NonEmpty (Pattern ()), tyExpected :: Type, tyActual :: Type }
   | DataConstructorReturnTypeError
-    { errLoc :: Span, idExpected :: Id, idActual :: Id }
+    { errLoc :: Span, idExpected :: Id, tyActual :: Type }
   | MalformedDataConstructorType
     { errLoc :: Span, errTy :: Type }
   | ExpectedEffectType
@@ -932,8 +932,8 @@ instance UserMsg CheckerError where
     <> (intercalate "\n\t" . map (ticks . pretty) . toList) errPats
 
   msg DataConstructorReturnTypeError{..}
-    = "Expected type constructor `" <> pretty idExpected
-    <> "`, but got `" <> pretty idActual <> "`"
+    = "Expected return result to be of type constructor `" <> pretty idExpected
+    <> "`, but got type `" <> pretty tyActual <> "`"
 
   msg MalformedDataConstructorType{..}
     = "`" <> pretty errTy <> "` not valid in a data constructor definition"

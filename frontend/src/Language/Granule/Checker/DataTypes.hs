@@ -82,44 +82,51 @@ checkDataCon
   indices
   tyConParams
   tyConIndices
-  d@(DataConstrIndexed sp dName tySch@(Forall s dataConTyVars constraints ty)) = do
-    -- type variables from the type constructor are the parameters and type indices combined
-    let tyConVars = tyConParams ++ tyConIndices
+  d@(DataConstrIndexed sp dName tySch@(Forall s dataConTyVars constraints ty)) =
+    case leftmostOfApplication (resultType ty) of
+      TyCon tConName | tName == tConName -> do
+        -- type variables from the type constructor are the parameters and type indices combined
+        let tyConVars = tyConParams ++ tyConIndices
 
-    -- Focus on just those bound variables in scope which are used in the type
-    let relevantTyVars = relevantSubCtxt (freeVars ty) (tyConVars <> dataConTyVars)
+        -- Focus on just those bound variables in scope which are used in the type
+        let relevantTyVars = relevantSubCtxt (freeVars ty) (tyConVars <> dataConTyVars)
 
-    -- Which variables are bound in this data constructor but don't appear in the result?
-    -- These are existentials
-    let dataConTyVarsInResultType = relevantSubCtxt (freeVars $ resultType ty) dataConTyVars
-    let tyVarsExistials = dataConTyVars `subtractCtxt` dataConTyVarsInResultType
+        -- Which variables are bound in this data constructor but don't appear in the result?
+        -- These are existentials
+        let dataConTyVarsInResultType = relevantSubCtxt (freeVars $ resultType ty) dataConTyVars
+        let tyVarsExistials = dataConTyVars `subtractCtxt` dataConTyVarsInResultType
 
-    -- Add quanitifers to the type variables
-    tyVarsForallAndPis <- refineBinderQuantification (relevantTyVars `subtractCtxt` tyVarsExistials) ty
+        -- Add quanitifers to the type variables
+        tyVarsForallAndPis <- refineBinderQuantification (relevantTyVars `subtractCtxt` tyVarsExistials) ty
 
-    modify $ \st -> st { tyVarContext =
-            tyVarsForallAndPis <> [(v, (k, InstanceQ)) | (v, k) <- tyVarsExistials]}
+        modify $ \st -> st { tyVarContext =
+                tyVarsForallAndPis <> [(v, (k, InstanceQ)) | (v, k) <- tyVarsExistials]}
 
-    -- Check we are making something that is actually a type
-    (_, ty) <- checkKind sp ty ktype
+        -- Check we are making something that is actually a type
+        (_, ty) <- checkKind sp ty ktype
 
-    -- type index positions for this data constructor
-    let typeIndexPositions = case lookup dName indices of
-          Just inds -> inds
-          _ -> []
-    --let kindsWithIndexInformation = flagTypeIndices typeIndexPositions (parameterTypes kind)
+        -- type index positions for this data constructor
+        let typeIndexPositions = case lookup dName indices of
+              Just inds -> inds
+              _ -> []
+        --let kindsWithIndexInformation = flagTypeIndices typeIndexPositions (parameterTypes kind)
 
-    -- Create new version of the data type with coercions generated for indices
-    --(ty', coercions, newTyVars) <- checkAndGenerateSubstitution sp tName ty kindsWithIndexInformation
+        reportM ("For data constructor " <> pretty dName <> " index positiosn are " <> pretty typeIndexPositions)
 
-    -- Construct new type scheme for the data constructor
-    let dataConTyVarsNew = relevantTyVars -- <> newTyVars
-    let tySch = Forall sp dataConTyVarsNew constraints ty
+        -- Create new version of the data type with coercions generated for indices
+        --(ty', coercions, newTyVars) <- checkAndGenerateSubstitution sp tName ty kindsWithIndexInformation
 
-    -- Register this data constructor into the environment
-    registerDataConstructor tySch [] typeIndexPositions
+        -- Construct new type scheme for the data constructor
+        let dataConTyVarsNew = relevantTyVars -- <> newTyVars
+        let tySch = Forall sp dataConTyVarsNew constraints ty
 
-  where
+        -- Register this data constructor into the environment
+        registerDataConstructor tySch [] typeIndexPositions
+
+      _ ->
+        throw $ DataConstructorReturnTypeError s tName (resultType ty)
+
+   where
     -- Given a list (first parameter) of positions explaining which of a list
     -- of kinds (second parameter) are type indices, then output a list
     -- of kinds paired with a boolean where True means it is a type index
@@ -132,11 +139,11 @@ checkDataCon
     --     flagTypeIndices' indexPositions ((n, k):nAndKs) =
     --       (n `elem` indexPositions, k) : flagTypeIndices' indexPositions nAndKs
 
-    registerDataConstructor dataConstrTy coercions indexPositions = do
-      st <- get
-      case extend (dataConstructors st) dName (dataConstrTy, coercions, indexPositions) of
-        Just ds -> put st { dataConstructors = ds }
-        Nothing -> throw DataConstructorNameClashError{ errLoc = sp, errId = dName }
+      registerDataConstructor dataConstrTy coercions indexPositions = do
+        st <- get
+        case extend (dataConstructors st) dName (dataConstrTy, coercions, indexPositions) of
+          Just ds -> put st { dataConstructors = ds }
+          Nothing -> throw DataConstructorNameClashError{ errLoc = sp, errId = dName }
 
 checkDataCon tName kind indices tyConParams tyConIndices d@DataConstrNonIndexed{}
   = checkDataCon tName kind indices tyConParams tyConIndices
