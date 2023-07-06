@@ -46,9 +46,10 @@ registerTypeConstructor d@(DataDecl sp name tyVars kindAnn ds) =
     -- the IDs of data constructors
     dataConstrIds = map dataConstrId ds
     -- Calculate the kind for the type constructor
-    tyConKind = mkKind (map snd tyVars)
+    tyConKind = mkKind tyVars
+    mkKind :: Ctxt Type -> Type
     mkKind [] = case kindAnn of Just k -> k; Nothing -> Type 0 -- default to `Type`
-    mkKind (v:vs) = FunTy Nothing v (mkKind vs)
+    mkKind ((id,v):vs) = FunTy (Just id) Nothing v (mkKind vs)
 
 -- Given a data type decalaration, check and register its data constructors
 -- into the scope.
@@ -191,9 +192,9 @@ checkAndGenerateSubstitution sp tName ty ixkinds =
           { errLoc = sp, tyConActual = tC, tyConExpected = tName }
 
     -- Recurse through function types, applying this function to the result type
-    checkAndGenerateSubstitution' sp tName (FunTy id arg res) kinds = do
+    checkAndGenerateSubstitution' sp tName (FunTy id grade arg res) kinds = do
       (res', subst, tyVarsNew) <- checkAndGenerateSubstitution' sp tName res kinds
-      return (FunTy id arg res', subst, tyVarsNew)
+      return (FunTy id grade arg res', subst, tyVarsNew)
 
     checkAndGenerateSubstitution' sp tName (TyApp fun arg) ((True,kind):kinds) = do
       varSymb <- freshIdentifierBase "t"

@@ -53,6 +53,24 @@ data SpecIndicator = FstIsSpec | SndIsSpec | PatternCtxt
 
 data Mode = Types | Effects deriving Show
 
+-- Abstracted equality/relation on grades
+relGrades :: (?globals :: Globals)
+  => Span -> Coeffect -> Coeffect
+  -- Explain how coeffects should be related by a solver constraint
+  -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
+  -> Checker Substitution
+relGrades s c c' rel = do
+  -- Unify the coeffect kinds of the two coeffects
+  (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c c'
+
+  -- Add constraint for the coeffect (using ^op for the ordering compared with the order of equality)
+  c' <- substitute subst c'
+  c  <- substitute subst c
+  kind <- substitute subst kind
+  addConstraint (rel s (inj2 c') (inj1 c) kind)
+  debugM "added solver constraint from box-types equality" (pretty $ (rel s (inj2 c') (inj1 c) kind))
+  return subst
+
 {- | Check whether two types are equal, and at the same time
      generate (in)equality constraints and perform unification (on non graded things)
 
@@ -105,13 +123,17 @@ equalTypesRelatedCoeffects :: (?globals :: Globals)
   -> Checker (Bool, Substitution)
 equalTypesRelatedCoeffects s rel t1 t2 spec mode = do
   let (t1', t2') = if spec == FstIsSpec then (t1, t2) else (t2, t1)
-  -- Infer kind of left
-  (k, subst, _)  <- synthKind s t1'
-  -- Check the right has this kind
-  (subst', _)    <- checkKind s t2' k
-  (eqT, subst'') <- equalTypesRelatedCoeffectsInner s rel t1 t2 k spec mode
-  -- Collect substitutions
-  substFinal <- combineManySubstitutions s [subst,subst',subst'']
+  -- Infer kinds
+  (k, subst, _) <- synthKind s t1'
+  -- check the other type has the same kind
+  (subst', _) <- checkKind s t2' k
+  substFromK <- combineManySubstitutions s [subst,subst']
+  -- apply substitutions before equality
+  t1'' <- substitute substFromK t1'
+  t2'' <- substitute substFromK t2'
+  -- main equality
+  (eqT, subst'') <- equalTypesRelatedCoeffectsInner s rel t1'' t2'' k spec mode
+  substFinal <- combineManySubstitutions s [substFromK, subst'']
   return (eqT, substFinal)
 
 -- Check if `t1 == t2` at kind `k`
@@ -132,16 +154,28 @@ equalTypesRelatedCoeffectsInner :: (?globals :: Globals)
 equalTypesRelatedCoeffectsInner s rel t1 t2 _ _ _ | t1 == t2 =
   return (True, [])
 
-equalTypesRelatedCoeffectsInner s rel fTy1@(FunTy _ t1 t2) fTy2@(FunTy _ t1' t2') _ sp mode = do
+equalTypesRelatedCoeffectsInner s rel fTy1@(FunTy _ grade t1 t2) fTy2@(FunTy _ grade' t1' t2') _ sp mode = do
   debugM "equalTypesRelatedCoeffectsInner (funTy left)" ""
   -- contravariant position (always approximate)
   (eq1, u1) <- equalTypesRelatedCoeffects s ApproximatedBy t1' t1 (flipIndicator sp) mode
+
    -- covariant position (depends: is not always over approximated)
   t2  <- substitute u1 t2
   t2' <- substitute u1 t2'
   debugM "equalTypesRelatedCoeffectsInner (funTy right)" (pretty t2 <> " == " <> pretty t2')
   (eq2, u2) <- equalTypesRelatedCoeffects s rel t2 t2' sp mode
-  unifiers <- combineSubstitutions s u1 u2
+
+  -- grade relation if in GradedBase
+  subst <-
+    if (usingExtension GradedBase) then
+      case (grade, grade') of
+        (Just r, Just r')  -> relGrades s r r' rel
+        (Nothing, Just r') -> relGrades s (TyGrade Nothing 1) r' rel
+        (Just r, Nothing)  -> relGrades s r (TyGrade Nothing 1) rel
+        (Nothing, Nothing) -> return []
+      else return []
+
+  unifiers <- combineManySubstitutions s [u1, u2, subst]
   return (eq1 && eq2, unifiers)
 
 equalTypesRelatedCoeffectsInner _ _ (TyCon con1) (TyCon con2) _ _ _
@@ -168,16 +202,10 @@ equalTypesRelatedCoeffectsInner s rel x@(Box c t) y@(Box c' t') k sp Types = do
   -- Debugging messages
   debugM "equalTypesRelatedCoeffectsInner (box)" $ "grades " <> show c <> " and " <> show c' <> ""
 
-  -- Unify the coeffect kinds of the two coeffects
-  (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c c'
+  -- Related the grades
+  subst <- relGrades s c c' rel
 
-  -- Add constraint for the coeffect (using ^op for the ordering compared with the order of equality)
-  c' <- substitute subst c'
-  c  <- substitute subst c
-  kind <- substitute subst kind
-  addConstraint (rel s (inj2 c') (inj1 c) kind)
-  debugM "added solver constraint from box-types equality" (pretty $ (rel s (inj2 c') (inj1 c) kind))
-
+  -- Equailty on the inner types
   (eq, subst') <- equalTypesRelatedCoeffects s rel t t' sp Types
 
   substU <- combineManySubstitutions s [subst, subst']
@@ -526,7 +554,7 @@ isIndexedType :: Type -> Checker Bool
 isIndexedType t = do
   b <- typeFoldM TypeFold
       { tfTy = \_ -> return $ Const False
-      , tfFunTy = \_ (Const x) (Const y) -> return $ Const (x || y)
+      , tfFunTy = \_ _ (Const x) (Const y) -> return $ Const (x || y)
       , tfTyCon = \c -> do {
           st <- get;
           return $ Const $ case lookup c (typeConstructors st) of Just (_, _, indices) -> indices /= []; Nothing -> False }
@@ -569,7 +597,8 @@ refineBinderQuantification ctxt ty = mapM computeQuantifier ctxt
       return $ if result then (id, (kind, BoundQ)) else (id, (kind, ForallQ))
 
     aux :: Id -> Type -> Checker Bool
-    aux id (FunTy _ t1 t2) = liftM2 (||) (aux id t1) (aux id t2)
+    aux id (FunTy _ (Just g) t1 t2) = liftM2 (||) (liftM2 (||) (aux id t1) (aux id t2)) (aux id g)
+    aux id (FunTy _ Nothing t1 t2)  = liftM2 (||) (aux id t1) (aux id t2)
     aux id (Box _ t)       = aux id t
     aux id (Diamond _ t)   = aux id t
     aux id (Star _ t)      = aux id t

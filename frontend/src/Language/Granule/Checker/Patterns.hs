@@ -112,7 +112,7 @@ ctxtFromTypedPattern' outerCoeff _ pos t (PWild s _ rf) cons =
 
     --case cons of
       -- Full consumption is allowed here
-    --  Full -> do
+  --  Full -> do
 
         -- If the wildcard appears under one or more [ ] pattern then we must
         -- add a constraint that 0 approaximates the effect of the enclosing
@@ -162,20 +162,10 @@ ctxtFromTypedPattern' outerCoeff s pos ty@(TyCon c) (PFloat s' _ rf n) _
     return ([], [], [], elabP, Full)
 
 -- Pattern match on a modal box
-ctxtFromTypedPattern' outerBoxTy s pos t@(Box coeff ty) (PBox sp _ rf p) _ = do
-    (innerBoxTy, subst0, _) <- synthKind s coeff
-    (coeff, subst1, coeffTy) <- case outerBoxTy of
-        -- Case: no enclosing [ ] pattern
-        Nothing -> return (coeff, [], innerBoxTy)
-        -- Case: there is an enclosing [ ] pattern of type outerBoxTy
-        Just (outerCoeff, outerBoxTy) -> do
-          -- Therefore try and flatten at this point
-          flatM <- flattenable outerBoxTy innerBoxTy
-          case flatM of
-            Just (flattenOp, subst, ty) -> return (flattenOp outerCoeff coeff, subst, ty)
-            Nothing -> throw DisallowedCoeffectNesting
-              { errLoc = s, errTyOuter = outerBoxTy, errTyInner = innerBoxTy }
-
+ctxtFromTypedPattern' outerCoeffAndTy s pos t@(Box coeff ty) (PBox sp _ rf p) _ = do
+    (innerCoeffTy, subst0, _) <- synthKind s coeff
+    -- Flatten with outter coeffect, if there is one
+    (Just (coeff, coeffTy), subst1) <- flattenCoeffects s outerCoeffAndTy (Just (coeff, innerCoeffTy))
 
     (ctxt, eVars, subst, elabPinner, consumption) <- ctxtFromTypedPattern' (Just (coeff, coeffTy)) s pos ty p Full
 
@@ -244,6 +234,7 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
       -- where a`2 and n`1 are \forall quantified
 
       areEq <- equalTypesRelatedCoeffectsAndUnify s Eq PatternCtxt (resultType dataConstructorTypeFresh) ty
+      debugM "Patterns.ctxtFromTypedPattern areEq" $ show areEq
       case areEq of
         (True, ty, unifiers) -> do
 
@@ -359,6 +350,22 @@ ctxtFromTypedPattern' _ s _ t p _ = do
     (Star _ t') -> throw $ UniquenessError { errLoc = s, uniquenessMismatch = UniquePromotion t'}
     otherwise -> throw $ PatternTypingError { errLoc = s, errPat = p, tyExpected = t }
 
+flattenCoeffects :: (?globals :: Globals) => Span -> Maybe (Coeffect, Type) -> Maybe (Coeffect, Type) -> Checker (Maybe (Coeffect, Type), Substitution)
+flattenCoeffects s Nothing Nothing | usingExtension GradedBase = do
+  one <- generatePolymorphicGrade1 s
+  return (Just one, [])
+
+flattenCoeffects _ Nothing r = return (r, [])
+flattenCoeffects _ r Nothing = return (r, [])
+flattenCoeffects s (Just (outerCoeff, outerCoeffTy)) (Just (innerCoeff, innerCoeffTy)) = do
+  flatM <- flattenable outerCoeffTy innerCoeffTy
+  case flatM of
+    Just (flattenOp, subst, ty) -> return (Just (flattenOp outerCoeff innerCoeff, ty), subst)
+    Nothing -> throw DisallowedCoeffectNesting
+      { errLoc = s, errTyOuter = outerCoeffTy, errTyInner = innerCoeffTy }
+
+
+
 {-
 
   `ctxtFromTypedPatterns pp ty ps consumption`
@@ -397,10 +404,18 @@ ctxtFromTypedPatterns' :: (?globals :: Globals)
 ctxtFromTypedPatterns' _ sp _ ty [] _ =
   return ([], ty, [], [], [], [])
 
-ctxtFromTypedPatterns' outerCoeff s pos (FunTy _ t1 t2) (pat:pats) (cons:consumptionsIn) = do
+ctxtFromTypedPatterns' outerCoeff s pos (FunTy _ grade t1 t2) (pat:pats) (cons:consumptionsIn) = do
 
   -- Match a pattern
-  (localGam, eVars, subst, elabP, consumption) <- ctxtFromTypedPattern' outerCoeff s pos t1 pat cons
+  -- Flatten outerCoeff (if there is one) with the grade here
+  (gradeWithTy, subst0a) <- case grade of
+                              Nothing -> return (Nothing, [])
+                              Just r  -> do
+                                (gradeTy, substGradeTy, _) <- synthKind s r
+                                return (Just (r, gradeTy), substGradeTy)
+  (innerCoeff, subst0b) <- flattenCoeffects s outerCoeff gradeWithTy
+
+  (localGam, eVars, subst, elabP, consumption) <- ctxtFromTypedPattern' innerCoeff s pos t1 pat cons
 
   -- Apply substitution to the outgoing type
   t2' <- substitute subst t2
@@ -410,7 +425,7 @@ ctxtFromTypedPatterns' outerCoeff s pos (FunTy _ t1 t2) (pat:pats) (cons:consump
       ctxtFromTypedPatterns' outerCoeff s pos (normaliseType t2') pats consumptionsIn
 
   -- Combine the results
-  substs' <- combineSubstitutions s subst substs
+  substs' <- combineManySubstitutions s [subst0a, subst0b, subst, substs]
   -- TODO: probably you can make the first part of this component be calculated more efficiently
   newLocalGam <- ghostVariableContextMeet $ localGam <> localGam'
   return (newLocalGam, ty, eVars ++ eVars', substs', elabP : elabPs, consumption : consumptions)
@@ -423,7 +438,7 @@ ctxtFromTypedPatterns' _ s _ ty (p:ps) _ = do
   -- if this was well typed, i.e., if we have two patterns left we get
   -- p0 -> p1 -> ?
   psTyVars <- mapM (\_ -> freshIdentifierBase "?" Data.Functor.<&> (TyVar . mkId)) ps
-  let spuriousType = foldr (FunTy Nothing) (TyVar $ mkId "?") psTyVars
+  let spuriousType = foldr (FunTy Nothing Nothing) (TyVar $ mkId "?") psTyVars
   throw TooManyPatternsError
     { errLoc = s, errPats = p :| ps, tyExpected = ty, tyActual = spuriousType }
 

@@ -117,6 +117,7 @@ tokens :-
   "#"                           { \p _ -> TokenHash p }
   "⊸"                           { \p _ -> TokenArrow p }
   "*{"                          { \p _ -> TokenStar p }
+  "%"                           { \p _ -> TokenPercent p }
 
 {
 
@@ -192,6 +193,7 @@ data Token
   | TokenCopy AlexPosn
   | TokenEndorse AlexPosn
   | TokenHash AlexPosn
+  | TokenPercent AlexPosn
   | TokenStar AlexPosn
 
   deriving (Eq, Show, Generic)

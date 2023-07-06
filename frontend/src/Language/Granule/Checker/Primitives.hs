@@ -27,7 +27,7 @@ typeAliases :: [(Id, ([Id], Type))]
 typeAliases =
     -- IO = {p | p in IOElem}
     [(mkId "IO", ([], TySet Normal (map tyCon ioElems)))
-    ,(mkId "Inverse", ([mkId "a"], FunTy Nothing (TyVar $ mkId "a") (TyCon $ mkId "()")))]
+    ,(mkId "Inverse", ([mkId "a"], FunTy Nothing Nothing (TyVar $ mkId "a") (TyCon $ mkId "()")))]
   where
     ioElems = ["Stdout", "Stdin", "Stderr", "Open", "Read", "Write", "IOExcept", "Close"]
 

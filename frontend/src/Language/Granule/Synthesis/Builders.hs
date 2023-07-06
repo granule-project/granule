@@ -31,13 +31,13 @@ makeVarUntyped name =
   where s = nullSpanNoFile
 
 makeAbs :: Id -> Expr () Type -> TypeScheme -> Expr () Type
-makeAbs name e (Forall _ _ _ t@(FunTy _ t1 t2)) =
-  Val s t False (Abs t (PVar s t False name) Nothing e)
+makeAbs name e (Forall _ _ _ t@(FunTy _ _ t1 t2)) =
+  Val s t False (Abs t (PVar s t False name) (Just t1) e)
   where s = nullSpanNoFile
 makeAbs name e _ = error "Cannot synth here" -- TODO: better error handling
 
 makeAbsUnbox :: Type -> Id -> Expr () Type -> TypeScheme -> Expr () Type
-makeAbsUnbox t name e (Forall _ _ _ t'@(FunTy _ t1 t2)) =
+makeAbsUnbox t name e (Forall _ _ _ t'@(FunTy _ _ t1 t2)) =
   Val s t False (Abs t (PBox s t False (PVar s t' False name)) (Just t1) e)
   where s = nullSpanNoFile
 makeAbsUnbox _ name e _ = error "Cannot synth here" -- TODO: better error handling
@@ -70,8 +70,8 @@ makeUnbox name1 name2 tyS boxTy varTy =
 makeUnboxP :: Id -> Expr () Type -> TypeScheme -> Type -> Type -> Expr () Type -> Expr () Type
 makeUnboxP name1 expr (Forall _ _ _ goalTy) boxTy varTy e  =
   App s goalTy False
-  (Val s (FunTy Nothing boxTy goalTy) False
-    (Abs (FunTy Nothing boxTy goalTy)
+  (Val s (FunTy Nothing Nothing boxTy goalTy) False
+    (Abs (FunTy Nothing Nothing boxTy goalTy)
       (PBox s boxTy False
         (PVar s varTy False name1)) (Just boxTy) e))
   expr
@@ -106,7 +106,7 @@ makePairElimP :: (Pattern Type -> Pattern Type) -> Expr () Type -> Id -> Id -> T
 makePairElimP ptransf elimExpr lId rId (Forall _ _ _ goalTy) lTy rTy e =
   App s goalTy False
   (Val s (ProdTy lTy rTy) False
-    (Abs (FunTy Nothing (ProdTy lTy rTy) goalTy)
+    (Abs (FunTy Nothing Nothing (ProdTy lTy rTy) goalTy)
       (ptransf $ PConstr s (ProdTy lTy rTy) False (mkId ",") [(PVar s lTy False lId), (PVar s rTy False rId)] )
         Nothing e)) elimExpr
   where s = nullSpanNoFile

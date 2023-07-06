@@ -80,7 +80,7 @@ nonIndexedToIndexed _  _     _      d@DataConstrIndexed{} = d
 nonIndexedToIndexed id tName tyVars (DataConstrNonIndexed sp dName params)
     = DataConstrIndexed sp dName (Forall sp [] [] ty)
   where
-    ty = foldr (FunTy Nothing) (returnTy (GrType.TyCon id) tyVars) params
+    ty = foldr (FunTy Nothing Nothing) (returnTy (GrType.TyCon id) tyVars) params
     returnTy t [] = t
     returnTy t (v:vs) = returnTy (GrType.TyApp t ((GrType.TyVar . fst) v)) vs
 
@@ -114,7 +114,7 @@ cgPat (GrPat.PConstr _ _ _ i l_pt)
 
 cgType :: Compiler m => GrType.Type -> m (Hs.Type ())
 cgType (GrType.Type i) = return $ TyStar ()
-cgType (GrType.FunTy _ t1 t2) = do
+cgType (GrType.FunTy _ _ t1 t2) = do
   t1' <- cgType t1
   t2' <- cgType t2
   return $ Hs.TyFun () t1' t2'

@@ -238,7 +238,7 @@ freshPolymorphicInstance quantifier isDataConstructor tyS@(Forall s kinds constr
           t2 : typesFromIndices t1 (index+1) indices
         else
           typesFromIndices t1 (index+1) indices
-    typesFromIndices (FunTy _ _ t) index indices = typesFromIndices t (index+1) indices
+    typesFromIndices (FunTy _ _ _ t) index indices = typesFromIndices t (index+1) indices
     typesFromIndices _ _ _ = []
 
 instance Substitutable Pred where

@@ -140,7 +140,6 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
           return $ Left (Forall nullSpanNoFile [] [] ty', derivedDefs)
 
 
-
 checkDef :: (?globals :: Globals)
          => Ctxt TypeScheme  -- context of top-level definitions
          -> Def () ()        -- definition
@@ -286,8 +285,8 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ binders
       -- Check that our consumption context matches the binding
       subst0 <- if NoTopLevelApprox `elem` globalsExtensions ?globals
         then ctxtEquals s localGam combinedGam
-        else ctxtApprox s localGam combinedGam
-      -- ctxtApprox s localGam combinedGam
+        else do
+          ctxtApprox s localGam combinedGam
 
 
       -- Create elaborated equation
@@ -351,9 +350,9 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ binders
 
     replaceParameters :: [[Type]] -> Type -> Type
     replaceParameters [] ty = ty
-    replaceParameters ([]:tss) (FunTy id _ ty) = replaceParameters tss ty
+    replaceParameters ([]:tss) (FunTy id grade _ ty) = replaceParameters tss ty
     replaceParameters ((t:ts):tss) ty =
-      FunTy Nothing t (replaceParameters (ts:tss) ty)
+      FunTy Nothing Nothing t (replaceParameters (ts:tss) ty)
     replaceParameters _ t = error $ "Expecting function type: " <> pretty t
 
     -- Convert an id+assumption to a type.
@@ -455,7 +454,61 @@ checkExpr _ _ _ _ ty@(TyCon c) (Val s _ rf (NumFloat n)) | internalName c == "DF
   let elaborated = Val s ty rf (NumFloat n)
   return (usedGhostVariableContext, [], elaborated)
 
-checkExpr defs gam pol _ ty@(FunTy _ sig tau) (Val s _ rf (Abs _ p t e)) = do
+checkExpr defs gam pol _ ty@(FunTy _ grade sig tau) (Val s _ rf (Abs _ p t e)) | usingExtension GradedBase = do
+  debugM "checkExpr[FunTy-graded base]" (pretty s <> " : " <> pretty ty)
+  -- If an explicit signature on the lambda was given, then check
+  -- it confirms with the type being checked here
+
+  (tau', subst1) <- case t of
+    Nothing -> return (tau, [])
+    Just t' -> do
+      (eqT, unifiedType, subst) <- equalTypes s sig t'
+      unless eqT $ throw TypeError{ errLoc = s, tyExpected = sig, tyActual = t' }
+      return (tau, subst)
+
+  newConjunct
+
+  -- Get the type of the grade (if there is a grade)
+  (gradeAndType, subst0) <-
+      case grade of
+          Nothing -> do
+            one <- generatePolymorphicGrade1 s
+            return (Just one, [])
+          Just r -> do
+            (t, subst0, _) <- synthKind s r
+            return (Just (r, t), subst0)
+
+  (bindings, localVars, subst, elaboratedP, _) <- ctxtFromTypedPattern' gradeAndType s InCase sig p NotFull
+  debugM "binding from lam" $ pretty bindings
+
+  pIrrefutable <- isIrrefutable s sig p
+  if pIrrefutable then do
+    -- Check the body in the extended context
+    tau'' <- substitute subst tau'
+
+    newConjunct
+
+    (gam', subst2, elaboratedE) <- checkExpr defs (bindings <> gam) pol False tau'' e
+    -- Check linearity of locally bound variables
+    case checkLinearity bindings gam' of
+       [] -> do
+          subst <- combineManySubstitutions s [subst, subst0, subst1, subst2]
+
+          -- Locally we should have this property (as we are under a binder)
+          subst' <- ctxtApprox s (gam' `intersectCtxts` bindings) bindings
+
+          concludeImplication s localVars
+
+          let elaborated = Val s ty rf (Abs ty elaboratedP t elaboratedE)
+
+          substFinal <- combineSubstitutions s subst subst'
+
+          return (gam' `subtractCtxt` bindings, substFinal, elaborated)
+
+       (p:ps) -> illLinearityMismatch s (p:|ps)
+  else throw RefutablePatternError{ errLoc = s, errPat = p }
+
+checkExpr defs gam pol _ ty@(FunTy _ Nothing sig tau) (Val s _ rf (Abs _ p t e)) = do
   debugM "checkExpr[FunTy]" (pretty s <> " : " <> pretty ty)
   -- If an explicit signature on the lambda was given, then check
   -- it confirms with the type being checked here
@@ -540,7 +593,8 @@ checkExpr defs gam pol topLevel tau
       subst'' <- combineSubstitutions s subst subst'
 
       -- Create elborated AST
-      let scaleTy = FunTy Nothing floatTy (FunTy Nothing (Box (TyRational (toRational x)) floatTy) floatTy)
+      let scaleTy = FunTy Nothing Nothing floatTy
+                      (FunTy Nothing Nothing (Box (TyRational (toRational x)) floatTy) floatTy)
       let elab' = App s floatTy rf
                     (App s' scaleTy rf' (Val s'' floatTy rf'' (Var floatTy v)) (Val s3 floatTy rf3 (NumFloat x))) elab
 
@@ -549,11 +603,31 @@ checkExpr defs gam pol topLevel tau
         throw $ TypeError { errLoc = s, tyExpected = TyCon $ mkId "DFloat", tyActual = tau }
 
 -- Application checking
-checkExpr defs gam pol topLevel tau (App s _ rf e1 e2) = do
+checkExpr defs gam pol topLevel tau (App s a rf e1 e2) | (usingExtension GradedBase) = do
+  debugM "checkExpr[App]-gradedBase" (pretty s <> " : " <> pretty tau)
+
+-- GRADED BASE
+--
+--      G1 |- e1 => a %r -> b    G2 |- e2 <= a
+--  -------------------------------------------- app
+--      G1 + r * G2 |- e1 e2 <= b
+--
+--  The moding here, with synthesis for e1, is because we need
+--  to know the grade `r`.
+
+  -- Syntheise type of function
+  (tau', gam, subst, elab) <- synthExpr defs gam pol (App s a rf e1 e2)
+  -- Check the return types match
+  (eqT, _, substTy) <- equalTypes s tau tau'
+  unless eqT $ throw TypeError{ errLoc = s, tyExpected = tau, tyActual = tau' }
+
+  return (gam, subst, elab)
+
+checkExpr defs gam pol topLevel tau (App s _ rf e1 e2) | not (usingExtension GradedBase) = do
     debugM "checkExpr[App]" (pretty s <> " : " <> pretty tau)
     (argTy, gam2, subst2, elaboratedR) <- synthExpr defs gam pol e2
 
-    funTy <- substitute subst2 (FunTy Nothing argTy tau)
+    funTy <- substitute subst2 (FunTy Nothing Nothing argTy tau)
     (gam1, subst1, elaboratedL) <- checkExpr defs gam pol topLevel funTy e1
 
     gam <- ctxtPlus s gam1 gam2
@@ -1070,21 +1144,21 @@ synthExpr defs gam pol
 
   let floatTy = TyCon $ mkId "DFloat"
 
-  let scaleTyApplied = FunTy Nothing (Box (TyRational (toRational r)) floatTy) floatTy
-  let scaleTy = FunTy Nothing floatTy scaleTyApplied
+  let scaleTyApplied = FunTy Nothing Nothing (Box (TyRational (toRational r)) floatTy) floatTy
+  let scaleTy = FunTy Nothing Nothing floatTy scaleTyApplied
 
   let elab = App s scaleTy rf (Val s' scaleTy rf' (Var scaleTy v)) (Val s'' floatTy rf'' (NumFloat r))
 
   return (scaleTyApplied, weakenedGhostVariableContext, [], elab)
 
 -- Application
-synthExpr defs gam pol (App s _ rf e e') = do
+synthExpr defs gam pol (App s _ rf e e') | not (usingExtension GradedBase) = do
     debugM "synthExpr[App]" (pretty s)
     (fTy, gam1, subst1, elaboratedL) <- synthExpr defs gam pol e
 
     case fTy of
       -- Got a function type for the left-hand side of application
-      (FunTy _ sig tau) -> do
+      (FunTy _ _ sig tau) -> do
          (gam2, subst2, elaboratedR) <- checkExpr defs gam (flipPol pol) False sig e'
          gamNew <- ctxtPlus s gam1 gam2
 
@@ -1096,8 +1170,49 @@ synthExpr defs gam pol (App s _ rf e e') = do
          let elaborated = App s tau rf elaboratedL elaboratedR
          return (tau, gamNew, subst, elaborated)
 
-      -- Not a function type
-      t -> throw LhsOfApplicationNotAFunction{ errLoc = s, errTy = t }
+         -- Not a function type
+      t -> throw LhsOfApplicationNotAFunction{ errLoc = s, errTy = fTy }
+
+-- Application
+-- GRADED BASE
+
+synthExpr defs gam pol (App s _ rf e1 e2) | usingExtension GradedBase = do
+  debugM "synthExpr[App-graded-base]" (pretty s)
+
+--
+--      G1 |- e1 => a %r -> b    G2 |- e2 <= a
+--  -------------------------------------------- app
+--      G1 + r * G2 |- e1 e2 => b
+--
+  -- Syntheise type of function
+  (funTy, gam1, subst1, elab_e1) <- synthExpr defs gam pol e1
+  case funTy of
+    FunTy _ grade sig tau -> do
+      -- Check whether `e2` can be promoted (implicitly by this rule)
+      unpr <-
+        if (CBN `elem` globalsExtensions ?globals)
+        then return False
+        else return $ resourceAllocator e2
+      when unpr (throw $ UnpromotableError{errLoc = s, errTy = sig })
+
+      -- Check the argument against `sig`
+      (gam2, subst2, elab_e2) <- checkExpr defs gam (flipPol pol) False sig e2
+
+      let r = case grade of
+                Just r  -> r
+                -- No grade so implicitly 1 of any semiring
+                Nothing -> TyGrade Nothing 1
+
+      -- Multiply the context
+      (scaled_gam2, subst2') <- ctxtMult s r gam2
+      gam_out <- ctxtPlus s gam1 scaled_gam2
+
+      -- Output
+      substFinal <- combineManySubstitutions s [subst1, subst2, subst2']
+      let elaborated = App s tau rf elab_e1 elab_e2
+      return (tau, gam_out, substFinal, elaborated)
+
+    _ -> throw LhsOfApplicationNotAFunction{ errLoc = s, errTy = funTy }
 
 {- Promotion
 
@@ -1228,7 +1343,7 @@ synthExpr defs gam pol (Binop s _ rf op e1 e2) = do
     -- No matching type were found (meaning there is a type error)
     selectFirstByType t1 t2 [] = return Nothing
 
-    selectFirstByType t1 t2 ((FunTy _ opt1 (FunTy _ opt2 resultTy)):ops) = do
+    selectFirstByType t1 t2 ((FunTy _ grade1 opt1 (FunTy _ grade2 opt2 resultTy)):ops) = do
       -- Attempt to use this typing
       (result, local) <- peekChecker $ do
          (eq1, substA, _) <- equalTypes s t1 opt1
@@ -1261,7 +1376,7 @@ synthExpr defs gam pol (Val s _ rf (Abs _ p (Just sig) e)) = do
      -- Locally we should have this property (as we are under a binder)
      subst0 <- ctxtApprox s (gam'' `intersectCtxts` bindings) bindings
 
-     let finalTy = FunTy Nothing sig tau
+     let finalTy = FunTy Nothing Nothing sig tau
      let elaborated = Val s finalTy rf (Abs finalTy elaboratedP (Just sig) elaboratedE)
 
      substFinal <- combineManySubstitutions s [subst0, substP, subst]
@@ -1294,7 +1409,7 @@ synthExpr defs gam pol (Val s _ rf (Abs _ p Nothing e)) = do
      -- Locally we should have this property (as we are under a binder)
      subst0 <- ctxtApprox s (gam'' `intersectCtxts` bindings) bindings
 
-     let finalTy = FunTy Nothing sig tau
+     let finalTy = FunTy Nothing Nothing sig tau
      let elaborated = Val s finalTy rf (Abs finalTy elaboratedP (Just sig) elaboratedE)
      finalTy' <- substitute substP finalTy
 

@@ -46,7 +46,7 @@ data Polarity = Normal | Opposite
 -- | Type syntax (includes effect, coeffect, and predicate terms)
 data Type where
     Type    :: Int -> Type                          -- ^ Universe construction
-    FunTy   :: Maybe Id -> Type -> Type -> Type     -- ^ Function type
+    FunTy   :: Maybe Id -> Maybe Coeffect -> Type -> Type -> Type     -- ^ Function type
 
     TyCon   :: Id -> Type                           -- ^ Type constructor
     Box     :: Coeffect -> Type -> Type             -- ^ Graded modal necessity
@@ -112,12 +112,12 @@ unforall (Forall _ _ _ t) = t
 ----------------------------------------------------------------------
 -- # Smart constructors
 
--- | Smart constructors for function types
+-- | Smart constructors for function types (with no grade)
 funTy :: Type -> Type -> Type
-funTy = FunTy Nothing
+funTy = FunTy Nothing Nothing
 
 (.->) :: Type -> Type -> Type
-s .-> t = FunTy Nothing s t
+s .-> t = FunTy Nothing Nothing s t
 infixr 1 .->
 
 -- | Smart constructor for constructors and variable
@@ -210,7 +210,7 @@ containsTypeSig :: Type -> Bool
 containsTypeSig =
   runIdentity . typeFoldM (TypeFold
       { tfTy = \_ -> return $ False
-      , tfFunTy = \_ x y -> return (x || y)
+      , tfFunTy = \_ c x y -> return (x || y)
       , tfTyCon = \_ -> return False
       , tfBox = \x y -> return (x || y)
       , tfDiamond = \x y -> return $ (x || y)
@@ -227,27 +227,27 @@ containsTypeSig =
 
 -- | Compute the arity of a function type
 arity :: Type -> Int
-arity (FunTy _ _ t) = 1 + arity t
-arity _           = 0
+arity (FunTy _ _ _ t) = 1 + arity t
+arity _               = 0
 
 -- | Get the result type after the last Arrow, e.g. for @a -> b -> Pair a b@
 -- the result type is @Pair a b@
 resultType :: Type -> Type
-resultType (FunTy _ _ t) = resultType t
+resultType (FunTy _ _ _ t) = resultType t
 resultType t = t
 
 -- Given a function type, return a list of the parameter tpes
 parameterTypes :: Type -> [Type]
-parameterTypes (FunTy _ t1 t2) = t1 : parameterTypes t2
-parameterTypes t               = []
+parameterTypes (FunTy _ _ t1 t2) = t1 : parameterTypes t2
+parameterTypes t                 = []
 
 -- Given a function type, return a list of named parameter types
 -- generating some fresh names if no names are given
 parameterTypesWithNames :: Type -> [(Id, Type)]
 parameterTypesWithNames = aux 0
   where
-    aux seed (FunTy (Just n) t1 t2) = (n, t1) : aux seed t2
-    aux seed (FunTy Nothing  t1 t2) = (mkId ("a" <> show seed), t1) : aux (seed + 1) t2
+    aux seed (FunTy (Just n) _ t1 t2) = (n, t1) : aux seed t2
+    aux seed (FunTy Nothing  _ t1 t2) = (mkId ("a" <> show seed), t1) : aux (seed + 1) t2
     aux _ _                         = []
 
 -- | Get the leftmost type of an application
@@ -274,8 +274,8 @@ freeAtomsVars t = []
 -- Trivially effectful monadic constructors
 mTy :: Monad m => Int -> m Type
 mTy          = return . Type
-mFunTy :: Monad m => Maybe Id -> Type -> Type -> m Type
-mFunTy v x y   = return (FunTy v x y)
+mFunTy :: Monad m => Maybe Id -> Maybe Coeffect -> Type -> Type -> m Type
+mFunTy v mg x y   = return (FunTy v mg x y)
 mTyCon :: Monad m => Id -> m Type
 mTyCon       = return . TyCon
 mBox :: Monad m => Coeffect -> Type -> m Type
@@ -306,7 +306,7 @@ mTySig t _ k      = return (TySig t k)
 -- Monadic algebra for types
 data TypeFold m a = TypeFold
   { tfTy      :: Int                -> m a
-  , tfFunTy   :: Maybe Id -> a -> a -> m a
+  , tfFunTy   :: Maybe Id -> Maybe a -> a -> a -> m a
   , tfTyCon   :: Id                 -> m a
   , tfBox     :: a -> a             -> m a
   , tfDiamond :: a -> a             -> m a
@@ -333,10 +333,11 @@ typeFoldM algebra = go
   where
    go :: Type -> m a
    go (Type l) = (tfTy algebra) l
-   go (FunTy v t1 t2) = do
+   go (FunTy v coeff t1 t2) = do
      t1' <- go t1
      t2' <- go t2
-     (tfFunTy algebra) v t1' t2'
+     coeff' <- maybe (return Nothing) (\coeff -> Just <$> go coeff) coeff
+     (tfFunTy algebra) v coeff' t1' t2'
    go (TyCon s) = (tfTyCon algebra) s
    go (Box c t) = do
      c' <- go c
@@ -390,7 +391,7 @@ typeFoldM algebra = go
 instance Term Type where
     freeVars = getConst . runIdentity . typeFoldM TypeFold
       { tfTy      = \_ -> return (Const [])
-      , tfFunTy   = \_ (Const x) (Const y) -> return $ Const (x <> y)
+      , tfFunTy   = \_ _ (Const x) (Const y) -> return $ Const (x <> y)
       , tfTyCon   = \_ -> return (Const []) -- or: const (return [])
       , tfBox     = \(Const c) (Const t) -> return $ Const (c <> t)
       , tfDiamond = \(Const e) (Const t) -> return $ Const (e <> t)

@@ -164,6 +164,7 @@ typeIndices (DataDecl _ _ tyVars kind constrs) =
         TyVar v' | v == v' -> findIndices tyVars' t1
         -- This is an index, and we can see its position by how many things we have left
         _                  -> (length tyVars') : findIndices tyVars' t1
+    findIndices tyVars (FunTy _ _ _ t) = findIndices tyVars t
     findIndices [] (TyCon _) = []
     -- Defaults to `empty` (acutally an ill-formed case for data types)
     findIndices _ _ = []
@@ -175,7 +176,7 @@ nonIndexedToIndexedDataConstr tName tyVars (DataConstrNonIndexed sp dName params
     -- Don't push the parameters into the type scheme yet
     = DataConstrIndexed sp dName (Forall sp [] [] ty)
   where
-    ty = foldr (FunTy Nothing) (returnTy (TyCon tName) tyVars) params
+    ty = foldr (FunTy Nothing Nothing) (returnTy (TyCon tName) tyVars) params
     returnTy t [] = t
     returnTy t (v:vs) = returnTy (TyApp t ((TyVar . fst) v)) vs
 

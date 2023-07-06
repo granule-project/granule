@@ -1,0 +1,7 @@
+-- gr --no-eval
+language GradedBase
+
+data List a = Nil | Cons a (List a)
+
+f : forall {a : Type} . a % 1 -> a % 1 -> (List a, a)
+f x y = (Cons x Nil, y)

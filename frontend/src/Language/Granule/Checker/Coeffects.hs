@@ -4,16 +4,21 @@
 module Language.Granule.Checker.Coeffects where
 
 import Language.Granule.Checker.Monad
+import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Kinding
+import Language.Granule.Checker.Variables
 import Language.Granule.Context
 
 import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 
 -- | Operations on coeffects
 import Language.Granule.Utils
+
+import Control.Monad.State.Strict (modify)
 
 -- Calculate whether a type assumption is level kinded
 isLevelKinded :: (?globals :: Globals) => Span -> Type -> Checker Bool
@@ -92,3 +97,15 @@ multAll s vars c ((_, Discharged _ _) : ctxt) =
 
 multAll s vars c ((_, Ghost _) : ctxt) =
     multAll s vars c ctxt
+
+generatePolymorphicGrade1 :: Span -> Checker (Coeffect, Type)
+generatePolymorphicGrade1 s = do
+    -- Create a fresh kind variable for this coeffect
+    semiringVarStr <- freshIdentifierBase $ "s[" <> prettyTrace (startPos s) <> "]"
+    let semiringVar = mkId semiringVarStr
+    -- remember this new kind variable in the kind environment
+    -- TODO: [UNIFY/SUBST] Check whether this should really be InstanceQ and not ForallQ
+    -- My understand here is that we want this to be a unification variable.
+    modify (\st -> st { tyVarContext = (semiringVar, (kcoeffect, InstanceQ)) : tyVarContext st })
+    -- return the 1 : semiringVar information
+    return (TyGrade (Just (TyVar semiringVar)) 1, TyVar semiringVar)

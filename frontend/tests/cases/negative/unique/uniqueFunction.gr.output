@@ -1,3 +1,3 @@
 Type checking failed: 
 Type error: frontend/tests/cases/negative/unique/uniqueFunction.gr:5:49:
-Expected `()` but got `!b0`
+Expected `!b0` but got `()`

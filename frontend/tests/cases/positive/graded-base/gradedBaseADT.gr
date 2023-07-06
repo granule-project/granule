@@ -1,0 +1,7 @@
+language GradedBase
+
+data BoxNat : (n : Nat) -> Type -> Type where
+  BoxNat : forall {a : Type, n : Nat} . a % n -> BoxNat n a
+
+data Box : (s : Semiring) -> (r : s) -> Type -> Type where
+   Box : forall {a : Type, s : Semiring, r : s} . a % r -> Box s r a

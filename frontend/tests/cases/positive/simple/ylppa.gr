@@ -1,0 +1,9 @@
+--- Extract the left part of a pair
+fst : forall {a : Type, b : Type} . a × b [0] -> a
+fst (x, [_]) = x
+
+ylppa : ∀ {a : Type, b : Type} . a → (a → b) → b
+ylppa x f = f x
+
+main : Int
+main = ylppa (1,[2]) fst

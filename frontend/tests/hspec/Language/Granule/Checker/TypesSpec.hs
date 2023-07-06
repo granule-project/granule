@@ -36,7 +36,7 @@ spec = do
           _ <- runAll kindCheckDef defs
           refineBinderQuantification
                     [(mkId "m", tyCon "Nat"), (mkId "a", Type 0)]
-                    (FunTy Nothing (TyApp (tyCon "N") (tyVar "m")) (tyVar "a"))
+                    (FunTy Nothing Nothing (TyApp (tyCon "N") (tyVar "m")) (tyVar "a"))
 
       -- Binder checks
       let binders = fromRight [] result

@@ -421,7 +421,7 @@ evalInCBV ctxt (Val _ _ _ (Var _ x)) =
     case lookup x ctxt of
       Just val@(Ext _ (PrimitiveClosure f)) -> return $ Ext () $ Primitive (f ctxt)
       Just val -> return val
-      Nothing  -> fail $ "Variable '" <> sourceName x <> "' is undefined in context."
+      Nothing  -> fail $ "Variable '" <> sourceName x <> "' is undefined in context. Context is " <> show ctxt
 
 evalInCBV ctxt (Val s _ _ (Promote _ e)) =
   if CBN `elem` globalsExtensions ?globals

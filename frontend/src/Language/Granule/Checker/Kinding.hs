@@ -109,11 +109,11 @@ checkKind s t k | t == k = do
   throw $ KindError s t k
 
 -- KChk_funk
-checkKind s (FunTy name t1 t2) k = do
+checkKind s (FunTy name mCoeff t1 t2) k = do
   (subst1, t1') <- checkKind s t1 k
   (subst2, t2') <- checkKind s t2 k
   substFinal <- combineSubstitutions s subst1 subst2
-  return (substFinal, FunTy name t1 t2)
+  return (substFinal, FunTy name mCoeff t1 t2)
 
 -- KChk_SetKind
 checkKind s (TyApp (TyCon (internalName -> "Set")) t) (TyCon (internalName -> "Coeffect")) =
@@ -135,7 +135,7 @@ checkKind s (TyApp (TyCon (internalName -> "SetOp")) t) (TyCon (internalName -> 
 -- KChk_app
 checkKind s (TyApp t1 t2) k2 = do
   (k1, subst1, t2') <- synthKind s t2
-  (subst2, t1') <- checkKind s t1 (FunTy Nothing k1 k2)
+  (subst2, t1') <- checkKind s t1 (FunTy Nothing Nothing k1 k2)
   substFinal <- combineSubstitutions s subst1 subst2
   return (substFinal, TyApp t1' t2')
 
@@ -281,11 +281,11 @@ synthKindWithConfiguration s config t@(TyVar x) = do
 --   ----------------------- Fun
 --        t1 -> t2 => k
 
-synthKindWithConfiguration s config (FunTy name t1 t2) = do
+synthKindWithConfiguration s config (FunTy name mCoeff t1 t2) = do
   (k, subst1, t1') <- synthKindWithConfiguration s config t1
   (subst2   , t2') <- checkKind s t2 k
   subst <- combineSubstitutions s subst1 subst2
-  return (k, subst, FunTy name t1' t2')
+  return (k, subst, FunTy name mCoeff t1' t2')
 
 -- KChkS_pair
 synthKindWithConfiguration s config (TyApp (TyApp (TyCon (internalName -> ",,")) t1) t2) = do
@@ -312,10 +312,22 @@ synthKindWithConfiguration s config (TyApp (TyCon (internalName -> "Set")) t) = 
 synthKindWithConfiguration s config (TyApp t1 t2) = do
   (funK, subst1, t1') <- synthKindWithConfiguration s config t1
   case funK of
-    (FunTy _ k1 k2) -> do
+    (FunTy name _ k1 k2) -> do
       (subst2, t2') <- checkKind s t2 k1
-      subst <- combineSubstitutions s subst1 subst2
-      return (k2, subst, TyApp t1' t2')
+      -- Create and apply substitution of t2 for name if there is a name
+      let localSpecialisation = case name of Nothing -> []; Just id -> [(id, SubstT t2)]
+      k2' <- substitute localSpecialisation k2
+      -- NOTE THIS SUBSTITUTION IS LOCAL AND SHOULD NOT BE RETURNED
+      -- IT IS ONLY TO DO WITH REWRITING THE RESULT KIND HERE
+      -- e.g., (a : Type) -> B a   instantiated with a = Int
+      -- we want to do B Int
+      -- but we don't need to know that `a |-> Int` anywhere else
+        -- since `a` is bound only int his context
+        -- Therefore do not output `localSpecialisation` here.
+
+      -- Construct output substitution and (specialised) result
+      subst <- combineManySubstitutions s [subst1, subst2]
+      return (k2', subst, TyApp t1' t2')
     _ -> throw KindError { errLoc = s, errTy = t1, errKL = funK }
 
 -- KChkS_interval
@@ -388,7 +400,7 @@ synthKindWithConfiguration s _ t@(TyCon (internalName -> "Pure")) = do
 
 synthKindWithConfiguration s _ t@(TyCon (internalName -> "Handled")) = do
   var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") keffect
-  return $ ((FunTy Nothing (TyVar var) (TyVar var)), [], t)
+  return $ ((FunTy Nothing Nothing (TyVar var) (TyVar var)), [], t)
 
 synthKindWithConfiguration s _ t@(TyCon (internalName -> "Infinity")) = do
   var <- freshTyVarInContext (mkId $ "s") kcoeffect
@@ -601,11 +613,13 @@ joinTypes'' :: (?globals :: Globals)
           -> MaybeT Checker (Type, Substitution, Maybe Injections)
 joinTypes'' s t t' rel | t == t' = return (t, [], Nothing)
 
-joinTypes'' s (FunTy id t1 t2) (FunTy _ t1' t2') rel = do
+
+-- TODO join types on the coeffects?
+joinTypes'' s (FunTy id mCoeff t1 t2) (FunTy _ _ t1' t2') rel = do
   (t1j, subst1, _) <- joinTypes'' s t1' t1 rel -- contravariance
   (t2j, subst2, _) <- joinTypes'' s t2 t2' rel
   subst <- lift $ combineSubstitutions s subst1 subst2
-  return (FunTy id t1j t2j, subst, Nothing)
+  return (FunTy id mCoeff t1j t2j, subst, Nothing)
 
 joinTypes'' s (Diamond ef1 t1) (Diamond ef2 t2) rel = do
   (tj, subst0, _) <- joinTypes'' s t1 t2 rel
@@ -694,8 +708,8 @@ joinTypesNoMGU'' :: (?globals :: Globals)
           -> MaybeT Checker (Type, Substitution, Maybe Injections)
 joinTypesNoMGU'' s t t' rel | t == t' = return (t, [], Nothing)
 
-joinTypesNoMGU'' s (FunTy id t1 t2) (FunTy x t1' t2') rel =
-  joinTypes'' s (FunTy id t1 t2) (FunTy x t1' t2') rel
+joinTypesNoMGU'' s (FunTy id mc t1 t2) (FunTy x mc' t1' t2') rel =
+  joinTypes'' s (FunTy id mc t1 t2) (FunTy x mc' t1' t2') rel
 
 joinTypesNoMGU'' s (Diamond ef1 t1) (Diamond ef2 t2) rel =
   joinTypes'' s (Diamond ef1 t1) (Diamond ef2 t2) rel
@@ -734,8 +748,16 @@ mguCoeffectTypesFromCoeffects :: (?globals :: Globals)
   -> Type
   -> Checker (Type, Substitution, (Type -> Type, Type -> Type))
 mguCoeffectTypesFromCoeffects s c1 c2 = do
-  (coeffTy1, subst1, _) <- synthKind s c1
-  (coeffTy2, subst2, _) <- synthKind s c2
+  (coeffTy1, subst1, coeffTy2, subst2) <-
+    if usingExtension GradedBase
+    then do
+      (coeffTy1, subst1, _) <- synthKindWithConfiguration s GradeToPolyAsCoeffect c1
+      (coeffTy2, subst2, _) <- synthKindWithConfiguration s GradeToPolyAsCoeffect c2
+      return (coeffTy1, subst1, coeffTy2, subst2)
+    else do
+      (coeffTy1, subst1, _) <- synthKind s c1
+      (coeffTy2, subst2, _) <- synthKind s c2
+      return (coeffTy1, subst1, coeffTy2, subst2)
   (coeffTy, subst3, res) <- mguCoeffectTypes s coeffTy1 coeffTy2
   subst <- combineManySubstitutions s [subst1, subst2, subst3]
   return (coeffTy, subst, res)
@@ -1016,7 +1038,7 @@ unification s var1 typ2 rel = do
             Type _ | var1 `elem` freeVars typ2 ->
               throw OccursCheckFail { errLoc = s, errVar = var1, errTy = typ2 }
             -- loop in higher type
-            FunTy _ _ (Type _) | var1 `elem` freeVars typ2 ->
+            FunTy _ _ _ (Type _) | var1 `elem` freeVars typ2 ->
               throw OccursCheckFail { errLoc = s, errVar = var1, errTy = typ2 }
             _ -> return ()
 
@@ -1171,7 +1193,7 @@ instance Unifiable Type where
     unify' t t' | t == t' = return []
     unify' (TyVar v) t    = lift $ unification nullSpan v t Eq
     unify' t (TyVar v)    = unify' (TyVar v) t
-    unify' (FunTy _ t1 t2) (FunTy _ t1' t2') = do
+    unify' (FunTy _ _ t1 t2) (FunTy _ _ t1' t2') = do
         u1 <- unify' t1 t1'
         u2 <- unify' t2 t2'
         lift $ combineSubstitutionsHere u1 u2

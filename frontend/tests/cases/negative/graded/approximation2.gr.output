@@ -1,4 +1,4 @@
 Type checking failed: 
 Falsifiable theorem: frontend/tests/cases/negative/graded/approximation2.gr:5:1:
   The following constraint associated with `borg` is false:
-	  (prom_[5:18]0 + prom_[5:22]0 ≤ 5..6) ∧ (3..4 ≤ prom_[5:22]0) ∧ (0..1 ≤ prom_[5:18]0)
+	  (prom_[5:18]0 + prom_[5:22]0 ≤ 5..6) ∧ (3..4 ≤ prom_[5:22]0) ∧ (prom_[5:18]0 ≤ 0..1)
