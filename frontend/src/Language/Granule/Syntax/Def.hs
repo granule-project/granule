@@ -147,13 +147,16 @@ typeIndicesPositions d = nub (concatMap snd (typeIndices d))
 
 -- | Given a data decleration, return the type parameters which are type indicies
 typeIndices :: DataDecl -> [(Id, [Int])]
-typeIndices (DataDecl _ _ tyVars _ constrs) =
+typeIndices (DataDecl _ _ tyVars kind constrs) =
     map constructorIndices constrs
   where
     constructorIndices :: DataConstr -> (Id, [Int])
     constructorIndices dataConstr@(DataConstrNonIndexed _ id _) = (id, [])
     constructorIndices dataConstr@(DataConstrIndexed _ id (Forall _ _ _ ty)) =
-      (id, findIndices (reverse tyVars) (resultType ty))
+      (id, findIndices (reverse tyVars <> processKind kind) (resultType ty))
+
+    processKind Nothing   = []
+    processKind (Just ty) = parameterTypesWithNames ty
 
     findIndices :: Ctxt Kind -> Type -> [Int]
     findIndices ((v, _):tyVars') (TyApp t1 t2) =

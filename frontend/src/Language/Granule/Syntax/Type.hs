@@ -236,9 +236,19 @@ resultType :: Type -> Type
 resultType (FunTy _ _ t) = resultType t
 resultType t = t
 
+-- Given a function type, return a list of the parameter tpes
 parameterTypes :: Type -> [Type]
 parameterTypes (FunTy _ t1 t2) = t1 : parameterTypes t2
 parameterTypes t               = []
+
+-- Given a function type, return a list of named parameter types
+-- generating some fresh names if no names are given
+parameterTypesWithNames :: Type -> [(Id, Type)]
+parameterTypesWithNames = aux 0
+  where
+    aux seed (FunTy (Just n) t1 t2) = (n, t1) : aux seed t2
+    aux seed (FunTy Nothing  t1 t2) = (mkId ("a" <> show seed), t1) : aux (seed + 1) t2
+    aux _ _                         = []
 
 -- | Get the leftmost type of an application
 -- >>> leftmostOfApplication $ TyCon (mkId ",") .@ TyCon (mkId "Bool") .@ TyCon (mkId "Bool")

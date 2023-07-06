@@ -71,7 +71,7 @@ check :: (?globals :: Globals)
 check ast@(AST _ _ _ hidden _) = do
   evalChecker (initState { allHiddenNames = hidden }) $ (do
       ast@(AST dataDecls defs imports hidden name) <- return $ replaceTypeAliases ast
-      _    <- checkNameClashes ast
+      _    <- checkNameClashes Primitives.typeConstructors Primitives.dataTypes ast
       _    <- runAll registerTypeConstructor  (Primitives.dataTypes <> dataDecls)
       _    <- runAll registerDataConstructors (Primitives.dataTypes <> dataDecls)
       defs <- runAll kindCheckDef defs
@@ -89,7 +89,7 @@ synthExprInIsolation :: (?globals :: Globals)
   -> IO (Either (NonEmpty CheckerError) (Either (TypeScheme , [Def () ()]) Type))
 synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
   evalChecker (initState { allHiddenNames = hidden }) $ do
-      _    <- checkNameClashes ast
+      _    <- checkNameClashes Primitives.typeConstructors Primitives.dataTypes ast
       _    <- runAll registerTypeConstructor (Primitives.dataTypes ++ dataDecls)
       _    <- runAll registerDataConstructors (Primitives.dataTypes ++ dataDecls)
       defs <- runAll kindCheckDef defs
@@ -460,27 +460,27 @@ checkExpr defs gam pol _ ty@(FunTy _ sig tau) (Val s _ rf (Abs _ p t e)) = do
   -- If an explicit signature on the lambda was given, then check
   -- it confirms with the type being checked here
 
-  (tau', subst1) <- case t of
-    Nothing -> return (tau, [])
-    Just t' -> do
-      (eqT, unifiedType, subst) <- equalTypes s sig t'
-      unless eqT $ throw TypeError{ errLoc = s, tyExpected = sig, tyActual = t' }
-      return (tau, subst)
+  (sig', subst1) <- case t of
+    Nothing -> return (sig, [])
+    Just sig' -> do
+      (eqT, unifiedSigType, subst) <- lEqualTypes s sig sig'
+      unless eqT $ throw TypeErrorConflictingExpected{ errLoc = s, tyExpected' = sig', tyExpected = sig }
+      return (unifiedSigType, subst)
 
   newConjunct
 
-  (bindings, localVars, subst0, elaboratedP, _) <- ctxtFromTypedPattern s InCase sig p NotFull
+  (bindings, localVars, subst0, elaboratedP, _) <- ctxtFromTypedPattern s InCase sig' p NotFull
   debugM "binding from lam" $ pretty bindings
 
   pIrrefutable <- isIrrefutable s sig p
   if pIrrefutable then do
     -- Check the body in the extended context
-    tau'' <- substitute subst0 tau'
+    tau' <- substitute subst0 tau
 
     newConjunct
 
     debugM "checkExpr in funty bit" ""
-    (gam', subst2, elaboratedE) <- checkExpr defs (bindings <> gam) pol False tau'' e
+    (gam', subst2, elaboratedE) <- checkExpr defs (bindings <> gam) pol False tau' e
     -- Check linearity of locally bound variables
     case checkLinearity bindings gam' of
        [] -> do
@@ -692,7 +692,7 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
 
 -- All other expressions must be checked using synthesis
 checkExpr defs gam pol topLevel tau e = do
-  debugM "checkExpr[*]" (pretty (getSpan e) <> " : " <> pretty tau)
+  debugM "checkExpr[*]" ("Term `" <> pretty e <> "` @ " <> pretty (getSpan e) <> " : " <> pretty tau)
   (tau', gam', subst', elaboratedE) <- synthExpr defs gam pol e
 
   -- Now to do a type equality on check type `tau` and synth type `tau'`
@@ -1091,7 +1091,7 @@ synthExpr defs gam pol (App s _ rf e e') = do
          subst <- combineSubstitutions s subst1 subst2
 
          -- Synth subst
-         tau    <- substitute subst2 tau
+         tau    <- substitute subst tau
 
          let elaborated = App s tau rf elaboratedL elaboratedR
          return (tau, gamNew, subst, elaborated)

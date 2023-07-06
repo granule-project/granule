@@ -176,6 +176,7 @@ equalTypesRelatedCoeffectsInner s rel x@(Box c t) y@(Box c' t') k sp Types = do
   c  <- substitute subst c
   kind <- substitute subst kind
   addConstraint (rel s (inj2 c') (inj1 c) kind)
+  debugM "added solver constraint from box-types equality" (pretty $ (rel s (inj2 c') (inj1 c) kind))
 
   (eq, subst') <- equalTypesRelatedCoeffects s rel t t' sp Types
 
