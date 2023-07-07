@@ -32,11 +32,15 @@ import Data.Functor.Const
 
 lEqualTypesWithPolarity :: (?globals :: Globals)
   => Span -> SpecIndicator -> Type -> Type -> Checker (Bool, Type, Substitution)
-lEqualTypesWithPolarity s pol = equalTypesRelatedCoeffectsAndUnify s ApproximatedBy pol
+lEqualTypesWithPolarity s pol t1 t2 = do
+  let (t1', t2') = if pol == SndIsSpec then (t1, t2) else (t2, t1)
+  equalTypesRelatedCoeffectsAndUnify s ApproximatedBy pol t1' t2'
 
 equalTypesWithPolarity :: (?globals :: Globals)
   => Span -> SpecIndicator -> Type -> Type -> Checker (Bool, Type, Substitution)
-equalTypesWithPolarity s pol = equalTypesRelatedCoeffectsAndUnify s Eq pol
+equalTypesWithPolarity s pol t1 t2 = do
+  let (t1', t2') = if pol == SndIsSpec then (t1, t2) else (t2, t1)
+  equalTypesRelatedCoeffectsAndUnify s Eq pol t1' t2'
 
 lEqualTypes :: (?globals :: Globals)
   => Span -> Type -> Type -> Checker (Bool, Type, Substitution)
@@ -122,19 +126,16 @@ equalTypesRelatedCoeffects :: (?globals :: Globals)
   -> Mode
   -> Checker (Bool, Substitution)
 equalTypesRelatedCoeffects s rel t1 t2 spec mode = do
-  let (t1', t2') = if spec == FstIsSpec then (t1, t2) else (t2, t1)
-  debugM "main equality A" (pretty t1' <> " =? " <> pretty t2')
   -- Infer kinds
-  (k, subst, _) <- synthKind s t1'
+  (k, subst, _) <- synthKind s t1
   -- check the other type has the same kind
-  (subst', _) <- checkKind s t2' k
+  (subst', _) <- checkKind s t2 k
   substFromK <- combineManySubstitutions s [subst,subst']
   -- apply substitutions before equality
-  t1'' <- substitute substFromK t1'
-  t2'' <- substitute substFromK t2'
+  t1 <- substitute substFromK t1
+  t2 <- substitute substFromK t2
   -- main equality
-  debugM "main equality B" (pretty t1'' <> " =? " <> pretty t2'')
-  (eqT, subst'') <- equalTypesRelatedCoeffectsInner s rel t1'' t2'' k spec mode
+  (eqT, subst'') <- equalTypesRelatedCoeffectsInner s rel t1 t2 k spec mode
   substFinal <- combineManySubstitutions s [substFromK, subst'']
   return (eqT, substFinal)
 
