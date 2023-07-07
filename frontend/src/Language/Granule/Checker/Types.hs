@@ -32,11 +32,15 @@ import Data.Functor.Const
 
 lEqualTypesWithPolarity :: (?globals :: Globals)
   => Span -> SpecIndicator -> Type -> Type -> Checker (Bool, Type, Substitution)
-lEqualTypesWithPolarity s pol = equalTypesRelatedCoeffectsAndUnify s ApproximatedBy pol
+lEqualTypesWithPolarity s pol t1 t2 = do
+  let (t1', t2') = if pol == SndIsSpec then (t1, t2) else (t2, t1)
+  equalTypesRelatedCoeffectsAndUnify s ApproximatedBy pol t1' t2'
 
 equalTypesWithPolarity :: (?globals :: Globals)
   => Span -> SpecIndicator -> Type -> Type -> Checker (Bool, Type, Substitution)
-equalTypesWithPolarity s pol = equalTypesRelatedCoeffectsAndUnify s Eq pol
+equalTypesWithPolarity s pol t1 t2 = do
+  let (t1', t2') = if pol == SndIsSpec then (t1, t2) else (t2, t1)
+  equalTypesRelatedCoeffectsAndUnify s Eq pol t1' t2'
 
 lEqualTypes :: (?globals :: Globals)
   => Span -> Type -> Type -> Checker (Bool, Type, Substitution)
@@ -104,11 +108,10 @@ equalTypesRelatedCoeffects :: (?globals :: Globals)
   -> Mode
   -> Checker (Bool, Substitution)
 equalTypesRelatedCoeffects s rel t1 t2 spec mode = do
-  let (t1', t2') = if spec == FstIsSpec then (t1, t2) else (t2, t1)
   -- Infer kind of left
-  (k, subst, _)  <- synthKind s t1'
+  (k, subst, _)  <- synthKind s t1
   -- Check the right has this kind
-  (subst', _)    <- checkKind s t2' k
+  (subst', _)    <- checkKind s t2 k
   (eqT, subst'') <- equalTypesRelatedCoeffectsInner s rel t1 t2 k spec mode
   -- Collect substitutions
   substFinal <- combineManySubstitutions s [subst,subst',subst'']
