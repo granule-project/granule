@@ -459,12 +459,12 @@ checkExpr defs gam pol _ ty@(FunTy _ grade sig tau) (Val s _ rf (Abs _ p t e)) |
   -- If an explicit signature on the lambda was given, then check
   -- it confirms with the type being checked here
 
-  (tau', subst1) <- case t of
-    Nothing -> return (tau, [])
-    Just t' -> do
-      (eqT, unifiedType, subst) <- equalTypes s sig t'
-      unless eqT $ throw TypeError{ errLoc = s, tyExpected = sig, tyActual = t' }
-      return (tau, subst)
+  (sig', subst1) <- case t of
+    Nothing -> return (sig, [])
+    Just sig' -> do
+      (eqT, unifiedSigType, subst) <- lEqualTypes s sig sig'
+      unless eqT $ throw TypeErrorConflictingExpected{ errLoc = s, tyExpected' = sig', tyExpected = sig }
+      return (unifiedSigType, subst)
 
   newConjunct
 
@@ -478,17 +478,17 @@ checkExpr defs gam pol _ ty@(FunTy _ grade sig tau) (Val s _ rf (Abs _ p t e)) |
             (t, subst0, _) <- synthKind s r
             return (Just (r, t), subst0)
 
-  (bindings, localVars, subst, elaboratedP, _) <- ctxtFromTypedPattern' gradeAndType s InCase sig p NotFull
+  (bindings, localVars, subst, elaboratedP, _) <- ctxtFromTypedPattern' gradeAndType s InCase sig' p NotFull
   debugM "binding from lam" $ pretty bindings
 
-  pIrrefutable <- isIrrefutable s sig p
+  pIrrefutable <- isIrrefutable s sig' p
   if pIrrefutable then do
     -- Check the body in the extended context
-    tau'' <- substitute subst tau'
+    tau' <- substitute subst tau
 
     newConjunct
 
-    (gam', subst2, elaboratedE) <- checkExpr defs (bindings <> gam) pol False tau'' e
+    (gam', subst2, elaboratedE) <- checkExpr defs (bindings <> gam) pol False tau' e
     -- Check linearity of locally bound variables
     case checkLinearity bindings gam' of
        [] -> do
@@ -525,7 +525,7 @@ checkExpr defs gam pol _ ty@(FunTy _ Nothing sig tau) (Val s _ rf (Abs _ p t e))
   (bindings, localVars, subst0, elaboratedP, _) <- ctxtFromTypedPattern s InCase sig' p NotFull
   debugM "binding from lam" $ pretty bindings
 
-  pIrrefutable <- isIrrefutable s sig p
+  pIrrefutable <- isIrrefutable s sig' p
   if pIrrefutable then do
     -- Check the body in the extended context
     tau' <- substitute subst0 tau
