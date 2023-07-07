@@ -155,7 +155,7 @@ equalTypesRelatedCoeffectsInner s rel t1 t2 _ _ _ | t1 == t2 =
   return (True, [])
 
 equalTypesRelatedCoeffectsInner s rel fTy1@(FunTy _ grade t1 t2) fTy2@(FunTy _ grade' t1' t2') _ sp mode = do
-  debugM "equalTypesRelatedCoeffectsInner (funTy left)" ""
+  debugM "equalTypesRelatedCoeffectsInner (funTy left)" (pretty sp)
   -- contravariant position (always approximate)
   (eq1, u1) <- equalTypesRelatedCoeffects s ApproximatedBy t1' t1 (flipIndicator sp) mode
 
