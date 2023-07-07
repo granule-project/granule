@@ -123,6 +123,7 @@ equalTypesRelatedCoeffects :: (?globals :: Globals)
   -> Checker (Bool, Substitution)
 equalTypesRelatedCoeffects s rel t1 t2 spec mode = do
   let (t1', t2') = if spec == FstIsSpec then (t1, t2) else (t2, t1)
+  debugM "main equality A" (pretty t1' <> " =? " <> pretty t2')
   -- Infer kinds
   (k, subst, _) <- synthKind s t1'
   -- check the other type has the same kind
@@ -132,6 +133,7 @@ equalTypesRelatedCoeffects s rel t1 t2 spec mode = do
   t1'' <- substitute substFromK t1'
   t2'' <- substitute substFromK t2'
   -- main equality
+  debugM "main equality B" (pretty t1'' <> " =? " <> pretty t2'')
   (eqT, subst'') <- equalTypesRelatedCoeffectsInner s rel t1'' t2'' k spec mode
   substFinal <- combineManySubstitutions s [substFromK, subst'']
   return (eqT, substFinal)
