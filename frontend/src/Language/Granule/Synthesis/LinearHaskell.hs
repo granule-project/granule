@@ -158,7 +158,7 @@ Import Linear Haskell to Granule
 
 -}
 
-processHaskell ::  FilePath -> IO (GrDef.AST () (), Module SrcSpanInfo)
+processHaskell ::  (?globals :: Globals) => FilePath -> IO (GrDef.AST () (), Module SrcSpanInfo)
 processHaskell file = do
     contents <- readFile file
     let pResult   = Parser.parseModuleWithMode parseMode contents
@@ -171,7 +171,7 @@ processHaskell file = do
 
 
 
-toGranule :: Module SrcSpanInfo -> IO (GrDef.AST () ())
+toGranule :: (?globals :: Globals) => Module SrcSpanInfo -> IO (GrDef.AST () ())
 toGranule src@(Module sp modHead pragmas imports decls) = do
     let (dataDecls, typeSchemes, funEqs) = foldl (\(datas, typeSchemes, funEqs) decl ->
             case decl of
@@ -202,7 +202,9 @@ toGranule src@(Module sp modHead pragmas imports decls) = do
 
 
     -- traceM $ "datas: " <> (show dataDecls)
-    -- traceM $ "funBinds: " <> (show funEqs)
+    traceM $ "\n defs:: " <> (GrP.pretty defDecls)
+    -- traceM $ "\n funBinds show : " <> (show funEqs)
+    -- traceM $ "\n funEqs : " <> (GrP.pretty funEqs)
 
     return $ GrDef.AST dataDecls' defDecls mempty mempty Nothing
 toGranule _ = error "file must be a Haskell module"

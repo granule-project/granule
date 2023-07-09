@@ -203,8 +203,8 @@ SpecList :: { ([Example () ()], [(Id, Maybe Type)]) }
   | {- empty -}                         { ([], []) }
 
 Example :: { Example () () }
-  : Expr '=' Expr                 { Example $1 $3 False }
-  | Expr '=' Expr '@' VAR         { Example $1 $3 True }
+  : Expr '=' Expr '!' CONSTR               { Example $1 $3 True }
+  | Expr '=' Expr                          { Example $1 $3 False }
 
 Components :: { [(Id, Maybe Type)] }
   : VAR                                   {% return [(mkId $ symString $1, Nothing)] }

@@ -192,7 +192,6 @@ data Measurement =
   , examplesUsed    :: Integer
   , cartesian       :: Bool
   , cartAttempts    :: Integer
-
   } deriving Show
 
 instance Semigroup Measurement where

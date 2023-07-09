@@ -262,6 +262,16 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             , show exampleLimit <> ""
             ]
 
+        globalsCartesianSynth <-
+          (optional . option (auto @Int))
+            $ long "cart-synth"
+            <> (help . unwords)
+            [ "Synthesise using the cartesian semiring (for benchmarking)"
+            , "Defaults to"
+            , show cartSynth <> ""
+            ]
+
+
         globalsIncludePath <-
           optional $ strOption
             $ long "include-path"
@@ -306,11 +316,6 @@ parseGrConfig = info (go <**> helper) $ briefDesc
           flag Nothing (Just True)
            $ long "linear-haskell"
             <> help "Synthesise Linear Haskell programs"
-
-        globalsCartesianSynth <-
-          flag Nothing (Just True)
-           $ long "cart-synth"
-            <> help "Synthesise the using the cartesian semiring"
 
         globalsSynthHtml <-
           flag Nothing (Just True)

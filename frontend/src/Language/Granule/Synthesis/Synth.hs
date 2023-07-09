@@ -397,15 +397,15 @@ synthesiseGradedBase ast gradedProgram hole spec eval hints index unrestricted r
 
   -- Initialise input context with
   -- local synthesis context
-  let gamma = map (\(v, a)  -> case (a, cartesianSynth) of
-          (Linear t, True) -> (v, SVar (Linear (toCart t)) (Just $ NonDecreasing 0) 0)
-          (Discharged t a, True) -> (v, SVar (Discharged (toCart t) (toCart a)) (Just $ NonDecreasing 0) 0)
+  let gamma = map (\(v, a)  -> case (a, cartSynth) of
+          (Linear t, x) | x > 0 -> (v, SVar (Linear (toCart t)) (Just $ NonDecreasing 0) 0)
+          (Discharged t a, x) | x > 0 -> (v, SVar (Discharged (toCart t) (toCart a)) (Just $ NonDecreasing 0) 0)
           (a, _)  -> (v, SVar a (Just $ NonDecreasing 0) 0)
           ) ctxt ++
 
-              map (\(v, (tySch, grade)) -> (v, SDef tySch (if cartesianSynth then Just anyG else Just grade) 0)) restricted ++
+              map (\(v, (tySch, grade)) -> (v, SDef tySch (if cartSynth > 0 then Just anyG else Just grade) 0)) restricted ++
   -- unrestricted definitions given as hints
-              map (\(v, tySch) -> (v, SDef tySch (if cartesianSynth then Just anyG else Nothing) 0)) unrestricted
+              map (\(v, tySch) -> (v, SDef tySch (if cartSynth > 0 then Just anyG else Nothing) 0)) unrestricted
 
   -- Add constraints from type scheme and from checker so far as implication
   (_, cs') <- runChecker cs $ do
@@ -422,7 +422,7 @@ synthesiseGradedBase ast gradedProgram hole spec eval hints index unrestricted r
   let lims = mergeByNorm (map mergeByNorm [[[(x,y) | x <- [0..10]] | y <- [0..10]]])
   let sParamList = map (\(elim,intro) -> defaultSearchParams { matchMax = elim, introMax = intro }) lims
 
-  let (goal, originalGoal) = if cartesianSynth then (toCart goalTy, Just goalTy) else (goalTy, Nothing)
+  let (goal, originalGoal) = if cartSynth > 0 then (toCart goalTy, Just goalTy) else (goalTy, Nothing)
 
   let synRes = synLoop ast hole spec eval constructorsWithRecLabels index gamma [] originalGoal goal sParamList
   (res, agg1) <- runStateT (runSynthesiser index synRes cs') synthState
@@ -434,6 +434,7 @@ synthesiseGradedBase ast gradedProgram hole spec eval hints index unrestricted r
         $ nubBy (\(expr1, _, _) (expr2, _, _) -> expr1 == expr2) $ rights (map fst res)
         -- <benchmarking-output>
   let agg = case datas of (_:_) -> (last datas <> agg1) ; _ -> agg1
+
 
   if benchmarking then
     if benchmarkingRawData then
@@ -453,9 +454,9 @@ synthesiseGradedBase ast gradedProgram hole spec eval hints index unrestricted r
                         , contextSize = toInteger $ length gamma
                         , examplesUsed =
                             case spec of
-                              Just (Spec _ _ exs _) -> toInteger $ length $ filter (\(Example _ _ cartOnly)-> cartesianSynth || not cartOnly ) exs
+                              Just (Spec _ _ exs _) -> toInteger $ length $ filter (\(Example _ _ cartOnly)-> cartSynth > 0 || not cartOnly ) exs
                               Nothing -> 0
-                        , cartesian = cartesianSynth
+                        , cartesian = cartSynth > 0
                         , cartAttempts = attempts agg
                         } in
                 return (programs, Just measurement)
@@ -499,22 +500,23 @@ runExamples :: (?globals :: Globals)
             -> Id
             -> IO Bool
 runExamples eval ast@(AST decls defs imports hidden mod) examples defId = do
-  let examples' = filter (\(Example input output cartOnly) -> cartesianSynth || not cartOnly ) examples
-  let exampleMainExprs =
-        map (\(Example input output _) -> makeEquality input output) examples'
+  let examples' = filter (\(Example input output cartOnly) -> cartSynth > 0 || not cartOnly ) examples
+  if not $ null examples' then do
+    let exampleMainExprs =
+          map (\(Example input output _) -> makeEquality input output) examples'
     -- remove the existing main function (should probably keep the main function so we can stitch it back in after)
 
-  let defsWithoutMain = filter (\(Def _ mIdent _ _ _ _) -> mIdent /= mkId entryPoint) defs
+    let defsWithoutMain = filter (\(Def _ mIdent _ _ _ _) -> mIdent /= mkId entryPoint) defs
 
-  let foundBoolDecl = find (\(DataDecl _ dIdent _ _ _) ->  dIdent == mkId "Bool") decls
-  let declsWithBool = case foundBoolDecl of
+    let foundBoolDecl = find (\(DataDecl _ dIdent _ _ _) ->  dIdent == mkId "Bool") decls
+    let declsWithBool = case foundBoolDecl of
                         Just decl -> decls
                         Nothing -> boolDecl : decls
 
-  let exampleMainExprsCombined = foldr (\mainExpr acc -> case acc of Just acc' -> Just $ makeAnd mainExpr acc' ; Nothing -> Just mainExpr) Nothing exampleMainExprs
-  case exampleMainExprsCombined of
-    Nothing -> error "Could not construct main definition for example AST!"
-    Just exampleMainExprsCombined' -> do
+    let exampleMainExprsCombined = foldr (\mainExpr acc -> case acc of Just acc' -> Just $ makeAnd mainExpr acc' ; Nothing -> Just mainExpr) Nothing exampleMainExprs
+    case exampleMainExprsCombined of
+      Nothing -> error "Could not construct main definition for example AST!"
+      Just exampleMainExprsCombined' -> do
       -- exmapleMainDef:
       --    (&&') : Bool -> Bool [0..1] -> Bool
       --    (&&') True [y] = y;
@@ -522,15 +524,17 @@ runExamples eval ast@(AST decls defs imports hidden mod) examples defId = do
       --
       --    main : IO ()
       --    main = (example_in_1 == example_out_1) (&&') ... (&&') (example_in_n == example_out_n)
-      let exampleMainDef = Def nullSpanNoFile (mkId entryPoint) False Nothing
+        let exampleMainDef = Def nullSpanNoFile (mkId entryPoint) False Nothing
                               (EquationList nullSpanNoFile (mkId entryPoint) False
                                 [(Equation nullSpanNoFile (mkId entryPoint) () False [] exampleMainExprsCombined')]) (Forall nullSpanNoFile [] [] (TyInt 0))
-      let astWithExampleMain = AST declsWithBool (defsWithoutMain ++ [exampleMainDef]) imports hidden mod
-      let timeout = 100000
-      res <- liftIO $ System.Timeout.timeout timeout $ eval astWithExampleMain
-      case res of
-        Just True -> return True;
-        _ -> return False;
+        let astWithExampleMain = AST declsWithBool (defsWithoutMain ++ [exampleMainDef]) imports hidden mod
+        let timeout = 100000
+        res <- liftIO $ System.Timeout.timeout timeout $ eval astWithExampleMain
+        case res of
+          Just True -> return True;
+          _ -> do 
+            return False;
+  else return True
 
   where
     boolDecl :: DataDecl
@@ -603,25 +607,28 @@ gSynthOuter
     then do
       -- Run the type checker if we used cartesian/"Any" mode
       -- Only accept programs which check with the original non-cartesian semiring type
-      checked <- if not cartesianSynth then return True else do
-        st <- getSynthState
-        case gradedProgram st of
-          Nothing -> return True
-          Just prog -> do
-            let hole = HoleMessage sp hgoal hctxt htyVars hVars synthCtxt [([], expr)]
-            let holeCases = concatMap (\h -> map (\(pats, e) -> (errLoc h, zip (getCtxtIds (holeVars h)) pats, e)) (cases h)) [hole]
-            let (AST _ defs' _ _ _) = holeRefactor holeCases ast
-            let [defId] = currDef st
-            Synthesiser $ lift $ lift $ lift $ modify (\state ->
-              state {
-                attempts = 1 + attempts state
+      checked <- if cartSynth == 0 then return True else do
+        if cartSynth == 1 then do 
+          st <- getSynthState
+          case gradedProgram st of
+            Nothing -> return True
+            Just prog -> do
+              let hole = HoleMessage sp hgoal hctxt htyVars hVars synthCtxt [([], expr)]
+              let holeCases = concatMap (\h -> map (\(pats, e) -> (errLoc h, zip (getCtxtIds (holeVars h)) pats, e)) (cases h)) [hole]
+              let (AST _ defs' _ _ _) = holeRefactor holeCases ast
+              let [defId] = currDef st
+              Synthesiser $ lift $ lift $ lift $ modify (\state ->
+                state {
+                  attempts = 1 + attempts state
                     })
 
 
-            case (find (\(Def _ id _ _ _ _) -> id == defId) defs', prog) of
-              (Just (Def _ _ _ _ (EquationList _ _ _ eqs) _), Def _ _ _ _ (EquationList _ _ _ eqs') _) -> 
-                return $ pretty eqs == pretty eqs'
-              _ -> return False
+              case (find (\(Def _ id _ _ _ _) -> id == defId) defs', prog) of
+                (Just (Def _ _ _ _ (EquationList _ _ _ eqs) _), Def _ _ _ _ (EquationList _ _ _ eqs') _) -> 
+                  return $ pretty eqs == pretty eqs'
+                _ -> return False
+        else do 
+          return True 
 
         -- st <- getSynthState
         -- liftIO $ do
@@ -648,7 +655,7 @@ gSynthOuter
             let [def] = currDef st
             success <- liftIO $ runExamples eval ast' examples def
             if success
-              then return res
+            then return res
             else none
           _ -> return res
       else none
@@ -812,7 +819,7 @@ varRule gamma (Focused left) (Focused (var@(name, assumption):right)) goal = do
               (True, Just grade) -> do
                 synSt <- getSynthState
                 if not $ name `elem` currDef synSt then do
-                  (kind, _, _) <- conv $ synthKind ns grade
+                  (kind, _, _) <- conv $ synthKind ns  grade
                   delta <- ctxtMultByCoeffect (TyGrade (Just kind) 0) (gamma ++ left ++ right)
                   let singleUse = (name, SDef tySch (Just $ TyGrade (Just kind) 1) 0)
                   let rInfo = VarRule name assumption goal gamma [] (singleUse:delta)
@@ -1162,7 +1169,7 @@ constrRule sParams inIntroPhase focusPhase gamma goal = do
             case (args, underLim) of
               -- Nullary constructor
               ([], _) -> do
-                let kind = if cartesianSynth
+                let kind = if cartSynth > 0
                            then Just $ TyCon $ mkId "Cartesian"
                            else Nothing
                 delta <- ctxtMultByCoeffect (TyGrade kind 0) gamma

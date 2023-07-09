@@ -51,9 +51,9 @@ data Globals = Globals
   , globalsSubtractiveSynthesis   :: Maybe Bool
   , globalsAlternateSynthesisMode :: Maybe Bool
   , globalsHaskellSynth            :: Maybe Bool
-  , globalsCartesianSynth           :: Maybe Bool
   , globalsSynthHtml        :: Maybe Bool
   , globalsExampleLimit         :: Maybe Int
+  , globalsCartesianSynth         :: Maybe Int
   , globalsExtensions           :: [Extension]
   } deriving (Read, Show)
 
@@ -87,7 +87,7 @@ usingExtension e = elem e $ globalsExtensions ?globals
 
 -- | Accessors for global flags with default values
 debugging, interactiveDebugging, noColors, alternativeColors, noEval, suppressInfos, suppressErrors,
-  timestamp, testing, ignoreHoles, benchmarking, benchmarkingRawData, subtractiveSynthesisMode, alternateSynthesisMode, haskellSynth, synthHtml, cartesianSynth :: (?globals :: Globals) => Bool
+  timestamp, testing, ignoreHoles, benchmarking, benchmarkingRawData, subtractiveSynthesisMode, alternateSynthesisMode, haskellSynth, synthHtml :: (?globals :: Globals) => Bool
 debugging         = fromMaybe False $ globalsDebugging ?globals
 interactiveDebugging         = fromMaybe False $ globalsInteractiveDebugging ?globals
 noColors          = fromMaybe False $ globalsNoColors ?globals
@@ -104,7 +104,6 @@ subtractiveSynthesisMode = fromMaybe False $ globalsSubtractiveSynthesis ?global
 alternateSynthesisMode = fromMaybe False $ globalsAlternateSynthesisMode ?globals
 haskellSynth = fromMaybe False $ globalsHaskellSynth ?globals
 synthHtml = fromMaybe False $ globalsSynthHtml ?globals
-cartesianSynth = fromMaybe False $ globalsCartesianSynth ?globals
 
 -- | Accessor for the solver timeout with a default value
 solverTimeoutMillis :: (?globals :: Globals) => Integer
@@ -113,6 +112,9 @@ solverTimeoutMillis = fromMaybe 10000 $ globalsSolverTimeoutMillis ?globals
 -- | Limit to how many times we run the examples before giving up
 exampleLimit :: (?globals :: Globals) => Int
 exampleLimit = fromMaybe 25 $ globalsExampleLimit ?globals
+
+cartSynth :: (?globals :: Globals) => Int
+cartSynth = fromMaybe 0 $ globalsCartesianSynth ?globals
 
 -- | Accessors for global file paths with default values
 includePath, sourceFilePath :: (?globals :: Globals) => FilePath
