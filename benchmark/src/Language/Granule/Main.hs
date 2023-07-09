@@ -50,6 +50,7 @@ class Report a where
   report :: ([Measurement], Measurement) -> (Measurement -> a) -> IO ()
   report1 :: ([Measurement], Measurement) -> (Measurement -> a) -> IO ()
   reportLead :: ([Measurement], Measurement) -> (Measurement -> a) -> IO ()
+  reportLead2 :: ([Measurement], Measurement) -> (Measurement -> a) -> IO ()
   reportString :: ([Measurement], Measurement) -> (Measurement -> a) -> String
   report1String :: ([Measurement], Measurement) -> (Measurement -> a) -> String
 
@@ -59,6 +60,7 @@ instance Report Bool where
                              | otherwise      = putStr "\\fail{} "
   report1 = report
   reportLead = report
+  reportLead2 = report
 
   reportString (_, aggregate) view | view aggregate = "\\success{}"
                                    | otherwise      = "\\fail{} "
@@ -69,6 +71,7 @@ instance Report Integer where
     printf "%3d      " (view aggregate)
   report1 = report
   reportLead = report
+  reportLead2 = report
   reportString (_, aggregate) view =
     printf "%3d      " (view aggregate)
   report1String = reportString
@@ -78,6 +81,8 @@ instance Report Double where
     printf "%6.2f (\\stderr{%6.2f})" (view aggregate) (stdError $ map view results)
   reportLead (results, aggregate) view =
     printf "{\\highlight{$ %6.2f (\\stderr{%6.2f}) $}}" (view aggregate) (stdError $ map view results)
+  reportLead2 (results, aggregate) view =
+    printf "{\\newhighlight{$ %6.2f (\\stderr{%6.2f}) $}}" (view aggregate) (stdError $ map view results)
   report1 (_, aggregate) view =
     printf "%6.2f" (view aggregate)
   reportString (results, aggregate) view =
@@ -87,8 +92,9 @@ instance Report Double where
 
 modes :: [(String, (String, String))]
 modes = [
-      ("graded", ("Graded", ""))
-    , ("cartesian", ("Cartesian", "--cart-synth"))
+      ("Graded", ("Graded", ""))
+    , ("Cartesian", ("Cartesian", "--cart-synth 1"))
+    , ("Cartesian (No Retries)", ("Cartesian (No Retries)", "--cart-synth 2"))
       ]
 
 defaultRepeatTrys = 10
@@ -160,6 +166,8 @@ processArgs (arg:args)
 printUsage :: String
 printUsage = ""
 
+attemptsToSeconds :: Integer -> Double
+attemptsToSeconds n = 1000.0 * fromIntegral n
 
 main :: IO ()
 main = do
@@ -172,7 +180,7 @@ main = do
   (files, categories, fpm, repeatTimes) <- return $ processArgs argsMain
 
   let items = benchmarksToRun benchmarkList
-  let doModes = ["graded", "cartesian"]
+  let doModes = ["Graded", "Cartesian", "Cartesian (No Retries)"]
   let fpm = True
   let repeatTime = defaultRepeatTrys
 
@@ -194,17 +202,17 @@ main = do
   let resultsPerFile = transpose resultsPerMode
 
   putStrLn "\\begin{table}[t]"
-  putStrLn "{\\small{"
+  putStrLn "{\\footnotesize{"
   putStrLn "\\begin{center}"
   putStrLn "\\setlength{\\tabcolsep}{0.3em}"
-  let seps = replicate (length relevantModes) "p{0.75em}rccc"
-  putStrLn $ "\\begin{tabular}{p{1.25em}cc|" <> intercalate "|" seps <> "} & & & "
+  -- let seps = replicate (length relevantModes) "p{0.75em}rccc"
+  putStrLn $ "\\begin{tabular}{p{1.25em}cc|p{0.75em}rc|p{0.75em}rcc|p{0.75em}rc} & & & "
+  putStrLn $ "\\multicolumn{3}{c|}{Graded}&\\multicolumn{4}{c|}{Cartesian}&\\multicolumn{3}{c|}{Cartesian (No Retries)} \\\\ \\hline \\multicolumn{2}{c}{{Problem}}& \\multicolumn{1}{c|}{{Ctxt}} & & \\multicolumn{1}{c}{$\\mu{T}$ (ms)} & \\multicolumn{1}{c|}{{\\#/Exs.}} & & \\multicolumn{1}{c}{$\\mu{T}$ (ms)} & \\multicolumn{1}{c}{\\textsc{N}} & \\multicolumn{1}{c|}{$\\mu{T}$ + OracleT (ms)}  & & \\multicolumn{1}{c}{$\\mu{T}$ (ms)} & \\multicolumn{1}{c|}{{\\#/Exs.}}\\\\ \\hline"
+  -- let colHeadings = map (\(modeTitle, _) -> "\\multicolumn{5}{c|}{"<> modeTitle <> "}") relevantModes
+  -- putStrLn $ intercalate "&" colHeadings <> "\\\\ \\hline"
 
-  let colHeadings = map (\(modeTitle, _) -> "\\multicolumn{5}{c|}{"<> modeTitle <> "}") relevantModes
-  putStrLn $ intercalate "&" colHeadings <> "\\\\ \\hline"
-
-  let subHeadings = replicate (length relevantModes) "\\multicolumn{1}{c}{$\\mu{T}$ (ms)} & \\multicolumn{1}{c}{\\textsc{SMT}} & \\multicolumn{1}{c}{Paths} & \\multicolumn{1}{r|}{\\textsc{N}}"
-  putStrLn $ "\\multicolumn{2}{r}{{Problem}}& \\multicolumn{1}{c|}{{Exs}} & & " <> intercalate " & & " subHeadings <> "\\\\ \\hline"
+  -- let subHeadings = replicate (length relevantModes) "\\multicolumn{1}{c}{$\\mu{T}$ (ms)} & \\multicolumn{1}{c}{\\textsc{SMT}} & \\multicolumn{1}{c}{Paths} & \\multicolumn{1}{r|}{\\textsc{N}}"
+  -- putStrLn $ "\\multicolumn{2}{r}{{Problem}}& \\multicolumn{1}{c|}{{Exs}} & & " <> intercalate " & & " subHeadings <> "\\\\ \\hline"
 
   res <- foldM (\seq@(resultsFormattedPrev, prevCategory) resultsPerModePerFile -> do
           let category = snd5 $ head resultsPerModePerFile
@@ -217,35 +225,62 @@ main = do
           putStrLn " & "
           putStr texName 
           putStr " & "
-          let examples = fifth5 $ head resultsPerModePerFile
-          report1 examples examplesUsed
+          let ctxt = fifth5 $ head resultsPerModePerFile
+          report1 ctxt contextSize
 
-          leadTime <- foldM (\(lead :: Maybe (String, Double) ) (texName, category, fileName, mode, results@(meausurements, aggregate)) -> do
+          leadTime <- foldM (\(lead :: (Maybe (String, Double), Bool) ) (texName, category, fileName, mode, results@(meausurements, aggregate)) -> do
             let currentTime = read $ report1String results synthTime
             case lead of
-              Nothing -> return $ Just (mode, currentTime)
-              Just (_, leadTime) ->
+              (Nothing, _) -> return (Just (mode, currentTime), False)
+              (Just (m, leadTime), cartLead) ->
                 if not (timeout aggregate) && leadTime > currentTime then
-                  return $ Just (mode, currentTime)
+                  if mode == "--cart-synth" then
+                    if leadTime > currentTime +  attemptsToSeconds (cartAttempts aggregate) then
+                      return $ (Just (mode, currentTime), cartLead)
+                    else
+                      return (Just (m, leadTime), True)
+                  else
+                    return $ (Just (mode, currentTime), cartLead)
                 else
                   return lead
-            ) Nothing resultsPerModePerFile
+            ) (Nothing, False) resultsPerModePerFile
 
           resultsFormatted <- forM resultsPerModePerFile $ (\(texName, category, fileName, mode, results@(measurements, aggregate)) -> do
             return $  sequence (if splitTimeAndSMT then
                 if not $ success aggregate then
-                  [ putStr " & " , putStr "\\fail{}", putStr " & ",  putStr "Timeout", putStr " & ", putStr "-", putStr " & ", putStr "-" , putStr " & ",  putStr "-" ]
+                  [
+                      putStr " & "
+                      , putStr "\\fail{}"
+                      , putStr " & "
+                      ,  putStr "Timeout"
+                      , putStr " & "
+                      , putStr "-"
+                      , if mode == "--cart-synth 1" then putStr " & " else putStr ""
+                      , if mode == "--cart-synth 1" then putStr "-"  else putStr ""
+                      , if mode == "--cart-synth 1" then putStr " & " else putStr ""
+                      , if mode == "--cart-synth 1" then putStr "-"  else putStr ""
+                      ]
                 else
                   [ putStr " & ", report1 results success
                   , putStr " & "
-                  , if fromMaybeFst "" leadTime == mode then reportLead results synthTime else report results synthTime
+                  , 
+                    if mode == "--cart-synth 1" then 
+                      if not $ snd leadTime then 
+                        if fromMaybeFst "" (fst leadTime) == mode then reportLead results synthTime else report results synthTime
+                      else 
+                        reportLead2 results synthTime
+                    else 
+                      if fromMaybeFst "" (fst leadTime) == mode then reportLead results synthTime else report results synthTime
                   , putStr " & "
-                  , report1 results smtCalls
-                  , putStr " & "
-                  , report1 results pathsExplored
-                  , putStr " & "
-                  -- , report1 results smtCalls
-                  , if mode == "--cart-synth" then report1 results cartAttempts else report1 results programSize ]
+                  , if mode == "--cart-synth 1" then 
+                      report1 results cartAttempts
+                    else  
+                      report1 results examplesUsed
+
+                  , if mode == "--cart-synth 1" then putStr " & " else putStr ""
+                  , if mode == "--cart-synth 1" then do
+                        printf  "%6.2f" (synthTime aggregate + attemptsToSeconds (cartAttempts aggregate))  else putStr ""
+                  ]
               else
                 [ report1 results success
                 , report results synthTime
@@ -338,7 +373,7 @@ aggregate results =
       , timeout = fromMaybe True $ the' (map timeout results)
       , pathsExplored = fromMaybe 0 $ the' (map pathsExplored results)
       , programSize = fromMaybe 0 $ the' (map programSize results)
-      , contextSize = fromMaybe 0 $ the' (map pathsExplored results)
+      , contextSize = fromMaybe 0 $ the' (map contextSize results)
       , examplesUsed = fromMaybe 0 $ the' (map examplesUsed results)
       , cartesian = fromMaybe False $ the' (map cartesian results)
       , cartAttempts = fromMaybe 0 $ the' (map cartAttempts results)
