@@ -1,8 +1,0 @@
-language GradedBase 
-
-data List a =  Cons a (List a) | Nil 
-
-data Bool = True | False
-
-consBool : Bool %2 -> List Bool
-consBool = ?

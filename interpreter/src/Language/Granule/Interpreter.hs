@@ -232,9 +232,9 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
       let timeout = if interactiveDebugging then maxBound :: Int else 10000000
       rest <- synthesiseHoles config astSrc holes isGradedBase
 
-      gradedExpr <- if cartesianSynth then getGradedExpr config defId else return Nothing
+      gradedExpr <- if cartSynth > 0 then getGradedExpr config defId else return Nothing
       let defs' = map (\(x, (Forall tSp con bind ty)) ->
-              if cartesianSynth
+              if cartSynth > 0
                 then (x,  (Forall tSp con bind (toCart ty)))
                 else (x, (Forall tSp con bind ty))
                  ) defs
@@ -464,6 +464,15 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             , show exampleLimit <> ""
             ]
 
+        globalsCartesianSynth <-
+          (optional . option (auto @Int))
+            $ long "cart-synth"
+            <> (help . unwords)
+            [ "Synthesise using the cartesian semiring (for benchmarking)"
+            , "Defaults to"
+            , show cartSynth <> ""
+            ]
+
         globalsIncludePath <-
           optional $ strOption
             $ long "include-path"
@@ -513,11 +522,6 @@ parseGrConfig = info (go <**> helper) $ briefDesc
           flag Nothing (Just True)
            $ long "alternate"
             <> help "Use alternate mode for synthesis (subtractive divisive, additive naive)"
-
-        globalsCartesianSynth <-
-          flag Nothing (Just True)
-           $ long "cart-synth"
-            <> help "Synthesise using cartesian semiring"
 
         globalsHaskellSynth <-
           flag Nothing (Just True)

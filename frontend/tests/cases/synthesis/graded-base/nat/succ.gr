@@ -5,5 +5,4 @@ data N = S N | Z
 succ : N %1 -> N 
 spec 
     succ Z = (S Z);
-    succ (S Z) = (S (S Z));
-succ = ?
+succ x = S x

@@ -14,7 +14,7 @@ add (S n1) n2 = S (add n1 n2)
 
 sum : List N %0..∞ -> N 
 spec 
-    sum Nil = Z;
     sum (Cons (S Z) (Cons (S Z) Nil)) = (S (S Z));
+    sum (Cons (S Z) (Cons (S Z) (Cons (S Z) Nil))) = (S (S (S Z)))      !Cartesian;
     fold %0..∞, add %0..∞
 sum = ?

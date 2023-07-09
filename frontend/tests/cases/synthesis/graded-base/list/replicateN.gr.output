@@ -5,7 +5,6 @@ data N = S N | Z
 
 replicateN : forall { a : Type} . N %0..∞ -> a % 0..∞ -> List a
 spec
-    replicateN (S Z) 1 = (Cons 1 Nil); 
     replicateN (S (S Z)) 2 = (Cons 2 (Cons 2 Nil));
     replicateN % 0..∞
 replicateN Z y = Nil;

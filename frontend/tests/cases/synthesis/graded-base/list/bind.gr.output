@@ -25,6 +25,7 @@ isEven (S (S z)) = concat (Cons (isEven z) Nil)
 
 bind : forall a b . List a %1..∞ -> (a %1..∞ -> List b) %0..∞ -> List b
 spec 
-    bind (Cons Z Nil) isEven = Nil;
+    bind (Cons Z Nil) isEven = Nil                      !Cartesian;
+    bind (Cons (S Z) Nil) isEven = (Cons (S Z) Nil)     !Cartesian;
     map %1..∞, concat %1..∞
-bind x y = concat ((map (\w -> y w)) x)
+bind x y = concat ((map (\w -> w)) x)

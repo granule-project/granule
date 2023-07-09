@@ -5,7 +5,6 @@ data List a = Cons a (List a) | Nil
 data Maybe a = Just a | Nothing 
 head : forall a . (List a) %0..1 -> a %0..1 -> a
 spec 
-    head Nil 2 = 2;
-    head (Cons 1 (Cons 2 Nil)) 2 = 1;
+    head (Cons 1 (Cons 2 Nil)) 2 = 1    !Cartesian;
 head Nil y = y;
 head (Cons z u) y = z

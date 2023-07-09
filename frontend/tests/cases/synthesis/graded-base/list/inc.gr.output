@@ -10,7 +10,6 @@ map (Cons x xs) f = (Cons (f x) (map xs f))
 
 inc : forall a . (List N) %1..∞ -> (List N)
 spec
-    inc Nil = Nil;
     inc (Cons (S Z) Nil) = (Cons (S (S Z)) Nil);
     map %1..∞
 inc x = (map x) (\u -> S u)

@@ -4,6 +4,7 @@ data Tree a = Leaf | Node (Tree a) a (Tree a)
 
 stutter : forall a b . Tree (a [2]) % 1..∞ -> Tree (a, a)
 spec
+    stutter (Node Leaf [1] Leaf) = (Node Leaf (1, 1) Leaf)  !Cartesian;
     stutter %0..∞
 stutter Leaf = Leaf;
-stutter (Node y [v] u) = ((Node (stutter y)) (v, v)) (stutter u)
+stutter (Node y [v] u) = ((Node (stutter y)) (v, v)) (stutter y)

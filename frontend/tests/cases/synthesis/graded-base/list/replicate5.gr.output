@@ -3,4 +3,6 @@ language GradedBase
 data List a =  Cons a (List a) | Nil 
 
 replicate : forall { a : Type} . a %5 -> List a 
+spec
+    replicate 1 = Cons 1 (Cons 1 (Cons 1 (Cons 1 (Cons 1 Nil))))    !Cartesian;
 replicate x = (Cons x) ((Cons x) ((Cons x) ((Cons x) ((Cons x) Nil))))

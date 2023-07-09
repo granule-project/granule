@@ -7,12 +7,7 @@ data N = S N | Z
 
 drop : forall a .  N %0..∞ -> List (a) %0..∞ -> List a
 spec 
-    drop Z Nil = Nil; 
-    drop (S Z) Nil = Nil;
-    drop Z (Cons Z Nil) = Cons Z Nil; 
-    drop (S Z) (Cons Z Nil) = Nil;
-    drop Z (Cons (S Z) (Cons Z Nil)) = Cons (S Z) (Cons Z Nil); 
-    drop (S Z) (Cons (S Z) (Cons Z Nil)) = Cons Z Nil; 
+    drop (S Z) (Cons (S Z) (Cons Z Nil)) = Cons Z Nil   !Cartesian; 
     drop % 0..∞
 drop x y = 
     (case y of
@@ -22,5 +17,5 @@ drop x y =
       S z -> (drop z) y);
       Cons p q -> 
     (case x of
-      Z -> y;
+      Z -> q;
       S x8 -> q))

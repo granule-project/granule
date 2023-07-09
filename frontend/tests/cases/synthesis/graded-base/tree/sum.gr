@@ -15,5 +15,6 @@ sum : forall a . Tree N % 0..∞ -> N
 spec 
     sum Leaf = Z;
     sum (Node Leaf (S (S Z)) Leaf) = (S (S Z));
+    sum (Node (Node Leaf (S Z) (Node Leaf (S Z) Leaf)) (S (S Z)) Leaf) = (S (S (S (S Z))));
     fold % 1..∞, add %1..∞
 sum = ?

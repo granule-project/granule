@@ -7,8 +7,7 @@ data Maybe a = Just a | Nothing
 
 last : forall a . (List a) %0..∞ -> Maybe a 
 spec
-    last Nil = Nothing; 
-    last (Cons 1 Nil) = Just 1;
-    last (Cons 1 (Cons 2 Nil)) = Just 2;
+    last (Cons 1 (Cons 2 Nil)) = Just 2       ;
+    last (Cons 1 Nil) = Just 1      !Cartesian;
     last %0..∞
 last = ?

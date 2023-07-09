@@ -6,9 +6,6 @@ data N = S N | Z
 
 snoc : forall {a : Type} . (List a) % 1..∞ -> a % 1..∞ -> List a
 spec 
-    snoc Nil Z = Cons Z Nil; 
-    snoc Nil (S Z) = (Cons (S Z)) Nil; 
-    snoc (Cons Z Nil) Z = (Cons Z (Cons Z Nil));
     snoc (Cons Z Nil) (S Z) = (Cons Z (Cons (S Z) Nil));
     snoc % 0..∞
 snoc x y = 

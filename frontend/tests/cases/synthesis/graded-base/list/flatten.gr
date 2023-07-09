@@ -8,6 +8,6 @@ append (Cons z u) y = (Cons z) ((append u) y)
 
 flatten : forall a . (List (List a)) %0..∞ -> (List a)
 spec 
-    flatten (Cons (Cons 1 Nil) (Cons (Cons 1 Nil) Nil)) = Cons 1 (Cons 1 Nil);
+    flatten (Cons (Cons 1 Nil) (Cons (Cons 1 Nil) Nil)) = Cons 1 (Cons 1 Nil)      !Cartesian;
     flatten % 0..∞ , append %0..∞
 flatten = ?

@@ -1,5 +1,15 @@
 language GradedBase
 data Maybe a = Nothing | Just a
 
+data N = S N | Z
+data Bool = True | False
+
+isOne : N %0..1 -> Bool 
+isOne (S Z) = True;
+isOne _ = False
+
 map : forall {a : Type, b : Type} . (a -> b) % (0..1) -> (Maybe a) % (1..1) -> Maybe b
-map = ?
+spec 
+    map isOne (Just (S Z)) = Just True     !Cartesian;
+map x Nothing = Nothing;
+map x (Just z) = Just (x z)

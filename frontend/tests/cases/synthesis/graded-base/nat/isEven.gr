@@ -6,7 +6,6 @@ data Bool = True | False
 
 isEven : N %1..∞ -> Bool  
 spec 
-    isEven (S Z) = False; 
     isEven (S (S Z)) = True;
     isEven (S (S (S Z))) = False;
     isEven % 0..∞

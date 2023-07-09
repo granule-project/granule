@@ -4,8 +4,9 @@ data N = S N | Z
 
 sum : N %1..∞ -> N %1..∞ -> N
 spec 
-    sum (S Z) Z = (S Z); 
     sum (S Z) (S Z) = (S (S Z));
+    sum (S Z) Z = (S Z)                                             @Cartesian; 
+    sum (S (S (S (S Z)))) (S (S Z)) = (S (S (S (S (S (S Z))))))     @Cartesian;
     sum % 0..∞
 sum Z y = y;
 sum (S z) y = S ((sum z) y)
