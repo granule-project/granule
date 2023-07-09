@@ -90,7 +90,6 @@ runGrOnFiles globPatterns config = let ?globals = grGlobals config in do
             case globalsHaskellSynth ?globals of
               Just True -> do
                 (ast, hsSrc) <- processHaskell path
-                _ <- error $ show hsSrc
                 result <- synthesiseLinearHaskell ast hsSrc
                 case result of
                   Just srcModified -> do
