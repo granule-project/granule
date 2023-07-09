@@ -56,6 +56,7 @@ tokens :-
   try                           { \p s -> TokenTry p }
   as                            { \p s -> TokenAs p }
   catch                         { \p s -> TokenCatch p }
+  share                         { \p _ -> TokenShare p}
   clone                         { \p s -> TokenCopy p }
   endorse                       { \p s -> TokenEndorse p }
   pack                          { \p s -> TokenPack p }
@@ -116,7 +117,7 @@ tokens :-
   "{!"                          { \p _ -> TokenHoleStart p }
   "!}"                          { \p _ -> TokenHoleEnd p}
   "!"                           { \p _ -> TokenBang p}
-  "&"                           { \p _ -> TokenBorrow p}
+  "&"                           { \p _ -> TokenBorrow p }
   "#"                           { \p _ -> TokenHash p }
   "⊸"                           { \p _ -> TokenArrow p }
   "*{"                          { \p _ -> TokenStar p }
@@ -193,6 +194,7 @@ data Token
   | TokenAt AlexPosn
   | TokenBang AlexPosn
   | TokenBorrow AlexPosn
+  | TokenShare AlexPosn
   | TokenCopy AlexPosn
   | TokenEndorse AlexPosn
   | TokenPack AlexPosn

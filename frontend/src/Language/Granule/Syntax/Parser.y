@@ -61,6 +61,7 @@ import Language.Granule.Utils hiding (mkSpan)
     catch    { TokenCatch _ }
     import { TokenImport _ _ }
     language { TokenPragma _ _ }
+    share { TokenShare _ }
     clone { TokenCopy _ }
     endorse { TokenEndorse _ }
     pack    { TokenPack _ }
@@ -649,7 +650,7 @@ Atom :: { Expr () () }
                                   return $ Val sp () False $
                                      case $2 of (TokenStringLiteral _ c) -> Nec () (Val sp () False $ StringLiteral c) }
   | Hole                      { $1 }
-  | '&' Expr                  {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ App sp () False (Val sp () False (Var () (mkId "uniqueReturn"))) $2 }
+  | share Expr              {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ App sp () False (Val sp () False (Var () (mkId "uniqueReturn"))) $2 }
 
 {
 
