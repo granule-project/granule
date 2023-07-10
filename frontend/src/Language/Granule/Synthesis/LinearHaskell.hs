@@ -212,43 +212,43 @@ nameToGranule :: Name SrcSpanInfo -> GrId.Id
 nameToGranule (Ident _ name)  = GrId.mkId name
 nameToGranule (Symbol _ name) = GrId.mkId name
 
-
+data UsedCons = UsedList | UsedMaybe | UsedEither deriving (Show, Eq)
 
 -- a Haskell type sig can have the form f,g :: a -> a which we need to turn into
 -- (f, a -> a)
 -- (g, a -> a)
 -- to eventually pair each one with the relevant funBinds to make a Granule def
-typeSigToGranule :: Decl SrcSpanInfo -> ([(GrId.Id, GrType.TypeScheme)], Bool, [Int])
+typeSigToGranule :: Decl SrcSpanInfo -> ([(GrId.Id, GrType.TypeScheme)], [UsedCons], [Int])
 typeSigToGranule (TypeSig sp ident ty) =
     let grTy = typeToGranule ty in
         case grTy of
-            Just (grTy', usedList, tups) ->
-                let tyVars = Set.toList . Set.fromList $ collectTyVars grTy' 
+            Just (grTy', usedCons, tups) ->
+                let tyVars = Set.toList . Set.fromList $ collectTyVars grTy'
                 in
-                    (map (\ident' -> (nameToGranule ident', GrType.Forall (srcSpanInfoToGranule sp) tyVars [] grTy')) ident, usedList, tups)
-            Nothing -> ([], False, [])
-    where 
+                    (map (\ident' -> (nameToGranule ident', GrType.Forall (srcSpanInfoToGranule sp) tyVars [] grTy')) ident, usedCons, tups)
+            Nothing -> ([], [], [])
+    where
         collectTyVars (GrType.FunTy _ _ t1 t2) = collectTyVars t1 ++ collectTyVars t2
         collectTyVars (GrType.TyApp t1 t2)     = collectTyVars t1 ++ collectTyVars t2
-        collectTyVars tyVar@(GrType.TyVar id)  = [(id, GrType.ktype)] 
+        collectTyVars tyVar@(GrType.TyVar id)  = [(id, GrType.ktype)]
         collectTyVars _                        = []
-typeSigToGranule _ = ([], False, [])
+typeSigToGranule _ = ([], [], [])
 
 
-typeToGranule :: Type SrcSpanInfo -> Maybe (GrType.Type, Bool, [Int])
+typeToGranule :: Type SrcSpanInfo -> Maybe (GrType.Type, [UsedCons], [Int])
 typeToGranule (TyFun _ Nothing t1 t2) =
     let res1 = typeToGranule t1
         res2 = typeToGranule t2
     in case (res1, res2) of
         (Just (t1', ul1, tups1), Just (t2', ul2, tups2)) ->
-            Just (GrType.FunTy Nothing (Just $ GrType.TyCon $ GrId.mkId "Many") t1' t2', ul1 || ul2, tups1 ++ tups2)
+            Just (GrType.FunTy Nothing (Just $ GrType.TySig (GrType.TyCon $ GrId.mkId "Many") (GrType.TyCon $ GrId.mkId "LNL")) t1' t2', ul1 ++ ul2, tups1 ++ tups2)
         _ -> Nothing
 typeToGranule (TyFun _ (Just (TyCon _ (UnQual _ (Ident _ name)))) t1 t2) | name == "->." =
     let res1 = typeToGranule t1
         res2 = typeToGranule t2
     in case (res1, res2) of
         (Just (t1', ul1, tups1), Just (t2', ul2, tups2)) ->
-            Just (GrType.FunTy Nothing (Just $ GrType.TyCon $ GrId.mkId "One") t1' t2', ul1 || ul2, tups1 ++ tups2)
+            Just (GrType.FunTy Nothing (Just $ GrType.TySig (GrType.TyCon $ GrId.mkId "One") (GrType.TyCon $ GrId.mkId "LNL")) t1' t2', ul1 ++ ul2, tups1 ++ tups2)
         _ -> Nothing
 typeToGranule (TyFun _ (Just mult) t1 t2) =
     let res1     = typeToGranule t1
