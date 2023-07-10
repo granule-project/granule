@@ -8,4 +8,5 @@ isJust : forall {a : Type} . (Maybe a) %0..1 -> Bool
 spec
     isJust (Just 1) = True;
     isJust Nothing = False;
-isJust = ?
+isJust Nothing = False;
+isJust (Just y) = True

@@ -234,7 +234,7 @@ main = do
               (Nothing, _) -> return (Just (mode, currentTime), False)
               (Just (m, leadTime), cartLead) ->
                 if not (timeout aggregate) && leadTime > currentTime then
-                  if mode == "--cart-synth" then
+                  if mode == "--cart-synth 1" then
                     if leadTime > currentTime +  attemptsToSeconds (cartAttempts aggregate) then
                       return $ (Just (mode, currentTime), cartLead)
                     else
@@ -255,8 +255,6 @@ main = do
                       ,  putStr "Timeout"
                       , putStr " & "
                       , putStr "-"
-                      , if mode == "--cart-synth 1" then putStr " & " else putStr ""
-                      , if mode == "--cart-synth 1" then putStr "-"  else putStr ""
                       , if mode == "--cart-synth 1" then putStr " & " else putStr ""
                       , if mode == "--cart-synth 1" then putStr "-"  else putStr ""
                       ]

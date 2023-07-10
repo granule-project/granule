@@ -624,7 +624,7 @@ gSynthOuter
 
 
               case (find (\(Def _ id _ _ _ _) -> id == defId) defs', prog) of
-                (Just (Def _ _ _ _ (EquationList _ _ _ eqs) _), Def _ _ _ _ (EquationList _ _ _ eqs') _) -> 
+                (Just (Def _ _ _ _ (EquationList _ _ _ eqs) _), Def _ _ _ _ (EquationList _ _ _ eqs') _) ->  do
                   return $ pretty eqs == pretty eqs'
                 _ -> return False
         else do 
@@ -646,8 +646,8 @@ gSynthOuter
         --     Nothing -> return False
 
       if checked then
-        case spec of
-          Just (Spec _ _ examples@(_:_) _) -> do
+        case (spec, cartSynth == 1) of
+          (Just (Spec _ _ examples@(_:_) _), False) -> do
             st <- getSynthState
             let hole = HoleMessage sp hgoal hctxt htyVars hVars synthCtxt [([], expr)]
             let holeCases = concatMap (\h -> map (\(pats, e) -> (errLoc h, zip (getCtxtIds (holeVars h)) pats, e)) (cases h)) [hole]

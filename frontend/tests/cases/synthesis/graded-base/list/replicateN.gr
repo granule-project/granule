@@ -7,4 +7,4 @@ replicateN : forall { a : Type} . N %0..∞ -> a % 0..∞ -> List a
 spec
     replicateN (S (S Z)) 2 = (Cons 2 (Cons 2 Nil));
     replicateN % 0..∞
-replicate = ?
+replicateN = ?
