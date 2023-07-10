@@ -64,6 +64,12 @@ instance Pretty () where
 instance {-# OVERLAPPABLE #-} Pretty a => Pretty [a] where
    pretty xs = "[" <> intercalate "," (map pretty xs) <> "]"
 
+-- Pretty printing for type variable contexts
+instance Pretty q => Pretty [(Id, (Type, q))] where
+  pretty = (intercalate ", ") . (map prettyAssignment)
+    where
+      prettyAssignment (v, (ty, qu)) = pretty qu <> pretty v <> " : " <> pretty ty
+
 instance (Pretty a, Pretty b) => Pretty (Either a b) where
   pretty (Left a) = pretty a
   pretty (Right b) = pretty b

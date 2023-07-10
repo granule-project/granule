@@ -2,7 +2,7 @@
 
 import Vec
 
---data Bool where True; False
+data Bool where True; False
 
 foo : Int → Int [0..1] → Int
 foo x [y] = if x > 5 then 0 else y

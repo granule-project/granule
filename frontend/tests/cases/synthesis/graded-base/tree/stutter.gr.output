@@ -7,4 +7,4 @@ spec
     stutter (Node Leaf [1] Leaf) = (Node Leaf (1, 1) Leaf)  !Cartesian;
     stutter %0..∞
 stutter Leaf = Leaf;
-stutter (Node y [v] u) = ((Node (stutter y)) (v, v)) (stutter y)
+stutter (Node y [v] u) = ((Node (stutter y)) (v, v)) (stutter u)

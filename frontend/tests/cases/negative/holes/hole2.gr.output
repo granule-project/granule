@@ -6,16 +6,14 @@ Found a goal: frontend/tests/cases/negative/holes/hole2.gr:11:40:
    Context:
      f : .[a -> b]. n
      x : a
-     xs : Vec n00 a
+     xs : Vec n0 a
 
    Type context:
-     n0 : Nat
+     n1 : Nat
      b0 : Type
      a0 : Type
-     t130 : Nat
-     t120 : Type
-     n00 : Nat
-     t110 : Type
+     n0 : Nat
+     t0 : Type
      a : Type
      b : Type
      n : Nat

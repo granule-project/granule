@@ -16,7 +16,7 @@ import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Variables
 import Language.Granule.Checker.SubstitutionContexts
-import Language.Granule.Checker.Checker(checkDataCons,checkTyCon)
+import Language.Granule.Checker.DataTypes
 import qualified Language.Granule.Checker.Primitives as Primitives
 import Language.Granule.Utils
 import Language.Granule.Synthesis.Contexts
@@ -194,8 +194,8 @@ testSynthesiser synthComputation = do
                                                                   , dataConstrParams = [TyVar (Id "b" "b")]}]}]
     -- Load in the primitive data constructors first before running the computation synthComputation
     let synthComputation' =
-             (conv (runAll checkTyCon (extras ++ Primitives.dataTypes)))
-          >> (conv (runAll checkDataCons (extras ++ Primitives.dataTypes)))
+            --  (conv (runAll checkTyCon (extras ++ Primitives.dataTypes)))
+            (conv (runAll registerDataConstructors (extras ++ Primitives.dataTypes)))
           >> synthComputation
     (outputs, dat) <- runStateT (runSynthesiser 1 synthComputation' initState) mempty
     succeedingOutput <- mapM (\(x, y) -> convertError x >>= (\x' -> return (x', y))) outputs

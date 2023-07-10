@@ -1,0 +1,4 @@
+language GradedBase
+
+f : forall {a : Type} . a % Many -> (a, a)
+f x = (x, x)

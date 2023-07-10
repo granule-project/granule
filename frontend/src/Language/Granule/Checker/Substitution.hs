@@ -27,7 +27,6 @@ import Language.Granule.Syntax.Expr hiding (Substitutable)
 import Language.Granule.Syntax.Helpers hiding (freshIdentifierBase)
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pattern
--- import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 
@@ -143,14 +142,12 @@ freshPolymorphicInstance :: (?globals :: Globals)
   -> Instantiation -- ^ A substitution associated with this type scheme (e.g., for
                   --     data constructors of indexed types) that also needs freshening
   -> [Int]        -- ^ Type Indices if this is a data constructor for an indexed type
-  -> Checker (Type, Ctxt Kind, Substitution, [Type], Substitution)
+  -> Checker (Type, Ctxt Kind, [Type], Substitution)
     -- Returns the type (with new instance variables)
        -- a context of all the instance variables kinds (and the ids they replaced)
-       -- a substitution from the visible instance variable to their originals
        -- a list of the (freshened) constraints for this scheme
        -- a correspondigly freshened version of the parameter substitution
-freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty) ixSubstitution indices = do
-
+freshPolymorphicInstance quantifier isDataConstructor tyS@(Forall s kinds constr ty) ixSubstitution indices = do
 
     let boundTypes = typesFromIndices ty 0 indices
     debugM "freshPoly boundVars: " (show boundTypes)
@@ -172,10 +169,9 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
     -- Return the type and all instance variables
     let newTyVars = map (\(_, kv) -> swap . fromEither $ kv) renameMap
     let substLefts = ctxtMap (SubstT . TyVar . snd) $ justLefts renameMap
-
     ixSubstitution' <- substitute substLefts ixSubstitution
 
-    return (tyFreshened, newTyVars, substLefts, constrFreshened, ixSubstitution')
+    return (tyFreshened, newTyVars, constrFreshened, ixSubstitution')
 
   where
     -- Takes a renamep map and iteratively applies each renaming forwards to

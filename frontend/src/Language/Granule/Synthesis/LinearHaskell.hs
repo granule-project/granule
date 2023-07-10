@@ -156,7 +156,7 @@ Import Linear Haskell to Granule
 
 -}
 
-processHaskell ::  (?globals :: Globals) => FilePath -> IO (GrDef.AST () (), Module SrcSpanInfo)
+processHaskell :: FilePath -> IO (GrDef.AST () (), Module SrcSpanInfo)
 processHaskell file = do
     contents <- readFile file
     let pResult   = Parser.parseModuleWithMode parseMode contents
@@ -169,7 +169,7 @@ processHaskell file = do
 
 
 
-toGranule :: (?globals :: Globals) => Module SrcSpanInfo -> IO (GrDef.AST () ())
+toGranule ::  Module SrcSpanInfo -> IO (GrDef.AST () ())
 toGranule src@(Module sp modHead pragmas imports decls) = do
     let (dataDecls, typeSchemes, funEqs) = foldl (\(datas, typeSchemes, funEqs) decl ->
             case decl of

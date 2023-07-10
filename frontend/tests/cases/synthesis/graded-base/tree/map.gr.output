@@ -14,4 +14,4 @@ spec
     map (Node Leaf True Leaf) neg = (Node Leaf False Leaf)  !Cartesian;
     map %0..∞
 map Leaf y = Leaf;
-map (Node z u v) y = ((Node ((map v) y)) (y u)) ((map v) y)
+map (Node z u v) y = ((Node ((map z) y)) (y u)) ((map v) y)

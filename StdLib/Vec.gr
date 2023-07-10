@@ -178,10 +178,10 @@ copySpine (Cons x xs) = let
 data VecX a where
   VecX : ∀ {n : Nat} . Vec n a → VecX a
 
-import Maybe
+-- import Maybe
 
-stringToVecX : String → VecX Char
-stringToVecX s = case stringUncons s of
-  None → VecX Nil;
-  Some (c, s) → let VecX v = stringToVecX s in VecX (Cons c v)
+-- stringToVecX : String → VecX Char
+-- stringToVecX s = case stringUncons s of
+--   None → VecX Nil;
+--   Some (c, s) → let VecX v = stringToVecX s in VecX (Cons c v)
 

@@ -5,13 +5,11 @@ Found a goal: frontend/tests/cases/negative/splitting/nested.gr:10:17:
 
    Context:
      x : N
-     xs : Vec n00 N
+     xs : Vec n0 N
 
    Type context:
-     t130 : Nat
-     t120 : Type
-     n00 : Nat
-     t110 : Type
+     n0 : Nat
+     t0 : Type
      n : Nat
 
    Case splits for x, xs:
@@ -25,7 +23,5 @@ Found a goal: frontend/tests/cases/negative/splitting/nested.gr:11:9:
    Expected type is: `Vec n N`
 
    Type context:
-     t100 : Nat
-     t90 : Type
-     t80 : Type
+     t0 : Type
      n : Nat

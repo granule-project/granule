@@ -13,4 +13,4 @@ head (Next x _) = x
 elim3Stream : forall { a : Type } . Stream a %0..1 -> (a, (a, a))
 spec 
     elim3Stream (Next 3 (Next 2 (ones ()))) = (3, (2, 1))   !Cartesian;
-elim3Stream (Next y (Next u (Next w p))) = (y, (u, w))
+elim3Stream (Next y (Next u (Next w p))) = (y, (w, u))

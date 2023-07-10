@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 data N (n : Nat) where
   Z : N 0;
   S : N n -> N (n+1)
@@ -8,6 +9,9 @@ natToInt
 natToInt Z = 0;
 natToInt (S m) = 1 + natToInt m
 
+=======
+import Nat
+>>>>>>> graded-base
 
 fact : ∀ {n : Nat} . (N n) [(∞ : (Ext Nat))..(∞ : (Ext Nat))] → Int
 fact [Z] = 1;

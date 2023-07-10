@@ -13,4 +13,4 @@ head (Next x _) = x
 elim2Stream : forall { a : Type } . Stream a %0..1 -> (a, a)
 spec 
     elim2Stream (Next 2 (ones ())) = (2, 1)     !Cartesian;
-elim2Stream (Next y (Next u v)) = (y, u)
+elim2Stream (Next y (Next u v)) = (u, y)

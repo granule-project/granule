@@ -176,6 +176,9 @@ ctxtFromTypedPattern' outerCoeffAndTy s pos t@(Box coeff ty) (PBox sp _ rf p) _ 
 ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
   debugM "Patterns.ctxtFromTypedPattern" $ "ty: " <> show ty <> "\t" <> pretty ty <> "\nPConstr: " <> pretty dataC
 
+  reportM $ "Typing pattern " <> prettyNested p <> " at type " <> prettyNested ty
+  reportMsep
+
   st <- get
   mConstructor <- lookupDataConstructor s dataC
   case mConstructor of
@@ -189,7 +192,7 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
         _ -> return ()
 
       -- get fresh instance of the data constructors type
-      (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, constraints, coercions') <-
+      (dataConstructorTypeFresh, freshTyVarsCtxt, constraints, coercions') <-
           freshPolymorphicInstance InstanceQ True tySch coercions indices
 
       -- register any constraints of the data constructor into the solver
@@ -199,33 +202,33 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
       -- Running example:
       -- tySch      = S : forall {n.0 : Nat, t.10 : Nat, t.11 : Type} . N a.3 n.0 -> N t.11 t.10
       -- coercions = t.10 ~ n.0 + 1, t.11 ~ a.3
-      -- 0 is an index position
+      -- 1 is an index position
 
-      -- Debugging
-      debugM "ctxt" $ "### DATA CONSTRUCTOR (" <> pretty dataC <> ")"
-                         <> "\n###\t tySch = " <> pretty tySch
-                         <> "\n###\t coercions = " <> pretty coercions
-                         <> "\n###\t indices = " <> pretty indices <> "\n"
+      -- <REPORT>
+      reportM $ "Matching on constructor " <> pretty dataC <> "\n"
+      reportM $ "Type scheme  = " <> pretty tySch
+      reportM $ "Coercions    = " <> pretty coercions
+      reportM $ "Type indices = " <> pretty indices
+      reportMsep
+      reportM $ "Freshe freshTyVarsCtxt = " <> pretty freshTyVarsCtxt
+
+      reportM $ "Freshened type scheme = " <> pretty dataConstructorTypeFresh
+      reportM $ "Freshened coercions   = " <> pretty coercions'
+      -- </REPORT>
 
       -- dataConstructorTypeFresh = N a.3.0 n.0.0 -> N t.11.0 t.10.0
       -- freshTyVarSubst = a.3 ~> a.3.0, n.0 ~> n.0.0, t.10 ~> t.10.0, t.11 ~ t.11.0 [TODO: WRONG WAY ROUND!?]
       -- coercions' = t.9.0 ~ n.0.0 + 1, t.11.0 ~ a.3.0
 
-      debugM "ctxt" $ "\n### FRESH POLY ###\n####\t dConTyFresh = "
-                      <> pretty dataConstructorTypeFresh
-                      <> "\n###\t ctxt = " <> pretty freshTyVarsCtxt
-                      <> "\n###\t freshTyVarSubst = " <> pretty freshTyVarSubst
-                      <> "\n###\t coercions' =  " <> pretty coercions'
-
       -- TODO: Maybe remove
-      dataConstructorTypeFresh <- substitute (flipSubstitution coercions') dataConstructorTypeFresh
+--      dataConstructorTypeFresh <- substitute (flipSubstitution coercions') dataConstructorTypeFresh
 
       -- dataConstructorTypeFresh = N t.11.0 n.0.0 -> N t.11.0 t.10.0
 
       st <- get
-      debugM "ctxt" $ "### tyVarContext = " <> pretty (tyVarContext st)
-                    <> "\n\t### eqL (res dCfresh) = " <> pretty dataConstructorTypeFresh <> "\n"
-                    <> "\n\t### eqR (ty) = " <> show ty <> "\n"
+      reportMsep
+      reportM $ "Computing equality " <> prettyNested (resultType dataConstructorTypeFresh) <> " == " <> prettyNested ty
+      reportM $ " (under type variable context = " <> pretty (tyVarContext st) <> ")"
 
       -- Equality between N t.11.0 t.10.0 ~ N a`2 n`1
       -- where a`2 and n`1 are \forall quantified
@@ -235,6 +238,7 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
       case areEq of
         (True, ty, unifiers) -> do
 
+          reportM $ "EQUAL with unifiers " <> pretty unifiers
           -- Predicate now says:
           --    t.10.0 ~ n.0.0 + 1
           --    t.11.0 ~ a.3.0
@@ -244,6 +248,8 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
 
           -- unifiers:   t.10.0 ~ n`1
           --             t.11.0 ~ a`2
+          st <- get
+          reportM $ "Predicate stack" <> (pretty $ predicateStack st)
 
           dataConstructorIndexRewritten <- substitute unifiers dataConstructorTypeFresh
 
@@ -251,6 +257,7 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
           -- dataConstructorIndexRewritten = N a`2 n.0.0 -> N a`2 n`1
 
           dataConstructorIndexRewrittenAndSpecialised <- substitute coercions' dataConstructorIndexRewritten
+          reportM $ "Remaining type for the pattern constructor after equality unifiers and freshened coercions are applied: " <> pretty dataConstructorIndexRewrittenAndSpecialised
 
           -- dataConstructorIndexRewrittenAndSpecialised = N a`2 n.0.0 -> N a`2 n`1
 
@@ -259,27 +266,38 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
                         <> "\n\t### drewrit = " <> pretty dataConstructorIndexRewritten
                         <> "\n\t### drewritAndSpec = " <> pretty dataConstructorIndexRewrittenAndSpecialised <> "\n"
 
+          reportM $ "Rescursive checking of pattern typing on patterns (" <> pretty ps <> ") at (to be decomposed) types " <> prettyNested dataConstructorIndexRewrittenAndSpecialised
+
           -- Recursively apply pattern matching on the internal patterns to the constructor pattern
           (bindingContexts, _, bs, us, elabPs, consumptionsOut) <-
             ctxtFromTypedPatterns' outerBoxTy s pos dataConstructorIndexRewrittenAndSpecialised ps (replicate (length ps) cons)
           let consumptionOut = foldr meetConsumption Full consumptionsOut
 
+          reportMsep
+          reportM $ "Recursive check of patterns resulted in unification: " <> pretty us
+
           -- TODO: GO BACK TO THIS
           -- Apply the coercions to the type
+          -- (`ty` used for working out definition unification)
+          debugM "### pattern" (pretty ty)
           ty <- substitute coercions' ty
+          debugM "### pattern" (pretty ty)
 
           -- Unifiers are only those things that include index variables
 
           -- unifiers:   t.10.0 ~ n`1
 
-          let unifiers' = filter (\(id, subst) -> case lookup id (tyVarContext st) of Just (_, BoundQ) -> True; _ -> False) unifiers
-          debugM "ctxt" $ "unifiers': " <> show unifiers'
+
+          -- let unifiers' = filter (\(id, subst) -> case lookup id (tyVarContext st) of Just (_, BoundQ) -> True; _ -> False) unifiers
+          --debugM "ctxt" $ "unifiers': " <> show unifiers'
 
           -- Combine the substitutions
           --     n`1 ~ t.10.0
-          subst <- combineSubstitutions s (flipSubstitution unifiers') us
+          -- subst <- combineSubstitutions s (flipSubstitution unifiers') us
+          subst <- combineSubstitutions s unifiers us
           subst <- combineSubstitutions s coercions' subst
-          debugM "ctxt" $ "\n\t### outSubst = " <> show subst <> "\n"
+          debugM "ctxt" $ "\n\t### outSubst = " <> pretty subst <> "\n"
+          reportM $ "Output substitution = " <> pretty subst
 
           -- ### outSubst = n`1 ~ n.0.0 + 1
           --                t.11.0 ~ a.3.0
@@ -347,6 +365,25 @@ flattenCoeffects s (Just (outerCoeff, outerCoeffTy)) (Just (innerCoeff, innerCoe
       { errLoc = s, errTyOuter = outerCoeffTy, errTyInner = innerCoeffTy }
 
 
+
+{-
+
+  `ctxtFromTypedPatterns pp ty ps consumption`
+  Parameters
+    - pp = the position in which the pattern is occuring
+    - ty = the types of the inputs and the output (e.g. in the form of a FunTy)
+    - ps = a list of patterns
+    - consumption = consumption information (DEPRECATED)
+
+  Returns a tuples of a:
+    - binding context
+    - type for the body (with any specialisations applied)
+    - any type variables which have been bound
+    - an outgoing substitution [TODO: is this needed for the predicate in case we need to update any info?]
+    - the type-elaborated patterns
+    - consumption information (DEPRECATED)
+
+-}
 ctxtFromTypedPatterns :: (?globals :: Globals)
   => Span
   -> PatternPosition
@@ -380,7 +417,7 @@ ctxtFromTypedPatterns' outerCoeff s pos (FunTy _ grade t1 t2) (pat:pats) (cons:c
 
   (localGam, eVars, subst, elabP, consumption) <- ctxtFromTypedPattern' innerCoeff s pos t1 pat cons
 
-  -- Apply substitutions
+  -- Apply substitution to the outgoing type
   t2' <- substitute subst t2
 
   -- Match the rest

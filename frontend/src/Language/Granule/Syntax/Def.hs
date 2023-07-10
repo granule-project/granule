@@ -173,8 +173,6 @@ data DataConstr
     { dataConstrSpan :: Span, dataConstrId :: Id, dataConstrParams :: [Type] } -- ^ ADTs
   deriving (Eq, Show, Generic, Typeable, Data)
 
-
-
 -- | Is the data type an indexed data type, or just a plain ADT?
 isIndexedDataType :: DataDecl -> Bool
 isIndexedDataType d = not ((concatMap snd (typeIndices d)) == [])
@@ -186,13 +184,16 @@ typeIndicesPositions d = nub (concatMap snd (typeIndices d))
 
 -- | Given a data decleration, return the type parameters which are type indicies
 typeIndices :: DataDecl -> [(Id, [Int])]
-typeIndices (DataDecl _ _ tyVars _ constrs) =
+typeIndices (DataDecl _ _ tyVars kind constrs) =
     map constructorIndices constrs
   where
     constructorIndices :: DataConstr -> (Id, [Int])
     constructorIndices dataConstr@(DataConstrNonIndexed _ id _) = (id, [])
     constructorIndices dataConstr@(DataConstrIndexed _ id (Forall _ _ _ ty)) =
-      (id, findIndices (reverse tyVars) (resultType ty))
+      (id, findIndices (reverse tyVars <> processKind kind) (resultType ty))
+
+    processKind Nothing   = []
+    processKind (Just ty) = parameterTypesWithNames ty
 
     findIndices :: Ctxt Kind -> Type -> [Int]
     findIndices ((v, _):tyVars') (TyApp t1 t2) =
@@ -200,29 +201,11 @@ typeIndices (DataDecl _ _ tyVars _ constrs) =
         TyVar v' | v == v' -> findIndices tyVars' t1
         -- This is an index, and we can see its position by how many things we have left
         _                  -> (length tyVars') : findIndices tyVars' t1
+    findIndices tyVars (FunTy _ _ _ t) = findIndices tyVars t
     findIndices [] (TyCon _) = []
     -- Defaults to `empty` (acutally an ill-formed case for data types)
     findIndices _ _ = []
 
-{-| discriminateTypeIndicesOfDataType takes a data type definition, which has 0 or more
-   type parameters, and splits those type parameters into two lists: the first being
-   those which are really parameters (in a parametric polymorphism sense), and the second
-   which are indices (in the GADT/indexed families sense) -}
-discriminateTypeIndicesOfDataType :: DataDecl -> ([(Id, Kind)], [(Id, Kind)])
-discriminateTypeIndicesOfDataType d@(DataDecl _ _ tyVars _ _) =
-   classify (zip tyVars [0..(length tyVars)])
-  where
-    -- Partition the variables into two depending on whether
-    -- their position makes them an index or not
-    classify [] = ([], [])
-    classify ((vark, pos) : is) =
-      let (params, indices) = classify is
-      in
-        if pos `elem` typeIndexPositions
-        then (params, vark : indices)
-        else (vark : params, indices)
-
-    typeIndexPositions = nub $ concatMap snd (typeIndices d)
 
 nonIndexedToIndexedDataConstr :: Id -> [(Id, Kind)] -> DataConstr -> DataConstr
 nonIndexedToIndexedDataConstr _     _      d@DataConstrIndexed{} = d

@@ -36,19 +36,19 @@ capabilities =
    [(mkId "Console", funTy (tyCon "String") (tyCon "()"))
   , (mkId "TimeDate", funTy (tyCon "()") (tyCon "String"))]
 
-
+overlapsAllowed :: [Id]
+overlapsAllowed = [mkId "One", mkId "Private", mkId "Public", mkId "Unused"]
 
 -- Associates type constuctors names to their:
 --    * kind
 --    * list of (finite) matchable constructor names (but not the actual set of constructor names which could be infinite)
---    * boolean flag on whether they are indexed types or not
 --    * list of which type parameters are indices (proxy for whether they are indexed types or not)
 typeConstructors :: (?globals :: Globals) => [(Id, (Type, [Id], [Int]))]
 typeConstructors =
   -- If we have the security levels extension turned on then include these things
   (extensionDependent [(SecurityLevels, [(mkId "Level",    (kcoeffect, [], []))
                                        , (mkId "Unused",   (tyCon "Level", [], []))
-                                      , (mkId "Dunno",    (tyCon "Level", [], []))])] [])
+                                       , (mkId "Dunno",    (tyCon "Level", [], []))])] [])
  ++
   -- Everything else is always in scope
     [ (mkId "Coeffect",  (Type 2, [], []))
@@ -87,19 +87,14 @@ typeConstructors =
 
     -- Note that Private/Public can be members of Sec (and map to Hi/Lo) or if 'SecurityLevels' is
     -- turned on then they are part of the 'Level' semiring
-    , (mkId "Private",  (extensionDependent [(SecurityLevels, tyCon "Level")] (tyCon "Sec"), [], []))
-    , (mkId "Public",   (extensionDependent [(SecurityLevels, tyCon "Level")] (tyCon "Sec"), [], []))
     -- Borrowing
     , (mkId "Borrowing", (kcoeffect, [], []))
     , (mkId "One",       (tyCon "Borrowing", [], []))
     , (mkId "Beta",      (tyCon "Borrowing", [], []))
     , (mkId "Omega",     (tyCon "Borrowing", [], []))
     -- Security levels
-    , (mkId "Level",    (kcoeffect, [], [])) -- Security level
-    , (mkId "Private",  (tyCon "Level", [], []))
-    , (mkId "Public",   (tyCon "Level", [], []))
-    , (mkId "Unused",   (tyCon "Level", [], []))
-    , (mkId "Dunno",    (tyCon "Level", [], []))
+    , (mkId "Private",  (extensionDependent [(SecurityLevels, tyCon "Level")] (tyCon "Sec"), [], []))
+    , (mkId "Public",   (extensionDependent [(SecurityLevels, tyCon "Level")] (tyCon "Sec"), [], []))
     -- Alternate security levels (a la Gaboardi et al. 2016 and Abel-Bernardy 2020)
     , (mkId "Sec",  (kcoeffect, [], []))
     , (mkId "Hi",    (tyCon "Sec", [], []))
@@ -121,7 +116,6 @@ typeConstructors =
     , (mkId "Chan", (funTy protocol (Type 0), [], [0]))
     , (mkId "LChan", (funTy protocol (Type 0), [], [0]))
     , (mkId "Dual", (funTy protocol protocol, [], [0]))
-    , (mkId "->", (funTy (Type 0) (funTy (Type 0) (Type 0)), [], []))
     -- Top completion on a coeffect, e.g., Ext Nat is extended naturals (with ∞)
     , (mkId "Ext", (funTy kcoeffect kcoeffect, [], [0]))
     -- Effect grade types - Sessions

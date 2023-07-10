@@ -11,7 +11,4 @@ Impossible pattern match: StdLib/Nat.gr:47:1:
 Pattern match in an equation of `sub` is impossible as it implies the unsatisfiable condition ∃ n00 : Nat . ∃ n01 : Nat . ((n00 + 1) + 1 = n00 + 1) ∧ (n00 + 1 ≥ n01 + 1)
 
 Impossible pattern match: frontend/tests/cases/negative/indexed/impossible-pattern-match.gr:7:1:
-Pattern match in an equation of `subBad` is impossible as it implies the unsatisfiable condition ∃ n00 : Nat . (n00 + 1 = 0)
-
-Impossible pattern match: frontend/tests/cases/negative/indexed/impossible-pattern-match.gr:8:1:
-Pattern match in an equation of `subBad` is impossible as it implies the unsatisfiable condition ∃ n00 : Nat . ∃ n01 : Nat . ((n00 + 1) + 1 = n00 + 1) ∧ (n01 + 1 = n00 + 1)
+Pattern match in an equation of `subBad` is impossible as it implies the unsatisfiable condition ∃ n0 : Nat . (n0 + 1 = 0)

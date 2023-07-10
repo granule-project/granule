@@ -126,8 +126,9 @@ compileToSBV predicate tyVarContext constructors =
          (\(varPred, solverVar) -> do
              pred <- buildTheoremNew ctxt ((v, solverVar) : solverVars)
              case q of
-              ForallQ -> return $ varPred .=> pred
-              _       -> return $ varPred .&& pred)
+              ForallQ   -> return $ varPred .=> pred
+              BoundQ    -> return $ varPred .=> pred
+              InstanceQ -> return $ varPred .&& pred)
 
     -- Build the theorem, doing local creation of universal variables
     -- when needed (see Impl case)
@@ -260,7 +261,8 @@ freshSolverVarScoped _ _ t _ _ =
 
 -- | What is the SBV representation of a quantifier
 compileQuantScoped :: QuantifiableScoped a => Quantifier -> String -> (SBV a -> Symbolic SBool) -> Symbolic SBool
-compileQuantScoped ForallQ = universalScoped
+compileQuantScoped ForallQ   = universalScoped
+compileQuantScoped BoundQ    = universalScoped
 compileQuantScoped _ = existentialScoped
 
 -- | Represents symbolic values which can be quantified over inside the solver

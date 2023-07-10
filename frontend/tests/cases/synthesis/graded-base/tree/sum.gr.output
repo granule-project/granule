@@ -17,4 +17,4 @@ spec
     sum (Node Leaf (S (S Z)) Leaf) = (S (S Z));
     sum (Node (Node Leaf (S Z) (Node Leaf (S Z) Leaf)) (S (S Z)) Leaf) = (S (S (S (S Z))));
     fold % 1..∞, add %1..∞
-sum x = ((fold x) (\p -> \q -> (add p) q)) ((add Z) Z)
+sum x = (add Z) (((fold x) (\p -> \q -> (add p) q)) Z)

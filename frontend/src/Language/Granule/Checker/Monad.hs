@@ -552,6 +552,8 @@ data CheckerError
       cases       :: [([Pattern ()], Expr () ())] }
   | TypeError
     { errLoc :: Span, tyExpected :: Type, tyActual :: Type }
+  | TypeErrorConflictingExpected
+    { errLoc :: Span, tyExpected :: Type, tyExpected' :: Type }
   | TypeErrorAtLevel
     { errLoc :: Span, tyExpectedL :: Type , tyActualL :: Type }
   | GradingError
@@ -627,7 +629,7 @@ data CheckerError
   | TooManyPatternsError
     { errLoc :: Span, errPats :: NonEmpty (Pattern ()), tyExpected :: Type, tyActual :: Type }
   | DataConstructorReturnTypeError
-    { errLoc :: Span, idExpected :: Id, idActual :: Id }
+    { errLoc :: Span, idExpected :: Id, tyActual :: Type }
   | MalformedDataConstructorType
     { errLoc :: Span, errTy :: Type }
   | ExpectedEffectType
@@ -689,6 +691,7 @@ instance UserMsg CheckerError where
 
   title HoleMessage{} = "Found a goal"
   title TypeError{} = "Type error"
+  title TypeErrorConflictingExpected{} = "Type error"
   title TypeErrorAtLevel{} = "Type error"
   title GradingError{} = "Grading error"
   title KindMismatch{} = "Kind mismatch"
@@ -797,6 +800,9 @@ instance UserMsg CheckerError where
   msg TypeError{..} = if pretty tyExpected == pretty tyActual
     then "Expected `" <> pretty tyExpected <> "` but got `" <> pretty tyActual <> "` coming from a different binding"
     else "Expected `" <> pretty tyExpected <> "` but got `" <> pretty tyActual <> "`"
+
+  msg TypeErrorConflictingExpected{..} =
+    "Two conflicting signatures: expected `" <> pretty tyExpected <> "` and `" <> pretty tyExpected' <> "`."
 
   msg TypeErrorAtLevel{..} = if pretty tyExpectedL == pretty tyActualL
     then "Expected `" <> pretty tyExpectedL <> "` but got `" <> pretty tyActualL <> "` coming from a different binding"
@@ -969,8 +975,8 @@ instance UserMsg CheckerError where
     <> (intercalate "\n\t" . map (ticks . pretty) . toList) errPats
 
   msg DataConstructorReturnTypeError{..}
-    = "Expected type constructor `" <> pretty idExpected
-    <> "`, but got `" <> pretty idActual <> "`"
+    = "Expected return result to be of type constructor `" <> pretty idExpected
+    <> "`, but got type `" <> pretty tyActual <> "`"
 
   msg MalformedDataConstructorType{..}
     = "`" <> pretty errTy <> "` not valid in a data constructor definition"

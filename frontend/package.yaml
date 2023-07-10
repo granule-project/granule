@@ -45,6 +45,7 @@ library:
   - Language.Granule.Checker.Coeffects
   - Language.Granule.Checker.Constraints
   - Language.Granule.Checker.Constraints.SNatX
+  - Language.Granule.Checker.DataTypes
   - Language.Granule.Checker.Flatten
   - Language.Granule.Checker.Ghost
   - Language.Granule.Checker.LaTeX

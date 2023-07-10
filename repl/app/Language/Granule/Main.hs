@@ -35,6 +35,7 @@ import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Lexer
 import Language.Granule.Syntax.Span
+import Language.Granule.Checker.DataTypes
 import Language.Granule.Checker.Checker
 import Language.Granule.Checker.TypeAliases
 import Language.Granule.Interpreter.Eval
@@ -373,8 +374,8 @@ buildRelevantASTdefinitions vars defMap = buildAST defMap [] (map sourceName var
 
 buildCheckerState :: (?globals::Globals) => [DataDecl] -> Checker.Checker ()
 buildCheckerState dataDecls = do
-    _ <- Checker.runAll checkTyCon dataDecls
-    _ <- Checker.runAll checkDataCons dataDecls
+    _ <- Checker.runAll registerTypeConstructor  dataDecls
+    _ <- Checker.runAll registerDataConstructors dataDecls
     return ()
 
 buildDef :: Int -> TypeScheme -> Expr () () -> Def () ()

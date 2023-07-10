@@ -139,7 +139,7 @@ derivePush' s topLevel c _sigma gamma argTy@(leftmostOfApplication -> TyCon name
           -- We have it in context, so now we need to apply its type
           Just (tyScheme, _) -> do
             -- freshen the type
-            (pushTy, _, _, _constraints, _) <- freshPolymorphicInstance InstanceQ False tyScheme [] []
+            (pushTy, _, _constraints, _) <- freshPolymorphicInstance InstanceQ False tyScheme [] []
             case pushTy of
               t@(FunTy _ _ t1 t2) -> do
                   -- Its argument must be unified with argTy here
@@ -182,7 +182,7 @@ derivePush' s topLevel c _sigma gamma argTy@(leftmostOfApplication -> TyCon name
               cases <- forM constructors (\(dataConsName, (tySch@(Forall _ _ _ dataConsType), coercions, _)) -> do
 
                 -- Instantiate the data constructor
-                (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, _constraint, coercions') <-
+                (dataConstructorTypeFresh, freshTyVarsCtxt, _constraint, coercions') <-
                       freshPolymorphicInstance InstanceQ True tySch coercions []
 
                 -- [Note: this does not register the constraints associated with the data constrcutor]
@@ -346,7 +346,7 @@ derivePull' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
           -- We have it in context, so now we need to apply its type
           Just (tyScheme, _) -> do
             -- freshen the type
-            (pullTy, _, _, _constraints, _) <- freshPolymorphicInstance InstanceQ False tyScheme [] []
+            (pullTy, _, _constraints, _) <- freshPolymorphicInstance InstanceQ False tyScheme [] []
             case pullTy of
               t@(FunTy _ _ t1 t2) -> do
                   -- Its argument must be unified with argTy here
@@ -386,7 +386,7 @@ derivePull' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
                 debugM "deriv-pull - coercions" (show coercions)
 
                 -- Instantiate the data constructor
-                (dataConstructorTypeFresh, _, _, _constraint, coercions') <-
+                (dataConstructorTypeFresh, _, _constraint, coercions') <-
                       freshPolymorphicInstance InstanceQ True tySch coercions []
 
                 debugM "deriv-pull - dataConstructorTypeFresh" (pretty dataConstructorTypeFresh)
@@ -639,7 +639,7 @@ deriveCopyShape' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) ar
           -- We have it in context, so now we need to apply its type
           Just (tyScheme, _) -> do
             -- freshen the type
-            (copyShapeTy, _, _, _constraints, _) <- freshPolymorphicInstance InstanceQ False tyScheme [] []
+            (copyShapeTy, _, _constraints, _) <- freshPolymorphicInstance InstanceQ False tyScheme [] []
             case copyShapeTy of
               t@(FunTy _ mCoeff t1 (ProdTy t2 t3)) -> do
                   -- Its argument must be unified with argTy here
@@ -673,7 +673,7 @@ deriveCopyShape' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) ar
               exprs <- forM constructors (\(dataConsName, (tySch@(Forall _ _ _ dataConsType), coercions, _)) -> do
 
                 -- Instantiate the data constructor
-                (dataConstructorTypeFresh, _, _, _constraint, coercions') <-
+                (dataConstructorTypeFresh, _, _constraint, coercions') <-
                       freshPolymorphicInstance InstanceQ True tySch coercions []
                 -- [Note: this does not register the constraints associated with the data constrcutor]
                 dataConstructorTypeFresh <- substitute (flipSubstitution coercions') dataConstructorTypeFresh
@@ -816,7 +816,7 @@ deriveDrop' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
           -- We have it in context, so now we need to apply its type
           Just (tyScheme, _) -> do
             -- freshen the type
-            (dropTy, _, _, _constraints, _) <- freshPolymorphicInstance InstanceQ False tyScheme [] []
+            (dropTy, _, _constraints, _) <- freshPolymorphicInstance InstanceQ False tyScheme [] []
             case dropTy of
               t@(FunTy _ mCoeff t1 t2) -> do
                   -- Its argument must be unified with argTy here
@@ -849,7 +849,7 @@ deriveDrop' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
               exprs <- forM constructors (\(dataConsName, (tySch@(Forall _ _ _ dataConsType), coercions, _)) -> do
 
                 -- Instantiate the data constructor
-                (dataConstructorTypeFresh, _, _, _constraint, coercions') <-
+                (dataConstructorTypeFresh, _, _constraint, coercions') <-
                       freshPolymorphicInstance InstanceQ True tySch coercions []
                 -- [Note: this does not register the constraints associated with the data constrcutor]
                 dataConstructorTypeFresh <- substitute (flipSubstitution coercions') dataConstructorTypeFresh

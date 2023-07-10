@@ -312,7 +312,7 @@ getSAssumptionType (SVar (Linear t) sInfo depth) = return (t, False, Nothing, sI
 getSAssumptionType (SVar (Discharged t g) sInfo depth) = return (t, False, Just g, sInfo, Forall ns [] [] t, depth)
 getSAssumptionType (SDef tySch usage depth) = do
   -- If this is a top level definition, we should freshen it
-  (freshTy, tyVarsFreshD, substFromFreshening, constraints', _) <- conv $ freshPolymorphicInstance InstanceQ False tySch [] []
+  (freshTy, tyVarsFreshD, constraints', _) <-  conv $ freshPolymorphicInstance InstanceQ False tySch [] []
   return $ (freshTy, True, usage, Nothing, tySch, depth)
 getSAssumptionType (SVar (Ghost _) sInfo _) =
   error "Cannot synthesis in the context of Ghost variables (i.e., for language SecurityLevels)"
@@ -397,7 +397,7 @@ checkConstructor con@(Forall  _ binders constraints conTy) assumptionTy subst = 
     conv $ resetAddedConstraintsFlag -- reset the flag that says if any constraints were added
     -- Generate a fresh instance of this constructor (assumes it is not indexed)
     let typeIndices = []
-    (conTyFresh, tyVarsFreshD, substFromFreshening, constraints', coercions) <-
+    (conTyFresh, tyVarsFreshD, constraints', coercions) <-
         conv $ freshPolymorphicInstance InstanceQ True con subst typeIndices
 
     -- Take the rightmost type of the function type, collecting the arguments along the way
@@ -416,7 +416,7 @@ checkConstructor con@(Forall  _ binders constraints conTy) assumptionTy subst = 
     let predicate = Conj $ predicateStack cs
     -- Clear the checker state predicate
     conv $ modify (\s -> s { predicateStack = []})
-    return (success, specTy, args, subst'', substFromFreshening, predicate)
+    return (success, specTy, args, subst'', [], predicate)
 
   where
   -- | Get the right most of a function type and collect its arguments in a list

@@ -980,8 +980,6 @@ unification s var1 typ2 rel = do
       -----------
       -- Case on the quantification mode of this variable
       case quantifier1 of
-        -- * BoundQ
-        --BoundQ -> error $ "boundq deprecated"
 
         -- * Universal quantifier
         ForallQ ->
@@ -1007,15 +1005,17 @@ unification s var1 typ2 rel = do
 
                           -- Types which need solver handling (effects and coeffects)
                           -- need to have constraints registered
-                          whenM (requiresSolver s kind)
+                          useSolver <- requiresSolver s kind
+                          if useSolver then do
                             (addConstraint (rel s (TyVar var1) (TyVar var2) kind))
+                            return subst
+                          else do
+                            -- Local substitution of var2 for the universal var1
+                            let localSubst = (var2, SubstT (TyVar var1))
+                            -- Apply thhis unification result to the type variable context
+                            substIntoTyVarContext var2 (TyVar var1)
 
-                          -- Local substitution of var2 for the universal var1
-                          let localSubst = (var2, SubstT (TyVar var1))
-                          -- Apply thhis unification result to the type variable context
-                          substIntoTyVarContext var2 (TyVar var1)
-
-                          return (localSubst : subst)
+                            return (localSubst : subst)
 
                     _ -> do
                       ifM (requiresSolver s kind1)
@@ -1032,7 +1032,7 @@ unification s var1 typ2 rel = do
                 -- This ultimately mostly likely represent a general unification failure
                 (throw $ UnificationFail s var1 typ2 kind1 False)
 
-        -- * Unification variable
+        -- * Unification variable (can unify with BoundQs too)
         _ -> do -- InstanceQ or BoundQ
           -- Join kinds by checking that `typ2` has the same kind as the variable
           (subst1, typ2') <- checkKind s typ2 kind1
@@ -1049,17 +1049,19 @@ unification s var1 typ2 rel = do
 
           -- Types which need solver handling (effects and coeffects)
           -- need to have constraints registered
-          whenM (requiresSolver s kind1)
+          needsSolver <- requiresSolver s kind1
+          if needsSolver then do
               -- Create solver constraint
-              (addConstraint (rel s (TyVar var1) typ2 kind1))
+              addConstraint (rel s (TyVar var1) typ2 kind1)
+              return subst1
+          else do
+            -- Apply thhis unification result to the type variable context
+            substIntoTyVarContext var1 typ2
 
-          -- Apply thhis unification result to the type variable context
-          substIntoTyVarContext var1 typ2
-
-          -- Local substitution
-          let localSubst = (var1, SubstT typ2)
-          --subst <- combineSubstitutions s subst1 subst2
-          return (localSubst : subst1)
+            -- Local substitution
+            let localSubst = (var1, SubstT typ2)
+            --subst <- combineSubstitutions s subst1 subst2
+            return (localSubst : subst1)
 
 -- # Substitutions work
 
@@ -1099,7 +1101,11 @@ combineSubstitutions sp u1 u2 = do
       uss1 <- forM u1 $ \(v, s) ->
         case lookupMany v u2 of
           -- Unifier in u1 but not in u2
-          [] -> return [(v, s)]
+          [] -> do
+            -- TODO: perhaps this should be:
+            --s' <- substitute u2 s -- APPLY THE SUBSTITUTION
+            --return [(v, s')]
+            return [(v, s)]
           -- Possible unifications in each part
           alts -> do
               unifs <-
@@ -1125,7 +1131,10 @@ combineSubstitutions sp u1 u2 = do
               Nothing -> return [(v, s)]
               _       -> return []
       let uss = concat uss1 <> concat uss2
-      reduceByTransitivity sp uss
+      res <- reduceByTransitivity sp uss
+      debugM "COMBINING" (pretty u1 <> "\n" <> pretty u2 <> "\n<RES> = " <> pretty res)
+      return res
+
 
 -- checkValid :: [Id] -> Substitution -> Checker (Maybe (Type, Type))
 -- checkValid vars (sub1@(v, (SubstT (TyVar v'))):substs) = do
