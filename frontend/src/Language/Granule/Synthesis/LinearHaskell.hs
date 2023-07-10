@@ -175,19 +175,23 @@ toGranule src@(Module sp modHead pragmas imports decls) = do
             case decl of
                 TypeSig{}   -> (datas, typeSigToGranule decl : typeSchemes, funEqs)
                 FunBind{}   -> (datas, typeSchemes, funBindToGranule decl : funEqs)
-                PatBind{}   -> (datas, typeSchemes, patBindToGranule decl : funEqs) 
+                PatBind{}   -> (datas, typeSchemes, patBindToGranule decl : funEqs)
                 DataDecl{}  -> (declToGranule decl : datas, typeSchemes, funEqs)
                 GDataDecl{} -> (declToGranule decl : datas, typeSchemes, funEqs)
                 _ -> (datas, typeSchemes, funEqs)
             ) ([], [], []) decls
 
-    let (typeSchemes', tupDecls, usedList) = foldl (\(tys1, decls, usedList1) (tys2, usedList2, tups) ->
+    let (typeSchemes', tupDecls, usedCons) = foldl (\(tys1, decls, usedList1) (tys2, usedList2, tups) ->
                 let tys'   = tys1 ++ tys2
                     decls' = map tupDecl tups
-                in (tys', decls' ++ decls, usedList1 || usedList2)
-            ) ([], [], False) typeSchemes
+                in (tys', decls' ++ decls, usedList1 ++ usedList2)
+            ) ([], [], []) typeSchemes
 
-    let dataDecls' = if usedList then listDecl : (nub tupDecls ++ catMaybes dataDecls) else (nub tupDecls ++ catMaybes dataDecls)
+    let dataDecls1     = nub tupDecls ++ catMaybes dataDecls
+    let dataDecls2     = if UsedList   `elem` usedCons then listDecl : dataDecls1 else dataDecls1
+    let dataDecls3     = if UsedMaybe  `elem` usedCons then maybeDecl : dataDecls2 else dataDecls2
+    let dataDecls'     = if UsedEither `elem` usedCons then eitherDecl : dataDecls3 else dataDecls3
+
 
     let defDecls = foldl (\defs funEq ->
             case funEq of
@@ -252,26 +256,29 @@ typeToGranule (TyFun _ (Just mult) t1 t2) =
         resMult  = typeToGranule mult
     in case (res1, res2, resMult) of
         (Just (t1', ul1, tups1), Just (t2', ul2, tups2), Just (mult', _, _)) ->
-            Just (GrType.FunTy Nothing (Just mult') t1' t2', ul1 || ul2, tups1 ++ tups2)
+            Just (GrType.FunTy Nothing (Just $ GrType.TySig mult' (GrType.TyCon $ GrId.mkId "LNL")) t1' t2', ul1 ++ ul2, tups1 ++ tups2)
         _ -> Nothing
 typeToGranule (TyStar _) =
-    Just (GrType.Type 0, False, [])
+    Just (GrType.Type 0, [], [])
 typeToGranule (TyCon _ (UnQual _ name)) =
-    Just (GrType.TyCon $ nameToGranule name, False, [])
+    case nameToGranule name of
+        (GrId.Id "Maybe" "Maybe") -> Just (GrType.TyCon $ nameToGranule name, [UsedMaybe], [])
+        (GrId.Id "Either" "Either") -> Just (GrType.TyCon $ nameToGranule name, [UsedEither], [])
+        _ -> Just (GrType.TyCon $ nameToGranule name, [], [])
 typeToGranule (TyApp _ t1 t2) =
     let res1 = typeToGranule t1
         res2 = typeToGranule t2
     in case (res1, res2) of
         (Just (t1', ul1, tups1), Just (t2', ul2, tups2)) ->
-            Just (GrType.TyApp t1' t2', ul1 || ul2, tups1 ++ tups2)
+            Just (GrType.TyApp t1' t2', ul1 ++ ul2, tups1 ++ tups2)
         _ -> Nothing
 typeToGranule (TyVar _ name) =
-    Just (GrType.TyVar $ nameToGranule name, False, [])
+    Just (GrType.TyVar $ nameToGranule name, [], [])
 typeToGranule (TyParen _ t) = typeToGranule t
 typeToGranule (TyList _ t) =
     let res = typeToGranule t
     in case res of
-        Just (t', _, tups) -> Just (GrType.TyApp (GrType.TyCon $ GrId.mkId "#List") t', True, tups)
+        Just (t', _, tups) -> Just (GrType.TyApp (GrType.TyCon $ GrId.mkId "#List") t', [UsedList], tups)
         Nothing -> Nothing
 typeToGranule (TyTuple _ _ tys) =
     case buildType tys $ GrType.TyCon $ GrId.mkId $ "," <> (show $ length tys) of
@@ -279,12 +286,12 @@ typeToGranule (TyTuple _ _ tys) =
         Nothing -> Nothing
     where
 
-        buildType [] tupTy = Just (tupTy, False, [])
+        buildType [] tupTy = Just (tupTy, [], [])
         buildType (t1:ts) tupTy =
             let res1 = buildType ts tupTy
                 res2 = typeToGranule t1
             in case (res1, res2) of
-                (Just (t2, ul, tups), Just (t1', ul', tups')) -> Just (GrType.TyApp t2 t1', ul || ul', tups ++ tups')
+                (Just (t2, ul, tups), Just (t1', ul', tups')) -> Just (GrType.TyApp t2 t1', ul ++ ul', tups ++ tups')
                 _ -> Nothing
 
 -- If we cannot find out what a Granule equivalent type is, then just ignore it rather than error out
@@ -300,7 +307,7 @@ declToGranule :: Decl SrcSpanInfo -> Maybe (GrDef.DataDecl)
 declToGranule (DataDecl sp (DataType _) _ dhead cons _) = do
     (grId, tyVarCtxt) <- dheadToGranule dhead
     cons' <- sequence $ map conToGranule cons
-    return $ GrDef.DataDecl (srcSpanInfoToGranule sp) grId tyVarCtxt Nothing cons' 
+    return $ GrDef.DataDecl (srcSpanInfoToGranule sp) grId tyVarCtxt Nothing cons'
 declToGranule (GDataDecl sp (DataType _) _ dhead (Just kind) gCons _) = do
     (grId, tyVarCtxt) <- dheadToGranule dhead
     (kind', _, _) <- typeToGranule kind
@@ -309,7 +316,7 @@ declToGranule (GDataDecl sp (DataType _) _ dhead (Just kind) gCons _) = do
 declToGranule (GDataDecl sp (DataType _) _ dhead Nothing gCons _) = do
     (grId, tyVarCtxt) <- dheadToGranule dhead
     gCons' <- sequence $ map gConToGranule gCons
-    return $ GrDef.DataDecl (srcSpanInfoToGranule sp) grId tyVarCtxt Nothing gCons' 
+    return $ GrDef.DataDecl (srcSpanInfoToGranule sp) grId tyVarCtxt Nothing gCons'
 declToGranule _ = Nothing
 
 
@@ -406,6 +413,45 @@ tupDecl n =
                 GrDef.dataConstrParams = map (\tyVar -> GrType.TyVar tyVar) tyVars
                 }
             ]}
+
+maybeDecl :: GrDef.DataDecl
+maybeDecl = GrDef.DataDecl {
+        GrDef.dataDeclSpan = ns,
+        GrDef.dataDeclId = GrId.mkId "Maybe",
+        GrDef.dataDeclTyVarCtxt = [(GrId.mkId "a", GrType.Type 0)],
+        GrDef.dataDeclKindAnn = Nothing,
+        GrDef.dataDeclDataConstrs = [
+            GrDef.DataConstrNonIndexed {
+                GrDef.dataConstrSpan = ns,
+                GrDef.dataConstrId = GrId.mkId "Nothing",
+                GrDef.dataConstrParams = []
+                },
+            GrDef.DataConstrNonIndexed {
+                GrDef.dataConstrSpan = ns,
+                GrDef.dataConstrId = GrId.mkId "Just",
+                GrDef.dataConstrParams = [ GrType.TyVar $ GrId.mkId "a" ]
+            }
+        ]}
+
+eitherDecl :: GrDef.DataDecl
+eitherDecl = GrDef.DataDecl {
+        GrDef.dataDeclSpan = ns,
+        GrDef.dataDeclId = GrId.mkId "Either",
+        GrDef.dataDeclTyVarCtxt = [(GrId.mkId "a", GrType.Type 0), (GrId.mkId "b", GrType.Type 0) ],
+        GrDef.dataDeclKindAnn = Nothing,
+        GrDef.dataDeclDataConstrs = [
+            GrDef.DataConstrNonIndexed {
+                GrDef.dataConstrSpan = ns,
+                GrDef.dataConstrId = GrId.mkId "Left",
+                GrDef.dataConstrParams = [ GrType.TyVar $ GrId.mkId "a" ]
+            },
+            GrDef.DataConstrNonIndexed {
+                GrDef.dataConstrSpan = ns,
+                GrDef.dataConstrId = GrId.mkId "Right",
+                GrDef.dataConstrParams = [ GrType.TyVar $ GrId.mkId "b" ]
+            }
+        ]}
+
 
 
 
@@ -533,8 +579,8 @@ exprToHaskell app@(GrExpr.App _ _ _ e1 e2) =
     let (leftMostExpr, args) = leftMostAndArgs e1
     in if isTupleExpr leftMostExpr
     then Tuple noSrcSpan Boxed $ map exprToHaskell (e2:args)
-    else if isListExpr leftMostExpr 
-    then List noSrcSpan $ listToHaskell app 
+    else if isListExpr leftMostExpr
+    then List noSrcSpan $ listToHaskell app
     else
         let e1' = exprToHaskell e1
             e2' = exprToHaskell e2
