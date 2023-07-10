@@ -134,6 +134,7 @@ cgType (GrType.TyApp t1 t2) =
     t2' <- cgType t2
     return $ Hs.TyApp () t1' t2'
 cgType (GrType.Star _t t2) = cgType t2
+cgType (GrType.Borrow _t t2) = cgType t2
 cgType (GrType.TyInt i) = return mkUnit
 cgType (GrType.TyRational ri) = return mkUnit
 cgType (GrType.TyGrade mt i) = return mkUnit

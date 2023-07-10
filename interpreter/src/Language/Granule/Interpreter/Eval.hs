@@ -799,6 +799,11 @@ builtIns =
   , (mkId "uniquePull",    Ext () $ Primitive uniquePull)
   , (mkId "reveal",  Ext () $ Primitive reveal)
   , (mkId "trustedBind",    Ext () $ PrimitiveClosure trustedBind)
+  , (mkId "withBorrow",     Ext () $ PrimitiveClosure withBorrow)
+  , (mkId "split",     Ext () $ Primitive split)
+  , (mkId "join",     Ext () $ Primitive join)
+  , (mkId "borrowPush",     Ext () $ Primitive borrowPush)
+  , (mkId "borrowPull",     Ext () $ Primitive borrowPull)
   , (mkId "newFloatArray",  Ext () $ Primitive newFloatArray)
   , (mkId "lengthFloatArray",  Ext () $ Primitive lengthFloatArray)
   , (mkId "readFloatArray",  Ext () $ Primitive readFloatArray)
@@ -807,6 +812,9 @@ builtIns =
   , (mkId "lengthFloatArrayI",  Ext () $ Primitive lengthFloatArrayI)
   , (mkId "readFloatArrayI",  Ext () $ Primitive readFloatArrayI)
   , (mkId "writeFloatArrayI",  Ext () $ Primitive writeFloatArrayI)
+  , (mkId "lengthFloatArrayB",  Ext () $ Primitive lengthFloatArrayB)
+  , (mkId "readFloatArrayB",  Ext () $ Primitive readFloatArrayB)
+  , (mkId "writeFloatArrayB",  Ext () $ Primitive writeFloatArrayB)
   , (mkId "deleteFloatArray", Ext () $ Primitive deleteFloatArray)
   -- Additive conjunction (linear logic)
   , (mkId "with", Ext () $ Primitive $ \v -> return $ Ext () $ Primitive $ \w -> return $ Constr () (mkId "&") [v, w])
@@ -1025,6 +1033,25 @@ builtIns =
       = return $ Nec () (Val nullSpan () False (Constr () (mkId ",") [x, y]))
     uniquePull v = error $ "Bug in Granule. Can't pull through a non-unique: " <> prettyDebug v
 
+    withBorrow :: Ctxt RValue -> RValue -> IO RValue
+    withBorrow = error $ "Bug in Granule. Not implemented yet!"
+
+    split :: RValue -> IO RValue
+    split = error $ "Bug in Granule. Not implemented yet!"
+
+    join :: RValue -> IO RValue
+    join = error $ "Bug in Granule. Not implemented yet!"
+
+    borrowPush :: RValue -> IO RValue
+    borrowPush (Ref () (Val nullSpan () False (Constr () (Id "," ",") [x, y])))
+     = return $ Constr () (mkId ",") [Ref () (Val nullSpan () False x), Ref () (Val nullSpan () False y)]
+    borrowPush v = error $ "Bug in Granule. Can't push through an unborrowed: " <> prettyDebug v
+
+    borrowPull :: RValue -> IO RValue
+    borrowPull (Constr () (Id "," ",") [Ref () (Val nullSpan () False x), Ref () (Val _ () False y)])
+      = return $ Ref () (Val nullSpan () False (Constr () (mkId ",") [x, y]))
+    borrowPull v = error $ "Bug in Granule. Can't pull through an unborrowed: " <> prettyDebug v
+
     recv :: (?globals :: Globals) => RValue -> IO RValue
     recv (Ext _ (Chan c)) = do
       x <- readChan c
@@ -1144,6 +1171,11 @@ builtIns =
       (e,fa') <- RT.readFloatArrayISafe fa i
       return $ Constr () (mkId ",") [NumFloat e, Ext () $ Runtime fa']
 
+    readFloatArrayB :: RValue -> IO RValue
+    readFloatArrayB = \(Ref () (Val _ _ _ (Ext () (Runtime fa)))) -> return $ Ext () $ Primitive $ \(NumInt i) -> do
+      (e,fa') <- RT.readFloatArraySafe fa i
+      return $ Constr () (mkId ",") [NumFloat e, Ref () (Val nullSpan () False $ Ext () $ Runtime fa')]
+
     lengthFloatArray :: RValue -> IO RValue
     lengthFloatArray = \(Nec () (Val _ _ _ (Ext () (Runtime fa)))) ->
       let (e,fa') = RT.lengthFloatArray fa
@@ -1153,6 +1185,11 @@ builtIns =
     lengthFloatArrayI = \(Ext () (Runtime fa)) ->
       let (e,fa') = RT.lengthFloatArray fa
       in return $ Constr () (mkId ",") [NumInt e, Ext () $ Runtime fa']
+
+    lengthFloatArrayB :: RValue -> IO RValue
+    lengthFloatArrayB = \(Ref () (Val _ _ _ (Ext () (Runtime fa)))) -> return $ Ext () $ Primitive $ \(NumInt i) ->
+      let (e,fa') = RT.lengthFloatArray fa
+      in return $ Constr () (mkId ",") [NumInt e, Ref () (Val nullSpan () False $ Ext () $ Runtime fa')]
 
     writeFloatArray :: RValue -> IO RValue
     writeFloatArray = \(Nec _ (Val _ _ _ (Ext _ (Runtime fa)))) -> return $
@@ -1167,6 +1204,13 @@ builtIns =
       Ext () $ Primitive $ \(NumFloat v) -> do
         arr <- RT.writeFloatArrayISafe fa i v
         return $ Ext () $ Runtime arr
+
+    writeFloatArrayB :: RValue -> IO RValue
+    writeFloatArrayB = \(Ref _ (Val _ _ _ (Ext _ (Runtime fa)))) -> return $
+      Ext () $ Primitive $ \(NumInt i) -> return $
+        Ext () $ Primitive $ \(NumFloat v) -> do
+          arr <- RT.writeFloatArraySafe fa i v
+          return $ Ref () $ Val nullSpan () False $ Ext () $ Runtime arr
 
     deleteFloatArray :: RValue -> IO RValue
     deleteFloatArray = \(Nec _ (Val _ _ _ (Ext _ (Runtime fa)))) -> do

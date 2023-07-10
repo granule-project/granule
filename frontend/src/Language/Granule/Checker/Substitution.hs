@@ -359,6 +359,9 @@ substituteValue ctxt (PureF ty expr) =
 substituteValue ctxt (NecF ty expr) =
     do ty' <- substitute ctxt ty
        return $ Nec ty' expr
+substituteValue ctxt (RefF ty expr) =
+    do ty' <- substitute ctxt ty
+       return $ Ref ty' expr
 substituteValue ctxt (ConstrF ty ident vs) =
     do  ty' <- substitute ctxt ty
         return $ Constr ty' ident vs

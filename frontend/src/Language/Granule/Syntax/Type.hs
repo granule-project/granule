@@ -37,6 +37,7 @@ Example: `List n Int` in Granule
 type Coeffect = Type
 type Effect   = Type
 type Guarantee = Type
+type Permission = Type
 type Kind     = Type
 
 -- Represents polairty information for lattices
@@ -52,6 +53,7 @@ data Type where
     Box     :: Coeffect -> Type -> Type             -- ^ Graded modal necessity
     Diamond :: Effect   -> Type -> Type             -- ^ Graded modal possibility
     Star    :: Guarantee -> Type -> Type
+    Borrow  :: Permission -> Type -> Type
     TyVar   :: Id -> Type                           -- ^ Type variable
     TyApp   :: Type -> Type -> Type                 -- ^ Type application
     TyInt   :: Int -> Type                          -- ^ Type-level Int
@@ -156,6 +158,9 @@ keffect = tyCon "Effect"
 kguarantee :: Type
 kguarantee = tyCon "Guarantee"
 
+kpermission :: Type
+kpermission = tyCon "Permission"
+
 kpredicate :: Type
 kpredicate = tyCon "Predicate"
 
@@ -225,6 +230,7 @@ containsTypeSig =
       , tfBox = \x y -> return (x || y)
       , tfDiamond = \x y -> return $ (x || y)
       , tfStar = \x y -> return $ (x || y)
+      , tfBorrow = \x y -> return $ (x || y)
       , tfTyVar = \_ -> return False
       , tfTyApp = \x y -> return (x || y)
       , tfTyInt = \_ -> return False
@@ -298,6 +304,8 @@ mDiamond :: Monad m => Type -> Type -> m Type
 mDiamond e y = return (Diamond e y)
 mStar :: Monad m => Guarantee -> Type -> m Type
 mStar g y    = return (Star g y)
+mBorrow :: Monad m => Permission -> Type -> m Type
+mBorrow p y = return (Borrow p y)
 mTyVar :: Monad m => Id -> m Type
 mTyVar       = return . TyVar
 mTyApp :: Monad m => Type -> Type -> m Type
@@ -329,6 +337,7 @@ data TypeFold m a = TypeFold
   , tfBox     :: a -> a             -> m a
   , tfDiamond :: a -> a             -> m a
   , tfStar    :: a -> a             -> m a
+  , tfBorrow  :: a -> a             -> m a
   , tfTyVar   :: Id                 -> m a
   , tfTyApp   :: a -> a             -> m a
   , tfTyInt   :: Int                -> m a
@@ -345,7 +354,7 @@ data TypeFold m a = TypeFold
 -- Base monadic algebra
 baseTypeFold :: Monad m => TypeFold m Type --Type
 baseTypeFold =
-  TypeFold mTy mFunTy mTyCon mBox mDiamond mStar mTyVar mTyApp mTyInt mTyRational mTyGrade mTyInfix mTySet mTyCase mTySig mTyExists mTyForall
+  TypeFold mTy mFunTy mTyCon mBox mDiamond mStar mBorrow mTyVar mTyApp mTyInt mTyRational mTyGrade mTyInfix mTySet mTyCase mTySig mTyExists mTyForall
 
 -- | Monadic fold on a `Type` value
 typeFoldM :: forall m a . Monad m => TypeFold m a -> Type -> m a
@@ -371,6 +380,10 @@ typeFoldM algebra = go
      t' <- go t
      g' <- go g
      (tfStar algebra) g' t'
+   go (Borrow p t) = do
+     t' <- go t
+     p' <- go p
+     (tfBorrow algebra) p' t'
    go (TyVar v) = (tfTyVar algebra) v
    go (TyApp t1 t2) = do
      t1' <- go t1
@@ -424,6 +437,7 @@ instance Term Type where
       , tfBox     = \(Const c) (Const t) -> return $ Const (c <> t)
       , tfDiamond = \(Const e) (Const t) -> return $ Const (e <> t)
       , tfStar    = \(Const g) (Const t) -> return $ Const (g <> t)
+      , tfBorrow  = \(Const p) (Const t) -> return $ Const (p <> t)
       , tfTyVar   = \v -> return $ Const [v] -- or: return . return
       , tfTyApp   = \(Const x) (Const y) -> return $ Const (x <> y)
       , tfTyInt   = \_ -> return (Const [])

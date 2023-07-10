@@ -745,6 +745,15 @@ checkExpr defs gam pol _ ty@(Star demand tau) (Val s _ rf (Nec _ e)) = do
     let elaborated = Val s ty rf (Nec tau elaboratedE)
     return (gam', subst, elaborated)
 
+checkExpr defs gam pol _ ty@(Borrow demand tau) (Val s _ rf (Ref _ e)) = do
+    debugM "checkExpr[Borrow]" (pretty s <> " : " <> pretty ty)
+
+    -- Checker the expression being borrowed
+    (gam', subst, elaboratedE) <- checkExpr defs gam pol False tau e
+
+    let elaborated = Val s ty rf (Ref tau elaboratedE)
+    return (gam', subst, elaborated)
+
 -- Check a case expression
 checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
   debugM "checkExpr[Case]" (pretty s <> " : " <> pretty tau)
@@ -1385,6 +1394,25 @@ synthExpr defs gam pol (Val s _ rf (Nec _ e)) = do
 
   let finalTy = Star (TyVar var) t
   let elaborated = Val s finalTy rf (Nec t elaboratedE)
+  return (finalTy, gam', subst, elaborated)
+
+-- placeholder!
+synthExpr defs gam pol (Val s _ rf (Ref _ e)) = do
+  debugM "synthExpr[Ref]" (pretty s)
+
+   -- Create a fresh kind variable for this permission
+  vark <- freshIdentifierBase $ "kref_[" <> pretty (startPos s) <> "]"
+   -- remember this new kind variable in the kind environment
+  modify (\st -> st { tyVarContext = (mkId vark, (kguarantee, InstanceQ)) : tyVarContext st })
+
+   -- Create a fresh permission variable for the permission of the borrowed expression
+  var <- freshTyVarInContext (mkId $ "ref_[" <> pretty (startPos s) <> "]") (tyVar vark)
+
+  -- Synth type of necessitated expression
+  (t, gam', subst, elaboratedE) <- synthExpr defs gam pol e
+
+  let finalTy = Borrow (TyVar var) t
+  let elaborated = Val s finalTy rf (Ref t elaboratedE)
   return (finalTy, gam', subst, elaborated)
 
 -- BinOp

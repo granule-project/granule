@@ -215,6 +215,18 @@ equalTypesRelatedCoeffectsInner s rel (Diamond ef1 t1) (Diamond ef2 t2) _ sp Typ
   u <- combineSubstitutions s unif unif'
   return (eq && eq', u)
 
+equalTypesRelatedCoeffectsInner s rel (Star g1 t1) (Star g2 t2) _ sp mode = do
+  (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 sp mode
+  (eq', _, unif') <- equalTypes s g1 g2
+  u <- combineSubstitutions s unif unif'
+  return (eq && eq', u)
+
+equalTypesRelatedCoeffectsInner s rel (Borrow p1 t1) (Borrow p2 t2) _ sp mode = do
+  (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 sp mode
+  (eq', _, unif') <- equalTypes s p1 p2
+  u <- combineSubstitutions s unif unif'
+  return (eq && eq', u)
+
 equalTypesRelatedCoeffectsInner s rel x@(Box c t) y@(Box c' t') k sp Types = do
   -- Debugging messages
   debugM "equalTypesRelatedCoeffectsInner (box)" $ "grades " <> show c <> " and " <> show c' <> ""
@@ -272,6 +284,82 @@ equalTypesRelatedCoeffectsInner s rel (TyApp (TyCon d') (TyApp (TyCon d) t)) t' 
 equalTypesRelatedCoeffectsInner s rel t (TyApp (TyCon d') (TyApp (TyCon d) t')) k sp mode
   | internalName d == "Dual" && internalName d' == "Dual" =
   equalTypesRelatedCoeffectsInner s rel t t' k sp mode
+
+equalTypesRelatedCoeffectsInner s rel (TyVar n) t kind sp mode = do
+  checkerState <- get
+  debugM "Types.equalTypesRelatedCoeffectsInner on TyVar"
+          $ "span: " <> show s
+          <> "\nkind: " <> show kind
+          <> "\nTyVar: " <> show n <> " with " <> show (lookup n (tyVarContext checkerState))
+          <> "\ntype: " <> show t <> "\nspec indicator: " <> show sp
+
+  debugM "context" $ pretty $ tyVarContext checkerState
+
+  -- Do an occurs check for types
+  case kind of
+    Type _ ->
+       if n `elem` freeVars t
+         then throw OccursCheckFail { errLoc = s, errVar = n, errTy = t }
+         else return ()
+    _ -> return ()
+
+  case lookup n (tyVarContext checkerState) of
+    -- We can unify an instance with a concrete type
+    (Just (k1, q)) | (q == BoundQ) || (q == InstanceQ) -> do --  && sp /= PatternCtxt
+
+      jK <-  joinTypes s k1 kind
+      case jK of
+        Nothing -> throw UnificationKindError
+          { errLoc = s, errTy1 = (TyVar n), errK1 = k1, errTy2 = t, errK2 = kind }
+
+        -- If the kind is Nat, then create a solver constraint
+        Just (TyCon (internalName -> "Nat"), unif, _) -> do
+          addConstraint (Eq s (TyVar n) t (TyCon $ mkId "Nat"))
+          return (True, unif ++ [(n, SubstT t)])
+
+        Just (_, unif, _) -> return (True, unif ++ [(n, SubstT t)])
+
+    (Just (k1, ForallQ)) -> do
+
+       -- If the kind if nat then set up and equation as there might be a
+       -- pausible equation involving the quantified variable
+       jK <- joinTypes s k1 kind
+       case jK of
+         Just (TyCon (Id "Nat" "Nat"), unif, _) -> do
+           addConstraint $ Eq s (TyVar n) t (TyCon $ mkId "Nat")
+           return (True, unif ++ [(n, SubstT t)])
+
+         Just (TyCon (Id "Q" "Q"), unif, _) -> do
+           addConstraint $ Eq s (TyVar n) t (TyCon $ mkId "Q")
+           return (True, unif ++ [(n, SubstT t)])
+
+         _ -> throw UnificationFail{ errLoc = s, errVar = n, errKind = k1, errTy = t, tyIsConcrete = True }
+
+    (Just (_, InstanceQ)) -> error "Please open an issue at https://github.com/granule-project/granule/issues"
+    (Just (_, BoundQ)) -> error "Please open an issue at https://github.com/granule-project/granule/issues"
+    Nothing -> throw UnboundTypeVariable { errLoc = s, errId = n }
+
+
+equalTypesRelatedCoeffectsInner s rel t (TyVar n) k sp mode =
+  equalTypesRelatedCoeffectsInner s rel (TyVar n) t k (flipIndicator sp) mode
+
+equalTypesRelatedCoeffectsInner s rel (Star g1 t1) t2 _ sp mode
+  | t1 == t2 = throw $ UniquenessError { errLoc = s, uniquenessMismatch = NonUniqueUsedUniquely t2}
+  | otherwise = do
+    (g, _, u) <- equalTypes s t1 t2
+    return (g, u)
+
+equalTypesRelatedCoeffectsInner s rel t1 (Star g2 t2) k sp mode = 
+  equalTypesRelatedCoeffectsInner s rel (Star g2 t2) t1 k (flipIndicator sp) mode
+
+equalTypesRelatedCoeffectsInner s rel (Borrow p1 t1) t2 _ sp mode
+  | t1 == t2 = throw $ UniquenessError { errLoc = s, uniquenessMismatch = NonUniqueUsedUniquely t2} -- placeholder error
+  | otherwise = do
+    (g, _, u) <- equalTypes s t1 t2
+    return (g, u)
+
+equalTypesRelatedCoeffectsInner s rel t1 (Borrow p2 t2) k sp mode = 
+  equalTypesRelatedCoeffectsInner s rel (Borrow p2 t2) t1 k (flipIndicator sp) mode
 
 -- Do duality check (left) [special case of TyApp rule]
 equalTypesRelatedCoeffectsInner s rel (TyApp (TyCon d) t) t' _ sp mode
@@ -605,6 +693,7 @@ isIndexedType t = do
       , tfBox = \_ (Const x) -> return $ Const x
       , tfDiamond = \_ (Const x) -> return $ Const x
       , tfStar = \_ (Const x) -> return $ Const x
+      , tfBorrow = \_ (Const x) -> return $ Const x
       , tfTyVar = \_ -> return $ Const False
       , tfTyApp = \(Const x) (Const y) -> return $ Const (x || y)
       , tfTyInt = \_ -> return $ Const False

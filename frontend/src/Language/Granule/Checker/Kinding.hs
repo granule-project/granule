@@ -402,6 +402,13 @@ synthKindWithConfiguration s _ (Star g t) = do
   subst <- combineManySubstitutions s [subst0, subst1, subst2]
   return (ktype, subst, Star g' t')
 
+synthKindWithConfiguration s _ (Borrow p t) = do
+  (permissionTy, subst0, p') <- synthKindWithConfiguration s (defaultResolutionBehaviour p) p
+  (subst1, _) <- checkKind s permissionTy kpermission
+  (subst2, t') <- checkKind s t ktype
+  subst <- combineManySubstitutions s [subst0, subst1, subst2]
+  return (ktype, subst, Borrow p' t')
+
 synthKindWithConfiguration s _ t@(TyCon (internalName -> "Pure")) = do
   -- Create a fresh type variable
   var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") keffect

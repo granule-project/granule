@@ -229,6 +229,7 @@ getAssumConstr a =
     getTypeConstr (Box _ t) = getTypeConstr t
     getTypeConstr (Diamond t1 _) = getTypeConstr t1
     getTypeConstr (Star _ t) = getTypeConstr t
+    getTypeConstr (Borrow _ t) = getTypeConstr t
     getTypeConstr (TyApp t1 t2) = getTypeConstr t1
     getTypeConstr (TySig t _) = getTypeConstr t
     getTypeConstr (TyVar _) = Nothing

@@ -397,6 +397,7 @@ Type :: { Type }
   | Type '&' Type                  { TyApp (TyApp (TyCon $ mkId "&") $1) $3 }
   | TyAtom '[' Coeffect ']'        { Box $3 $1 }
   | TyAtom '*{' Guarantee '}'      { Star $3 $1 }
+  | '&' Permission TyAtom          { Borrow $2 $3 }
   | TyAtom '[' ']'                 { Box (TyInfix TyOpInterval (TyGrade (Just extendedNat) 0) infinity) $1 }
   | TyAtom '<' Effect '>'          { Diamond $3 $1 }
   | case Type of TyCases { TyCase $2 $4 }
@@ -533,6 +534,9 @@ TyAbsNamed :: { [(Id, Type)] }
 TyAbsImplicit :: { [Id] }
   : VAR ',' TyAbsImplicit       { (mkId $ symString $1) : $3 }
   | VAR                         { [mkId $ symString $1] }
+Permission :: { Type }
+  : CONSTR                  { TyCon $ mkId $ constrString $1 }
+  | VAR                     { TyVar (mkId $ symString $1) }
 
 Expr :: { Expr () () }
   : let LetBind MultiLet

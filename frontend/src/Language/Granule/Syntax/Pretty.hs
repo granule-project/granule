@@ -140,6 +140,9 @@ instance Pretty Type where
         (TyCon (Id "Unique" "Unique")) -> docSpan "uniq" ("*" <> prettyNested t)
         otherwise -> prettyNested t <> " *" <> docSpan "uniq" (pretty g)
 
+    pretty (Borrow p t) =
+      "& " <> pretty p <> " " <> prettyNested t
+
     pretty (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "," =
       "(" <> pretty t1 <> ", " <> pretty t2 <> ")"
 
@@ -286,6 +289,7 @@ instance Pretty v => Pretty (Value v a) where
     pretty (Promote _ e) = "[" <> pretty e <> "]"
     pretty (Pure _ e)    = "<" <> pretty e <> ">"
     pretty (Nec _ e)     = "*" <> pretty e
+    pretty (Ref _ e)     = "&" <> pretty e
     pretty (Var _ x)     = pretty x
     pretty (NumInt n)    = show n
     pretty (NumFloat n)  = show n
