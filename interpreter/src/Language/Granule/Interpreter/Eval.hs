@@ -1033,14 +1033,20 @@ builtIns =
       = return $ Nec () (Val nullSpan () False (Constr () (mkId ",") [x, y]))
     uniquePull v = error $ "Bug in Granule. Can't pull through a non-unique: " <> prettyDebug v
 
-    withBorrow :: Ctxt RValue -> RValue -> IO RValue
-    withBorrow = error $ "Bug in Granule. Not implemented yet!"
+    withBorrow :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
+    withBorrow ctxt f = return $ Ext () $ Primitive $ \(Nec () v) -> return $
+      let (Ref () v') = unsafePerformIO $ evalIn ctxt
+            (App nullSpan () False
+             (Val nullSpan () False f)
+             (Val nullSpan () False (Ref () v))) in (Nec () v')
 
     split :: RValue -> IO RValue
-    split = error $ "Bug in Granule. Not implemented yet!"
+    split v = return $ Constr () (mkId ",") [v, v]
 
     join :: RValue -> IO RValue
-    join = error $ "Bug in Granule. Not implemented yet!"
+    join (Constr () (Id "," ",") [Ref () (Val nullSpan () False x), Ref () (Val _ () False _)])
+     = return $ Ref () (Val nullSpan () False x)
+    join v = error $ "Bug in Granule. Can't join unborrowed types."
 
     borrowPush :: RValue -> IO RValue
     borrowPush (Ref () (Val nullSpan () False (Constr () (Id "," ",") [x, y])))
