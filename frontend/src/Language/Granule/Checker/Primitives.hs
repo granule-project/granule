@@ -672,13 +672,13 @@ tick = BUILTIN
 --------------------------------------------------------------------------------
 
 uniqueReturn
-  : forall {a : Type}
-  . *a -> !a
+  : forall {a : Type, s : Semiring, r : s}
+  . *a -> a [r]
 uniqueReturn = BUILTIN
 
 uniqueBind
-  : forall {a b : Type}
-  . (*a -> !b) -> !a -> !b
+  : forall {a b : Type, s : Semiring, r : s}
+  . {(1 : s) <= r} => (*a -> b [r]) -> a [r] -> b [r]
 uniqueBind = BUILTIN
 
 uniquePush
