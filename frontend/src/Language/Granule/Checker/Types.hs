@@ -223,7 +223,7 @@ equalTypesRelatedCoeffectsInner s rel (Star g1 t1) (Star g2 t2) _ sp mode = do
 
 equalTypesRelatedCoeffectsInner s rel (Borrow p1 t1) (Borrow p2 t2) _ sp mode = do
   (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 sp mode
-  (eq', _, unif') <- equalTypes s p1 p2
+  (eq', unif') <- equalTypesRelatedCoeffects s rel (normalise p1) (normalise p2) sp mode
   u <- combineSubstitutions s unif unif'
   return (eq && eq', u)
 
@@ -353,7 +353,7 @@ equalTypesRelatedCoeffectsInner s rel t1 (Star g2 t2) k sp mode =
   equalTypesRelatedCoeffectsInner s rel (Star g2 t2) t1 k (flipIndicator sp) mode
 
 equalTypesRelatedCoeffectsInner s rel (Borrow p1 t1) t2 _ sp mode
-  | t1 == t2 = throw $ UniquenessError { errLoc = s, uniquenessMismatch = NonUniqueUsedUniquely t2} -- placeholder error
+  | t1 == t2 = error "" -- placeholder error
   | otherwise = do
     (g, _, u) <- equalTypes s t1 t2
     return (g, u)
@@ -698,6 +698,7 @@ isIndexedType t = do
       , tfTyApp = \(Const x) (Const y) -> return $ Const (x || y)
       , tfTyInt = \_ -> return $ Const False
       , tfTyRational = \_ -> return $ Const False
+      , tfTyFraction = \_ -> return $ Const False
       , tfTyGrade = \_ _ -> return $ Const False
       , tfTyInfix = \_ (Const x) (Const y) -> return $ Const (x || y)
       , tfSet = \_ _ -> return $ Const False

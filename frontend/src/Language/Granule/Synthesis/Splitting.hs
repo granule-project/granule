@@ -235,6 +235,7 @@ getAssumConstr a =
     getTypeConstr (TyVar _) = Nothing
     getTypeConstr (TyInt _) = Nothing
     getTypeConstr (TyRational _) = Nothing
+    getTypeConstr (TyFraction _) = Nothing
     getTypeConstr (TyGrade _ _) = Nothing
     getTypeConstr (TyInfix _ _ _) = Nothing
     getTypeConstr (TySet _ _) = Nothing

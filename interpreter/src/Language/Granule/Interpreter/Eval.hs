@@ -1046,7 +1046,7 @@ builtIns =
     join :: RValue -> IO RValue
     join (Constr () (Id "," ",") [Ref () (Val nullSpan () False x), Ref () (Val _ () False _)])
      = return $ Ref () (Val nullSpan () False x)
-    join v = error $ "Bug in Granule. Can't join unborrowed types."
+    join v = error $ "Bug in Granule. Can't join unborrowed types: " <> prettyDebug v
 
     borrowPush :: RValue -> IO RValue
     borrowPush (Ref () (Val nullSpan () False (Constr () (Id "," ",") [x, y])))

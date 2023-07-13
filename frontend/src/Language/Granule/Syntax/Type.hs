@@ -58,6 +58,7 @@ data Type where
     TyApp   :: Type -> Type -> Type                 -- ^ Type application
     TyInt   :: Int -> Type                          -- ^ Type-level Int
     TyRational :: Rational -> Type                  -- ^ Type-level Rational
+    TyFraction :: Rational -> Type
     TyGrade :: Maybe Type -> Int -> Type            -- ^ Graded element
     TyInfix :: TypeOperator -> Type -> Type -> Type -- ^ Infix type operator
 
@@ -235,6 +236,7 @@ containsTypeSig =
       , tfTyApp = \x y -> return (x || y)
       , tfTyInt = \_ -> return False
       , tfTyRational = \_ -> return False
+      , tfTyFraction = \_ -> return False
       , tfTyGrade = \_ _ -> return False
       , tfTyInfix = \_ x y -> return (x || y)
       , tfSet = \_ _ -> return  False
@@ -314,6 +316,8 @@ mTyInt :: Monad m => Int -> m Type
 mTyInt       = return . TyInt
 mTyRational :: Monad m => Rational -> m Type
 mTyRational          = return . TyRational
+mTyFraction :: Monad m => Rational -> m Type
+mTyFraction  = return . TyFraction
 mTyGrade :: Monad m => Maybe Type -> Int -> m Type
 mTyGrade t c = return $ TyGrade t c
 mTyInfix :: Monad m => TypeOperator -> Type -> Type -> m Type
@@ -342,6 +346,7 @@ data TypeFold m a = TypeFold
   , tfTyApp   :: a -> a             -> m a
   , tfTyInt   :: Int                -> m a
   , tfTyRational :: Rational        -> m a
+  , tfTyFraction :: Rational        -> m a
   , tfTyGrade :: Maybe a   -> Int  -> m a
   , tfTyInfix :: TypeOperator -> a -> a -> m a
   , tfSet     :: Polarity -> [a]    -> m a
@@ -354,7 +359,7 @@ data TypeFold m a = TypeFold
 -- Base monadic algebra
 baseTypeFold :: Monad m => TypeFold m Type --Type
 baseTypeFold =
-  TypeFold mTy mFunTy mTyCon mBox mDiamond mStar mBorrow mTyVar mTyApp mTyInt mTyRational mTyGrade mTyInfix mTySet mTyCase mTySig mTyExists mTyForall
+  TypeFold mTy mFunTy mTyCon mBox mDiamond mStar mBorrow mTyVar mTyApp mTyInt mTyRational mTyFraction mTyGrade mTyInfix mTySet mTyCase mTySig mTyExists mTyForall
 
 -- | Monadic fold on a `Type` value
 typeFoldM :: forall m a . Monad m => TypeFold m a -> Type -> m a
@@ -391,6 +396,7 @@ typeFoldM algebra = go
      (tfTyApp algebra) t1' t2'
    go (TyInt i) = (tfTyInt algebra) i
    go (TyRational i) = (tfTyRational algebra) i
+   go (TyFraction i) = (tfTyFraction algebra) i
    go (TyGrade Nothing i) = (tfTyGrade algebra) Nothing i
    go (TyGrade (Just t) i) = do
      t' <- go t
@@ -442,6 +448,7 @@ instance Term Type where
       , tfTyApp   = \(Const x) (Const y) -> return $ Const (x <> y)
       , tfTyInt   = \_ -> return (Const [])
       , tfTyRational  = \_ -> return (Const [])
+      , tfTyFraction = \_ -> return (Const [])
       , tfTyGrade     = \_ _ -> return (Const [])
       , tfTyInfix = \_ (Const y) (Const z) -> return $ Const (y <> z)
       , tfSet     = \_ -> return . Const . concat . map getConst
@@ -453,6 +460,7 @@ instance Term Type where
 
     isLexicallyAtomic TyInt{} = True
     isLexicallyAtomic TyRational{} = True
+    isLexicallyAtomic TyFraction{} = True
     isLexicallyAtomic TyGrade{} = True
     isLexicallyAtomic TyVar{} = True
     isLexicallyAtomic TySet{} = True
@@ -528,6 +536,9 @@ instance Freshenable m Type where
 normalise :: Type -> Type
 normalise (TyInfix TyOpPlus (TyRational n) (TyRational m)) = TyRational (n + m)
 normalise (TyInfix TyOpTimes (TyRational n) (TyRational m)) = TyRational (n * m)
+
+normalise (TyInfix TyOpPlus (TyFraction n) (TyFraction m)) = TyFraction (n + m)
+normalise (TyInfix TyOpTimes (TyFraction n) (TyFraction m)) = TyFraction (n * m)
 
 -- exempt Uniquness from multiplicative unit
 normalise g@(TyInfix TyOpTimes r (TyGrade (Just (TyCon (internalName -> "Uniqueness"))) 1)) = g

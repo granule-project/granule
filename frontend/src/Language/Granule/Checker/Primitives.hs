@@ -703,17 +703,17 @@ trustedBind = BUILTIN
 
 withBorrow
   : forall {a b : Type}
-  . (& Whole a -> & Whole b) -> *a -> *b
+  . (& 1 a -> & 1 b) -> *a -> *b
 withBorrow = BUILTIN
 
 split
-  : forall {a : Type}
-  . & Whole a -> (& Half a, & Half a)
+  : forall {a : Type, f : Fraction}
+  . & f a -> (& (f * 1/2) a, & (f * 1/2) a)
 split = BUILTIN
 
 join
-  : forall {a : Type}
-  . (& Half a, & Half a) -> & Whole a
+  : forall {a : Type, f : Fraction}
+  . (& f a, & f a) -> & (f+f) a
 join = BUILTIN
 
 borrowPush

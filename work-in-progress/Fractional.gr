@@ -5,15 +5,13 @@ data Colour = Colour (Int, (Int, Int))
 scarlet : *Colour -> *Colour
 scarlet c =
     let x = c;
-        y = x
-    in y
+        y = x in y
 
-scarlet' : *Colour -> !Colour
+scarlet' : *Colour -> Colour [0..2]
 scarlet' c =
     let [s] = share c;
         [x] = [s];
-        [y] = [s]
-    in [x]
+        [y] = [s] in [x]
 
 observe : forall {p : Permission, f : p} . & f Colour -> & f Colour
 observe = ?
@@ -21,20 +19,18 @@ observe = ?
 -- unification bug here
 -- persimmon : *Colour -> *Colour
 -- persimmon c =
---     withBorrow (\b ->
---         let (x, y) = split b;
---             x' = observe x;
---             b = join (x', y)
---         in b) c
+--     withBorrow (\b -> let (x, y) = split b;
+--                            x' = observe x;
+--                            b = join (x', y) in b) c
 
-mutate : & Whole Colour -> & Whole Colour
+mutate : & 1 Colour -> & 1 Colour
 mutate = ?
 
 viridian : *Colour -> *Colour
 viridian c =
     withBorrow mutate c
 
-transform : & Whole Int -> & Whole Int
+transform : & 1 Int -> & 1 Int
 transform = ?
 
 indigo : *(Int, (Int, Int)) -> *(Int, (Int, Int))
@@ -49,15 +45,12 @@ indigo' c =
     let (r, p) = uniquePush c;
         (g, b) = uniquePush p;
         (r', b') = par (\() -> withBorrow transform r) (\() -> withBorrow transform b);
-        p' = uniquePull (g, b')
-        in uniquePull (r', p')
+        p' = uniquePull (g, b') in uniquePull (r', p')
 
 -- need arbitrary fractions for this one (but looks fine to me)
 -- amethyst : *Colour -> *Colour
 -- amethyst c =
---     withBorrow (\b ->
---         let (x, y) = split b;
---             (l, r) = split x;
---             x' = join (l, r);
---             b = join (x', y)
---         in b) c
+--     withBorrow (\b -> let (x, y) = split b;
+--                           (l, r) = split x;
+--                           x' = join (l, r);
+--                           b = join (x', y) in b) c

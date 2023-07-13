@@ -14,6 +14,7 @@ module Language.Granule.Syntax.Pretty where
 
 import Data.Foldable (toList)
 import Data.List (intercalate)
+import Data.Ratio (numerator, denominator)
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Pattern
@@ -102,6 +103,11 @@ instance Pretty Type where
     pretty (TyGrade Nothing n)  = show n
     pretty (TyGrade (Just t) n)  = "(" <> show n <> " : " <> pretty t <> ")"
     pretty (TyRational n) = show n
+    pretty (TyFraction f) = let (n, d) = (numerator f, denominator f) in
+      if d == 1 then
+        show n
+      else
+        show n <> "/" <> show d
 
     -- Non atoms
     pretty (Type 0) = docSpan "constName" "Type"

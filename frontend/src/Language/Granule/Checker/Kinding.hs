@@ -502,6 +502,8 @@ synthKindWithConfiguration s config t@(TyForall x k ty) = do
   registerTyVarInContextWith' x k ForallQ $ do
        (kind, subst, elabTy) <- synthKindWithConfiguration s config ty
        return (kind, subst, TyForall x k elabTy)
+synthKindWithConfiguration s config t@(TyFraction _) = do
+  return (TyCon $ mkId "Fraction", [], t)
 
 synthKindWithConfiguration s _ t =
   throw ImpossibleKindSynthesis { errLoc = s, errTy = t }
@@ -569,9 +571,37 @@ closedOperatorAtKind s TyOpTimes t = do
       -- If not, see if the type is an effect
       (result', putChecker') <- peekChecker (checkKind s t keffect)
       case result' of
-        -- Not a closed operator at this kind
-        Left  _ -> return Nothing
+        -- If not, see if the type is a permission
+        Left _ -> do
+          (result'', putChecker'') <- peekChecker (checkKind s t kpermission)
+          case result'' of
+            -- Not a closed operator at this kind
+            Left _ -> return Nothing
+            -- Yes it is a permission
+            Right (subst, _) -> do
+              putChecker''
+              return $ Just subst
         -- Yes it is an effect type
+        Right (subst, _) -> do
+          putChecker'
+          return $ Just subst
+    -- Yes it is a coeffect type
+    Right (subst, _) -> do
+      putChecker
+      return $ Just subst
+
+-- + case
+closedOperatorAtKind s TyOpPlus t = do
+  -- See if the type is a coeffect
+  (result, putChecker) <- peekChecker (checkKind s t kcoeffect)
+  case result of
+    Left _ -> do
+      -- If not, see if the type is a permission
+      (result', putChecker') <- peekChecker (checkKind s t kpermission)
+      case result' of
+        -- Not a closed operator at this kind
+        Left _ -> return Nothing
+        -- Yes it is a permission
         Right (subst, _) -> do
           putChecker'
           return $ Just subst

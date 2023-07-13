@@ -137,6 +137,7 @@ cgType (GrType.Star _t t2) = cgType t2
 cgType (GrType.Borrow _t t2) = cgType t2
 cgType (GrType.TyInt i) = return mkUnit
 cgType (GrType.TyRational ri) = return mkUnit
+cgType (GrType.TyFraction ri) = return mkUnit
 cgType (GrType.TyGrade mt i) = return mkUnit
 cgType (GrType.TyInfix t1 t2 t3) = return mkUnit
 cgType (GrType.TySet p l_t) = return mkUnit

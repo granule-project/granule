@@ -16,6 +16,7 @@ import Data.Foldable (toList)
 import Data.List (intercalate, nub, stripPrefix)
 import Data.Maybe (mapMaybe)
 import Data.Set (Set, (\\), fromList, insert, empty, singleton)
+import Data.Ratio ((%))
 import qualified Data.Map as M
 import Numeric
 import System.FilePath ((</>), takeBaseName)
@@ -537,6 +538,11 @@ TyAbsImplicit :: { [Id] }
 Permission :: { Type }
   : CONSTR                  { TyCon $ mkId $ constrString $1 }
   | VAR                     { TyVar (mkId $ symString $1) }
+  | INT '/' INT             { TyFraction $ let TokenInt _ n = $1 in let TokenInt _ d = $3 in (toInteger n) % (toInteger d) }
+  | INT                     { TyFraction $ let TokenInt _ n = $1 in (toInteger n) % 1}
+  | Permission '+' Permission         { TyInfix TyOpPlus $1 $3 }
+  | Permission '*' Permission         { TyInfix TyOpTimes $1 $3 }
+  | '(' Permission ')'              { $2 }
 
 Expr :: { Expr () () }
   : let LetBind MultiLet
