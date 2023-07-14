@@ -2,36 +2,24 @@ import Parallel
 
 data Colour = Colour (Int, (Int, Int))
 
-scarlet : *Colour -> *Colour
-scarlet c =
-    let x = c;
-        y = x in y
-
-scarlet' : *Colour -> Colour [0..2]
-scarlet' c =
-    let [s] = share c;
-        [x] = [s];
-        [y] = [s] in [x]
-
 observe : forall {p : Permission, f : p} . & f Colour -> & f Colour
-observe = ?
+observe x = x -- placeholder for the sake of example
 
--- unification bug here
--- persimmon : *Colour -> *Colour
--- persimmon c =
---     withBorrow (\b -> let (x, y) = split b;
---                            x' = observe x;
---                            b = join (x', y) in b) c
+persimmon : *Colour -> *Colour
+persimmon c =
+  withBorrow (\b -> let (x, y) = split b;
+                         x' = observe x;
+                         f = join (x', y) in f) c
 
 mutate : & 1 Colour -> & 1 Colour
-mutate = ?
+mutate x = x -- placeholder for the sake of example
 
 viridian : *Colour -> *Colour
 viridian c =
     withBorrow mutate c
 
 transform : & 1 Int -> & 1 Int
-transform = ?
+transform x = x -- placeholder for the sake of example
 
 indigo : *(Int, (Int, Int)) -> *(Int, (Int, Int))
 indigo c = 
@@ -47,10 +35,12 @@ indigo' c =
         (r', b') = par (\() -> withBorrow transform r) (\() -> withBorrow transform b);
         p' = uniquePull (g, b') in uniquePull (r', p')
 
--- need arbitrary fractions for this one (but looks fine to me)
--- amethyst : *Colour -> *Colour
--- amethyst c =
---     withBorrow (\b -> let (x, y) = split b;
---                           (l, r) = split x;
---                           x' = join (l, r);
---                           b = join (x', y) in b) c
+amethyst : *Colour -> *Colour
+amethyst c =
+    withBorrow (\b -> let (x, y) = split b;
+                          (l, r) = split x;
+                          x' = join (l, r);
+                          f = join (x', y) in f) c
+
+bad : & 1/2 Colour -> & 2/1 Colour
+bad x = x

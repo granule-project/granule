@@ -57,7 +57,7 @@ equalTypes s = equalTypesRelatedCoeffectsAndUnify s Eq SndIsSpec
 data SpecIndicator = FstIsSpec | SndIsSpec | PatternCtxt
   deriving (Eq, Show)
 
-data Mode = Types | Effects deriving Show
+data Mode = Types | Effects | Permissions deriving Show
 
 -- Abstracted equality/relation on grades
 relGrades :: (?globals :: Globals)
@@ -216,14 +216,16 @@ equalTypesRelatedCoeffectsInner s rel (Diamond ef1 t1) (Diamond ef2 t2) _ sp Typ
   return (eq && eq', u)
 
 equalTypesRelatedCoeffectsInner s rel (Star g1 t1) (Star g2 t2) _ sp mode = do
+  debugM "equalTypesRelatedCoeffectsInner (star)" $ "grades " <> show g1 <> " and " <> show g2
   (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 sp mode
   (eq', _, unif') <- equalTypes s g1 g2
   u <- combineSubstitutions s unif unif'
   return (eq && eq', u)
 
-equalTypesRelatedCoeffectsInner s rel (Borrow p1 t1) (Borrow p2 t2) _ sp mode = do
-  (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 sp mode
-  (eq', unif') <- equalTypesRelatedCoeffects s rel (normalise p1) (normalise p2) sp mode
+equalTypesRelatedCoeffectsInner s rel (Borrow p1 t1) (Borrow p2 t2) _ sp Types = do
+  debugM "equalTypesRelatedCoeffectsInner (borrow)" $ "grades " <> show p1 <> " and " <> show p2
+  (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 sp Types
+  (eq', unif') <- equalTypesRelatedCoeffects s rel (normalise p1) (normalise p2) sp Permissions
   u <- combineSubstitutions s unif unif'
   return (eq && eq', u)
 
@@ -465,6 +467,15 @@ equalTypesRelatedCoeffectsInner s rel t1 t2 k sp mode = do
           return (eq, [])
         Left _ -> throw $ KindMismatch s Nothing keffect k
 
+    Permissions -> do
+      (result, putChecker) <- peekChecker (checkKind s k kpermission)
+      case result of
+        Right res -> do
+          putChecker
+          eq <- permEquals s k t1 t2
+          return (eq, [])
+        Left _ -> throw $ KindMismatch s Nothing kpermission k
+
     Types ->
       case k of
 
@@ -681,7 +692,27 @@ twoEqualEffectTypes s ef1 ef2 = do
           Left k -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = ef2 , errK = k }
       Left k -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = ef1 , errK = k }
 
+<<<<<<< HEAD
 -- | Find out if a type is indexed overall (i.e., is a GADT)
+=======
+permEquals :: (?globals :: Globals) => Span -> Type -> Type -> Type -> Checker Bool
+permEquals s _ p1 p2 = do
+    mpTy1 <- isPermission s p1
+    mpTy2 <- isPermission s p2
+    case mpTy1 of
+      Right pTy1 ->
+        case mpTy2 of
+          Right pTy2 -> do
+            -- Check that the types of the effect terms match
+            (eq, _, u) <- equalTypes s pTy1 pTy2
+            if eq then do
+              return True
+            else throw $ KindMismatch { errLoc = s, tyActualK = Just p1, kExpected = pTy1, kActual = pTy2 }
+          Left k -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = p2 , errK = k }
+      Left k -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = p1 , errK = k }
+
+-- | Find out if a type is indexed
+>>>>>>> 89bb724c (fix the unification bug so all fractional examples compile)
 isIndexedType :: Type -> Checker Bool
 isIndexedType t = do
   b <- typeFoldM TypeFold
@@ -721,6 +752,7 @@ isEffectType s ty = do
       return $ Right effTy
     Left err -> return $ Left effTy
 
+<<<<<<< HEAD
 -- `refineBinderQuantification ctxt ty`
 -- Given a list of variable-kind information `ctxt` binding over a type `ty`
 -- then calculate based on the usage of the type variables whether they are
@@ -761,3 +793,14 @@ refineBinderQuantification ctxt ty = mapM computeQuantifier ctxt
       where
         anyM f xs = mapM f xs >>= (return . or)
     aux id _ = return False
+=======
+isPermission :: (?globals :: Globals) => Span -> Type -> Checker (Either Kind Type)
+isPermission s ty = do
+  (pTy, _, _) <- synthKind s ty
+  (result, putChecker) <- peekChecker (checkKind s pTy kpermission)
+  case result of
+    Right res -> do
+      putChecker
+      return $ Right pTy
+    Left err -> return $ Left pTy
+>>>>>>> 89bb724c (fix the unification bug so all fractional examples compile)

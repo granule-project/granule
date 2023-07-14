@@ -442,6 +442,95 @@ instance Substitutable a => Substitutable (Pattern a) where
           ann' <- substitute ctxt ann
           return $ PConstr sp ann' rf nm tyVarBindsRequested pats)
 
+class Unifiable t where
+    unify' :: (?globals :: Globals) => t -> t -> MaybeT Checker Substitution
+
+unify :: (?globals :: Globals, Unifiable t) => t -> t -> Checker (Maybe Substitution)
+unify x y = runMaybeT $ unify' x y
+
+instance Unifiable Substitutors where
+    unify' (SubstT t) (SubstT t') = unify' t t'
+
+instance Unifiable Type where
+    unify' t t' | t == t' = return []
+    unify' (TyVar v) t    = return [(v, SubstT t)]
+    unify' t (TyVar v)    = return [(v, SubstT t)]
+    unify' (FunTy _ t1 t2) (FunTy _ t1' t2') = do
+        u1 <- unify' t1 t1'
+        u2 <- unify' t2 t2'
+        lift $ combineSubstitutionsHere u1 u2
+    unify' (Box c t) (Box c' t') = do
+        u1 <- unify' c c'
+        u2 <- unify' t t'
+        lift $ combineSubstitutionsHere u1 u2
+    unify' (Diamond e t) (Diamond e' t') = do
+        u1 <- unify' e e'
+        u2 <- unify' t t'
+        lift $ combineSubstitutionsHere u1 u2
+    unify' (Star g t) (Star g' t') = do
+        u1 <- unify' g g'
+        u2 <- unify' t t'
+        lift $ combineSubstitutionsHere u1 u2
+    unify' (Borrow p t) (Borrow p' t') = do
+        u1 <- unify' p p'
+        u2 <- unify' t t'
+        lift $ combineSubstitutionsHere u1 u2
+    unify' (TyApp t1 t2) (TyApp t1' t2') = do
+        u1 <- unify' t1 t1'
+        u2 <- unify' t2 t2'
+        lift $ combineSubstitutionsHere u1 u2
+
+    unify' t@(TyInfix o t1 t2) t'@(TyInfix o' t1' t2') | o == o' = do
+      u1 <- unify' t1 t1'
+      u2 <- unify' t2 t2'
+      lift $ combineSubstitutionsHere u1 u2
+
+      {-
+        (_, subst, k)   <- lift $ synthKind nullSpan t
+        (_, subst', k') <- lift $ synthKind nullSpan t
+        jK <- lift $ joinTypes nullSpan k k'
+        case jK of
+            Just (k, subst, _) -> do
+              if o == o'
+                then do
+                  u1 <- unify' t1 t1'
+                  u2 <- unify' t2 t2'
+                  u  <- lift $ combineSubstitutionsHere u1 u2
+                  u' <- lift $ combineSubstitutionsHere u subst
+                  lift $ combineSubstitutionsHere u' subst'
+                else do
+                  lift $ addConstraint $ Eq nullSpan t t' k
+                  return subst
+
+            -- No unification
+            _ -> fail ""
+            -}
+
+    unify' (TyCase t branches) (TyCase t' branches') = do
+      u <- unify' t t'
+      let branches1 = sortBy (\x y -> compare (fst x) (fst y)) branches
+      let branches2 = sortBy (\x y -> compare (fst x) (fst y)) branches'
+      if map fst branches1 == map fst branches2
+        then do
+          us <- zipWithM unify' (map snd branches1) (map snd branches2)
+          lift $ combineManySubstitutions nullSpan (u : us)
+        else
+          -- patterns are different in a case
+          fail ""
+
+    unify' (TySig t k) (TySig t' k') = do
+      u  <- unify' t t'
+      u' <- unify' k k'
+      lift $ combineSubstitutionsHere u u'
+
+    -- No unification
+    unify' _ _ = fail ""
+
+instance Unifiable t => Unifiable (Maybe t) where
+    unify' Nothing _ = return []
+    unify' _ Nothing = return []
+    unify' (Just x) (Just y) = unify' x y
+
 updateTyVar :: (?globals :: Globals) => Span -> Id -> Kind -> Checker ()
 updateTyVar s tyVar k = do
     -- Updated the kind of type variable `v` in the context
