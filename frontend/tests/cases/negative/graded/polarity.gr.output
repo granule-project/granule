@@ -4,4 +4,4 @@ Cannot unify universally quantified type variable `a` of kind `Type` with `a [0]
 
 Falsifiable theorem: frontend/tests/cases/negative/graded/polarity.gr:7:1:
   The following constraint associated with `secondOrderAlt` is false:
-	  (prom_[7:26]0 = 0) ∧ (prom_[7:26]0 = 1)
+	  (prom_[7:26]0 = 0) ∧ (1 = prom_[7:26]0)

@@ -1,3 +1,3 @@
 Type checking failed: 
 Unification failed: frontend/tests/cases/negative/polymorphism/polymorph.gr:2:25:
-Cannot unify universally quantified type variable `a` of kind `Type` with `c`
+Cannot unify universally quantified type variable `c` of kind `Type` with `a`

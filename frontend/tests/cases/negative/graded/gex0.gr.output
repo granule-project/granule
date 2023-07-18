@@ -1,4 +1,4 @@
 Type checking failed: 
 Falsifiable theorem: frontend/tests/cases/negative/graded/gex0.gr:4:1:
   The following constraint associated with `main` is false:
-	  ((2 : Nat) = 1) ∧ (prom_[4:30]0 = 1)
+	  ((2 : Nat) = 1) ∧ (1 = prom_[4:30]0)

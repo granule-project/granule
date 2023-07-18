@@ -621,6 +621,7 @@ pmatchCBV ctxt ((PFloat _ _ _ n, e):ps) (Val _ _ _ (NumFloat m)) =
 
 pmatchCBV ctxt (_:ps) v = pmatchCBV ctxt ps v
 
+-- Wrap a value into an expression
 valExpr :: ExprFix2 g ExprF ev () -> ExprFix2 ExprF g ev ()
 valExpr = Val nullSpanNoFile () False
 

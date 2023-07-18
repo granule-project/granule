@@ -723,9 +723,6 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
       -- Check that the use of locally bound variables matches their bound type
       subst'' <- ctxtApprox s (localGam `intersectCtxts` (patternGam)) (patternGam')
 
-      -- Conclude the implication
-      concludeImplication (getSpan pat_i) eVars
-
       -- Check linear use in anything Linear
       gamSoFar <- ctxtPlus s guardGam localGam
       case checkLinearity patternGam gamSoFar of
@@ -733,9 +730,14 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
         -- the variable bound in the pattern of this branch
         [] -> do
            substFinal <- combineManySubstitutions s [subst, subst', subst'']
+
+           -- Conclude the implication
+           concludeImplication (getSpan pat_i) eVars
+
            return (localGam `subtractCtxt` patternGam
                  , substFinal
                  , (elaborated_pat_i, elaborated_i))
+
 
         -- Anything that was bound in the pattern but not used correctly
         p:ps -> illLinearityMismatch s (p:|ps)
@@ -921,9 +923,6 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
       -- Check that the use of locally bound variables matches their bound type
       subst'' <- ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam'
 
-      -- Conclude
-      concludeImplication (getSpan pati) eVars
-
       -- Check linear use in this branch
       gamSoFar <- ctxtPlus s guardGam localGam
       case checkLinearity patternGam gamSoFar of
@@ -931,6 +930,10 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
          -- the variable bound in the pattern of this branch
          [] -> do
            substFinal <- combineManySubstitutions s [subst, subst', subst'']
+
+           -- Conclude
+           concludeImplication (getSpan pati) eVars
+
            return (tyCase
                     , (localGam `subtractCtxt` patternGam, substFinal)
                     , (elaborated_pat_i, elaborated_i))

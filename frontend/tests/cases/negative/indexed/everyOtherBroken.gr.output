@@ -1,7 +1,7 @@
 Type checking failed: 
 Counter example: frontend/tests/cases/negative/indexed/everyOtherBroken.gr:8:1:
   The following constraint associated with `everyOther` is false:
-	  ∀ {n0 : Nat, n1 : Nat} . (((n0 + 1 = (n1 + 1) + 1)) -> ((1 : Interval Nat) ≤ 0..1) ∧ ((1 : Nat) + n1 = n0 + 1) ∧ (n0 + 1 = n3 + 1) ∧ (n1 = n3) ∧ ((0 : Interval Nat) ≤ 0..1))
+	  ∀ {n0 : Nat, n1 : Nat} . (((n0 + 1 = (n1 + 1) + 1)) -> ((1 : Interval Nat) ≤ 0..1) ∧ ((1 : Nat) + n2 = n0 + 1) ∧ (n0 + 1 = n3 + 1) ∧ (n2 = n3) ∧ ((0 : Interval Nat) ≤ 0..1))
 
 Counter-example:
   n = 3 :: Integer

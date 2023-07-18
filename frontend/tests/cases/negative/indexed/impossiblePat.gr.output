@@ -1,10 +1,10 @@
 Type checking failed: 
 Impossible pattern match: frontend/tests/cases/negative/indexed/impossiblePat.gr:6:1:
-Pattern match in an equation of `last` is impossible as it implies the unsatisfiable condition (n + 1 = 0)
+Pattern match in an equation of `last` is impossible as it implies the unsatisfiable condition (0 = n + 1)
 
 Counter example: frontend/tests/cases/negative/indexed/impossiblePat.gr:8:1:
   The following constraint associated with `last` is false:
-	  ∀ {n0 : Nat} . (((n + 1 = n0 + 1)) -> (n0 = n1 + 1) ∧ ((0 : Interval Nat) ≤ 0..1))
+	  ∀ {n0 : Nat} . (((n0 + 1 = n + 1)) -> (n0 = n1 + 1) ∧ ((0 : Interval Nat) ≤ 0..1))
 
 Counter-example:
   n = 0 :: Integer
