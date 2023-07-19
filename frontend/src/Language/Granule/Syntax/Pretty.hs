@@ -165,6 +165,8 @@ instance Pretty Type where
                     <> intercalate "; " (map (\(p, t') -> pretty p
                     <> " : " <> pretty t') ps) <> ")"
 
+    pretty (TyExists var k t) =
+      "exists {" <> pretty var <> ":" <> pretty k <> "} . " <> pretty t
 
 instance Pretty TypeOperator where
   pretty = \case
@@ -262,6 +264,9 @@ instance Pretty v => Pretty (Value v a) where
     pretty (Constr _ n []) = pretty n
     pretty (Constr _ n vs) = intercalate " " $ pretty n : map prettyNested vs
     pretty (Ext _ v) = pretty v
+    pretty (Pack s a ty e1 var k ty') =
+      "pack <" <> pretty ty <> ", " <> pretty var <> "> "
+      <> "as exists {" <> pretty var <> " : " <> pretty k <> "} . " <> pretty ty'
 
 instance Pretty Id where
   pretty
@@ -299,6 +304,9 @@ instance Pretty (Value v a) => Pretty (Expr v a) where
                       <> " -> " <> pretty e') ps) <> ")"
   pretty (Hole _ _ _ []) = "?"
   pretty (Hole _ _ _ vs) = "{!" <> unwords (map pretty vs) <> "!}"
+
+  pretty (Unpack _ _ _ tyVar var e1 e2) =
+    "unpack <" <> pretty tyVar <> ", " <> pretty var <> "> = " <> pretty e1 <> " in " <> pretty e2
 
 instance Pretty Operator where
   pretty = \case

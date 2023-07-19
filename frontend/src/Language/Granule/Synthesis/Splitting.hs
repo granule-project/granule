@@ -237,6 +237,7 @@ getAssumConstr a =
     getTypeConstr (TyGrade _ _) = Nothing
     getTypeConstr (TyInfix _ _ _) = Nothing
     getTypeConstr (TySet _ _) = Nothing
+    getTypeConstr (TyExists _ _ t) = getTypeConstr t
     getTypeConstr (TyCase _ cases) =
       if allSame (map snd cases)
         then getTypeConstr . snd . head $ cases

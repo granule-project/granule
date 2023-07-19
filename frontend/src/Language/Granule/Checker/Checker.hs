@@ -523,7 +523,6 @@ checkExpr defs gam pol _ ty@(FunTy _ Nothing sig tau) (Val s _ rf (Abs _ p t e))
   newConjunct
 
   (bindings, localVars, subst0, elaboratedP, _) <- ctxtFromTypedPattern s InCase sig' p NotFull
-  debugM "binding from lam" $ pretty bindings
 
   pIrrefutable <- isIrrefutable s sig' p
   if pIrrefutable then do
@@ -532,7 +531,6 @@ checkExpr defs gam pol _ ty@(FunTy _ Nothing sig tau) (Val s _ rf (Abs _ p t e))
 
     newConjunct
 
-    debugM "checkExpr in funty bit" ""
     (gam', subst2, elaboratedE) <- checkExpr defs (bindings <> gam) pol False tau' e
     -- Check linearity of locally bound variables
     case checkLinearity bindings gam' of

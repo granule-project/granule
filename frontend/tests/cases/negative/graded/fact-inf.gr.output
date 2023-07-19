@@ -4,6 +4,7 @@ Counter example: frontend/tests/cases/negative/graded/fact-inf.gr:12:1:
 
 Counter-example:
   n = 0 :: Integer
+  n   = 0 :: Integer
 
 
 Counter example: frontend/tests/cases/negative/graded/fact-inf.gr:13:1:
@@ -12,3 +13,4 @@ Counter example: frontend/tests/cases/negative/graded/fact-inf.gr:13:1:
 
 Counter-example:
   n = 1 :: Integer
+  n   = 0 :: Integer

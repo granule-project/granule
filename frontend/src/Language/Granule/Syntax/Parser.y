@@ -62,6 +62,9 @@ import Language.Granule.Utils hiding (mkSpan)
     language { TokenPragma _ _ }
     clone { TokenCopy _ }
     endorse { TokenEndorse _ }
+    pack    { TokenPack _ }
+    unpack  { TokenUnpack _ }
+    exists  { TokenExists _ }
     INT   { TokenInt _ _ }
     FLOAT  { TokenFloat _ _}
     VAR    { TokenSym _ _ }
@@ -333,7 +336,7 @@ Kind :: { Kind }
 
 Type :: { Type }
   : '(' VAR ':' Type ')' '->' Type { FunTy (Just . mkId . symString $ $2) Nothing $4 $7 }
-  | '(' VAR ':' Type ')' '%' Coeffect '->' Type { FunTy (Just . mkId . symString $ $2) (Just $7) $4 $9 } 
+  | '(' VAR ':' Type ')' '%' Coeffect '->' Type { FunTy (Just . mkId . symString $ $2) (Just $7) $4 $9 }
   | TyJuxt                         { $1 }
   | '!' TyAtom                     { Box (TyCon $ mkId "Many") $2 }
   | '*' TyAtom                     { Star (TyCon $ mkId "Unique") $2 }
@@ -346,6 +349,7 @@ Type :: { Type }
   | TyAtom '[' ']'                 { Box (TyInfix TyOpInterval (TyGrade (Just extendedNat) 0) infinity) $1 }
   | TyAtom '<' Effect '>'          { Diamond $3 $1 }
   | case Type of TyCases { TyCase $2 $4 }
+  | exists '{' VAR ':' Type '}' '.' Type { TyExists (mkId . symString $ $3) $5 $8 }
 
 TyApp :: { Type }
  : TyJuxt TyAtom              { TyApp $1 $2 }
@@ -499,18 +503,28 @@ Expr :: { Expr () () }
                      (PConstr span3 () False (mkId "False") [], $6)] }
 
   | clone Expr as CopyBind in Expr
-    {% let t1 = $2; (_, pat, mt) = $4; t2 = $6 
+    {% let t1 = $2; (_, pat, mt) = $4; t2 = $6
       in (mkSpan (getPos $1, getEnd $6)) >>=
-        \sp -> return $ App sp () False (App sp () False 
-          (Val sp () False (Var () (mkId "uniqueBind"))) 
+        \sp -> return $ App sp () False (App sp () False
+          (Val sp () False (Var () (mkId "uniqueBind")))
           (Val sp () False (Abs () pat mt t2))) t1 }
 
   | endorse Expr as CopyBind in Expr
-    {% let t1 = $2; (_, pat, mt) = $4; t2 = $6 
+    {% let t1 = $2; (_, pat, mt) = $4; t2 = $6
       in (mkSpan (getPos $1, getEnd $6)) >>=
-        \sp -> return $ App sp () False (App sp () False 
-          (Val sp () False (Var () (mkId "trustedBind"))) 
+        \sp -> return $ App sp () False (App sp () False
+          (Val sp () False (Var () (mkId "trustedBind")))
           (Val sp () False (Abs () pat mt t2))) t1 }
+
+  | pack '<' Type ',' Atom '>' as exists '{' VAR ':' Type '}' '.' Type
+     {% do
+         sp <- mkSpan (getPos $1, getPos $14)
+         return $ Val sp () False $ Pack sp () $3 $5 (mkId . symString $ $10) $12 $15 }
+
+  | unpack '<' VAR ',' VAR '>' '=' Expr in Expr
+     {% do
+         sp <- mkSpan (getPos $1, getEnd $10)
+         return $ Unpack sp () False (mkId . symString $ $3) (mkId . symString $ $5) $8 $10 }
 
   | Form
     { $1 }
@@ -610,7 +624,7 @@ Atom :: { Expr () () }
                                     >>= \sp -> return $ Val sp () False $ Nec () (Val sp () False $ NumInt x) }
   | '#' FLOAT                 {% let (TokenFloat _ x) = $2
                                  in (mkSpan $ getPosToSpan $1)
-                                    >>= \sp -> return $ Val sp () False $ Nec () (Val sp () False $ NumFloat $ read x) }                                                                                           
+                                    >>= \sp -> return $ Val sp () False $ Nec () (Val sp () False $ NumFloat $ read x) }
   | CONSTR                    {% (mkSpan $ getPosToSpan $1)  >>= \sp -> return $ Val sp () False $ Constr () (mkId $ constrString $1) [] }
   | '#' CONSTR                {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Val sp () False $ Nec () (Val sp () False $ Constr () (mkId $ constrString $2) [])}
   | '(' Expr ',' Expr ')'     {% do
@@ -632,7 +646,7 @@ Atom :: { Expr () () }
                                      case $2 of (TokenCharLiteral _ c) -> Nec () (Val sp () False $ CharLiteral c) }
   | '#' STRING                {% (mkSpan $ getPosToSpan $1) >>= \sp ->
                                   return $ Val sp () False $
-                                     case $2 of (TokenStringLiteral _ c) -> Nec () (Val sp () False $ StringLiteral c) }                              
+                                     case $2 of (TokenStringLiteral _ c) -> Nec () (Val sp () False $ StringLiteral c) }
   | Hole                      { $1 }
   | '&' Expr                  {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ App sp () False (Val sp () False (Var () (mkId "uniqueReturn"))) $2 }
 

@@ -141,7 +141,7 @@ cgType (GrType.TyInfix t1 t2 t3) = return mkUnit
 cgType (GrType.TySet p l_t) = return mkUnit
 cgType (GrType.TyCase t l_p_tt) = unsupported "cgType: tycase not implemented"
 cgType (GrType.TySig t t2) = unsupported "cgType: tysig not implemented"
-
+cgType (GrType.TyExists _ _ _) = unsupported "cgType: tyexists not implemented"
 
 isTupleType :: GrType.Type -> Bool
 isTupleType (GrType.TyApp (GrType.TyCon id) _) = id == Id "," ","
@@ -182,6 +182,7 @@ cgExpr (GrExpr.Case _ _ _ ge cases) = do
     e' <- cgExpr e
     return $ alt p' e'
   return $ caseE ge' cases'
+cgExpr GrExpr.Unpack{} = error "cgExpr: existentials not implement"
 cgExpr GrExpr.Hole{} = error "cgExpr: hole not implemented"
 
 isTupleExpr :: CExpr -> Bool
@@ -217,6 +218,7 @@ cgVal (Abs _ p _ ex) = do
   p' <- cgPat p
   ex' <- cgExpr ex
   return $ lamE [p'] ex'
+cgVal Pack{} = error "Existentials unsupported in code gen"
 cgVal Ext{} = unexpected "cgVal: unexpected Ext"
 
 

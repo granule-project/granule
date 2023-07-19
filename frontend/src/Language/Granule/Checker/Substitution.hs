@@ -362,6 +362,10 @@ substituteValue ctxt (ConstrF ty ident vs) =
 substituteValue ctxt (ExtF ty ev) =
     do  ty' <- substitute ctxt ty
         return $ Ext ty' ev
+substituteValue ctxt (PackF s a ty e1 var k ty') = do
+    ty <- substitute ctxt ty
+    ty' <- substitute ctxt ty'
+    return (Pack s a ty e1 var k ty')
 substituteValue _ other = return (ExprFix2 other)
 
 substituteExpr :: (?globals::Globals)
@@ -396,6 +400,9 @@ substituteExpr ctxt (CaseF sp ty rf expr arms) =
         arms' <- mapM (mapFstM (substitute ctxt)) arms
         return $ Case sp ty' rf expr arms'
 substituteExpr ctxt (HoleF s a rf vs) = return $ Hole s a rf vs
+substituteExpr ctxt (UnpackF s a rf tyVar var e1 e2) = do
+      (PVar _ _ _ var) <- substitute ctxt (PVar s a False var)
+      return $ Unpack s a rf tyVar var e1 e2
 
 mapFstM :: (Monad m) => (a -> m b) -> (a, c) -> m (b, c)
 mapFstM fn (f, r) = do

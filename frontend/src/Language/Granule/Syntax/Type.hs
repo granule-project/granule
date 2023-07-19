@@ -63,6 +63,7 @@ data Type where
     TyCase  :: Type -> [(Type, Type)] -> Type -- ^ Type-level case
 
     TySig   :: Type -> Kind -> Type           -- ^ Kind signature
+    TyExists :: Id -> Kind -> Type -> Type    -- ^ Exists
 
 deriving instance Show Type
 deriving instance Eq Type
@@ -223,7 +224,8 @@ containsTypeSig =
       , tfTyInfix = \_ x y -> return (x || y)
       , tfSet = \_ _ -> return  False
       , tfTyCase = \_ _ -> return False
-      , tfTySig = \_ _ _ -> return True })
+      , tfTySig = \_ _ _ -> return True
+      , tfTyExists = \_ _ x -> return x})
 
 -- | Compute the arity of a function type
 arity :: Type -> Int
@@ -302,6 +304,8 @@ mTyCase :: Monad m => Type -> [(Type, Type)] -> m Type
 mTyCase x cs = return (TyCase x cs)
 mTySig   :: Monad m => Type -> Type -> Type -> m Type
 mTySig t _ k      = return (TySig t k)
+mTyExists :: Monad m => Id -> Kind -> Type -> m Type
+mTyExists v k t   = return (TyExists v k t)
 
 -- Monadic algebra for types
 data TypeFold m a = TypeFold
@@ -320,12 +324,13 @@ data TypeFold m a = TypeFold
   , tfSet     :: Polarity -> [a]    -> m a
   , tfTyCase  :: a -> [(a, a)]      -> m a
   , tfTySig   :: a -> Type -> (a -> m a)
+  , tfTyExists :: Id -> a -> a      -> m a
   }
 
 -- Base monadic algebra
 baseTypeFold :: Monad m => TypeFold m Type --Type
 baseTypeFold =
-  TypeFold mTy mFunTy mTyCon mBox mDiamond mStar mTyVar mTyApp mTyInt mTyRational mTyGrade mTyInfix mTySet mTyCase mTySig
+  TypeFold mTy mFunTy mTyCon mBox mDiamond mStar mTyVar mTyApp mTyInt mTyRational mTyGrade mTyInfix mTySet mTyCase mTySig mTyExists
 
 -- | Monadic fold on a `Type` value
 typeFoldM :: forall m a . Monad m => TypeFold m a -> Type -> m a
@@ -384,6 +389,10 @@ typeFoldM algebra = go
       a' <- a
       b' <- b
       return (a', b')
+   go (TyExists var k t) = do
+    k' <- go k
+    t' <- go t
+    (tfTyExists algebra) var k' t'
 
 ----------------------------------------------------------------------
 -- # Types are terms
@@ -405,6 +414,7 @@ instance Term Type where
       , tfSet     = \_ -> return . Const . concat . map getConst
       , tfTyCase  = \(Const t) cs -> return . Const $ t <> (concat . concat) [[a,b] | (Const a, Const b) <- cs]
       , tfTySig   = \(Const t) _ (Const k) -> return $ Const (t <> k)
+      , tfTyExists = \v _ (Const fvs) -> return $ Const [v' | v' <- fvs, v /= v']
       }
 
     isLexicallyAtomic TyInt{} = True
