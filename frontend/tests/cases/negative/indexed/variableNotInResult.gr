@@ -1,3 +1,0 @@
-language Report
-data VecX (a : Type) where
-  VecX : ∀ {n : Nat} . Vec n a → VecX a
