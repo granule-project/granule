@@ -50,3 +50,19 @@ freshTyVarInContextWithBinding var k q = do
 registerTyVarInContext :: Id -> Type -> Quantifier -> Checker ()
 registerTyVarInContext v t q = do
     modify (\st -> st { tyVarContext = (v, (t, q)) : tyVarContext st })
+
+-- | Helper for registering a new coeffect variable in the checker only
+--   within the scope of a particular computation
+registerTyVarInContextWith :: (MonadTrans m, Monad (m Checker))
+    => Id -> Type -> Quantifier -> m Checker a -> m Checker a
+registerTyVarInContextWith v t q cont = do
+  -- save ty var context
+  st <- lift $ get
+  let tyvc = tyVarContext st
+  -- register variable, type, and quantifier
+  lift $ registerTyVarInContext v t q
+  -- run continuation
+  res <- cont
+  -- reinstate original type variable context
+  lift $ modify $ \st -> st { tyVarContext = tyvc }
+  return res

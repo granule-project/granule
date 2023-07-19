@@ -112,7 +112,7 @@ checkDataCon
               _ -> []
         --let kindsWithIndexInformation = flagTypeIndices typeIndexPositions (parameterTypes kind)
 
-        reportM ("For data constructor " <> pretty dName <> " index positiosn are " <> pretty typeIndexPositions)
+        reportM ("For data constructor " <> pretty dName <> " index positions are " <> pretty typeIndexPositions)
 
         -- Create new version of the data type with coercions generated for indices
         --(ty', coercions, newTyVars) <- checkAndGenerateSubstitution sp tName ty kindsWithIndexInformation

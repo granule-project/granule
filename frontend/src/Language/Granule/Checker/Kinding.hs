@@ -615,11 +615,29 @@ joinTypes'' s t t' rel | t == t' = return (t, [], Nothing)
 
 
 -- TODO join types on the coeffects?
-joinTypes'' s (FunTy id mCoeff t1 t2) (FunTy _ _ t1' t2') rel = do
-  (t1j, subst1, _) <- joinTypes'' s t1' t1 rel -- contravariance
-  (t2j, subst2, _) <- joinTypes'' s t2 t2' rel
-  subst <- lift $ combineSubstitutions s subst1 subst2
-  return (FunTy id mCoeff t1j t2j, subst, Nothing)
+joinTypes'' s (FunTy id mCoeff t1 t2) (FunTy id' _ t1' t2') rel =
+
+    case (id, id') of
+          (Just id, Just id') ->
+            -- put id in the context
+            registerTyVarInContextWith id t1 BoundQ $ do
+              -- rename id' to id in the t2'
+              t2' <- lift $ substitute [(id', SubstT (TyVar id))] t2'
+              joinRest t2'
+          (Just id, Nothing) ->
+            registerTyVarInContextWith id t1 BoundQ $ do
+              joinRest t2'
+          (Nothing, Just id') ->
+            registerTyVarInContextWith id' t1' BoundQ $ do
+              joinRest t2'
+          (Nothing, Nothing) -> joinRest t2'
+
+   where joinRest t2' = do
+            -- now join the sub parts of the type
+            (t1j, subst1, _) <- joinTypes'' s t1' t1 rel -- contravariance
+            (t2j, subst2, _) <- joinTypes'' s t2 t2' rel
+            subst <- lift $ combineSubstitutions s subst1 subst2
+            return (FunTy id mCoeff t1j t2j, subst, Nothing)
 
 joinTypes'' s (Diamond ef1 t1) (Diamond ef2 t2) rel = do
   (tj, subst0, _) <- joinTypes'' s t1 t2 rel

@@ -72,7 +72,9 @@ check ast@(AST _ _ _ hidden _) = do
   evalChecker (initState { allHiddenNames = hidden }) $ (do
       ast@(AST dataDecls defs imports hidden name) <- return $ replaceTypeAliases ast
       _    <- checkNameClashes Primitives.typeConstructors Primitives.dataTypes ast
+      debugHeadingM "Register type constructors"
       _    <- runAll registerTypeConstructor  (Primitives.dataTypes <> dataDecls)
+      debugHeadingM "Register data constructors"
       _    <- runAll registerDataConstructors (Primitives.dataTypes <> dataDecls)
       defs <- runAll kindCheckDef defs
       let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs

@@ -223,6 +223,12 @@ debugM explanation message =
     when debugging $ traceM $
       ((unsafePerformIO getTimeString) <> (bold $ cyan $ "Debug: ") <> explanation <> " \n") <> message <> "\n"
 
+debugHeadingM :: (?globals :: Globals, Applicative f) => String -> f ()
+debugHeadingM explanation =
+    when debugging $ traceM $
+      ((unsafePerformIO getTimeString) <> (bold $ cyan $ "Debug: ") <> explanation <> " \n")
+
+
 debugM' :: (?globals :: Globals, Applicative f) => String -> String -> f ()
 debugM' explanation message =
     when True $ traceM $
