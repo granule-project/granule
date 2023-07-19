@@ -44,9 +44,10 @@ definiteUnification :: (?globals :: Globals)
 definiteUnification _ _ Nothing _ = return ()
 definiteUnification s pos (Just (coeff, coeffTy)) ty = do
   isPoly <- polyShaped ty
+  -- TODO: simplify
   when isPoly $ -- Used to be: addConstraintToPreviousFrame, but paper showed this was not a good idea
     case pos of
-      InCase ->  addConstraintToPreviousFrame $ ApproximatedBy s (TyGrade (Just coeffTy) 1) coeff coeffTy
+      InCase             -> addConstraintToNextFrame $ ApproximatedBy s (TyGrade (Just coeffTy) 1) coeff coeffTy
       InFunctionEquation -> addConstraintToNextFrame $ ApproximatedBy s (TyGrade (Just coeffTy) 1) coeff coeffTy
 
 -- | Predicate on whether a type has more than 1 shape (constructor)
@@ -129,7 +130,7 @@ ctxtFromTypedPattern' outerCoeff _ pos t (PWild s _ rf) cons =
               -- Must approximate zero
               case pos of
                 InFunctionEquation -> addConstraintToNextFrame $ ApproximatedBy s (TyGrade (Just coeffTy) 0) coeff coeffTy
-                InCase -> addConstraintToPreviousFrame $ ApproximatedBy s (TyGrade (Just coeffTy) 0) coeff coeffTy
+                InCase             -> addConstraintToNextFrame $ ApproximatedBy s (TyGrade (Just coeffTy) 0) coeff coeffTy
 
               return ([], [], [], PWild s t rf, NotFull)
 
