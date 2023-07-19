@@ -17,11 +17,15 @@ spec = do
   describe "unification" $
     it "unif test" $ do
       let ?globals = mempty{ globalsTesting = Just True }
-      let initState' = initState { tyVarContext = 
-             [ (mkId "x", (TyCon $ mkId "Nat", InstanceQ))
-             , (mkId "a", (Type 0, InstanceQ)) ] }
-      Right us <- evalChecker initState' $
-             unify (Box (TyVar $ mkId "x") (TyCon $ mkId "Bool"))
+      let initState' =
+            initState { typeConstructors = [(mkId "()", (Type 0, [], []))]
+                      , tyVarContext =
+                        [ (mkId "x", (TyCon $ mkId "Nat", InstanceQ))
+                        , (mkId "a", (Type 0, InstanceQ)) ] }
+      us <- evalChecker initState' $
+             unify (Box (TyVar $ mkId "x") (TyCon $ mkId "()"))
                    (Box (TySig (TyInt 1) (TyCon $ mkId "Nat")) (TyVar $ mkId "a"))
-      us `shouldBe` (Just [(mkId "a", SubstT $ TyCon $ mkId "Bool")
-                          , (mkId "x", SubstT $ TySig (TyInt 1) (TyCon $ mkId "Nat"))])
+      let result = case us of
+                     Right res -> res
+                     Left  err -> error $ show err
+      result `shouldBe` (Just [(mkId "a", SubstT $ TyCon $ mkId "()")])
