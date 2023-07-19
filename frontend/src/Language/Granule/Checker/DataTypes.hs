@@ -91,12 +91,17 @@ checkDataCon
 
         -- Focus on just those bound variables in scope which are used in the type
         let relevantTyVars = relevantSubCtxt (freeVars ty) (tyConVars <> dataConTyVars)
+        reportM ("relevantTyVars = " <> pretty relevantTyVars)
 
         -- Which variables are bound in this data constructor but don't appear in the result?
         -- These are existentials
         let dataConTyVarsInResultType = relevantSubCtxt (freeVars $ resultType ty) dataConTyVars
         let tyVarsExistials = dataConTyVars `subtractCtxt` dataConTyVarsInResultType
 
+        -- TODO: probably can be removed
+        -- if (not (null tyVarsExistials))
+        --   then throw $ VariablesNotInResultType s tName (map fst tyVarsExistials)
+        --   else do
         -- Add quanitifers to the type variables
         tyVarsForallAndPis <- refineBinderQuantification (relevantTyVars `subtractCtxt` tyVarsExistials) ty
 
@@ -110,12 +115,6 @@ checkDataCon
         let typeIndexPositions = case lookup dName indices of
               Just inds -> inds
               _ -> []
-        --let kindsWithIndexInformation = flagTypeIndices typeIndexPositions (parameterTypes kind)
-
-        reportM ("For data constructor " <> pretty dName <> " index positions are " <> pretty typeIndexPositions)
-
-        -- Create new version of the data type with coercions generated for indices
-        --(ty', coercions, newTyVars) <- checkAndGenerateSubstitution sp tName ty kindsWithIndexInformation
 
         -- Construct new type scheme for the data constructor
         let dataConTyVarsNew = relevantTyVars -- <> newTyVars
