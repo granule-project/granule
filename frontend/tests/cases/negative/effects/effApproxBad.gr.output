@@ -1,3 +1,3 @@
 Type checking failed: 
-Falsifiable theorem: frontend/tests/cases/negative/effects/effApproxBad.gr:3:1:
+Falsifiable theorem: frontend/tests/cases/negative/effects/effApproxBad.gr:4:1:
   When checking `tick'`, trying to prove false statement: (1 + (1 + 1) ≤ 2)

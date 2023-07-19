@@ -127,11 +127,24 @@ equalTypesRelatedCoeffects :: (?globals :: Globals)
   -> Mode
   -> Checker (Bool, Substitution)
 equalTypesRelatedCoeffects s rel t1 t2 spec mode = do
-  -- Infer kinds
-  (k, subst, _) <- synthKind s t1
-  -- check the other type has the same kind
-  (subst', _) <- checkKind s t2 k
-  substFromK <- combineManySubstitutions s [subst,subst']
+  -- Infer kinds (trying both ways round to unify)
+  --
+  let leftToRight = do
+        (k, subst, _) <- synthKind s t1
+        -- check the other type has the same kind
+        (subst', _) <- checkKind s t2 k
+        substFromK <- combineManySubstitutions s [subst,subst']
+        return (k, substFromK)
+  --
+  let rightToLeft = do
+        (k, subst, _) <- synthKind s t2
+        -- check the other type has the same kind
+        (subst', _) <- checkKind s t1 k
+        substFromK <- combineManySubstitutions s [subst,subst']
+        return (k, substFromK)
+  -- Try get the unified kinds of both types
+  (k, substFromK) <- leftToRight <|> rightToLeft
+
   -- apply substitutions before equality
   t1 <- substitute substFromK t1
   t2 <- substitute substFromK t2
