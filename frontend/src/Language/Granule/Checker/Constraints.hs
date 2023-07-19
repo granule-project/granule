@@ -65,7 +65,7 @@ provePredicate predicate vars constructors
       -- Force the result
       _ <- return $ thmRes `seq` thmRes
       end    <- if benchmarking then Clock.getTime Clock.Monotonic else return 0
-      let duration = (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double))
+      let duration = (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / 10^(6 :: Integer)::Double)
 
       return $ (duration, case thmRes of
         -- we're good: the negation of the theorem is unsatisfiable
@@ -227,6 +227,7 @@ freshSolverVarScoped quant name (TyCon conName) q k =
                   .|| solverVar .== literal manyRep
                     , SLNL solverVar)
         "OOZ"    -> k (solverVar .== 0 .|| solverVar .== 1, SOOZ (ite (solverVar .== 0) sFalse sTrue))
+        "Cartesian" -> k (sTrue, SPoint)
         k -> solverError $ "I don't know how to make a fresh solver variable of type " <> show conName)
 
 freshSolverVarScoped quant name t q k | t == extendedNat = do
@@ -372,6 +373,10 @@ compileCoeffect (TyCon name) (TyCon (internalName -> "LNL")) _ = do
 
   return (SLNL . fromInteger . toInteger $ n, sTrue)
 
+-- Cartesian semiring
+compileCoeffect (TyCon name) (TyCon (internalName -> "Cartesian")) _ | internalName name == "Any" = do
+  return (SPoint, sTrue)
+
 compileCoeffect (TyCon name) (TyCon (internalName -> "Sec")) _ = do
   case internalName name of
     "Hi" -> return (SSec hiRepresentation, sTrue)
@@ -483,6 +488,7 @@ compileCoeffect (TyGrade k' 0) k vars = do
         "Q"         -> return (SFloat (fromRational 0), sTrue)
         "OOZ"       -> return (SOOZ sFalse, sTrue)
         "LNL"       -> return (SLNL (literal zeroRep), sTrue)
+        "Cartesian" -> return (SPoint, sTrue)
         _           -> solverError $ "I don't know how to compile a 0 for " <> pretty k
     otherK | otherK == extendedNat ->
       return (SExtNat 0, sTrue)
@@ -521,6 +527,7 @@ compileCoeffect (TyGrade k' 1) k vars = do
         "Q"         -> return (SFloat (fromRational 1), sTrue)
         "OOZ"       -> return (SOOZ sTrue, sTrue)
         "LNL"       -> return (SLNL (literal oneRep), sTrue)
+        "Cartesian" -> return (SPoint, sTrue)
         _           -> solverError $ "I don't know how to compile a 1 for " <> pretty k
 
     otherK | otherK == extendedNat ->
@@ -767,7 +774,7 @@ liftM2And k = bindM2And (\a b -> return (k a b))
 matchTypes :: (?globals :: Globals, MonadIO m) => Type -> Maybe Type -> m Type
 matchTypes t Nothing = return t
 matchTypes t (Just t') | t == t' = return t
-matchTypes t (Just t') | otherwise = solverError $ "I have conflicting kinds of " ++ pretty t ++ " and " ++ pretty t'
+matchTypes t (Just t') = solverError $ "I have conflicting kinds of " ++ pretty t ++ " and " ++ pretty t'
 
 -- Get universe set for the parameter ttpe
 setUniverse :: (?globals :: Globals, ?constructors :: Ctxt [Id])

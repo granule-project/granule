@@ -646,11 +646,14 @@ checkExpr defs gam pol topLevel tau (App s _ rf e1 e2) | not (usingExtension Gra
 checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
     debugM "checkExpr[Box]" (pretty s <> " : " <> pretty ty)
 
-    unpr <-
+    promotable <-
       if (CBN `elem` globalsExtensions ?globals)
-        then return False
-        else return $ resourceAllocator e
-    when unpr (throw $ UnpromotableError{errLoc = s, errTy = ty})
+        then return True
+        -- In CBV mode, check we do not have a resource allocator here
+        else return $ (not (resourceAllocator e)
+        -- or see if we have turned on unsafe promotion
+                   || (UnsafePromotion `elem` globalsExtensions ?globals))
+    when (not promotable) (throw $ UnpromotableError{errLoc = s, errTy = ty})
 
     -- Checker the expression being promoted
     (gam', subst, elaboratedE) <- checkExpr defs gam pol False tau e
@@ -1237,14 +1240,14 @@ synthExpr defs gam pol (Val s _ rf (Promote _ e)) = do
    -- Synth type of promoted expression
    (t, gam', subst, elaboratedE) <- synthExpr defs gam pol e
 
-   unpr <-
+   promotable <-
       if (CBN `elem` globalsExtensions ?globals)
-        then return False
-        else case e of
-        App _ _ _ (Val _ _ _ (Var _ i)) _ ->
-          return $ internalName i `elem` Primitives.unpromotables
-        otherwise -> return False
-   when unpr (throw $ UnpromotableError{errLoc = s, errTy = t})
+        then return True
+        -- In CBV mode, check we do not have a resource allocator here
+        else return $ (not (resourceAllocator e)
+        -- or see if we have turned on unsafe promotion
+                   || (UnsafePromotion `elem` globalsExtensions ?globals))
+   when (not promotable) (throw $ UnpromotableError{errLoc = s, errTy = t})
 
    -- Multiply the grades of all the used variables here
    (gam'', subst') <- ctxtMult s (TyVar var) gam'

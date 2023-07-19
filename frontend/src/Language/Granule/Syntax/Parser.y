@@ -145,7 +145,7 @@ TopLevel :: { AST () () }
                                                        -- modify (\st -> st { globalsExtensions = ext : globalsExtensions st })
                                                        modify (\st -> ext : st)
                                                        return $4
-                                                    Nothing -> error ("Unknown language extension " ++ symString $2)
+                                                    Nothing -> error ("Unknown language extension " ++ constrString $2)
                                                 }
 
   | Defs                                        { $1 }
