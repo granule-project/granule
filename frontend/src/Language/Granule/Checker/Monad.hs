@@ -645,6 +645,8 @@ data CheckerError
     { errLoc :: Span, errTy :: Type }
   | EscapingExisentialVar
     { errLoc :: Span, var :: Id, errTy :: Type }
+  | VariablesNotInResultType
+    { errLoc :: Span, var :: Id, varsNotInResult :: [Id] }
   deriving (Show)
 
 instance UserMsg CheckerError where
@@ -720,6 +722,7 @@ instance UserMsg CheckerError where
   title InvalidPromotionError{} = "Type error"
   title TypeConstraintNotSatisfied{} = "Type constraint error"
   title EscapingExisentialVar{} = "Type error"
+  title VariablesNotInResultType{} = "Data type definition error"
 
   msg HoleMessage{..} =
     "\n   Expected type is: `" <> pretty holeTy <> "`"
@@ -1046,6 +1049,12 @@ instance UserMsg CheckerError where
 
   msg EscapingExisentialVar{ var, errTy }
     = "Existentially quantified variable " <> pretty var <> " escapes its scope in " <> pretty errTy
+
+  msg VariablesNotInResultType{ var, varsNotInResult }
+    = "Type-variable binding(s) "
+    <> intercalate "," (map (\x -> "`" <> pretty x <> "`") varsNotInResult) <> " do not appear in the result type for "
+    <> "`" <> pretty var <> "`"
+    <> "\n\tPerhaps you want to use an existential type instead (e.g., exists {x : k} . T)?"
 
   color HoleMessage{} = Blue
   color _ = Red

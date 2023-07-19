@@ -1,7 +1,5 @@
 -- gr --no-eval
 
-import Vec
-
 data Bool where True; False
 
 foo : Int → Int [0..1] → Int
