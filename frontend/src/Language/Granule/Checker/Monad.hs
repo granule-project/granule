@@ -595,6 +595,8 @@ data CheckerError
     { errLoc :: Span, errTy :: Type }
   | LhsOfApplicationNotAFunction
     { errLoc :: Span, errTy :: Type }
+  | LhsOfUnpackNotAnExistential
+    { errLoc :: Span, errTy :: Type }
   | FailedOperatorResolution
     { errLoc :: Span, errOp :: Operator, errTy :: Type }
   | NeedTypeSignature
@@ -641,6 +643,8 @@ data CheckerError
     { errLoc :: Span, errTy :: Type }
   | TypeConstraintNotSatisfied
     { errLoc :: Span, errTy :: Type }
+  | EscapingExisentialVar
+    { errLoc :: Span, var :: Id, errTy :: Type }
   deriving (Show)
 
 instance UserMsg CheckerError where
@@ -691,6 +695,7 @@ instance UserMsg CheckerError where
   title ExpectedEffectType{} = "Type error"
   title ExpectedOptionalEffectType{} = "Type error"
   title LhsOfApplicationNotAFunction{} = "Type error"
+  title LhsOfUnpackNotAnExistential{} = "Type error"
   title FailedOperatorResolution{} = "Operator resolution failed"
   title NeedTypeSignature{} = "Type signature needed"
   title SolverErrorCounterExample{} = "Counter example"
@@ -714,6 +719,7 @@ instance UserMsg CheckerError where
   title NaturalNumberAtWrongKind{} = "Kind error"
   title InvalidPromotionError{} = "Type error"
   title TypeConstraintNotSatisfied{} = "Type constraint error"
+  title EscapingExisentialVar{} = "Type error"
 
   msg HoleMessage{..} =
     "\n   Expected type is: `" <> pretty holeTy <> "`"
@@ -950,6 +956,10 @@ instance UserMsg CheckerError where
     = "Expected a function type on the left-hand side of an application, but got `"
     <> pretty errTy <> "`"
 
+  msg LhsOfUnpackNotAnExistential{..}
+    = "Expcted an existential type on the left-hand side of unpack, but got `"
+    <> pretty errTy <> "`"
+
   msg FailedOperatorResolution{..}
     = "Could not resolve operator `" <> pretty errOp
     <> "` at type `" <> pretty errTy <> "`"
@@ -1033,6 +1043,9 @@ instance UserMsg CheckerError where
 
   msg TypeConstraintNotSatisfied{ errTy }
     = "Constraint `" <> pretty errTy <> "` does not hold or is not provided by the type constraint assumptions here."
+
+  msg EscapingExisentialVar{ var, errTy }
+    = "Existentially quantified variable " <> pretty var <> " escapes its scope in " <> pretty errTy
 
   color HoleMessage{} = Blue
   color _ = Red

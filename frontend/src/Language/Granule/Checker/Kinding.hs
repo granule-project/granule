@@ -15,6 +15,7 @@ import Control.Arrow (second)
 import Control.Monad
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
+import Control.Monad.Trans.Identity
 import Data.Functor.Identity (runIdentity)
 import Data.Maybe (fromMaybe)
 import Data.List (isPrefixOf, sortBy)
@@ -472,6 +473,12 @@ synthKindWithConfiguration s config t@(TyRational _) = do
 -- Higher type universes
 synthKindWithConfiguration s config (Type i) = do
   return (Type (i + 1), [], Type i)
+
+-- Existentials
+synthKindWithConfiguration s config (TyExists x k ty) = do
+  runIdentityT $
+    registerTyVarInContextWith x k ForallQ $ do
+       IdentityT $ synthKindWithConfiguration s config ty
 
 synthKindWithConfiguration s _ t =
   throw ImpossibleKindSynthesis { errLoc = s, errTy = t }

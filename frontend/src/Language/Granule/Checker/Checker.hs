@@ -50,7 +50,7 @@ import Language.Granule.Checker.Variables
 import Language.Granule.Context
 
 import Language.Granule.Syntax.Identifiers
-import Language.Granule.Syntax.Helpers (hasHole)
+import Language.Granule.Syntax.Helpers (hasHole, freeVars)
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Pattern (Pattern(..))
@@ -1498,6 +1498,46 @@ synthExpr defs gam pol e@(AppTy s _ rf e1 ty) = do
           -- return this variable expression in place here
           freshenTySchemeForVar s rf name typScheme
     _ -> throw NeedTypeSignature{ errLoc = getSpan e, errExpr = e }
+
+
+--  G |- e : ty'[ty/x]
+-- ------------------------------------------------
+--  G |- pack < ty , e > as exists {x : k} . ty'
+synthExpr defs gam pol (Val s0 _ rf (Pack sp a ty e x k ty')) = do
+  debugM "synthExpr[pack]" ""
+  innerType <- substitute [(x, SubstT ty)] ty'
+  (gam, subst, elabE) <- checkExpr defs gam pol False innerType e
+
+  let retTy = TyExists x k ty'
+  let elab = Val s0 retTy rf (Pack sp retTy ty elabE x k ty')
+  return (retTy, gam, subst, elab)
+
+--
+-- G |- e1 : exists {y : k} . A
+-- G, forall tyx : k,  x : A |- e2 : B
+-- tyx notin fvB(B)
+-- -----------------------------------------
+-- G |- unpack < tyx , x > = e1 in e2 : B
+synthExpr defs gam pol (Unpack s a rf tyVar var e1 e2) = do
+  debugM "synthExpr[unpack]" ""
+  (ty, gam, subst1, elabE1) <- synthExpr defs gam pol e1
+  case ty of
+    TyExists y k tyA -> do
+      let gam' = (var, Linear tyA) : gam
+      registerTyVarInContext tyVar k ForallQ
+      (tyB, gam', subst2, elabE2)  <- synthExpr defs gam' pol e2
+      -- Check that the existential var doesn't escape
+      if not (tyVar `elem` freeVars tyB)
+        then do
+          substFinal <- combineManySubstitutions s [subst1, subst2]
+          let elab = Unpack s tyB rf tyVar var elabE1 elabE2
+          return (tyB, gam', substFinal, elab)
+
+        else throw EscapingExisentialVar{ errLoc = s, var = tyVar, errTy = tyB }
+
+
+    _ -> throw LhsOfUnpackNotAnExistential{ errLoc = s, errTy = ty }
+
 
 synthExpr _ _ _ e = do
   debugM "synthExpr[*]" (pretty (getSpan e))

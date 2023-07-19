@@ -277,6 +277,17 @@ equalTypesRelatedCoeffectsInner s rel t' t0@(TyApp (TyApp (TyCon d) grd) t) ind 
 
 -- ## GENERAL EQUALITY
 
+-- Equality on existential types
+equalTypesRelatedCoeffectsInner s rel (TyExists x1 k1 t1) (TyExists x2 k2 t2) ind sp mode = do
+  -- check kinds
+  (eqK, subst1) <- equalTypesRelatedCoeffectsInner s rel k1 k2 ind sp mode
+  -- replace x2 with x1 in t2
+  t2' <- substitute [(x2, SubstT $ TyVar x1)] t2
+  (eqT, subst2) <- equalTypesRelatedCoeffectsInner s rel t1 t2' ind sp mode
+
+  substFinal <- combineSubstitutions s subst1 subst2
+  return (eqK && eqT, substFinal)
+
 -- Equality on type application
 equalTypesRelatedCoeffectsInner s rel (TyApp t1 t2) (TyApp t1' t2') _ sp mode = do
   debugM "equalTypesRelatedCoeffectsInner (tyAp leftp)" (pretty t1 <> " = " <> pretty t1')
