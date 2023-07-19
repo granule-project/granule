@@ -496,12 +496,10 @@ checkExpr defs gam pol _ ty@(FunTy _ grade sig tau) (Val s _ rf (Abs _ p t e)) |
 
           -- Locally we should have this property (as we are under a binder)
           subst' <- ctxtApprox s (gam' `intersectCtxts` bindings) bindings
-
-          concludeImplication s localVars
-
           let elaborated = Val s ty rf (Abs ty elaboratedP t elaboratedE)
 
           substFinal <- combineSubstitutions s subst subst'
+          concludeImplication s localVars
 
           return (gam' `subtractCtxt` bindings, substFinal, elaborated)
 
@@ -540,11 +538,11 @@ checkExpr defs gam pol _ ty@(FunTy _ Nothing sig tau) (Val s _ rf (Abs _ p t e))
           -- Locally we should have this property (as we are under a binder)
           subst' <- ctxtApprox s (gam' `intersectCtxts` bindings) bindings
 
-          concludeImplication s localVars
-
           let elaborated = Val s ty rf (Abs ty elaboratedP t elaboratedE)
 
           substFinal <- combineManySubstitutions s [subst', subst0, subst1, subst2]
+          concludeImplication s localVars
+
           return (gam' `subtractCtxt` bindings, substFinal, elaborated)
 
        (p:ps) -> illLinearityMismatch s (p:|ps)
@@ -1413,10 +1411,9 @@ synthExpr defs gam pol (Val s _ rf (Abs _ p Nothing e)) = do
      let finalTy = FunTy Nothing Nothing sig tau
      let elaborated = Val s finalTy rf (Abs finalTy elaboratedP (Just sig) elaboratedE)
      finalTy' <- substitute substP finalTy
+     substFinal <- combineManySubstitutions s [subst0, substP, subst]
 
      concludeImplication s localVars
-
-     substFinal <- combineManySubstitutions s [subst0, substP, subst]
 
      return (finalTy', gam'' `subtractCtxt` bindings, substFinal, elaborated)
   else throw RefutablePatternError{ errLoc = s, errPat = p }
