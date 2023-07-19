@@ -1,2 +1,3 @@
+-- Wrapper to make a point-free existential type
 data Exists (f : Type -> Type) where
-  MkExists : forall {a : Type} . f a -> Exists f
+  MkExists : (exists {a : Type} . f a) -> Exists f

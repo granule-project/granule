@@ -174,7 +174,7 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
             , uniqueVarIdCounterMap = mempty
             , wantedTypeConstraints = []
             }
-        debugM "elaborateEquation" "checkEquation"
+        debugM "elaborateEquation" ("checkEquation with type scheme " <> pretty tys)
         (elaboratedEq, providedTcs, subst) <- checkEquation defCtxt defName equation tys
         debugM "elaborateEquation" "checkEquation done"
 
@@ -1502,36 +1502,44 @@ synthExpr defs gam pol e@(AppTy s _ rf e1 ty) = do
 
 --  G |- e : ty'[ty/x]
 -- ------------------------------------------------
---  G |- pack < ty , e > as exists {x : k} . ty'
-synthExpr defs gam pol (Val s0 _ rf (Pack sp a ty e x k ty')) = do
-  debugM "synthExpr[pack]" ""
+--  G |- pack < ty , e > as exists {x : k} . ty' : exists {x : k} . ty'
+synthExpr defs gam pol (Val s0 _ rf p@(Pack sp a ty e x k ty')) = do
+  debugM "synthExpr[pack]" (pretty p)
   innerType <- substitute [(x, SubstT ty)] ty'
   (gam, subst, elabE) <- checkExpr defs gam pol False innerType e
-
   let retTy = TyExists x k ty'
   let elab = Val s0 retTy rf (Pack sp retTy ty elabE x k ty')
   return (retTy, gam, subst, elab)
 
 --
 -- G |- e1 : exists {y : k} . A
--- G, forall tyx : k,  x : A |- e2 : B
+-- G, forall tyx : k,  x : A[tyx/y] |- e2 : B
 -- tyx notin fvB(B)
 -- -----------------------------------------
 -- G |- unpack < tyx , x > = e1 in e2 : B
-synthExpr defs gam pol (Unpack s a rf tyVar var e1 e2) = do
-  debugM "synthExpr[unpack]" ""
-  (ty, gam, subst1, elabE1) <- synthExpr defs gam pol e1
+synthExpr defs gam pol e@(Unpack s a rf tyVar var e1 e2) = do
+  debugM "synthExpr[unpack]" (pretty e)
+  (ty, gam1, subst1, elabE1) <- synthExpr defs gam pol e1
   case ty of
     TyExists y k tyA -> do
-      let gam' = (var, Linear tyA) : gam
+      -- line up the types
+      tyA <- substitute [(y, SubstT $ TyVar tyVar)] tyA
+      let bindings = [(var, Linear tyA)]
+      let gam' = bindings ++ gam
       registerTyVarInContext tyVar k ForallQ
-      (tyB, gam', subst2, elabE2)  <- synthExpr defs gam' pol e2
+      (tyB, gam2, subst2, elabE2)  <- synthExpr defs gam' pol e2
       -- Check that the existential var doesn't escape
       if not (tyVar `elem` freeVars tyB)
         then do
-          substFinal <- combineManySubstitutions s [subst1, subst2]
-          let elab = Unpack s tyB rf tyVar var elabE1 elabE2
-          return (tyB, gam', substFinal, elab)
+          case checkLinearity bindings gam' of
+            [] -> do
+              gamOut <- ctxtPlus s gam1 gam2
+              substFinal <- combineManySubstitutions s [subst1, subst2]
+
+              let elab = Unpack s tyB rf tyVar var elabE1 elabE2
+              return (tyB, gamOut `subtractCtxt` [(var, Linear tyA)], substFinal, elab)
+
+            (p:ps) -> illLinearityMismatch s (p:|ps)
 
         else throw EscapingExisentialVar{ errLoc = s, var = tyVar, errTy = tyB }
 

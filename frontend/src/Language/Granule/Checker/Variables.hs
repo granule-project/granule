@@ -4,6 +4,7 @@
 -- | Helpers for working with type variables in the type checker
 module Language.Granule.Checker.Variables where
 
+import Control.Monad.Trans.Identity
 import Control.Monad.State.Strict
 
 import qualified Data.Map as M
@@ -66,3 +67,8 @@ registerTyVarInContextWith v t q cont = do
   -- reinstate original type variable context
   lift $ modify $ \st -> st { tyVarContext = tyvc }
   return res
+
+registerTyVarInContextWith' ::
+  Id -> Type -> Quantifier -> Checker a -> Checker a
+registerTyVarInContextWith' v t q m =
+  runIdentityT $ registerTyVarInContextWith v t q (IdentityT m)

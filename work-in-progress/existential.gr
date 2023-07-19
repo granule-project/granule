@@ -1,14 +1,15 @@
 -- gr --no-eval
+language Report
 
 data Dyn where
-  Dyn : (exists {x : Type} . x) → Dyn
+  Dyn : (exists {xy : Type} . xy) → Dyn
 
 -- Wrapping and rewrapping an existential is okay
 idE : Dyn → Dyn
 idE (Dyn e) =
-  Dyn (unpack <t , x> = e in (pack <t , x> as exists {x : Type} . x))
+  Dyn (unpack <t , xs> = e in (pack <t , xs> as exists {xa : Type} . xa))
 
--- Also works with other kinds
+-- -- Also works with other kinds
 data Dyn2 a where
   Dyn2 : (exists {n : Nat} . a [n]) → Dyn2 a
 

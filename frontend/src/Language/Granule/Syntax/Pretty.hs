@@ -265,7 +265,7 @@ instance Pretty v => Pretty (Value v a) where
     pretty (Constr _ n vs) = intercalate " " $ pretty n : map prettyNested vs
     pretty (Ext _ v) = pretty v
     pretty (Pack s a ty e1 var k ty') =
-      "pack <" <> pretty ty <> ", " <> pretty var <> "> "
+      "pack <" <> pretty ty <> ", " <> pretty e1 <> "> "
       <> "as exists {" <> pretty var <> " : " <> pretty k <> "} . " <> pretty ty'
 
 instance Pretty Id where

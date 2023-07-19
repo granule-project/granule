@@ -419,10 +419,10 @@ instance Monad m => Freshenable m (Value v a) where
     freshen v@Ext{} = return v
 
     freshen (Pack s a ty e1 var k ty') = do
-      ty <- freshen ty
-      e1 <- freshen e1
-      var <- freshIdentifierBase ValueL var
-      k  <- freshen k
+      e1  <- freshen e1
+      ty  <- freshen ty
+      var <- freshIdentifierBase TypeL var
+      k   <- freshen k
       ty' <- freshen ty'
       return $ Pack s a ty e1 var k ty'
 
@@ -544,10 +544,11 @@ instance Monad m => Freshenable m (Expr v a) where
       return $ Hole s a rf vars'
 
     freshen (Unpack s a rf tyVar var e1 e2) = do
-      e1 <- freshen e1
+      e1    <- freshen e1
       tyVar <- freshIdentifierBase TypeL tyVar
       var   <- freshIdentifierBase ValueL var
-      e2 <- freshen e2
+      e2    <- freshen e2
+      removeFreshenings [var]
       return $ Unpack s a rf tyVar var e1 e2
 
 -- If an expression is a right-nested application tree on a contructor then

@@ -27,6 +27,7 @@ import Language.Granule.Syntax.Lexer
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Pattern
+import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Preprocessor.Markdown
 import Language.Granule.Syntax.Preprocessor.Latex
 import Language.Granule.Syntax.Span
