@@ -84,7 +84,7 @@ generateIndexPage = do
   generateFromTemplate IndexPage "Index" "Welcome to Granule Docs!" indexText
    where
     indexText = "See links on the side for various modules."
-             <> " Compile with version " <> pack (showVersion version) <> "\n."
+             <> " Compiled with Granule version v" <> pack (showVersion version) <> "."
 
 -- Generates the text of the primitives module
 generatePrimitivesPage :: (?globals::Globals) => IO Text
@@ -101,6 +101,7 @@ generateFromTemplate ctxt modName title content = do
   navigator <- generateNavigatorText ctxt
   return
       $ replace "MODULENAME"       modName
+      $ replace "PATH_PREFIX"      (if ctxt == IndexPage then "" else "../")
       $ replace "<!--NAVIGATOR-->" navigator
       $ replace "<!--TITLE-->"     title
       $ replace "<!--CONTENT-->"   content template

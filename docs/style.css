@@ -50,6 +50,13 @@
   float: left;
 }
 
+#logo {
+  float: right;
+}
+#logo img {
+  width: 100px;
+}
+
 a, a:visited {
   color: #404d5f;
 }
