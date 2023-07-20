@@ -1264,7 +1264,11 @@ instance Unifiable Type where
           lift $ addConstraint (Eq nullSpan t t' k)
           return [])
         -- Cannot ask the solver so fail
-        (fail "")
+        (case (t, t') of
+          -- Some slightly adhoc cases on session type duality that can happen
+          (TyApp (TyCon (internalName -> "Dual")) (TyCon (internalName -> "End")), TyCon (internalName -> "End")) -> return []
+          (TyCon (internalName -> "End"), TyApp (TyCon (internalName -> "Dual")) (TyCon (internalName -> "End"))) -> return []
+          _ -> fail "")
 
 instance Unifiable t => Unifiable (Maybe t) where
     unify' Nothing _ = return []
