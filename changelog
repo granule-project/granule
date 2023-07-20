@@ -4,6 +4,7 @@
   - Various internal refactorings
   - Bug fixes related to indexed types
   - Uniqueness features renamed (see `examples/uniqueness.gr`)
+  - Granule docs's feature `gr --grdoc file.gr` will generate documentation in `docs/index.html`
 
   # 0.9.2.0
    - New `Cartesian` semiring, with just one element `Any : Cartesian` for completely erasing grading (trivial solving)
