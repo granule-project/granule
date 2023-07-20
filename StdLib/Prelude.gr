@@ -8,6 +8,8 @@
 --- Repository: https://github.com/dorchard/granule
 ------
 
+module Prelude where
+
 import Bool
 
 --- # Standard functional components
