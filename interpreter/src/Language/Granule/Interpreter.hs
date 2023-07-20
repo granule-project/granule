@@ -50,6 +50,7 @@ import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Synthesis.RewriteHoles
 import Language.Granule.Utils
+import Language.Granule.Doc
 import Paths_granule_interpreter (version)
 
 main :: IO ()
@@ -116,7 +117,15 @@ run
 run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrFlags input) <> ?globals in do
     result <- try $ parseAndDoImportsAndFreshenDefs input
     case result of
+      -- Parse error
       Left (e :: SomeException) -> return . Left . ParseError $ show e
+
+      -- Generate docs mode
+      Right (ast, extensions) | grDocMode config -> do
+        grDoc ast
+        return $ Right NoEval
+
+      -- Normal mode
       Right (ast, extensions) ->
         -- update globals with extensions
         let ?globals = ?globals { globalsExtensions = extensions } in do
@@ -209,6 +218,7 @@ parseGrFlags
 
 data GrConfig = GrConfig
   { grRewriter        :: Maybe (String -> String)
+  , grDocMode         :: Bool -- are we generating docs instead of checking/running?
   , grKeepBackup      :: Maybe Bool
   , grLiterateEnvName :: Maybe String
   , grShowVersion     :: Bool
@@ -227,6 +237,7 @@ literateEnvName = fromMaybe "granule" . grLiterateEnvName
 instance Semigroup GrConfig where
   c1 <> c2 = GrConfig
     { grRewriter    = grRewriter    c1 <|> grRewriter  c2
+    , grDocMode     = grDocMode c1 || grDocMode c2
     , grKeepBackup      = grKeepBackup      c1 <|> grKeepBackup      c2
     , grLiterateEnvName = grLiterateEnvName c1 <|> grLiterateEnvName c2
     , grGlobals         = grGlobals         c1 <>  grGlobals         c2
@@ -236,6 +247,7 @@ instance Semigroup GrConfig where
 instance Monoid GrConfig where
   mempty = GrConfig
     { grRewriter    = Nothing
+    , grDocMode     = False
     , grKeepBackup      = Nothing
     , grLiterateEnvName = Nothing
     , grGlobals         = mempty
@@ -298,6 +310,11 @@ parseGrConfig = info (go <**> helper) $ briefDesc
           flag Nothing (Just True)
             $ long "debug"
             <> help "Debug mode"
+
+        grDocMode <-
+          flag False True
+            $ long "grdoc"
+            <> help "Generated docs for the specified file"
 
         grShowVersion <-
           flag False True
@@ -420,7 +437,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             <> (help . unwords)
             [ "Index of synthesised programs"
             , "Defaults to"
-            , show synthIndex 
+            , show synthIndex
             ]
 
         grRewriter
@@ -456,6 +473,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
           ( globPatterns
           , GrConfig
             { grRewriter
+            , grDocMode
             , grKeepBackup
             , grLiterateEnvName
             , grShowVersion

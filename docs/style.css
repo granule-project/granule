@@ -1,0 +1,40 @@
+.code {
+  font-family: monospace;
+  background: rgb(250,250,250);
+  clear: both;
+  padding: 5px;
+  margin: 5px;
+}
+
+.constName {
+  color: rgb(16, 145, 59);
+}
+
+.coeff {
+  color: rgb(6, 74, 209);
+}
+
+.eff {
+  color: rgb(204, 102, 6);
+}
+
+.keyword {
+  color: rgb(110, 12, 5);
+}
+
+#navigator {
+  width: calc(30vw - 20px - 2 * 20px);
+  margin: 0px;
+  padding: 20px;
+  margin-right: 20px;
+  background: rgb(230,230,230);
+  font-family: sans-serif;
+}
+
+#content {
+  width: calc(70vw - 2 * 20px);
+  margin: 0px;
+  padding: 20px;
+  font-family: sans-serif;
+}
+
