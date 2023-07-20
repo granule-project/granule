@@ -15,7 +15,7 @@ import Data.Text hiding
    (map, concatMap, filter, lines, take, takeWhile, dropWhile, drop, break, isPrefixOf, reverse)
 import qualified Data.Text as Text
 
-import Data.List (isPrefixOf)
+import Data.List (isPrefixOf, sort)
 import Data.Version (showVersion)
 import Paths_granule_interpreter (version)
 
@@ -88,16 +88,17 @@ generateNavigatorText :: PageContext -> IO Text
 generateNavigatorText ctxt = do
   -- Get all module documentation files
   files <- getDirectoryContents "docs/modules"
-  files <- return $ filter (\file -> takeExtension file == ".html") files
+  files <- return $ sort (filter (\file -> takeExtension file == ".html" && takeBaseName file /= "Primitives") files)
   -- Build a list of these links
   let prefix = if ctxt == ModulePage then "" else "modules/"
   let toLi file = li $ link (pack $ takeBaseName file) (prefix <> (pack $ takeBaseName file) <> ".html")
   -- Link to index page
   let indexPrefix = if ctxt == ModulePage then "../" else ""
   let topLevelLink = link "<i>Top-level</i><br />" (indexPrefix <> "index.html")
+  let primitiveLink = toLi "Primitives"
   -- Build ul
   let list = map toLi files
-  return $ topLevelLink <> ul (Text.concat list)
+  return $ topLevelLink <> ul (primitiveLink <> br <> Text.concat list)
 
 -- Helpers for manipulating raw source
 
@@ -144,6 +145,9 @@ span name = tagWithAttributes "span" ("class='" <> name <> "'")
 
 ul :: Text -> Text
 ul = tag "ul"
+
+br :: Text
+br = "<br />"
 
 li :: Text -> Text
 li = tag "li"
