@@ -122,7 +122,7 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
 
       -- Generate docs mode
       Right (ast, extensions) | grDocMode config -> do
-        grDoc ast
+        grDoc input ast
         return $ Right NoEval
 
       -- Normal mode

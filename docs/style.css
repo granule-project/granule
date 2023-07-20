@@ -2,8 +2,16 @@
   font-family: monospace;
   background: rgb(250,250,250);
   clear: both;
-  padding: 5px;
+  padding: 10px;
   margin: 5px;
+}
+
+.desc {
+  font-family: sans-serif;
+  padding: 10px;
+  margin: 5px;
+  margin-left: 20px;
+  margin-bottom: 15px;
 }
 
 .constName {

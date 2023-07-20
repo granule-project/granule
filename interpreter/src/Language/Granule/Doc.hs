@@ -4,26 +4,31 @@ module Language.Granule.Doc where
 
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Pretty
+import Language.Granule.Syntax.Span
 -- import Language.Granule.Syntax.Type
 import qualified Language.Granule.Checker.Primitives as Primitives
 import Language.Granule.Utils
 
 import System.Directory
 import System.FilePath
-import Data.Text hiding (map, concatMap, filter)
+import Data.Text hiding
+   (map, concatMap, filter, lines, take, takeWhile, dropWhile, drop, break, isPrefixOf, reverse)
 import qualified Data.Text as Text
 
+import Data.List (isPrefixOf)
 import Data.Version (showVersion)
 import Paths_granule_interpreter (version)
 
+-- import Debug.Trace
+
 
 -- Doc top-level
-grDoc :: (?globals::Globals) => AST () () -> IO ()
-grDoc ast = do
+grDoc :: (?globals::Globals) => String -> AST () () -> IO ()
+grDoc input ast = do
   -- Generate the file for this AST
   let modName = pretty $ moduleName ast
   putStrLn $ "Generate docs for " <> modName  <> "."
-  moduleFile <- generateModulePage ast
+  moduleFile <- generateModulePage input ast
   writeFile ("docs/modules/" <> modName <> ".html") (unpack moduleFile)
   -- Generate the Primitives file
   putStrLn $ "Generating docs index file."
@@ -36,15 +41,21 @@ grDoc ast = do
 
 data PageContext = IndexPage | ModulePage deriving (Eq, Show)
 
-generateModulePage :: (?globals::Globals) => AST () () -> IO Text
-generateModulePage ast =
+generateModulePage :: (?globals::Globals) => String -> AST () () -> IO Text
+generateModulePage input ast =
     let modName = pack . pretty $ moduleName ast
     in generateFromTemplate ModulePage modName ("Contexts of module " <> modName) content
    where
-    content = Text.concat dataDefs <> Text.concat defs
+    inputLines = lines input
+    content = (section "Meta-data" preamble)
+           <> (section "Data types" (Text.concat dataDefs))
+           <> (section "Definitions" (Text.concat defs))
+    preamble = parsePreamble inputLines
     dataDefs = map (codeDiv . pack . pretty) (dataTypes ast)
-    defs     = map (codeDiv . pack . prettyDef) (definitions ast)
-    prettyDef d = pretty (defId d) <> " : " <> pretty (defTypeScheme d)
+    defs     = map prettyDef (definitions ast)
+    prettyDef d =
+         (codeDiv $ pack $ pretty (defId d) <> " : " <> pretty (defTypeScheme d))
+      <> (descDiv $ scrapeDoc inputLines (defSpan d))
 
 -- Generates the text of the index
 generateIndexPage :: IO Text
@@ -88,11 +99,45 @@ generateNavigatorText ctxt = do
   let list = map toLi files
   return $ topLevelLink <> ul (Text.concat list)
 
+-- Helpers for manipulating raw source
+
+-- Scape comments preceding a particular point if they start with ---
+scrapeDoc :: [String] -> Span -> Text
+scrapeDoc inputLines span =
+    Text.concat (reverse relevantLinesFormatted)
+  where
+    relevantLinesFormatted = map (pack . drop 3) relevantLines
+    relevantLines = takeWhile ("---" `isPrefixOf`) (dropWhile (== "") (reverse before))
+    (before, _) = Prelude.splitAt (line - 1) inputLines
+    (line, _) = startPos span
+
+
+-- Parse the preamble from the front of a module file (if present)
+parsePreamble :: [String] -> Text
+parsePreamble inputLines =
+    ul $ Text.concat (map presentPrequelLine prequelLines)
+  where
+    presentPrequelLine line = li $ (tag "b" (pack name)) <> pack info
+      where
+       (name, info) = break (== ':') (drop 4 line)
+    prequelLines =
+      -- Not lines that are all "-" though
+      filter (not . Prelude.all (== '-'))
+      -- Only lines that start with "---"
+      $ takeWhile (\line -> "---" `isPrefixOf` line) inputLines
+
+
 ---
 -- HTML generation helpers
 
+section :: Text -> Text -> Text
+section name contents = tag "section" (tag "h2" name <> contents)
+
 codeDiv :: Text -> Text
 codeDiv = tagWithAttributes "div" ("class='code'")
+
+descDiv :: Text -> Text
+descDiv = tagWithAttributes "div" ("class='desc'")
 
 span :: Text -> Text -> Text
 span name = tagWithAttributes "span" ("class='" <> name <> "'")
