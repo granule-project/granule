@@ -5,6 +5,7 @@ module Language.Granule.Doc where
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
+import Language.Granule.Syntax.Parser (parseDefs)
 -- import Language.Granule.Syntax.Type
 import qualified Language.Granule.Checker.Primitives as Primitives
 import Language.Granule.Utils
@@ -55,7 +56,16 @@ data PageContext = IndexPage | ModulePage deriving (Eq, Show)
 generateModulePage :: (?globals::Globals) => String -> AST () () -> IO Text
 generateModulePage input ast =
     let modName = pack . pretty $ moduleName ast
-    in generateFromTemplate ModulePage modName ("Module " <> modName) content
+    in generateModulePage' modName ("Module " <> modName) input ast
+
+-- Generate module page from
+--   module name
+--   title for the page
+--   input string
+--   ast from that input
+generateModulePage' :: (?globals::Globals) => Text -> Text -> String -> AST () () -> IO Text
+generateModulePage' modName title input ast =
+    generateFromTemplate ModulePage modName title content
    where
     inputLines = lines input
     content = (section "Meta-data" preamble)
@@ -79,9 +89,10 @@ generateIndexPage = do
 -- Generates the text of the primitives module
 generatePrimitivesPage :: (?globals::Globals) => IO Text
 generatePrimitivesPage = do
-  let prims = map (\(id, tys) -> codeDiv (pack $ pretty id <> " : " <> pretty tys)) Primitives.builtins
-  generateFromTemplate ModulePage "Primitives" "Built-in primitives" (Text.concat prims)
-
+    generateModulePage' "Primitives" "Built-in primitives" (Primitives.builtinSrc) (fst . fromRight $ parseDefs "Primitives" Primitives.builtinSrc)
+  where
+    fromRight (Right x) = x
+    fromRight (Left x)  = error x
 generateFromTemplate :: PageContext -> Text -> Text -> Text -> IO Text
 generateFromTemplate ctxt modName title content = do
   template <- readFile "docs/template.html"
