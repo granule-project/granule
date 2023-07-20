@@ -28,6 +28,7 @@ import Control.Monad (when)
 -- Doc top-level
 grDoc :: (?globals::Globals) => String -> AST () () -> IO ()
 grDoc input ast = do
+    createDirectoryIfMissing True "docs/modules"
     -- Run twice so that all the links are stable
     run True
     putStrLn "Rebuilding links."
@@ -41,6 +42,8 @@ grDoc input ast = do
       let modName = pretty $ moduleName ast
       when info $ putStrLn $ "Generate docs for " <> modName  <> "."
       moduleFile <- generateModulePage input ast
+      -- create docs directory if its not there
+
       writeFile ("docs/modules/" <> modName <> ".html") (unpack moduleFile)
       -- Generate the Primitives file
       when info $ putStrLn $ "Generating docs index file."
