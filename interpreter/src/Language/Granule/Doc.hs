@@ -19,25 +19,36 @@ import Data.List (isPrefixOf, sort)
 import Data.Version (showVersion)
 import Paths_granule_interpreter (version)
 
+import Control.Monad (when)
+
 -- import Debug.Trace
 
 
 -- Doc top-level
 grDoc :: (?globals::Globals) => String -> AST () () -> IO ()
 grDoc input ast = do
-  -- Generate the file for this AST
-  let modName = pretty $ moduleName ast
-  putStrLn $ "Generate docs for " <> modName  <> "."
-  moduleFile <- generateModulePage input ast
-  writeFile ("docs/modules/" <> modName <> ".html") (unpack moduleFile)
-  -- Generate the Primitives file
-  putStrLn $ "Generating docs index file."
-  primFile <- generatePrimitivesPage
-  writeFile "docs/modules/Primitives.html" (unpack primFile)
-  -- Generate the index file
-  indexFile <- generateIndexPage
-  writeFile "docs/index.html" (unpack indexFile)
-  return ()
+    -- Run twice so that all the links are stable
+    run True
+    putStrLn "Rebuilding links."
+    run False
+
+  where
+
+    -- Run with flag to say whether to show output or not
+    run info = do
+      -- Generate the file for this AST
+      let modName = pretty $ moduleName ast
+      when info $ putStrLn $ "Generate docs for " <> modName  <> "."
+      moduleFile <- generateModulePage input ast
+      writeFile ("docs/modules/" <> modName <> ".html") (unpack moduleFile)
+      -- Generate the Primitives file
+      when info $ putStrLn $ "Generating docs index file."
+      primFile <- generatePrimitivesPage
+      writeFile "docs/modules/Primitives.html" (unpack primFile)
+      -- Generate the index file
+      indexFile <- generateIndexPage
+      writeFile "docs/index.html" (unpack indexFile)
+      return ()
 
 data PageContext = IndexPage | ModulePage deriving (Eq, Show)
 

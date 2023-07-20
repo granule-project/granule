@@ -75,12 +75,27 @@ This will instance the main frontend `gr` and the interactive mode
 More details about how to install can be found on the [wiki
 page](https://github.com/granule-project/granule/wiki/Installing-Granule).
 
+## Documentation
+
+[Granule standard library documentation](https://granule-project.github.io/docs/)
+
+You can run Granule in a mode that generates documentation in
+the `docs` directory of the compile top-level with the command:
+
+     gr --grdoc filename
+
+You can generate all the docs for the standard library by running
+
+     gr --grdoc StdLib/*.gr
+     gr --grdoc StdLib/*.gr
+
+(Note the second run stabilised the hyperlinks between modules).
 
 ## Compiler
 
 ### Granule -> Haskell compiler
 
-This provided by `grc` which takes a .gr file as input and outputs a .hs file of the code compiled to Haskell which imports the [Language.Granule.Runtime](https://github.com/granule-project/granule/blob/main/runtime/src/Language/Granule/Runtime.hs) module (so you need this in the path if you want to then compiler the resulting .hs file). 
+This provided by `grc` which takes a .gr file as input and outputs a .hs file of the code compiled to Haskell which imports the [Language.Granule.Runtime](https://github.com/granule-project/granule/blob/main/runtime/src/Language/Granule/Runtime.hs) module (so you need this in the path if you want to then compiler the resulting .hs file).
 
 ### LLVM compiler
 

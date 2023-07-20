@@ -124,6 +124,7 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
          Left (e :: SomeException) -> return . Left . ParseError $ show e
          Right (ast, extensions) -> do
             grDoc input ast
+            printSuccess "Docs built."
             return $ Right NoEval
 
       -- Normal mode
