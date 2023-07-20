@@ -6,6 +6,6 @@ data Vec : Nat → Type → Type where
   Nil  : ∀ {t : Type} . Vec 0 t;
   Cons : ∀ {t : Type, n : Nat} . t → Vec n t → Vec (n+1) t
 
-dubVec : ∀ {n : Nat} . Vec n Int → Vec (2*n) Int
+dubVec : ∀ {n : Nat} . Vec n Int → Vec (n + n) Int
 dubVec Nil = Nil;
 dubVec (Cons x xs) = Cons x (Cons 0 (dubVec xs))

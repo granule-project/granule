@@ -1,6 +1,8 @@
   # 0.9.3.0
-  - Existential types (exists {x : Type} . t, pack, unpack)
-
+  - Existential types, e.g.,`exists {x : Type} . t`, see `examples/existential.gr` and `examples/listToVec.gr`
+  - `language GradedBase` extension, see `example/graded-base.gr`
+  - Various internal refactorings
+  - Bug fixes related to indexed types
 
   # 0.9.2.0
    - New `Cartesian` semiring, with just one element `Any : Cartesian` for completely erasing grading (trivial solving)

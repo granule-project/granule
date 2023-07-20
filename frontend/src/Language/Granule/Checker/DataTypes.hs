@@ -66,6 +66,7 @@ registerDataConstructors d@(DataDecl sp name tyVars k dataConstrs) = do
 
     -- Split the type variables into those that are paremters, and those that are indices
     let (tyParams, tyIndices) = discriminateTypeIndicesOfDataType d
+    reportM ("parameters = " <> pretty tyParams)
     -- Check and register each data constructor
     mapM_ (checkDataCon name kind (typeIndices d) tyParams tyIndices) dataConstrs
 
