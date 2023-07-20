@@ -44,7 +44,7 @@ data PageContext = IndexPage | ModulePage deriving (Eq, Show)
 generateModulePage :: (?globals::Globals) => String -> AST () () -> IO Text
 generateModulePage input ast =
     let modName = pack . pretty $ moduleName ast
-    in generateFromTemplate ModulePage modName ("Contexts of module " <> modName) content
+    in generateFromTemplate ModulePage modName ("Module " <> modName) content
    where
     inputLines = lines input
     content = (section "Meta-data" preamble)

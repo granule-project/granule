@@ -50,3 +50,6 @@
   float: left;
 }
 
+a, a:visited {
+  color: #404d5f;
+}
