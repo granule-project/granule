@@ -8,6 +8,8 @@
 --- Repository: https://github.com/dorchard/granule
 ------
 
+module Either where
+
 data Either a b where Left a | Right b
 
 -- TODO: latest version can generalise this to `c : k, k : Semiring`

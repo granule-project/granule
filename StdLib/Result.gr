@@ -8,6 +8,8 @@
 --- Repository: https://github.com/dorchard/granule
 ------
 
+module Result where
+
 --- # Result type
 data Result a where Ok a | Failed (String [0..1])
 

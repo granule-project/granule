@@ -8,6 +8,8 @@
 --- Repository: https://github.com/dorchard/granule
 ------
 
+module Fin where
+
 import Nat
 
 data Fin : Nat -> Type where

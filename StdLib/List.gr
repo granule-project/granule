@@ -8,6 +8,8 @@
 --- Repository: https://github.com/dorchard/granule
 ------
 
+module List where
+
 import Result
 import Maybe
 import Bool

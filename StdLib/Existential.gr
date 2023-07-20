@@ -1,3 +1,5 @@
+module Existential where
+
 -- Wrapper to make a point-free existential type
 data Exists (f : Type -> Type) where
   MkExists : (exists {a : Type} . f a) -> Exists f
