@@ -1,5 +1,5 @@
 ------
---- Module: Vec
+--- Module: Cake
 --- Description: Base library for the purposes of examples
 --- Authors: Dominic Orchard, Vilem-Benjamin Liepelt
 --- License: BSD3
@@ -7,8 +7,6 @@
 --- Issue-tracking: https://github.com/dorchard/granule/issues
 --- Repository: https://github.com/dorchard/granule
 ------
-
-module Cake where
 
 module Cake hiding (Cake, Happy) where
 
