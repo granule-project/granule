@@ -80,7 +80,7 @@ page](https://github.com/granule-project/granule/wiki/Installing-Granule).
 [Granule standard library documentation](https://granule-project.github.io/docs/)
 
 You can run Granule in a mode that generates documentation in
-the `docs` directory of the compile top-level with the command:
+the `docs` directory of the compiler top-level with the command:
 
      gr --grdoc filename
 
@@ -89,7 +89,7 @@ You can generate all the docs for the standard library by running
      gr --grdoc StdLib/*.gr
      gr --grdoc StdLib/*.gr
 
-(Note the second run stabilised the hyperlinks between modules).
+(Note the second run here, which stabilises the hyperlinks between modules for multi-file runs).
 
 ## Compiler
 
