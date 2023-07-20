@@ -10,7 +10,7 @@
 
 module Language.Granule.Syntax.Def where
 
-import Data.List ((\\), delete)
+import Data.List ((\\), delete, nub)
 import Data.Set (Set)
 import qualified Data.Map as M
 import GHC.Generics (Generic)
@@ -138,21 +138,36 @@ data DataConstr
 
 -- | Is the data type an indexed data type, or just a plain ADT?
 isIndexedDataType :: DataDecl -> Bool
-isIndexedDataType (DataDecl _ id tyVars _ constrs) =
-    all nonIndexedConstructors constrs
-  where
-    nonIndexedConstructors DataConstrNonIndexed{} = False
-    nonIndexedConstructors (DataConstrIndexed _ _ (Forall _ tyVars' _ ty)) =
-      noMatchOnEndType (reverse tyVars) ty
+isIndexedDataType d = not ((concatMap snd (typeIndices d)) == [])
 
-    noMatchOnEndType ((v, _):tyVars) (TyApp t1 t2) =
+-- | This returns a list of which parameters are actually indices
+-- | If this is not an indexed type this list will be empty.
+typeIndicesPositions :: DataDecl -> [Int]
+typeIndicesPositions d = nub (concatMap snd (typeIndices d))
+
+-- | Given a data decleration, return the type parameters which are type indicies
+typeIndices :: DataDecl -> [(Id, [Int])]
+typeIndices (DataDecl _ _ tyVars kind constrs) =
+    map constructorIndices constrs
+  where
+    constructorIndices :: DataConstr -> (Id, [Int])
+    constructorIndices dataConstr@(DataConstrNonIndexed _ id _) = (id, [])
+    constructorIndices dataConstr@(DataConstrIndexed _ id (Forall _ _ _ ty)) =
+      (id, findIndices (reverse tyVars <> processKind kind) (resultType ty))
+
+    processKind Nothing   = []
+    processKind (Just ty) = parameterTypesWithNames ty
+
+    findIndices :: Ctxt Kind -> Type -> [Int]
+    findIndices ((v, _):tyVars') (TyApp t1 t2) =
       case t2 of
-        TyVar v' | v == v' -> noMatchOnEndType tyVars t1
-        _                  -> True
-    noMatchOnEndType tyVars (FunTy _ _ t) = noMatchOnEndType tyVars t
-    noMatchOnEndType [] (TyCon _) = False
-    -- Defaults to `true` (acutally an ill-formed case for data types)
-    noMatchOnEndType _ _ = True
+        TyVar v' | v == v' -> findIndices tyVars' t1
+        -- This is an index, and we can see its position by how many things we have left
+        _                  -> (length tyVars') : findIndices tyVars' t1
+    findIndices tyVars (FunTy _ _ _ t) = findIndices tyVars t
+    findIndices [] (TyCon _) = []
+    -- Defaults to `empty` (acutally an ill-formed case for data types)
+    findIndices _ _ = []
 
 
 nonIndexedToIndexedDataConstr :: Id -> [(Id, Kind)] -> DataConstr -> DataConstr
@@ -161,7 +176,7 @@ nonIndexedToIndexedDataConstr tName tyVars (DataConstrNonIndexed sp dName params
     -- Don't push the parameters into the type scheme yet
     = DataConstrIndexed sp dName (Forall sp [] [] ty)
   where
-    ty = foldr (FunTy Nothing) (returnTy (TyCon tName) tyVars) params
+    ty = foldr (FunTy Nothing Nothing) (returnTy (TyCon tName) tyVars) params
     returnTy t [] = t
     returnTy t (v:vs) = returnTy (TyApp t ((TyVar . fst) v)) vs
 

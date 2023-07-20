@@ -7,8 +7,11 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE TupleSections #-}
 
 {-# options_ghc -fno-warn-incomplete-uni-patterns -Wno-deprecations #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Redundant <$>" #-}
 
 -- | Core type checker
 module Language.Granule.Checker.Checker where
@@ -16,8 +19,8 @@ module Language.Granule.Checker.Checker where
 import Control.Arrow (second)
 import Control.Monad.State.Strict
 import Control.Monad.Except (throwError)
-import Data.List (isPrefixOf)
 import Data.List.NonEmpty (NonEmpty(..))
+import Data.List (isPrefixOf)
 import Data.List.Split (splitPlaces)
 import qualified Data.List.NonEmpty as NonEmpty (toList)
 import Data.Maybe
@@ -28,9 +31,9 @@ import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Constraints.SymbolicGrades
 import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Constraints
+import Language.Granule.Checker.DataTypes (registerTypeConstructor, registerDataConstructors)
 import Language.Granule.Checker.Exhaustivity
 import Language.Granule.Checker.Effects
-import Language.Granule.Checker.Flatten
 import Language.Granule.Checker.Ghost
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.NameClash
@@ -47,7 +50,7 @@ import Language.Granule.Checker.Variables
 import Language.Granule.Context
 
 import Language.Granule.Syntax.Identifiers
-import Language.Granule.Syntax.Helpers (freeVars, hasHole)
+import Language.Granule.Syntax.Helpers (hasHole, freeVars)
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Pattern (Pattern(..))
@@ -68,11 +71,11 @@ check :: (?globals :: Globals)
 check ast@(AST _ _ _ hidden _) = do
   evalChecker (initState { allHiddenNames = hidden }) $ (do
       ast@(AST dataDecls defs imports hidden name) <- return $ replaceTypeAliases ast
-      _    <- checkNameClashes ast
-      _    <- runAll checkTyCon (Primitives.dataTypes ++ dataDecls)
-      _    <- runAll checkDataCons (Primitives.dataTypes ++ dataDecls)
-      debugM "extensions" (show $ globalsExtensions ?globals)
-      debugM "check" "kindCheckDef"
+      _    <- checkNameClashes Primitives.typeConstructors Primitives.dataTypes ast
+      debugHeadingM "Register type constructors"
+      _    <- runAll registerTypeConstructor  (Primitives.dataTypes <> dataDecls)
+      debugHeadingM "Register data constructors"
+      _    <- runAll registerDataConstructors (Primitives.dataTypes <> dataDecls)
       defs <- runAll kindCheckDef defs
       let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
       defs <- runAll (checkDef defCtxt) defs
@@ -88,9 +91,9 @@ synthExprInIsolation :: (?globals :: Globals)
   -> IO (Either (NonEmpty CheckerError) (Either (TypeScheme , [Def () ()]) Type))
 synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
   evalChecker (initState { allHiddenNames = hidden }) $ do
-      _    <- checkNameClashes ast
-      _    <- runAll checkTyCon (Primitives.dataTypes ++ dataDecls)
-      _    <- runAll checkDataCons (Primitives.dataTypes ++ dataDecls)
+      _    <- checkNameClashes Primitives.typeConstructors Primitives.dataTypes ast
+      _    <- runAll registerTypeConstructor (Primitives.dataTypes ++ dataDecls)
+      _    <- runAll registerDataConstructors (Primitives.dataTypes ++ dataDecls)
       defs <- runAll kindCheckDef defs
 
       let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
@@ -105,7 +108,7 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
         (Val s _ _ (Constr _ c [])) -> do
           mConstructor <- lookupDataConstructor s c
           case mConstructor of
-            Just (tySch, _) -> return $ Left (tySch, [])
+            Just (tySch, _, _) -> return $ Left (tySch, [])
             Nothing -> do
               st <- get
               -- Or see if this is a kind constructors
@@ -125,7 +128,8 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
           --
           -- Solve the generated constraints
           checkerState <- get
-
+          tyVarContext' <- substitute subst (tyVarContext checkerState)
+          put $ checkerState { tyVarContext = tyVarContext' }
           let predicate = Conj $ predicateStack checkerState
           predicate <- substitute subst predicate
           solveConstraints predicate (getSpan expr) (mkId "grepl")
@@ -137,151 +141,6 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
           ty' <- substitute subst ty
           return $ Left (Forall nullSpanNoFile [] [] ty', derivedDefs)
 
--- TODO: we are checking for name clashes again here. Where is the best place
--- to do this check?
-checkTyCon :: DataDecl -> Checker ()
-checkTyCon d@(DataDecl sp name tyVars kindAnn ds)
-  = lookup name <$> gets typeConstructors >>= \case
-    Just _ -> throw TypeConstructorNameClash{ errLoc = sp, errId = name }
-    Nothing -> modify' $ \st ->
-      st{ typeConstructors = (name, (tyConKind, ids, isIndexedDataType d)) : typeConstructors st }
-  where
-    ids = map dataConstrId ds -- the IDs of data constructors
-    tyConKind = mkKind (map snd tyVars)
-    mkKind [] = case kindAnn of Just k -> k; Nothing -> Type 0 -- default to `Type`
-    mkKind (v:vs) = FunTy Nothing v (mkKind vs)
-
-checkDataCons :: (?globals :: Globals) => DataDecl -> Checker ()
-checkDataCons (DataDecl sp name tyVars k dataConstrs) = do
-    st <- get
-    let kind = case lookup name (typeConstructors st) of
-                Just (kind, _ ,_) -> kind
-                _ -> error $ "Internal error. Trying to lookup data constructor " <> pretty name
-    modify' $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars] }
-    mapM_ (checkDataCon name kind tyVars) dataConstrs
-
-checkDataCon :: (?globals :: Globals)
-  => Id -- ^ The type constructor and associated type to check against
-  -> Kind -- ^ The kind of the type constructor
-  -> Ctxt Kind -- ^ The type variables
-  -> DataConstr -- ^ The data constructor to check
-  -> Checker () -- ^ Return @Just ()@ on success, @Nothing@ on failure
-checkDataCon
-  tName
-  kind
-  tyVarsT
-  d@(DataConstrIndexed sp dName tySch@(Forall s tyVarsD constraints ty)) = do
-    case map fst $ intersectCtxts tyVarsT tyVarsD of
-      [] -> do -- no clashes
-
-        -- Only relevant type variables get included
-        let tyVars = relevantSubCtxt (freeVars ty) (tyVarsT <> tyVarsD)
-        let tyVars_justD = relevantSubCtxt (freeVars ty) tyVarsD
-
-        -- Add the type variables from the data constructor into the environment
-        -- The main universal context
-        let tyVarsD' = relevantSubCtxt (freeVars $ resultType ty) tyVars_justD
-        -- This subset of the context is for existentials
-        let tyVarsDExists = tyVars_justD `subtractCtxt` tyVarsD'
-        modify $ \st -> st { tyVarContext =
-               [(v, (k, ForallQ)) | (v, k) <- tyVarsT <> tyVarsD']
-            ++ [(v, (k, InstanceQ)) | (v, k) <- tyVarsDExists]
-            ++ tyVarContext st }
-
-        -- Check we are making something that is actually a type
-        -- _ <- checkKind sp (map (second (\k -> (k, ForallQ))) tyVars) ty ktype
-        _ <- checkKind sp ty ktype
-
-        -- Freshen the data type constructors type
-        (ty, tyVarsFreshD, substFromFreshening, constraints, []) <-
-             freshPolymorphicInstance ForallQ False (Forall s tyVars constraints ty) []
-
-        -- Create a version of the data constructor that matches the data type head
-        -- but with a list of coercions
-
-        ixKinds <- mapM (substitute substFromFreshening) (indexKinds kind)
-        (ty', coercions, tyVarsNewAndOld) <- checkAndGenerateSubstitution sp tName ty ixKinds
-
-        -- Reconstruct the data constructor's new type scheme
-        let tyVarsD' = tyVarsFreshD <> tyVarsNewAndOld
-        let tySch = Forall sp tyVarsD' constraints ty'
-
-        registerDataConstructor tySch coercions
-
-      (v:vs) -> (throwError . fmap mkTyVarNameClashErr) (v:|vs)
-  where
-    indexKinds (FunTy _ k1 k2) = k1 : indexKinds k2
-    indexKinds k = []
-
-    registerDataConstructor dataConstrTy subst = do
-      st <- get
-      case extend (dataConstructors st) dName (dataConstrTy, subst) of
-        Just ds -> put st { dataConstructors = ds, tyVarContext = [] }
-        Nothing -> throw DataConstructorNameClashError{ errLoc = sp, errId = dName }
-
-    mkTyVarNameClashErr v = DataConstructorTypeVariableNameClash
-        { errLoc = sp
-        , errDataConstructorId = dName
-        , errTypeConstructor = tName
-        , errVar = v
-        }
-
-checkDataCon tName kind tyVars d@DataConstrNonIndexed{}
-  = checkDataCon tName kind tyVars
-    $ nonIndexedToIndexedDataConstr tName tyVars d
-
-
-{-
-    Checks whether the type constructor name matches the return constraint
-    of the data constructor
-    and at the same time generate coercions for every parameter of result type type constructor
-    then generate fresh variables for parameter and coercions that are either trivial
-    variable ones or to concrete types
-
-    e.g.
-      checkAndGenerateSubstitution Maybe (a' -> Maybe a') [Type]
-      > (a' -> Maybe a, [a |-> a'], [a : Type])
-
-      checkAndGenerateSubstitution Other (a' -> Maybe a') [Type]
-      > *** fails
-
-      checkAndGenerateSubstitution Vec (Vec 0 t') [Nat, Type]
-      > (Vec n t', [n |-> Subst 0, t |-> t'], [n : Type, ])
-
-      checkAndGenerateSubstitution Vec (t' -> Vec n' t' -> Vec (n'+1) t') [Nat, Type]
-      > (t' -> Vec n' t' -> Vec n t, [n |-> Subst (n'+1), t |-> t'], [])
-
-      checkAndGenerateSubstitution Foo (Int -> Foo Int) [Type]
-      > (Int -> Foo t1, [t1 |-> Subst Int], [t1 : Type])
-
--}
-
-checkAndGenerateSubstitution ::
-       Span                     -- ^ Location of this application
-    -> Id                       -- ^ Name of the type constructor
-    -> Type                -- ^ Type of the data constructor
-    -> [Kind]                   -- ^ Types of the remaining data type indices
-    -> Checker (Type, Substitution, Ctxt Kind)
-checkAndGenerateSubstitution sp tName ty ixkinds =
-    checkAndGenerateSubstitution' sp tName ty (reverse ixkinds)
-  where
-    checkAndGenerateSubstitution' sp tName (TyCon tC) []
-        | tC == tName = return (TyCon tC, [], [])
-        | otherwise = throw UnexpectedTypeConstructor
-          { errLoc = sp, tyConActual = tC, tyConExpected = tName }
-
-    checkAndGenerateSubstitution' sp tName (FunTy id arg res) kinds = do
-      (res', subst, tyVarsNew) <- checkAndGenerateSubstitution' sp tName res kinds
-      return (FunTy id arg res', subst, tyVarsNew)
-
-    checkAndGenerateSubstitution' sp tName (TyApp fun arg) (kind:kinds) = do
-      varSymb <- freshIdentifierBase "t"
-      let var = mkId varSymb
-      (fun', subst, tyVarsNew) <-  checkAndGenerateSubstitution' sp tName fun kinds
-      return (TyApp fun' (TyVar var), (var, SubstT arg) : subst, (var, kind) : tyVarsNew)
-
-    checkAndGenerateSubstitution' sp _ t _ =
-      throw InvalidTypeDefinition { errLoc = sp, errTy = t }
 
 checkDef :: (?globals :: Globals)
          => Ctxt TypeScheme  -- context of top-level definitions
@@ -300,7 +159,6 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
 
     elaboratedEquations :: [Equation () Type] <- runAll elaborateEquation equations
 
-    checkGuardsForImpossibility s defName
     checkGuardsForExhaustivity s defName ty equations
     let el' = el { equations = elaboratedEquations }
     pure $ Def s defName rf el' tys
@@ -310,28 +168,54 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
       -- Erase the solver predicate between equations
         modify' $ \st -> st
             { predicateStack = []
+            , guardPredicates = [[]]
             , tyVarContext = []
+            , futureFrame = []
             , uniqueVarIdCounterMap = mempty
             , wantedTypeConstraints = []
             }
-        debugM "elaborateEquation" "checkEquation"
+        debugM "elaborateEquation" ("checkEquation with type scheme " <> pretty tys)
         (elaboratedEq, providedTcs, subst) <- checkEquation defCtxt defName equation tys
         debugM "elaborateEquation" "checkEquation done"
 
         -- Solve the generated constraints
         checkerState <- get
+        tyVarContext' <- substitute subst (tyVarContext checkerState)
+        put $ checkerState { tyVarContext = tyVarContext' }
 
-        let predicate = Conj $ predicateStack checkerState
-        debugM "elaborateEquation" "solveEq"
-        debugM "FINAL SUBST" (pretty subst)
-        predicate <- substitute subst predicate
-        solveConstraints predicate (getSpan equation) defName
-
+        -- Deal with additional constraints (due to session mostly)
         let wantedTcs = wantedTypeConstraints checkerState
         wantedTcs <- mapM (substitute subst) wantedTcs
         dischargedTypeConstraints s providedTcs wantedTcs
 
+        -- Apply the final substitution to the outcoming predicate
+        -- and run the solver
+        let predicate = Conj $ predicateStack checkerState
+        debugM "elaborateEquation" ("solveEq with final substitution = " <> pretty subst)
+        predicate <- substitute subst predicate
+        solveConstraints predicate (getSpan equation) defName
+
+        -- Apply the final substitution to head of the guard predicate stack too
+        st <- get
+        debugM "guardPredicatePreSubst" (pretty (guardPredicates st))
+        modifyM (\st ->
+          case guardPredicates st of
+            [] -> return st
+            [guardPred] -> do
+                guardPred' <- mapM (\((ctxt, pred), sp) -> do
+                  ctxt' <- substitute subst ctxt
+                  pred' <- substitute subst pred
+                  return ((ctxt', pred'), sp)) guardPred
+                return (st { guardPredicates = [guardPred'] })
+            guardPred -> do
+              error $ "Granule internal bug: PLEASE REPORT!\n"
+                  ++  "Final guard predicate stack is not a singleton: "
+                  ++  show guardPred)
+
         debugM "elaborateEquation" "solveEq done"
+
+        checkGuardsForImpossibility s defName []
+
         pure elaboratedEq
 
 checkEquation :: (?globals :: Globals) =>
@@ -344,12 +228,13 @@ checkEquation :: (?globals :: Globals) =>
                      --                   list of remaining type constraints (non-graded things)
                     --                    final substitution
 
-checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls constraints ty) = do
+checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ binders constraints defTy) = do
   -- Check that the lhs doesn't introduce any duplicate binders
   duplicateBinderCheck s pats
 
-  -- Freshen the type context
-  modify (\st -> st { tyVarContext = ctxtMap (\k -> (k, ForallQ)) foralls})
+  -- Initialize the type context with the type variable binders in scope from the signature
+  binders' <- refineBinderQuantification binders defTy
+  modify $ \st -> st { tyVarContext = binders' }
 
   -- Create conjunct to capture the pattern constraints
   newConjunct
@@ -359,41 +244,36 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
   -- Build the binding context for the branch pattern
   st <- get
   (patternGam, tau, localVars, subst, elaborated_pats, consumptions) <-
-     ctxtFromTypedPatterns s InFunctionEquation ty pats (patternConsumption st)
+     ctxtFromTypedPatterns s InFunctionEquation defTy pats (patternConsumption st)
 
   -- Update the consumption information
   modify (\st -> st { patternConsumption =
                          zipWith joinConsumption consumptions (patternConsumption st) } )
 
-  -- Determine if matching on type with more than one constructor
-  isPolyShaped <- polyShaped tau
-
   -- Create conjunct to capture the body expression constraints
   newConjunct
 
-{-
-  -- Specialise the return type by the pattern generated substitution
-  debugM "eqn" $ "### -- patternGam = " <> show patternGam
-  debugM "eqn" $ "### -- localVars  = " <> show localVars
-  debugM "eqn" $ "### -- tau = " <> show tau
-  tau' <- substitute subst tau
-  debugM "eqn" $ "### -- tau' = " <> show tau'
--}
+  --tau' <- substitute subst tau
+
+  reportM $ "Body type is " <> pretty tau
+  --reportM $ "Body type with substitution is " <> pretty tau'
+  st <- get
+  reportM $ "Predicate after type checking pattern is " <> pretty (predicateStack st)
 
   -- The type of the equation, after substitution.
-  equationTy' <- substitute subst ty
-  let equationTy'' = refineEquationTy patternGam equationTy'
+  equationTy' <- substitute subst defTy
+  let equationTy = calculateequationTy patternGam equationTy'
 
   -- Store the equation type in the state in case it is needed when splitting
   -- on a hole.
-  modify (\st -> st { equationTy = Just equationTy'' })
+  modify (\st -> st { equationTy = Just equationTy})
 
-  patternGam <- substitute subst patternGam
+  --patternGam <- substitute subst patternGam
   debugM "context in checkEquation 1" $ (show patternGam)
 
   -- Introduce ambient coeffect
   combinedGam <-
-    if (SecurityLevels `elem` globalsExtensions ?globals)
+    if SecurityLevels `elem` globalsExtensions ?globals
     then ghostVariableContextMeet $ patternGam <> freshGhostVariableContext
     else return patternGam
 
@@ -405,33 +285,57 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
     [] -> do
       localGam <- substitute subst localGam
       -- Check that our consumption context matches the binding
-      if (NoTopLevelApprox `elem` globalsExtensions ?globals)
+      subst0 <- if NoTopLevelApprox `elem` globalsExtensions ?globals
         then ctxtEquals s localGam combinedGam
-        else ctxtApprox s localGam combinedGam
-      -- ctxtApprox s localGam combinedGam
+        else do
+          ctxtApprox s localGam combinedGam
+
+
+      -- Create elaborated equation
+      subst'' <- combineManySubstitutions s [subst0, subst, subst']
+      let elab = Equation s name defTy rf elaborated_pats elaboratedExpr
+
+      elab' <- substitute subst'' elab
 
       -- Conclude the implication
       concludeImplication s localVars
 
-      -- Create elaborated equation
-      subst'' <- combineSubstitutions s subst subst'
-      let elab = Equation s name ty rf elaborated_pats elaboratedExpr
 
-      elab' <- substitute subst'' elab
+      st <- get
+      reportMsep
+      reportM $ "Final state of predicate: " <> pretty (predicateStack st)
+      reportMsep
+
+
       return (elab', providedTypeConstraints, subst'')
 
     -- Anything that was bound in the pattern but not used up
     (p:ps) -> illLinearityMismatch s (p:|ps)
 
   where
-    -- Given a context and a function type, refines the type by deconstructing
-    -- patterns into their constituent patterns and replacing parts of the type
-    -- by the corresponding pattern.
+
+
+    -- TODO: Rewrite this function so it's less confusing as to what info is being
+    --       passed to the splitter here.
+
+    -- Given a context of patterns, and the type of the equation, uses
+    -- these to calculate a type which represents the arguments which are to
+    -- be split on by deconstructing patterns into their constituent patterns
+
     -- e.g. Given a pattern: Cons x xs
     --      and a type:      Vec (n+1) t -> Vec n t
     --      returns:         t -> Vec n t -> Vec n t
-    refineEquationTy :: [(Id, Assumption)] -> Type -> Type
-    refineEquationTy patternGam ty =
+
+    -- i.e. If Vec (n+1) t -> Vec n t is the type of the equation
+    -- and the pattern we're splitting on is (Cons x xs) then we
+    -- take the types of each sub-pattern of Cons:
+    --      x  : t
+    --      xs : Vec n t
+    -- and use these to build a function from these sub-patterns to
+    -- the return type of our input type.
+
+    calculateequationTy :: [(Id, Assumption)] -> Type -> Type
+    calculateequationTy patternGam ty =
       case patternGam of
         [] -> ty
         (_:_) ->
@@ -448,9 +352,9 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
 
     replaceParameters :: [[Type]] -> Type -> Type
     replaceParameters [] ty = ty
-    replaceParameters ([]:tss) (FunTy id _ ty) = replaceParameters tss ty
+    replaceParameters ([]:tss) (FunTy id grade _ ty) = replaceParameters tss ty
     replaceParameters ((t:ts):tss) ty =
-      FunTy Nothing t (replaceParameters (ts:tss) ty)
+      FunTy Nothing Nothing t (replaceParameters (ts:tss) ty)
     replaceParameters _ t = error $ "Expecting function type: " <> pretty t
 
     -- Convert an id+assumption to a type.
@@ -485,7 +389,7 @@ checkExpr :: (?globals :: Globals)
           -> Checker (Ctxt Assumption, Substitution, Expr () Type)
 
 -- Hit an unfilled hole
-checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
+checkExpr defs ctxt _ _ t (Hole s _ _ vars) = do
   debugM "checkExpr[Hole]" (pretty s <> " : " <> pretty t)
 
   let boundVariables = map fst $ filter (\ (id, _) -> sourceName id `elem` map sourceName vars) ctxt
@@ -505,11 +409,11 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
               -- Check to see if this hole is something we are interested in
               case globalsHolePosition ?globals of
                 -- Synth everything mode
-                Nothing -> programSynthesise ctxt vars t
+                Nothing -> programSynthesise defs ctxt vars t
                 Just pos ->
                   if spanContains pos s
                     -- This is a hole we want to synth on
-                    then programSynthesise ctxt vars t
+                    then programSynthesise defs ctxt vars t
                     -- This is not a hole we want to synth on
                     else  return hexpr
 
@@ -552,44 +456,96 @@ checkExpr _ _ _ _ ty@(TyCon c) (Val s _ rf (NumFloat n)) | internalName c == "DF
   let elaborated = Val s ty rf (NumFloat n)
   return (usedGhostVariableContext, [], elaborated)
 
-checkExpr defs gam pol _ ty@(FunTy _ sig tau) (Val s _ rf (Abs _ p t e)) = do
+checkExpr defs gam pol _ ty@(FunTy _ grade sig tau) (Val s _ rf (Abs _ p t e)) | usingExtension GradedBase = do
+  debugM "checkExpr[FunTy-graded base]" (pretty s <> " : " <> pretty ty)
+  -- If an explicit signature on the lambda was given, then check
+  -- it confirms with the type being checked here
+
+  (sig', subst1) <- case t of
+    Nothing -> return (sig, [])
+    Just sig' -> do
+      (eqT, unifiedSigType, subst) <- lEqualTypes s sig sig'
+      unless eqT $ throw TypeErrorConflictingExpected{ errLoc = s, tyExpected' = sig', tyExpected = sig }
+      return (unifiedSigType, subst)
+
+  newConjunct
+
+  -- Get the type of the grade (if there is a grade)
+  (gradeAndType, subst0) <-
+      case grade of
+          Nothing -> do
+            one <- generatePolymorphicGrade1 s
+            return (Just one, [])
+          Just r -> do
+            (t, subst0, _) <- synthKind s r
+            return (Just (r, t), subst0)
+
+  (bindings, localVars, subst, elaboratedP, _) <- ctxtFromTypedPattern' gradeAndType s InCase sig' p NotFull
+  debugM "binding from lam" $ pretty bindings
+
+  pIrrefutable <- isIrrefutable s sig' p
+  if pIrrefutable then do
+    -- Check the body in the extended context
+    tau' <- substitute subst tau
+
+    newConjunct
+
+    (gam', subst2, elaboratedE) <- checkExpr defs (bindings <> gam) pol False tau' e
+    -- Check linearity of locally bound variables
+    case checkLinearity bindings gam' of
+       [] -> do
+          subst <- combineManySubstitutions s [subst, subst0, subst1, subst2]
+
+          -- Locally we should have this property (as we are under a binder)
+          subst' <- ctxtApprox s (gam' `intersectCtxts` bindings) bindings
+          let elaborated = Val s ty rf (Abs ty elaboratedP t elaboratedE)
+
+          substFinal <- combineSubstitutions s subst subst'
+          concludeImplication s localVars
+
+          return (gam' `subtractCtxt` bindings, substFinal, elaborated)
+
+       (p:ps) -> illLinearityMismatch s (p:|ps)
+  else throw RefutablePatternError{ errLoc = s, errPat = p }
+
+checkExpr defs gam pol _ ty@(FunTy _ Nothing sig tau) (Val s _ rf (Abs _ p t e)) = do
   debugM "checkExpr[FunTy]" (pretty s <> " : " <> pretty ty)
   -- If an explicit signature on the lambda was given, then check
   -- it confirms with the type being checked here
 
-  (tau', subst1) <- case t of
-    Nothing -> return (tau, [])
-    Just t' -> do
-      (eqT, unifiedType, subst) <- equalTypes s sig t'
-      unless eqT $ throw TypeError{ errLoc = s, tyExpected = sig, tyActual = t' }
-      return (tau, subst)
+  (sig', subst1) <- case t of
+    Nothing -> return (sig, [])
+    Just sig' -> do
+      (eqT, unifiedSigType, subst) <- lEqualTypes s sig sig'
+      unless eqT $ throw TypeErrorConflictingExpected{ errLoc = s, tyExpected' = sig', tyExpected = sig }
+      return (unifiedSigType, subst)
 
   newConjunct
 
-  (bindings, localVars, subst, elaboratedP, _) <- ctxtFromTypedPattern s InCase sig p NotFull
-  debugM "binding from lam" $ pretty bindings
+  (bindings, localVars, subst0, elaboratedP, _) <- ctxtFromTypedPattern s InCase sig' p NotFull
 
-  pIrrefutable <- isIrrefutable s sig p
+  pIrrefutable <- isIrrefutable s sig' p
   if pIrrefutable then do
     -- Check the body in the extended context
-    tau'' <- substitute subst tau'
+    tau' <- substitute subst0 tau
 
     newConjunct
 
-    (gam', subst2, elaboratedE) <- checkExpr defs (bindings <> gam) pol False tau'' e
+    (gam', subst2, elaboratedE) <- checkExpr defs (bindings <> gam) pol False tau' e
     -- Check linearity of locally bound variables
     case checkLinearity bindings gam' of
        [] -> do
-          subst <- combineSubstitutions s subst1 subst2
+
 
           -- Locally we should have this property (as we are under a binder)
-          ctxtApprox s (gam' `intersectCtxts` bindings) bindings
-
-          concludeImplication s localVars
+          subst' <- ctxtApprox s (gam' `intersectCtxts` bindings) bindings
 
           let elaborated = Val s ty rf (Abs ty elaboratedP t elaboratedE)
 
-          return (gam' `subtractCtxt` bindings, subst, elaborated)
+          substFinal <- combineManySubstitutions s [subst', subst0, subst1, subst2]
+          concludeImplication s localVars
+
+          return (gam' `subtractCtxt` bindings, substFinal, elaborated)
 
        (p:ps) -> illLinearityMismatch s (p:|ps)
   else throw RefutablePatternError{ errLoc = s, errPat = p }
@@ -635,7 +591,8 @@ checkExpr defs gam pol topLevel tau
       subst'' <- combineSubstitutions s subst subst'
 
       -- Create elborated AST
-      let scaleTy = FunTy Nothing floatTy (FunTy Nothing (Box (TyRational (toRational x)) floatTy) floatTy)
+      let scaleTy = FunTy Nothing Nothing floatTy
+                      (FunTy Nothing Nothing (Box (TyRational (toRational x)) floatTy) floatTy)
       let elab' = App s floatTy rf
                     (App s' scaleTy rf' (Val s'' floatTy rf'' (Var floatTy v)) (Val s3 floatTy rf3 (NumFloat x))) elab
 
@@ -644,17 +601,36 @@ checkExpr defs gam pol topLevel tau
         throw $ TypeError { errLoc = s, tyExpected = TyCon $ mkId "DFloat", tyActual = tau }
 
 -- Application checking
-checkExpr defs gam pol topLevel tau (App s _ rf e1 e2) = do
+checkExpr defs gam pol topLevel tau (App s a rf e1 e2) | (usingExtension GradedBase) = do
+  debugM "checkExpr[App]-gradedBase" (pretty s <> " : " <> pretty tau)
+
+-- GRADED BASE
+--
+--      G1 |- e1 => a %r -> b    G2 |- e2 <= a
+--  -------------------------------------------- app
+--      G1 + r * G2 |- e1 e2 <= b
+--
+--  The moding here, with synthesis for e1, is because we need
+--  to know the grade `r`.
+
+  -- Syntheise type of function
+  (tau', gam, subst, elab) <- synthExpr defs gam pol (App s a rf e1 e2)
+  -- Check the return types match
+  (eqT, _, substTy) <- equalTypes s tau tau'
+  unless eqT $ throw TypeError{ errLoc = s, tyExpected = tau, tyActual = tau' }
+
+  return (gam, subst, elab)
+
+checkExpr defs gam pol topLevel tau (App s _ rf e1 e2) | not (usingExtension GradedBase) = do
     debugM "checkExpr[App]" (pretty s <> " : " <> pretty tau)
     (argTy, gam2, subst2, elaboratedR) <- synthExpr defs gam pol e2
 
-    funTy <- substitute subst2 (FunTy Nothing argTy tau)
+    funTy <- substitute subst2 (FunTy Nothing Nothing argTy tau)
     (gam1, subst1, elaboratedL) <- checkExpr defs gam pol topLevel funTy e1
 
     gam <- ctxtPlus s gam1 gam2
 
     subst <- combineSubstitutions s subst1 subst2
-
     let elaborated = App s tau rf elaboratedL elaboratedR
     return (gam, subst, elaborated)
 
@@ -746,10 +722,7 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
         then ghostVariableContextMeet $ (mkId ".var.ghost", fromJust $ lookup (mkId ".var.ghost") gam) : patternGam
         else return patternGam
       -- Check that the use of locally bound variables matches their bound type
-      ctxtApprox s (localGam `intersectCtxts` (patternGam)) (patternGam')
-
-      -- Conclude the implication
-      concludeImplication (getSpan pat_i) eVars
+      subst'' <- ctxtApprox s (localGam `intersectCtxts` (patternGam)) (patternGam')
 
       -- Check linear use in anything Linear
       gamSoFar <- ctxtPlus s guardGam localGam
@@ -757,15 +730,21 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
         -- Return the resulting computed context, without any of
         -- the variable bound in the pattern of this branch
         [] -> do
+           substFinal <- combineManySubstitutions s [subst, subst', subst'']
+
+           -- Conclude the implication
+           concludeImplication (getSpan pat_i) eVars
+
            return (localGam `subtractCtxt` patternGam
-                 , subst'
+                 , substFinal
                  , (elaborated_pat_i, elaborated_i))
+
 
         -- Anything that was bound in the pattern but not used correctly
         p:ps -> illLinearityMismatch s (p:|ps)
 
   -- All branches must be possible
-  checkGuardsForImpossibility s $ mkId "case"
+  checkGuardsForImpossibility s (mkId "case") []
 
   -- Pop from stacks related to case
   -- _ <- popGuardContext
@@ -790,7 +769,7 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
 
 -- All other expressions must be checked using synthesis
 checkExpr defs gam pol topLevel tau e = do
-  debugM "checkExpr[*]" (pretty (getSpan e) <> " : " <> pretty tau)
+  debugM "checkExpr[*]" ("Term `" <> pretty e <> "` @ " <> pretty (getSpan e) <> " : " <> pretty tau)
   (tau', gam', subst', elaboratedE) <- synthExpr defs gam pol e
 
   -- Now to do a type equality on check type `tau` and synth type `tau'`
@@ -889,16 +868,16 @@ synthExpr _ gam _ (Val s _ rf (Constr _ c [])) = do
   st <- get
   mConstructor <- lookupDataConstructor s c
   case mConstructor of
-    Just (tySch, coercions) -> do
+    Just (tySch, coercions, _) -> do
       -- Freshen the constructor
       -- (discarding any fresh type variables, info not needed here)
 
-      (ty, _, _, constraints, coercions') <- freshPolymorphicInstance InstanceQ False tySch coercions
+      (ty, _, constraints, coercions') <- freshPolymorphicInstance InstanceQ False tySch coercions []
 
       otherTypeConstraints <- enforceConstraints s constraints
       registerWantedTypeConstraints otherTypeConstraints
 
-      -- Apply coercions
+    -- Apply coercions
       ty <- substitute coercions' ty
 
       let elaborated = Val s ty rf (Constr ty c [])
@@ -943,23 +922,27 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
         then ghostVariableContextMeet $ (mkId ".var.ghost", fromJust $ lookup (mkId ".var.ghost") gam) : patternGam
         else return patternGam
       -- Check that the use of locally bound variables matches their bound type
-      ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam'
-
-      -- Conclude
-      concludeImplication (getSpan pati) eVars
+      subst'' <- ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam'
 
       -- Check linear use in this branch
       gamSoFar <- ctxtPlus s guardGam localGam
       case checkLinearity patternGam gamSoFar of
          -- Return the resulting computed context, without any of
          -- the variable bound in the pattern of this branch
-         [] -> return (tyCase
-                    , (localGam `subtractCtxt` patternGam, subst')
+         [] -> do
+           substFinal <- combineManySubstitutions s [subst, subst', subst'']
+
+           -- Conclude
+           concludeImplication (getSpan pati) eVars
+
+           return (tyCase
+                    , (localGam `subtractCtxt` patternGam, substFinal)
                     , (elaborated_pat_i, elaborated_i))
          p:ps -> illLinearityMismatch s (p:|ps)
 
   -- All branches must be possible
-  checkGuardsForImpossibility s $ mkId "case"
+  checkGuardsForImpossibility s (mkId "case") []
+
   popCaseFrame
 
   let (branchTys, branchCtxtsAndSubsts, elaboratedCases) = unzip3 branchTysAndCtxtsAndSubsts
@@ -1026,7 +1009,7 @@ synthExpr defs gam pol (LetDiamond s _ rf p optionalTySig e1 e2) = do
 
   -- Check that usage matches the binding grades/linearity
   -- (performs the linearity check)
-  ctxtApprox s (gam2 `intersectCtxts` binders) binders
+  subst0 <- ctxtApprox s (gam2 `intersectCtxts` binders) binders
 
   gamNew <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
 
@@ -1037,7 +1020,7 @@ synthExpr defs gam pol (LetDiamond s _ rf p optionalTySig e1 e2) = do
   ef <- effectMult s efTy ef1 ef2
   let t = Diamond ef ty2
 
-  subst <- combineManySubstitutions s [substP, subst1, subst2, u]
+  subst <- combineManySubstitutions s [substP, subst0, subst1, subst2, u]
   -- Synth subst
   t' <- substitute substP t
 
@@ -1079,7 +1062,7 @@ synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
       t -> throw ExpectedEffectType{ errLoc = s, errTy = t }
 
   --to better match the typing rule both continuation types should be equal
-  (b, ty, _) <- equalTypes s ty2 ty3
+  (b, ty, subst4) <- equalTypes s ty2 ty3
   b <- case b of
       True -> return b
       False -> throw TypeError{ errLoc = s, tyExpected = ty2, tyActual = ty3}
@@ -1087,7 +1070,7 @@ synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
   optionalSigEquality s mty ty1
 
   -- linearity check for e2 and e3
-  ctxtApprox s (gam2 `intersectCtxts` binders) binders
+  subst5 <- ctxtApprox s (gam2 `intersectCtxts` binders) binders
 
   -- compute output contexts
   (gam2u3, _) <- joinCtxts s (gam2 `subtractCtxt` binders) gam3
@@ -1100,7 +1083,7 @@ synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
   ef <- effectMult s efTy f g
   let t = Diamond ef ty
 
-  subst <- combineManySubstitutions s [substP, subst1, subst2, subst3, subst']
+  subst <- combineManySubstitutions s [substP, subst1, subst2, subst3, subst4, subst5, subst']
   -- Synth subst
   t' <- substitute substP t
 
@@ -1155,7 +1138,7 @@ synthExpr defs gam pol
 
       -- elaborate just to a variable application
       let elab = Val s ty rf (Var ty (mkId $ "cap." <> internalName capName))
-      return (ty, outContext, [], elab)
+      return (ty, outContext, subst, elab)
 
 -- Specialised application for scale
 {- TODO: needs thought -}
@@ -1165,34 +1148,75 @@ synthExpr defs gam pol
 
   let floatTy = TyCon $ mkId "DFloat"
 
-  let scaleTyApplied = FunTy Nothing (Box (TyRational (toRational r)) floatTy) floatTy
-  let scaleTy = FunTy Nothing floatTy scaleTyApplied
+  let scaleTyApplied = FunTy Nothing Nothing (Box (TyRational (toRational r)) floatTy) floatTy
+  let scaleTy = FunTy Nothing Nothing floatTy scaleTyApplied
 
   let elab = App s scaleTy rf (Val s' scaleTy rf' (Var scaleTy v)) (Val s'' floatTy rf'' (NumFloat r))
 
   return (scaleTyApplied, weakenedGhostVariableContext, [], elab)
 
 -- Application
-synthExpr defs gam pol (App s _ rf e e') = do
+synthExpr defs gam pol (App s _ rf e e') | not (usingExtension GradedBase) = do
     debugM "synthExpr[App]" (pretty s)
     (fTy, gam1, subst1, elaboratedL) <- synthExpr defs gam pol e
 
     case fTy of
       -- Got a function type for the left-hand side of application
-      (FunTy _ sig tau) -> do
+      (FunTy _ _ sig tau) -> do
          (gam2, subst2, elaboratedR) <- checkExpr defs gam (flipPol pol) False sig e'
          gamNew <- ctxtPlus s gam1 gam2
 
          subst <- combineSubstitutions s subst1 subst2
 
          -- Synth subst
-         tau    <- substitute subst2 tau
+         tau    <- substitute subst tau
 
          let elaborated = App s tau rf elaboratedL elaboratedR
          return (tau, gamNew, subst, elaborated)
 
-      -- Not a function type
-      t -> throw LhsOfApplicationNotAFunction{ errLoc = s, errTy = t }
+         -- Not a function type
+      t -> throw LhsOfApplicationNotAFunction{ errLoc = s, errTy = fTy }
+
+-- Application
+-- GRADED BASE
+
+synthExpr defs gam pol (App s _ rf e1 e2) | usingExtension GradedBase = do
+  debugM "synthExpr[App-graded-base]" (pretty s)
+
+--
+--      G1 |- e1 => a %r -> b    G2 |- e2 <= a
+--  -------------------------------------------- app
+--      G1 + r * G2 |- e1 e2 => b
+--
+  -- Syntheise type of function
+  (funTy, gam1, subst1, elab_e1) <- synthExpr defs gam pol e1
+  case funTy of
+    FunTy _ grade sig tau -> do
+      -- Check whether `e2` can be promoted (implicitly by this rule)
+      unpr <-
+        if (CBN `elem` globalsExtensions ?globals)
+        then return False
+        else return $ resourceAllocator e2
+      when unpr (throw $ UnpromotableError{errLoc = s, errTy = sig })
+
+      -- Check the argument against `sig`
+      (gam2, subst2, elab_e2) <- checkExpr defs gam (flipPol pol) False sig e2
+
+      let r = case grade of
+                Just r  -> r
+                -- No grade so implicitly 1 of any semiring
+                Nothing -> TyGrade Nothing 1
+
+      -- Multiply the context
+      (scaled_gam2, subst2') <- ctxtMult s r gam2
+      gam_out <- ctxtPlus s gam1 scaled_gam2
+
+      -- Output
+      substFinal <- combineManySubstitutions s [subst1, subst2, subst2']
+      let elaborated = App s tau rf elab_e1 elab_e2
+      return (tau, gam_out, substFinal, elaborated)
+
+    _ -> throw LhsOfApplicationNotAFunction{ errLoc = s, errTy = funTy }
 
 {- Promotion
 
@@ -1312,7 +1336,7 @@ synthExpr defs gam pol (Binop s _ rf op e1 e2) = do
                 Right returnType -> local >> return (returnType, gam1, gam2, subst1, subst2, elaboratedL, elaboratedR)
                 -- Seems no way to resolve this:
                 Left _ ->
-                  throw FailedOperatorResolution { errLoc = s, errOp = op, errTy = t1 .-> t2 .-> tyVar "..." }
+                  throw FailedOperatorResolution { errLoc = s, errOp = op, errTy = t1 .-> t2 .-> tyVar "?" }
 
     gamOut <- ctxtPlus s gam1 gam2
     subst <- combineSubstitutions s subst1 subst2
@@ -1323,11 +1347,12 @@ synthExpr defs gam pol (Binop s _ rf op e1 e2) = do
     -- No matching type were found (meaning there is a type error)
     selectFirstByType t1 t2 [] = return Nothing
 
-    selectFirstByType t1 t2 ((FunTy _ opt1 (FunTy _ opt2 resultTy)):ops) = do
+    selectFirstByType t1 t2 ((FunTy _ grade1 opt1 (FunTy _ grade2 opt2 resultTy)):ops) = do
       -- Attempt to use this typing
       (result, local) <- peekChecker $ do
-         (eq1, _, _) <- equalTypes s t1 opt1
-         (eq2, _, _) <- equalTypes s t2 opt2
+         (eq1, substA, _) <- equalTypes s t1 opt1
+         (eq2, substB, _) <- equalTypes s t2 opt2
+         -- TODO: note substitutions getting discared here
          return (eq1 && eq2)
       -- If successful then return this local computation
       case result of
@@ -1353,12 +1378,12 @@ synthExpr defs gam pol (Val s _ rf (Abs _ p (Just sig) e)) = do
      (tau, gam'', subst, elaboratedE) <- synthExpr defs (bindings <> gam) pol e
 
      -- Locally we should have this property (as we are under a binder)
-     ctxtApprox s (gam'' `intersectCtxts` bindings) bindings
+     subst0 <- ctxtApprox s (gam'' `intersectCtxts` bindings) bindings
 
-     let finalTy = FunTy Nothing sig tau
+     let finalTy = FunTy Nothing Nothing sig tau
      let elaborated = Val s finalTy rf (Abs finalTy elaboratedP (Just sig) elaboratedE)
 
-     substFinal <- combineSubstitutions s substP subst
+     substFinal <- combineManySubstitutions s [subst0, substP, subst]
      finalTy' <- substitute substP finalTy
 
      concludeImplication s localVars
@@ -1386,17 +1411,16 @@ synthExpr defs gam pol (Val s _ rf (Abs _ p Nothing e)) = do
      (tau, gam'', subst, elaboratedE) <- synthExpr defs (bindings <> gam) pol e
 
      -- Locally we should have this property (as we are under a binder)
-     ctxtApprox s (gam'' `intersectCtxts` bindings) bindings
+     subst0 <- ctxtApprox s (gam'' `intersectCtxts` bindings) bindings
 
-     let finalTy = FunTy Nothing sig tau
+     let finalTy = FunTy Nothing Nothing sig tau
      let elaborated = Val s finalTy rf (Abs finalTy elaboratedP (Just sig) elaboratedE)
      finalTy' <- substitute substP finalTy
+     substFinal <- combineManySubstitutions s [subst0, substP, subst]
 
      concludeImplication s localVars
 
-     subst <- combineSubstitutions s substP subst
-
-     return (finalTy', gam'' `subtractCtxt` bindings, subst, elaborated)
+     return (finalTy', gam'' `subtractCtxt` bindings, substFinal, elaborated)
   else throw RefutablePatternError{ errLoc = s, errPat = p }
 
 -- Explicit type application
@@ -1477,6 +1501,54 @@ synthExpr defs gam pol e@(AppTy s _ rf e1 ty) = do
           -- return this variable expression in place here
           freshenTySchemeForVar s rf name typScheme
     _ -> throw NeedTypeSignature{ errLoc = getSpan e, errExpr = e }
+
+
+--  G |- e : ty'[ty/x]
+-- ------------------------------------------------
+--  G |- pack < ty , e > as exists {x : k} . ty' : exists {x : k} . ty'
+synthExpr defs gam pol (Val s0 _ rf p@(Pack sp a ty e x k ty')) = do
+  debugM "synthExpr[pack]" (pretty p)
+  innerType <- substitute [(x, SubstT ty)] ty'
+  (gam, subst, elabE) <- checkExpr defs gam pol False innerType e
+  let retTy = TyExists x k ty'
+  let elab = Val s0 retTy rf (Pack sp retTy ty elabE x k ty')
+  return (retTy, gam, subst, elab)
+
+--
+-- G |- e1 : exists {y : k} . A
+-- G, forall tyx : k,  x : A[tyx/y] |- e2 : B
+-- tyx notin fvB(B)
+-- -----------------------------------------
+-- G |- unpack < tyx , x > = e1 in e2 : B
+synthExpr defs gam pol e@(Unpack s a rf tyVar var e1 e2) = do
+  debugM "synthExpr[unpack]" (pretty e)
+  (ty, gam1, subst1, elabE1) <- synthExpr defs gam pol e1
+  case ty of
+    TyExists y k tyA -> do
+      -- line up the types
+      tyA <- substitute [(y, SubstT $ TyVar tyVar)] tyA
+      let bindings = [(var, Linear tyA)]
+      let gam' = bindings ++ gam
+      registerTyVarInContext tyVar k ForallQ
+      (tyB, gam2, subst2, elabE2)  <- synthExpr defs gam' pol e2
+      -- Check that the existential var doesn't escape
+      if not (tyVar `elem` freeVars tyB)
+        then do
+          case checkLinearity bindings gam' of
+            [] -> do
+              gamOut <- ctxtPlus s gam1 gam2
+              substFinal <- combineManySubstitutions s [subst1, subst2]
+
+              let elab = Unpack s tyB rf tyVar var elabE1 elabE2
+              return (tyB, gamOut `subtractCtxt` [(var, Linear tyA)], substFinal, elab)
+
+            (p:ps) -> illLinearityMismatch s (p:|ps)
+
+        else throw EscapingExisentialVar{ errLoc = s, var = tyVar, errTy = tyB }
+
+
+    _ -> throw LhsOfUnpackNotAnExistential{ errLoc = s, errTy = ty }
+
 
 synthExpr _ _ _ e = do
   debugM "synthExpr[*]" (pretty (getSpan e))
@@ -1577,9 +1649,9 @@ prettifyMessage msg =
 --   and the typical pattern is that `ctxt2` represents a specification
 --   (i.e. input to checking) and `ctxt1` represents actually usage
 ctxtApprox :: (?globals :: Globals) =>
-    Span -> Ctxt Assumption -> Ctxt Assumption -> Checker ()
+    Span -> Ctxt Assumption -> Ctxt Assumption -> Checker Substitution
 ctxtApprox s ctxt1 ctxt2 = do
-  -- intersection contains those ids from ctxt1 which appears in ctxt2
+  -- intersection contains those ids (and substitutions) from ctxt1 which appears in ctxt2
   intersection <-
     -- For everything in the right context
     -- (which should come as an input to checking)
@@ -1588,9 +1660,8 @@ ctxtApprox s ctxt1 ctxt2 = do
       case lookup id ctxt1 of
         -- ... if so equate
         Just ass1 -> do
-          -- TODO: deal with the subst here
-          _ <- relateByAssumption s ApproximatedBy (id, ass1) (id, ass2)
-          return id
+          subst <- relateByAssumption s ApproximatedBy (id, ass1) (id, ass2)
+          return (id, subst)
         -- ... if not check to see if the missing variable is linear
         Nothing   ->
            case ass2 of
@@ -1601,29 +1672,34 @@ ctxtApprox s ctxt1 ctxt2 = do
                -- TODO: deal with the subst here
                (kind, subst, _) <- synthKind s c
                -- TODO: deal with the subst here
-               _ <- relateByAssumption s ApproximatedBy (id, Discharged t (TyGrade (Just kind) 0)) (id, ass2)
-               return id
+               subst' <- relateByAssumption s ApproximatedBy (id, Discharged t (TyGrade (Just kind) 0)) (id, ass2)
+               subst'' <- combineSubstitutions s subst subst'
+               return (id, subst'')
              -- TODO: handle new ghost variables
              Ghost c -> do
                -- TODO: deal with the subst here
                (kind, subst, _) <- synthKind s c
                debugM "ctxtApprox ghost" (pretty kind <> ", " <> pretty c)
                -- TODO: deal with the subst here
-               _ <- relateByAssumption s ApproximatedBy (id, Ghost (TyGrade (Just kind) 0)) (id, ass2)
-               return id
+               subst' <- relateByAssumption s ApproximatedBy (id, Ghost (TyGrade (Just kind) 0)) (id, ass2)
+               subst'' <- combineSubstitutions s subst subst'
+               return (id, subst'')
   -- Last we sanity check, if there is anything in ctxt1 that is not in ctxt2
   -- then we have an issue!
+  let justIds = map fst intersection
   forM_ ctxt1 $ \(id, ass1) ->
-    if (id `elem` intersection)
+    if (id `elem` justIds)
       then return ()
       else throw UnboundVariableError{ errLoc = s, errId = id }
 
+  -- combine and return substitutions
+  combineManySubstitutions s (map snd intersection)
 
 -- | `ctxtEquals ctxt1 ctxt2` checks if two contexts are equal
 --   and the typical pattern is that `ctxt2` represents a specification
 --   (i.e. input to checking) and `ctxt1` represents actually usage
 ctxtEquals :: (?globals :: Globals) =>
-    Span -> Ctxt Assumption -> Ctxt Assumption -> Checker ()
+    Span -> Ctxt Assumption -> Ctxt Assumption -> Checker Substitution
 ctxtEquals s ctxt1 ctxt2 = do
   -- intersection contains those ids from ctxt1 which appears in ctxt2
   intersection <-
@@ -1635,8 +1711,8 @@ ctxtEquals s ctxt1 ctxt2 = do
         -- ... if so equate
         Just ass1 -> do
           -- -- TODO: deal with the subst here
-          _ <- relateByAssumption s Eq (id, ass1) (id, ass2)
-          return id
+          subst <- relateByAssumption s Eq (id, ass1) (id, ass2)
+          return (id, subst)
         -- ... if not check to see if the missing variable is linear
         Nothing   ->
            case ass2 of
@@ -1644,24 +1720,28 @@ ctxtEquals s ctxt1 ctxt2 = do
              Linear t -> illLinearityMismatch s . pure $ LinearNotUsed id
              -- Else, this could be due to weakening so see if this is allowed
              Discharged t c -> do
-               -- TODO: deal with the subst here
-               (kind, _, _) <- synthKind s c
-               -- TODO: deal with the subst here
-               _ <- relateByAssumption s Eq (id, Discharged t (TyGrade (Just kind) 0)) (id, ass2)
-               return id
+               (kind, subst, _) <- synthKind s c
+               subst' <- relateByAssumption s Eq (id, Discharged t (TyGrade (Just kind) 0)) (id, ass2)
+               subst'' <- combineSubstitutions s subst subst'
+               return (id, subst'')
              -- TODO: handle new ghost variables
              Ghost c -> do
                -- TODO: deal with the subst here
-               (kind, _, _) <- synthKind s c
+               (kind, subst, _) <- synthKind s c
                -- TODO: deal with the subst here
-               _ <- relateByAssumption s Eq (id, Ghost (TyGrade (Just kind) 0)) (id, ass2)
-               return id
+               subst' <- relateByAssumption s Eq (id, Ghost (TyGrade (Just kind) 0)) (id, ass2)
+               subst'' <- combineSubstitutions s subst subst'
+               return (id, subst'')
   -- Last we sanity check, if there is anything in ctxt1 that is not in ctxt2
   -- then we have an issue!
+  let justIds = map fst intersection
   forM_ ctxt1 $ \(id, ass1) ->
-    if (id `elem` intersection)
+    if (id `elem` justIds)
       then return ()
       else throw UnboundVariableError{ errLoc = s, errId = id }
+
+  -- return substitutions
+  combineManySubstitutions s (map snd intersection)
 
 {- | Take the least-upper bound of two contexts.
      If one context contains a linear variable that is not present in
@@ -1969,63 +2049,91 @@ checkGuardsForExhaustivity s name ty eqs = do
   debugM "Guard exhaustivity" "todo"
   return ()
 
-checkGuardsForImpossibility :: (?globals :: Globals) => Span -> Id -> Checker ()
-checkGuardsForImpossibility s name = do
+checkGuardsForImpossibility :: (?globals :: Globals) => Span -> Id -> [Type] -> Checker ()
+checkGuardsForImpossibility s name refinementConstraints = do
+  -- Convert all universal variables to existential
+  {- for example, if we are looking at the following program:
+      from tests/cases/negative/impossibilityNat.gr
+
+      data N (n : Nat) where
+        Z : N 0;
+        S : N n -> N (n + 1)
+
+      pred : forall {n : Nat} . N (n + 1) -> N n
+      pred (S n) = n;
+      pred Z = Z
+
+  -- We want this to be disallowed because the last pattern match is always impossible
+  -- i.e., there exists no such `n` such that `n + 1 = 0`.
+  -- Thus, to do this check we first make every universally quantified variable into an
+  -- existential (a unification variable)
+  -}
+
+  tyVars <- tyVarContextExistential >>= includeOnlyGradeVariables s
+
   -- Get top of guard predicate stack
   st <- get
-  let ps = head $ guardPredicates st
+  let guardPredicatesStack = head $ guardPredicates st
+  debugM "guardPredicatesStack" (pretty $ guardPredicates st)
 
   -- Convert all universal variables to existential
   tyVars <- tyVarContextExistential >>= includeOnlyGradeVariables s
 
   -- For each guard predicate
-  forM_ ps $ \((ctxt, p), s) -> do
+  forM_ guardPredicatesStack $ \((ctxt, predicate), s) -> do
 
     -- Existentially quantify those variables occuring in the pattern in scope
-    let thm = foldr (uncurry Exists) p ctxt
+    -- TODO: Remvoe commented code
+    -- constraints' <- mapM (compileTypeConstraintToConstraint nullSpanNoFile) refinementConstraints
+    let theorem = foldr (uncurry Exists) predicate ctxt
 
-    debugM "impossibility" $ "about to try" <> pretty thm
+    debugM "impossibility" $ "about to try (" <> pretty tyVars <> ") . " <> pretty theorem
     -- Try to prove the theorem
     constructors <- allDataConstructorNames
-    (_, result) <- liftIO $ provePredicate thm tyVars constructors
-
-    p <- simplifyPred thm
+    (_, result) <- liftIO $ provePredicate theorem tyVars constructors
 
     case result of
       QED -> return ()
 
       -- Various kinds of error
       -- TODO make errors better
-      NotValid msg -> throw ImpossiblePatternMatch
-        { errLoc = s
-        , errId = name
-        , errPred = p
-        }
-      NotValidTrivial unsats -> throw ImpossiblePatternMatchTrivial
-        { errLoc = s
-        , errId = name
-        , errUnsats = unsats
-        }
-      Timeout -> throw SolverTimeout
-        { errLoc = s
-        , errDefId = name
-        , errSolverTimeoutMillis = solverTimeoutMillis
-        , errContext = "pattern match of an equation"
-        , errPred = p
-        }
+      NotValid msg -> do
+            theorem' <- simplifyPred theorem
+            throw ImpossiblePatternMatch
+                { errLoc = s
+                , errId = name
+                , errPred = theorem'
+                }
+      NotValidTrivial unsats ->
+        throw ImpossiblePatternMatchTrivial
+          { errLoc = s
+          , errId = name
+          , errUnsats = unsats
+          }
+      Timeout -> do
+            theorem' <- simplifyPred theorem
+            throw SolverTimeout
+              { errLoc = s
+              , errDefId = name
+              , errSolverTimeoutMillis = solverTimeoutMillis
+              , errContext = "pattern match of an equation"
+              , errPred = theorem'
+              }
 
-      OtherSolverError msg -> throw ImpossiblePatternMatch
-        { errLoc = s
-        , errId = name
-        , errPred = p
-        }
+      OtherSolverError msg -> do
+            theorem' <- simplifyPred theorem
+            throw ImpossiblePatternMatch
+                    { errLoc = s
+                    , errId = name
+                    , errPred = theorem'
+                    }
 
       SolverProofError msg -> error msg
 
 --
 freshenTySchemeForVar :: (?globals :: Globals) => Span -> Bool -> Id -> TypeScheme -> Checker (Type, Ctxt Assumption, Substitution, Expr () Type)
 freshenTySchemeForVar s rf id tyScheme = do
-  (ty', _, _, constraints, []) <- freshPolymorphicInstance InstanceQ False tyScheme [] -- discard list of fresh type variables
+  (ty', _, constraints, []) <- freshPolymorphicInstance InstanceQ False tyScheme [] [] -- discard list of fresh type variables
 
   otherTypeConstraints <- enforceConstraints s constraints
   registerWantedTypeConstraints otherTypeConstraints
@@ -2036,20 +2144,14 @@ freshenTySchemeForVar s rf id tyScheme = do
 
 -- Hook into the synthesis engine.
 programSynthesise :: (?globals :: Globals) =>
-  Ctxt Assumption -> [Id] -> Type -> Checker (Expr () Type)
-programSynthesise ctxt vars ty = do
+  Ctxt TypeScheme -> Ctxt Assumption -> [Id] -> Type -> Checker (Expr () Type)
+programSynthesise defs ctxt vars ty = do
   currentState <- get
-  debugM "equation Nameeee" (show $ equationName currentState)
-  debugM "equation ctxt" (show $ ctxt)
-
-  let (defs, currentName) = case (equationName currentState, equationTy currentState) of
-        (Just name, Just ty') -> ([(name, ty')], name)
-        _ -> ([], mkId "")
-
   -- Run the synthesiser in this context
   let mode = if alternateSynthesisMode then Syn.Alternative else Syn.Default
   synRes <-
-      liftIO $ Syn.synthesiseProgram defs currentName
+  -- TODO: needs fixing, there is some part I am missing here for defs (which is now undefined)
+      liftIO $ Syn.synthesiseProgram undefined (mkId "")
                   (if subtractiveSynthesisMode then (Syn.Subtractive mode) else (Syn.Additive mode))
                   ctxt [] (Forall nullSpan [] [] ty) currentState
 

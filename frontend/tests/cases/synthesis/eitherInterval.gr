@@ -1,3 +1,4 @@
 data Either a b where Left a | Right b
 f : forall {a : Type, b : Type, c : Type} . b [2..3] -> Either a c -> Either (a, b [2..2]) (c, b [3..3])
-f = ?
+f [z] (Right x4) = Right (x4, [z]);
+f [z] (Left x3) = Left (x3, [z])

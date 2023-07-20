@@ -1,0 +1,9 @@
+data List a = Nil | Cons a (List a)
+
+peek : forall {a : Type, n : Nat}
+      . List (a [0..1]) -> (a, List (a [0..0]))
+peek (Cons [x] xs) =
+  let ys : List (a [0..0]) = xs;
+      y : a [0..0] = [x]
+  in (x, Cons y ys)
+

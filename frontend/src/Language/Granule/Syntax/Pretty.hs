@@ -64,6 +64,12 @@ instance Pretty () where
 instance {-# OVERLAPPABLE #-} Pretty a => Pretty [a] where
    pretty xs = "[" <> intercalate "," (map pretty xs) <> "]"
 
+-- Pretty printing for type variable contexts
+instance Pretty q => Pretty [(Id, (Type, q))] where
+  pretty = (intercalate ", ") . (map prettyAssignment)
+    where
+      prettyAssignment (v, (ty, qu)) = pretty qu <> pretty v <> " : " <> pretty ty
+
 instance (Pretty a, Pretty b) => Pretty (Either a b) where
   pretty (Left a) = pretty a
   pretty (Right b) = pretty b
@@ -95,14 +101,23 @@ instance Pretty Type where
     pretty (Type l) =
       "Type " <> pretty l
 
-    pretty (FunTy Nothing t1 t2)  =
+    pretty (FunTy Nothing Nothing t1 t2)  =
       case t1 of
         FunTy{} -> "(" <> pretty t1 <> ") -> " <> pretty t2
         _ -> pretty t1 <> " -> " <> pretty t2
 
-    pretty (FunTy (Just id) t1 t2)  =
+    pretty (FunTy Nothing (Just coeffect) t1 t2)  =
+      case t1 of
+        FunTy{} -> "(" <> pretty t1 <> ") -> " <> pretty t2
+        _ -> pretty t1 <> " % " <> pretty coeffect <>  " -> " <> pretty t2
+
+    pretty (FunTy (Just id) Nothing t1 t2)  =
       let pt1 = case t1 of FunTy{} -> "(" <> pretty t1 <> ")"; _ -> pretty t1
       in  "(" <> pretty id <> " : " <> pt1 <> ") -> " <> pretty t2
+
+    pretty (FunTy (Just id) (Just coeffect) t1 t2)  =
+      let pt1 = case t1 of FunTy{} -> "(" <> pretty t1 <> ")"; _ -> pretty t1
+      in  "(" <> pretty id <> " : " <> pt1 <> ") % " <> pretty coeffect <> " -> " <> pretty t2
 
     pretty (Box c t) =
       case c of
@@ -150,6 +165,8 @@ instance Pretty Type where
                     <> intercalate "; " (map (\(p, t') -> pretty p
                     <> " : " <> pretty t') ps) <> ")"
 
+    pretty (TyExists var k t) =
+      "exists {" <> pretty var <> ":" <> pretty k <> "} . " <> pretty t
 
 instance Pretty TypeOperator where
   pretty = \case
@@ -247,17 +264,15 @@ instance Pretty v => Pretty (Value v a) where
     pretty (Constr _ n []) = pretty n
     pretty (Constr _ n vs) = intercalate " " $ pretty n : map prettyNested vs
     pretty (Ext _ v) = pretty v
+    pretty (Pack s a ty e1 var k ty') =
+      "pack <" <> pretty ty <> ", " <> pretty e1 <> "> "
+      <> "as exists {" <> pretty var <> " : " <> pretty k <> "} . " <> pretty ty'
 
 instance Pretty Id where
   pretty
     = if debugging
         then internalName
-        else (stripMarker '`') . (stripMarker '.') . sourceName
-    where
-      stripMarker c [] = []
-      stripMarker c (c':cs) | c == c' = cs
-                            | otherwise = c' : stripMarker c cs
-
+        else filter (\x -> x /= '.' && x /= '`') . sourceName
 
 instance Pretty (Value v a) => Pretty (Expr v a) where
   pretty (App _ _ _ (App _ _ _ (Val _ _ _ (Constr _ x _)) t1) t2) | sourceName x == "," =
@@ -290,6 +305,9 @@ instance Pretty (Value v a) => Pretty (Expr v a) where
   pretty (Hole _ _ _ []) = "?"
   pretty (Hole _ _ _ vs) = "{!" <> unwords (map pretty vs) <> "!}"
 
+  pretty (Unpack _ _ _ tyVar var e1 e2) =
+    "unpack <" <> pretty tyVar <> ", " <> pretty var <> "> = " <> pretty e1 <> " in " <> pretty e2
+
 instance Pretty Operator where
   pretty = \case
     OpLesser          -> "<"
@@ -306,9 +324,6 @@ instance Pretty Operator where
 ticks :: String -> String
 ticks x = "`" <> x <> "`"
 
-instance Pretty Int where
-  pretty = show
-
 instance Pretty Span where
   pretty
     | testing = const "(location redacted)"
@@ -319,3 +334,6 @@ instance Pretty Span where
 
 instance Pretty Pos where
     pretty (l, c) = show l <> ":" <> show c
+
+instance {-# OVERLAPPABLE #-} Show a => Pretty a where
+    pretty = show

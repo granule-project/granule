@@ -59,6 +59,8 @@ data ValueF ev a value expr =
     | NumFloatF Double
     | CharLiteralF Char
     | StringLiteralF Text
+    | PackF Span a Type expr Id Kind Type
+     -- pack <t, e> as exists {x : k} . t
     -- Extensible part
     | ExtF a ev
    deriving (Generic, Eq, Rp.Data)
@@ -103,10 +105,21 @@ pattern CharLiteral ch = (ExprFix2 (CharLiteralF ch))
 pattern StringLiteral :: Text -> ExprFix2 ValueF g ev a
 pattern StringLiteral str = (ExprFix2 (StringLiteralF str))
 
+pattern Pack :: Span
+    -> a
+    -> Type
+    -> ExprFix2 g ValueF ev a
+    -> Id
+    -> Type
+    -> Type
+    -> ExprFix2 ValueF g ev a
+pattern Pack sp a ty e x k ty' = ExprFix2 (PackF sp a ty e x k ty')
+
+
 pattern Ext :: a -> ev -> ExprFix2 ValueF g ev a
 pattern Ext a extv = (ExprFix2 (ExtF a extv))
 {-# COMPLETE Abs, Promote, Pure, Constr, Var, NumInt,
-             NumFloat, CharLiteral, StringLiteral, Ext #-}
+             NumFloat, CharLiteral, StringLiteral, Pack, Ext #-}
 
 -- | Expressions (computations) in Granule (with `v` extended values
 -- | and annotations `a`).
@@ -124,6 +137,8 @@ data ExprF ev a expr value =
   | ValF Span a Bool value
   | CaseF Span a Bool expr [(Pattern a, expr)]
   | HoleF Span a Bool [Id]
+  | UnpackF Span a Bool Id Id expr expr
+     -- unpack <a, x> = e1 in e2
   deriving (Generic, Eq, Rp.Data)
 
 data Operator
@@ -210,7 +225,20 @@ pattern Case sp a rf swexp arms = (ExprFix2 (CaseF sp a rf swexp arms))
 pattern Hole :: --forall {g :: * -> * -> * -> * -> *} {ev} {a}.
                 Span -> a -> Bool -> [Id] -> ExprFix2 ExprF g ev a
 pattern Hole sp a rf vs = ExprFix2 (HoleF sp a rf vs)
-{-# COMPLETE App, Binop, LetDiamond, TryCatch, Val, Case, Hole #-}
+
+pattern Unpack :: Span
+    -> a
+    -> Bool
+    -> Id
+    -> Id
+    -> ExprFix2 ExprF g ev a
+    -> ExprFix2 ExprF g ev a
+    -> ExprFix2 ExprF g ev a
+pattern Unpack sp a rf tyVar var e1 e2 = ExprFix2 (UnpackF sp a rf tyVar var e1 e2)
+
+
+{-# COMPLETE App, Binop, LetDiamond, TryCatch, Val, Case, Hole, Unpack #-}
+
 
 -- Cannot be automatically derived unfortunately
 instance Functor (Value ev) where
@@ -225,6 +253,8 @@ instance Functor (Value ev) where
   fmap f (NumFloat n)      = NumFloat n
   fmap f (CharLiteral c)   = CharLiteral c
   fmap f (StringLiteral s) = StringLiteral s
+  fmap f (Pack s a ty e1 var k ty') =
+    Pack s (f a) ty (fmap f e1) var k ty'
 
 instance Functor (Expr ev) where
   fmap f (App s a rf e1 e2) = App s (f a) rf (fmap f e1) (fmap f e2)
@@ -235,6 +265,8 @@ instance Functor (Expr ev) where
   fmap f (Val s a b val) = Val s (f a) b (fmap f val)
   fmap f (Case s a b expr pats) = Case s (f a) b (fmap f expr) (map (\(p, e) -> (fmap f p, fmap f e)) pats)
   fmap f (Hole s a b ids)  = Hole s (f a) b ids
+  fmap f (Unpack s a rf tyVar var e1 e2) =
+    Unpack s (f a) rf tyVar var (fmap f e1) (fmap f e2)
 
 instance Bifunctor (f ev a)
     => Birecursive (ExprFix2 f g ev a) (ExprFix2 g f ev a) where
@@ -320,11 +352,13 @@ instance Term (Value ev a) where
     freeVars CharLiteral{}   = []
     freeVars StringLiteral{} = []
     freeVars Ext{} = []
+    freeVars (Pack s a ty e1 var k ty') = freeVars e1
 
     hasHole (Abs _ _ _ e) = hasHole e
     hasHole (Pure _ e)    = hasHole e
     hasHole (Promote _ e) = hasHole e
     hasHole (Nec _ e)    = hasHole e
+    hasHole (Pack s a ty e1 var k ty') = hasHole e1
     hasHole _             = False
 
     isLexicallyAtomic Abs{} = False
@@ -344,6 +378,8 @@ instance Substitutable Value where
     subst es _ v@CharLiteral{}   = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) False v
     subst es _ v@StringLiteral{} = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) False v
     subst es _ v@Ext{} = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) False v
+    subst es v (Pack s a ty e var k ty') =
+      Val (nullSpanInFile $ getSpan es) a False $ Pack s a ty (subst es v e) var k ty'
 
 instance Monad m => Freshenable m (Value v a) where
     freshen (Abs a p t e) = do
@@ -382,6 +418,14 @@ instance Monad m => Freshenable m (Value v a) where
     freshen v@StringLiteral{} = return v
     freshen v@Ext{} = return v
 
+    freshen (Pack s a ty e1 var k ty') = do
+      e1  <- freshen e1
+      ty  <- freshen ty
+      var <- freshIdentifierBase TypeL var
+      k   <- freshen k
+      ty' <- freshen ty'
+      return $ Pack s a ty e1 var k ty'
+
 freshenId :: Monad m => Id -> Freshener m Id
 freshenId v = do
       v' <- lookupVar ValueL v
@@ -401,6 +445,8 @@ instance Term (Expr v a) where
     freeVars (Case _ _ _ e cases)         = freeVars e <> (concatMap (freeVars . snd) cases
                                       \\ concatMap (boundVars . fst) cases)
     freeVars (Hole _ _ _ vars) = vars
+    freeVars (Unpack s a _ tyVar var e1 e2) =
+      freeVars e1 <> (freeVars e2 \\ [tyVar, var])
 
     hasHole (App _ _ _ e1 e2) = hasHole e1 || hasHole e2
     hasHole (AppTy _ _ _ e _) = hasHole e
@@ -410,6 +456,7 @@ instance Term (Expr v a) where
     hasHole (Val _ _ _ e) = hasHole e
     hasHole (Case _ _ _ e cases) = hasHole e || (or (map (hasHole . snd) cases))
     hasHole Hole{} = True
+    hasHole (Unpack s a _ tyVar var e1 e2) = hasHole e1 || hasHole e2
 
     isLexicallyAtomic (Val _ _ _ e) = isLexicallyAtomic e
     isLexicallyAtomic (App _ _ _ (App _ _ _ (Val _ _ _ (Constr _ x _)) t1) t2) = sourceName x == ","
@@ -439,6 +486,9 @@ instance Substitutable Expr where
                (map (second (subst es v)) cases)
 
     subst es _ v@Hole{} = v
+
+    subst es v (Unpack s a rf tyVar var e1 e2) =
+      Unpack s a rf tyVar var (subst es v e1) (subst es v e2)
 
 instance Monad m => Freshenable m (Expr v a) where
     freshen (App s a rf e1 e2) = do
@@ -492,6 +542,14 @@ instance Monad m => Freshenable m (Expr v a) where
       -- Freshen hole variables like they are normal variables
       vars' <- mapM freshenId vars
       return $ Hole s a rf vars'
+
+    freshen (Unpack s a rf tyVar var e1 e2) = do
+      e1    <- freshen e1
+      tyVar <- freshIdentifierBase TypeL tyVar
+      var   <- freshIdentifierBase ValueL var
+      e2    <- freshen e2
+      removeFreshenings [var]
+      return $ Unpack s a rf tyVar var e1 e2
 
 -- If an expression is a right-nested application tree on a contructor then
 -- extract the head constructor and the list of parameters

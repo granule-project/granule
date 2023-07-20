@@ -27,8 +27,13 @@ push = Cons
 peek : forall {n : Nat, a : Type} . (Vec (n+1) a) [1..2] -> (a, Vec (n+1) a)
 peek [Cons x xs] = (x, Cons x xs)
 
-peek' : forall {m : Ext Nat, a, n : Nat} . Vec (n+1) (a [m..m+1]) -> (a, Vec (n+1) (a [m..m]))
-peek' (Cons [x] xs) = (x, Cons [x] xs)
+-- Example of using let-bindings to do approximation locally
+peek' : forall {m : Ext Nat, a, n : Nat}
+      . Vec (n+1) (a [m..m+1]) -> (a, Vec (n+1) (a [m..m]))
+peek' (Cons [x] xs) =
+  let ys : Vec n (a [m..m]) = xs;
+      y  : a [m..m]         = [x]
+  in (x, Cons y ys)
 
 -- Patient database example
 

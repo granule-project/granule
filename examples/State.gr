@@ -1,10 +1,12 @@
 import Prelude
 
-data State sIn sOut a = State (sIn -> a × sOut)
+-- State monad example
+
+data State s a = State (s -> a × s)
 
 mapState
-  : forall {a : Type, b : Type, sIn : Type, sOut : Type}
-  . (a -> b) -> State sIn sOut a -> State s b
+  : forall {a : Type, b : Type, s : Type}
+  . (a -> b) -> State s a -> State s b
 mapState f (State ka) = State (\s -> let (a, s) = ka s in (f a, s))
 
 pureState
@@ -32,7 +34,6 @@ mmapState
   . (a -> State s b) -> State s a -> State s b
 mmapState k = joinState ∘ mapState k
 
-
 -- here things get interesitng
 -- `get` duplicates the state, so the usual implementation is not well typed
 -- get
@@ -40,16 +41,7 @@ mmapState k = joinState ∘ mapState k
 --   . State s s
 -- get = State (\s -> (s, s))
 
-
--- get
---   : forall {s : Type}
---   . State (s [2]) s
--- get = State (\[x] -> (x, x))
-
 get
   : forall {s : Type}
-  . State (s [2]) s
-get = State foo
-
-foo : forall {s : Type} . s [2] -> (s, s)
-foo = \[s] -> (s, s)
+  . State (s [0..Inf]) s
+get = State (\([x] : s [0..Inf]) -> (x, [x]))

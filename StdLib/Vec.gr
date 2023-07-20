@@ -175,13 +175,12 @@ copySpine (Cons x xs) = let
   (ss, xs) = copySpine xs
   in (Cons () ss, Cons x xs)
 
-data VecX a where
-  VecX : ∀ {n : Nat} . Vec n a → VecX a
-
 import Maybe
 
-stringToVecX : String → VecX Char
-stringToVecX s = case stringUncons s of
-  None → VecX Nil;
-  Some (c, s) → let VecX v = stringToVecX s in VecX (Cons c v)
+stringToVec : String → exists {n : Nat} . Vec n Char
+stringToVec s = case stringUncons s of
+  None → pack < 0 , Nil > as exists {n : Nat} . Vec n Char;
+  Some (c, s) →
+    unpack < m , v > = stringToVec s
+    in pack < m + 1 , (Cons c v) > as exists {n : Nat} . Vec n Char
 

@@ -4,23 +4,30 @@
 
 module Language.Granule.Checker.SubstitutionContexts where
 
+import Data.List (intercalate)
+
 import Language.Granule.Context
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Helpers
 
-{-| Substitutions map from variables to type-level things as defined by
-    substitutors -}
+{-| Substitutions map from unification
+    variables to type-level things as defined by substitutors -}
 type Substitution = Ctxt Substitutors
+
+{-| Instantiations map from universal variables to type-level things -}
+type Instantiation = Ctxt Substitutors
 
 {-| Substitutors are things we want to substitute in... they may be one
      of several things... -}
-data Substitutors =
+newtype Substitutors =
     SubstT  Type
   deriving (Eq, Show)
 
-instance Pretty Substitutors where
-  pretty (SubstT t) = pretty t
+instance {-# OVERLAPS #-} Pretty (Ctxt Substitutors) where
+  pretty = (intercalate " | ") . (map prettyCoerce)
+    where
+      prettyCoerce (v, SubstT t) = pretty v <> " ~ " <> pretty t
 
 instance Term Substitution where
   freeVars [] = []
@@ -29,6 +36,7 @@ instance Term Substitution where
 
 -- | For substitutions which are just renaminings
 --   allow the substitution to be inverted
+-- TODO: expunge this one day
 flipSubstitution :: Substitution -> Substitution
 flipSubstitution [] = []
 flipSubstitution ((var, SubstT (TyVar var')):subst) =

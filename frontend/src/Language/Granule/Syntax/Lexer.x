@@ -58,6 +58,9 @@ tokens :-
   catch                         { \p s -> TokenCatch p }
   clone                         { \p s -> TokenCopy p }
   endorse                       { \p s -> TokenEndorse p }
+  pack                          { \p s -> TokenPack p }
+  unpack                        { \p s -> TokenUnpack p }
+  exists                        { \p s -> TokenExists p }
   ∞                             { \p s -> TokenInfinity p }
   @float                        { \p s -> TokenFloat p s }
   @int                          { \p s -> TokenInt p $ read s }
@@ -117,6 +120,7 @@ tokens :-
   "#"                           { \p _ -> TokenHash p }
   "⊸"                           { \p _ -> TokenArrow p }
   "*{"                          { \p _ -> TokenStar p }
+  "%"                           { \p _ -> TokenPercent p }
 
 {
 
@@ -191,7 +195,11 @@ data Token
   | TokenBorrow AlexPosn
   | TokenCopy AlexPosn
   | TokenEndorse AlexPosn
+  | TokenPack AlexPosn
+  | TokenUnpack AlexPosn
+  | TokenExists AlexPosn
   | TokenHash AlexPosn
+  | TokenPercent AlexPosn
   | TokenStar AlexPosn
 
   deriving (Eq, Show, Generic)

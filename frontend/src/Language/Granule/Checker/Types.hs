@@ -19,24 +19,29 @@ import Language.Granule.Checker.Kinding
 import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Normalise
+import Language.Granule.Checker.Variables
 
-import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
-
+import Language.Granule.Syntax.Helpers (freeVars)
 import Language.Granule.Utils
+import Language.Granule.Context
 
 import Data.Functor.Const
 
 lEqualTypesWithPolarity :: (?globals :: Globals)
   => Span -> SpecIndicator -> Type -> Type -> Checker (Bool, Type, Substitution)
-lEqualTypesWithPolarity s pol = equalTypesRelatedCoeffectsAndUnify s ApproximatedBy pol
+lEqualTypesWithPolarity s pol t1 t2 = do
+  let (t1', t2') = if pol == SndIsSpec then (t1, t2) else (t2, t1)
+  equalTypesRelatedCoeffectsAndUnify s ApproximatedBy pol t1' t2'
 
 equalTypesWithPolarity :: (?globals :: Globals)
   => Span -> SpecIndicator -> Type -> Type -> Checker (Bool, Type, Substitution)
-equalTypesWithPolarity s pol = equalTypesRelatedCoeffectsAndUnify s Eq pol
+equalTypesWithPolarity s pol t1 t2 = do
+  let (t1', t2') = if pol == SndIsSpec then (t1, t2) else (t2, t1)
+  equalTypesRelatedCoeffectsAndUnify s Eq pol t1' t2'
 
 lEqualTypes :: (?globals :: Globals)
   => Span -> Type -> Type -> Checker (Bool, Type, Substitution)
@@ -53,8 +58,26 @@ data SpecIndicator = FstIsSpec | SndIsSpec | PatternCtxt
 
 data Mode = Types | Effects deriving Show
 
+-- Abstracted equality/relation on grades
+relGrades :: (?globals :: Globals)
+  => Span -> Coeffect -> Coeffect
+  -- Explain how coeffects should be related by a solver constraint
+  -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
+  -> Checker Substitution
+relGrades s c c' rel = do
+  -- Unify the coeffect kinds of the two coeffects
+  (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c c'
+
+  -- Add constraint for the coeffect (using ^op for the ordering compared with the order of equality)
+  c' <- substitute subst c'
+  c  <- substitute subst c
+  kind <- substitute subst kind
+  addConstraint (rel s (inj2 c') (inj1 c) kind)
+  debugM "added solver constraint from box-types equality" (pretty $ (rel s (inj2 c') (inj1 c) kind))
+  return subst
+
 {- | Check whether two types are equal, and at the same time
-     generate (in)equality constraints and perform unification.
+     generate (in)equality constraints and perform unification (on non graded things)
 
      The first argument is taken to be possibly approximated by the second
      e.g., the first argument is inferred, the second is a specification being
@@ -104,12 +127,30 @@ equalTypesRelatedCoeffects :: (?globals :: Globals)
   -> Mode
   -> Checker (Bool, Substitution)
 equalTypesRelatedCoeffects s rel t1 t2 spec mode = do
-  let (t1', t2') = if spec == FstIsSpec then (t1, t2) else (t2, t1)
-  -- Infer kinds
-  (k, subst, _) <- synthKind s t1'
-  (subst', _) <- checkKind s t2' k
+  -- Infer kinds (trying both ways round to unify)
+  --
+  let leftToRight = do
+        (k, subst, _) <- synthKind s t1
+        -- check the other type has the same kind
+        (subst', _) <- checkKind s t2 k
+        substFromK <- combineManySubstitutions s [subst,subst']
+        return (k, substFromK)
+  --
+  let rightToLeft = do
+        (k, subst, _) <- synthKind s t2
+        -- check the other type has the same kind
+        (subst', _) <- checkKind s t1 k
+        substFromK <- combineManySubstitutions s [subst,subst']
+        return (k, substFromK)
+  -- Try get the unified kinds of both types
+  (k, substFromK) <- leftToRight <|> rightToLeft
+
+  -- apply substitutions before equality
+  t1 <- substitute substFromK t1
+  t2 <- substitute substFromK t2
+  -- main equality
   (eqT, subst'') <- equalTypesRelatedCoeffectsInner s rel t1 t2 k spec mode
-  substFinal <- combineManySubstitutions s [subst,subst',subst'']
+  substFinal <- combineManySubstitutions s [substFromK, subst'']
   return (eqT, substFinal)
 
 -- Check if `t1 == t2` at kind `k`
@@ -130,16 +171,28 @@ equalTypesRelatedCoeffectsInner :: (?globals :: Globals)
 equalTypesRelatedCoeffectsInner s rel t1 t2 _ _ _ | t1 == t2 =
   return (True, [])
 
-equalTypesRelatedCoeffectsInner s rel fTy1@(FunTy _ t1 t2) fTy2@(FunTy _ t1' t2') _ sp mode = do
-  debugM "equalTypesRelatedCoeffectsInner (funTy left)" ""
+equalTypesRelatedCoeffectsInner s rel fTy1@(FunTy _ grade t1 t2) fTy2@(FunTy _ grade' t1' t2') _ sp mode = do
+  debugM "equalTypesRelatedCoeffectsInner (funTy left)" (pretty fTy1 <> " =? " <> pretty fTy2 <> " and " <> pretty sp)
   -- contravariant position (always approximate)
   (eq1, u1) <- equalTypesRelatedCoeffects s ApproximatedBy t1' t1 (flipIndicator sp) mode
+
    -- covariant position (depends: is not always over approximated)
-  t2 <- substitute u1 t2
+  t2  <- substitute u1 t2
   t2' <- substitute u1 t2'
   debugM "equalTypesRelatedCoeffectsInner (funTy right)" (pretty t2 <> " == " <> pretty t2')
   (eq2, u2) <- equalTypesRelatedCoeffects s rel t2 t2' sp mode
-  unifiers <- combineSubstitutions s u1 u2
+
+  -- grade relation if in GradedBase
+  subst <-
+    if (usingExtension GradedBase) then
+      case (grade, grade') of
+        (Just r, Just r')  -> relGrades s r r' rel
+        (Nothing, Just r') -> relGrades s (TyGrade Nothing 1) r' rel
+        (Just r, Nothing)  -> relGrades s r (TyGrade Nothing 1) rel
+        (Nothing, Nothing) -> return []
+      else return []
+
+  unifiers <- combineManySubstitutions s [u1, u2, subst]
   return (eq1 && eq2, unifiers)
 
 equalTypesRelatedCoeffectsInner _ _ (TyCon con1) (TyCon con2) _ _ _
@@ -157,14 +210,8 @@ equalTypesRelatedCoeffectsInner _ _ (TyCon con1) (TyCon con2) _ _ _
 
 equalTypesRelatedCoeffectsInner s rel (Diamond ef1 t1) (Diamond ef2 t2) _ sp Types = do
   debugM "equalTypesRelatedCoeffectsInner (diamond)" $ "grades " <> show ef1 <> " and " <> show ef2
-  (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 sp Types
+  (eq, unif)   <- equalTypesRelatedCoeffects s rel t1 t2 sp Types
   (eq', unif') <- equalTypesRelatedCoeffects s rel (handledNormalise s (Diamond ef1 t1) ef1) (handledNormalise s (Diamond ef2 t2) ef2) sp Effects
-  u <- combineSubstitutions s unif unif'
-  return (eq && eq', u)
-
-equalTypesRelatedCoeffectsInner s rel (Star g1 t1) (Star g2 t2) _ sp mode = do
-  (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 sp mode
-  (eq', _, unif') <- equalTypes s g1 g2
   u <- combineSubstitutions s unif unif'
   return (eq && eq', u)
 
@@ -172,102 +219,50 @@ equalTypesRelatedCoeffectsInner s rel x@(Box c t) y@(Box c' t') k sp Types = do
   -- Debugging messages
   debugM "equalTypesRelatedCoeffectsInner (box)" $ "grades " <> show c <> " and " <> show c' <> ""
 
-  -- Unify the coeffect kinds of the two coeffects
-  (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c c'
+  -- Related the grades
+  subst <- relGrades s c c' rel
 
-  -- Add constraint for the coeffect (using ^op for the ordering compared with the order of equality)
-  c' <- substitute subst c'
-  c  <- substitute subst c
-  kind <- substitute subst kind
-  addConstraint (rel s (inj2 c') (inj1 c) kind)
-
-  -- Create a substitution if we can (i.e., if this is an equality and one grade is a variable)
-  -- as this typically greatly improves error messages and repl interaction
-  let substExtra =
-       if isEq (rel s undefined undefined undefined)
-          then
-            case c of
-              TyVar v -> [(v, SubstT c')]
-              _ -> case c' of
-                    TyVar v -> [(v, SubstT c)]
-                    _       -> []
-          else
-            []
-
+  -- Equailty on the inner types
   (eq, subst') <- equalTypesRelatedCoeffects s rel t t' sp Types
 
-  substU <- combineManySubstitutions s [subst, subst', substExtra]
+  substU <- combineManySubstitutions s [subst, subst']
   return (eq, substU)
 
-equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) _ _ mode | n == m = do
-  checkerState <- get
-  case lookup n (tyVarContext checkerState) of
-    Just _ -> return (True, [])
-    Nothing -> throw UnboundTypeVariable { errLoc = s, errId = n }
+equalTypesRelatedCoeffectsInner s rel ty1@(TyVar var1) ty2 kind _ _ = do
+  useSolver <- requiresSolver s kind
+  reportM ("Equality between " <> pretty ty1 <> " and " <> pretty ty2)
+  if useSolver then do
+    reportM ("Is a solver variable so no substitution just an equality")
+    addConstraint (rel s (TyVar var1) ty2 kind)
+    return (True, [])
+  else do
+    -- If this isn't a solver type then use normal unfication
+    subst <- unification s var1 ty2 rel
+    reportM ("Not a solver therefore subst = " <> pretty subst)
+    return (True, subst)
 
-equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) sp _ mode = do
-  checkerState <- get
-  debugM "variable equality" $ pretty n <> " ~ " <> pretty m <> " where "
-                            <> pretty (lookup n (tyVarContext checkerState)) <> " and "
-                            <> pretty (lookup m (tyVarContext checkerState))
+equalTypesRelatedCoeffectsInner s rel ty1 (TyVar var2) kind sp mode =
+  -- Use the case above since it is symmetric
+  equalTypesRelatedCoeffectsInner s rel (TyVar var2) ty1 kind sp mode
 
-  case (lookup n (tyVarContext checkerState), lookup m (tyVarContext checkerState)) of
+-- ## UNIQUNESS TYPES
 
-    -- Two universally quantified variables are unequal
-    (Just (_, ForallQ), Just (_, ForallQ)) ->
-        return (False, [])
+equalTypesRelatedCoeffectsInner s rel (Star g1 t1) (Star g2 t2) _ sp mode = do
+  (eq, unif)      <- equalTypesRelatedCoeffects s rel t1 t2 sp mode
+  (eq', _, unif') <- equalTypes s g1 g2
+  u <- combineSubstitutions s unif unif'
+  return (eq && eq', u)
 
-    -- We can unify a universal a dependently bound universal
-    (Just (k1, ForallQ), Just (k2, BoundQ)) ->
-      tyVarConstraint (k1, n) (k2, m)
+equalTypesRelatedCoeffectsInner s rel (Star g1 t1) t2 _ sp mode
+  | t1 == t2 = throw $ UniquenessError { errLoc = s, uniquenessMismatch = NonUniqueUsedUniquely t2}
+  | otherwise = do
+    (g, _, u) <- equalTypes s t1 t2
+    return (g, u)
 
-    (Just (k1, BoundQ), Just (k2, ForallQ)) ->
-      tyVarConstraint (k1, n) (k2, m)
+equalTypesRelatedCoeffectsInner s rel t1 (Star g2 t2) k sp mode =
+  equalTypesRelatedCoeffectsInner s rel (Star g2 t2) t1 k (flipIndicator sp) mode
 
-
-    -- We can unify two instance type variables
-    (Just (k1, InstanceQ), Just (k2, BoundQ)) ->
-        tyVarConstraint (k1, n) (k2, m)
-
-    -- We can unify two instance type variables
-    (Just (k1, BoundQ), Just (k2, InstanceQ)) ->
-        tyVarConstraint (k1, n) (k2, m)
-
-    -- We can unify two instance type variables
-    (Just (k1, InstanceQ), Just (k2, InstanceQ)) ->
-        tyVarConstraint (k1, n) (k2, m)
-
-    -- We can unify two instance type variables
-    (Just (k1, BoundQ), Just (k2, BoundQ)) ->
-        tyVarConstraint (k1, n) (k2, m)
-
-    -- But we can unify a forall and an instance
-    (Just (k1, InstanceQ), Just (k2, ForallQ)) ->
-        tyVarConstraint (k1, n) (k2, m)
-
-    -- But we can unify a forall and an instance
-    (Just (k1, ForallQ), Just (k2, InstanceQ)) ->
-        tyVarConstraint (k1, n) (k2, m)
-
-    (t1, t2) -> error $ pretty s <> "-" <> show sp <> "\n"
-              <> pretty n <> " : " <> show t1
-              <> "\n" <> pretty m <> " : " <> show t2
-  where
-    tyVarConstraint (k1, n) (k2, m) = do
-      jK <- joinTypes s k1 k2
-      case jK of
-        Just (TyCon kc, unif, _) -> do
-          (result, putChecker) <- peekChecker (checkKind s (TyCon kc) kcoeffect)
-          case result of
-            Left err -> return ()
-            -- Create solver vars for coeffects
-            Right _ -> putChecker >> addConstraint (Eq s (TyVar n) (TyVar m) (TyCon kc))
-          return (True, unif ++ [(n, SubstT $ TyVar m)])
-        Just (_, unif, _) ->
-          return (True, unif ++ [(m, SubstT $ TyVar n)])
-        Nothing ->
-          return (False, [])
-
+-- ## SESSION TYPES
 -- Duality is idempotent (left)
 equalTypesRelatedCoeffectsInner s rel (TyApp (TyCon d') (TyApp (TyCon d) t)) t' k sp mode
   | internalName d == "Dual" && internalName d' == "Dual" =
@@ -277,73 +272,6 @@ equalTypesRelatedCoeffectsInner s rel (TyApp (TyCon d') (TyApp (TyCon d) t)) t' 
 equalTypesRelatedCoeffectsInner s rel t (TyApp (TyCon d') (TyApp (TyCon d) t')) k sp mode
   | internalName d == "Dual" && internalName d' == "Dual" =
   equalTypesRelatedCoeffectsInner s rel t t' k sp mode
-
-equalTypesRelatedCoeffectsInner s rel (TyVar n) t kind sp mode = do
-  checkerState <- get
-  debugM "Types.equalTypesRelatedCoeffectsInner on TyVar"
-          $ "span: " <> show s
-          <> "\nkind: " <> show kind
-          <> "\nTyVar: " <> show n <> " with " <> show (lookup n (tyVarContext checkerState))
-          <> "\ntype: " <> show t <> "\nspec indicator: " <> show sp
-
-  debugM "context" $ pretty $ tyVarContext checkerState
-
-  -- Do an occurs check for types
-  case kind of
-    Type _ ->
-       if n `elem` freeVars t
-         then throw OccursCheckFail { errLoc = s, errVar = n, errTy = t }
-         else return ()
-    _ -> return ()
-
-  case lookup n (tyVarContext checkerState) of
-    -- We can unify an instance with a concrete type
-    (Just (k1, q)) | (q == BoundQ) || (q == InstanceQ) -> do --  && sp /= PatternCtxt
-
-      jK <-  joinTypes s k1 kind
-      case jK of
-        Nothing -> throw UnificationKindError
-          { errLoc = s, errTy1 = (TyVar n), errK1 = k1, errTy2 = t, errK2 = kind }
-
-        -- If the kind is Nat, then create a solver constraint
-        Just (TyCon (internalName -> "Nat"), unif, _) -> do
-          addConstraint (Eq s (TyVar n) t (TyCon $ mkId "Nat"))
-          return (True, unif ++ [(n, SubstT t)])
-
-        Just (_, unif, _) -> return (True, unif ++ [(n, SubstT t)])
-
-    (Just (k1, ForallQ)) -> do
-
-       -- If the kind if nat then set up and equation as there might be a
-       -- pausible equation involving the quantified variable
-       jK <- joinTypes s k1 kind
-       case jK of
-         Just (TyCon (Id "Nat" "Nat"), unif, _) -> do
-           addConstraint $ Eq s (TyVar n) t (TyCon $ mkId "Nat")
-           return (True, unif ++ [(n, SubstT t)])
-
-         Just (TyCon (Id "Q" "Q"), unif, _) -> do
-           addConstraint $ Eq s (TyVar n) t (TyCon $ mkId "Q")
-           return (True, unif ++ [(n, SubstT t)])
-
-         _ -> throw UnificationFail{ errLoc = s, errVar = n, errKind = k1, errTy = t, tyIsConcrete = True }
-
-    (Just (_, InstanceQ)) -> error "Please open an issue at https://github.com/granule-project/granule/issues"
-    (Just (_, BoundQ)) -> error "Please open an issue at https://github.com/granule-project/granule/issues"
-    Nothing -> throw UnboundTypeVariable { errLoc = s, errId = n }
-
-
-equalTypesRelatedCoeffectsInner s rel t (TyVar n) k sp mode =
-  equalTypesRelatedCoeffectsInner s rel (TyVar n) t k (flipIndicator sp) mode
-
-equalTypesRelatedCoeffectsInner s rel (Star g1 t1) t2 _ sp mode
-  | t1 == t2 = throw $ UniquenessError { errLoc = s, uniquenessMismatch = NonUniqueUsedUniquely t2}
-  | otherwise = do
-    (g, _, u) <- equalTypes s t1 t2
-    return (g, u)
-
-equalTypesRelatedCoeffectsInner s rel t1 (Star g2 t2) k sp mode = 
-  equalTypesRelatedCoeffectsInner s rel (Star g2 t2) t1 k (flipIndicator sp) mode
 
 -- Do duality check (left) [special case of TyApp rule]
 equalTypesRelatedCoeffectsInner s rel (TyApp (TyCon d) t) t' _ sp mode
@@ -360,6 +288,20 @@ equalTypesRelatedCoeffectsInner s rel t0@(TyApp (TyApp (TyCon d) grd) t) t' ind 
 equalTypesRelatedCoeffectsInner s rel t' t0@(TyApp (TyApp (TyCon d) grd) t) ind sp mode
   | internalName d == "Graded" = do
     eqGradedProtocolFunction s rel grd t t' sp
+
+-- ## GENERAL EQUALITY
+
+-- Equality on existential types
+equalTypesRelatedCoeffectsInner s rel a@(TyExists x1 k1 t1) b@(TyExists x2 k2 t2) ind sp mode = do
+  debugM "Compare existentials for equality" (pretty a <> " = " <> pretty b)
+  -- check kinds
+  (eqK, subst1) <- equalTypesRelatedCoeffectsInner s rel k1 k2 ind sp mode
+  -- replace x2 with x1 in t2
+  t2' <- substitute [(x2, SubstT $ TyVar x1)] t2
+  registerTyVarInContextWith' x1 k1 ForallQ $ do
+      (eqT, subst2) <- equalTypesRelatedCoeffectsInner s rel t1 t2' ind sp mode
+      substFinal <- combineSubstitutions s subst1 subst2
+      return (eqK && eqT, substFinal)
 
 -- Equality on type application
 equalTypesRelatedCoeffectsInner s rel (TyApp t1 t2) (TyApp t1' t2') _ sp mode = do
@@ -408,9 +350,10 @@ equalTypesRelatedCoeffectsInner s rel (TySet _ ts1) (TySet _ ts2) k sp Types =
   -- TODO: make this more powerful
   return (all (`elem` ts2) ts1 && all (`elem` ts1) ts2, [])
 
+-- Drop through final case
 equalTypesRelatedCoeffectsInner s rel t1 t2 k sp mode = do
   debugM "type Equality: Drop through case "
-    ("t1 = " <> pretty t1 <> " t2 = " <> pretty t2 <> "\n k = " <> pretty k <> "\n mode = " <> show mode)
+    ("t1 = " <> pretty t1 <> ", t2 = " <> pretty t2 <> "\n k = " <> pretty k <> "\n mode = " <> show mode)
   case mode of
     Effects -> do
       (result, putChecker) <- peekChecker (checkKind s k keffect)
@@ -423,24 +366,24 @@ equalTypesRelatedCoeffectsInner s rel t1 t2 k sp mode = do
 
     Types ->
       case k of
-        (TyCon (internalName -> "Nat")) -> do
-          debugM "equality on nats" (pretty t1 ++ " =? " ++ pretty t2)
-          addConstraint $ Eq s t1 t2 (TyCon $ mkId "Nat")
-          return (True, [])
-
-        (TyCon (internalName -> "Q")) -> do
-          debugM "equality on Qs" (pretty t1 ++ " =? " ++ pretty t2)
-          addConstraint $ Eq s t1 t2 (TyCon $ mkId "Q")
-          return (True, [])
 
         (TyCon (internalName -> "Protocol")) ->
           sessionInequality s t1 t2
-        _ ->
-          case sp of
-            FstIsSpec ->
-              throw $ TypeError { errLoc = s, tyExpected = t1, tyActual = t2 }
-            _ ->
-              throw $ TypeError { errLoc = s, tyExpected = t1, tyActual = t2 }
+
+        _ -> do
+          handleBySolver <- requiresSolver s k
+          if handleBySolver then do
+            -- Go to SMT
+            debugM ("equality on types of kind: " <> pretty k) (pretty t1 ++ " =? " ++ pretty t2)
+            addConstraint $ Eq s t1 t2 k
+            return (True, [])
+          else
+            -- No other way to do equality so bail
+            case sp of
+              FstIsSpec ->
+                throw $ TypeError { errLoc = s, tyExpected = t1, tyActual = t2 }
+              _ ->
+                throw $ TypeError { errLoc = s, tyExpected = t1, tyActual = t2 }
 
 
 -- Essentially use to report better error messages when two session type
@@ -635,15 +578,15 @@ twoEqualEffectTypes s ef1 ef2 = do
           Left k -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = ef2 , errK = k }
       Left k -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = ef1 , errK = k }
 
--- | Find out if a type is indexed
+-- | Find out if a type is indexed overall (i.e., is a GADT)
 isIndexedType :: Type -> Checker Bool
 isIndexedType t = do
   b <- typeFoldM TypeFold
       { tfTy = \_ -> return $ Const False
-      , tfFunTy = \_ (Const x) (Const y) -> return $ Const (x || y)
+      , tfFunTy = \_ _ (Const x) (Const y) -> return $ Const (x || y)
       , tfTyCon = \c -> do {
           st <- get;
-          return $ Const $ case lookup c (typeConstructors st) of Just (_,_,ixed) -> ixed; Nothing -> False }
+          return $ Const $ case lookup c (typeConstructors st) of Just (_, _, indices) -> indices /= []; Nothing -> False }
       , tfBox = \_ (Const x) -> return $ Const x
       , tfDiamond = \_ (Const x) -> return $ Const x
       , tfStar = \_ (Const x) -> return $ Const x
@@ -655,7 +598,8 @@ isIndexedType t = do
       , tfTyInfix = \_ (Const x) (Const y) -> return $ Const (x || y)
       , tfSet = \_ _ -> return $ Const False
       , tfTyCase = \_ _ -> return $ Const False
-      , tfTySig = \(Const b) _ _ -> return $ Const b } t
+      , tfTySig = \(Const b) _ _ -> return $ Const b
+      , tfTyExists = \_ _ (Const a) -> return $ Const a } t
   return $ getConst b
 
 -- Given a type term, works out if its kind is actually an effect type
@@ -670,3 +614,43 @@ isEffectType s ty = do
       putChecker
       return $ Right effTy
     Left err -> return $ Left effTy
+
+-- `refineBinderQuantification ctxt ty`
+-- Given a list of variable-kind information `ctxt` binding over a type `ty`
+-- then calculate based on the usage of the type variables whether they are
+-- truly universal quantifiers, or whether some are actually pi-types.
+refineBinderQuantification :: (?globals :: Globals) => Ctxt Kind -> Type -> Checker (Ctxt (Kind, Quantifier))
+refineBinderQuantification ctxt ty = mapM computeQuantifier ctxt
+  where
+    computeQuantifier (id, kind) = do
+      result <- aux id ty
+      return $ if result then (id, (kind, BoundQ)) else (id, (kind, ForallQ))
+
+    aux :: Id -> Type -> Checker Bool
+    aux id (FunTy _ (Just g) t1 t2) = liftM2 (||) (liftM2 (||) (aux id t1) (aux id t2)) (aux id g)
+    aux id (FunTy _ Nothing t1 t2)  = liftM2 (||) (aux id t1) (aux id t2)
+    aux id (Box _ t)       = aux id t
+    aux id (Diamond _ t)   = aux id t
+    aux id (Star _ t)      = aux id t
+    aux id t@(TyApp _ _)   =
+      case leftmostOfApplication t of
+        TyCon tyConId -> do
+          st <- get
+          case lookup tyConId (typeConstructors st) of
+            Just (_, _, indices) -> do
+              -- For this type constructor `tyConId`
+              -- if any of its argument positions `i` is an index
+              -- then check if the `id` here is in the term for that argument
+              return $ any (\i ->
+                 if i < length (typeArguments t)
+                  then id `elem` freeVars (typeArguments t !! i)
+                  else False) indices
+            Nothing -> throw UnboundVariableError { errLoc = nullSpan , errId = id }
+        -- unusual- put possible (e.g., `f t`) give up and go for ForallQ
+        _ -> return False
+    aux id (TyInfix _ t1 t2) = liftM2 (||) (aux id t1) (aux id t2)
+    aux id (TySig t k)       = liftM2 (||) (aux id t) (aux id k)
+    aux id (TyCase t ts)     = liftM2 (||) (aux id t) (anyM (\(_, t) -> aux id t) ts)
+      where
+        anyM f xs = mapM f xs >>= (return . or)
+    aux id _ = return False

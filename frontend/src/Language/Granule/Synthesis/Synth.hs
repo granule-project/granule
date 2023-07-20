@@ -254,11 +254,11 @@ adtName _ = Nothing
 
 
 rightMostFunTy :: Type -> (Type, [Type])
-rightMostFunTy (FunTy _ arg t) = let (t', args) = rightMostFunTy t in (t', arg : args)
+rightMostFunTy (FunTy _ _ arg t) = let (t', args) = rightMostFunTy t in (t', arg : args)
 rightMostFunTy t = (t, [])
 
 reconstructFunTy :: Type -> [Type] -> Type
-reconstructFunTy = foldl (flip (FunTy Nothing))
+reconstructFunTy = foldl (flip (FunTy Nothing Nothing))
 
 
 data AltOrDefault = Default | Alternative
@@ -271,6 +271,11 @@ type Bindings = [(Id, (Id, Type))]
 
 data Structure a = None | Arg a | Dec a
   deriving (Show, Eq)
+
+instance Pretty a => Pretty (Structure a) where
+  pretty None    = "None"
+  pretty (Arg a) = "Arg " <> pretty a
+  pretty (Dec a) = "Dec " <> pretty a
 
 bindToContext :: (Id, (Assumption, Structure Id)) -> Ctxt (Assumption, Structure Id) -> Ctxt (Assumption, Structure Id) -> Bool -> (Ctxt (Assumption, Structure Id), Ctxt (Assumption, Structure Id))
 bindToContext var gamma omega True = (gamma, omega ++ [var])
@@ -393,7 +398,7 @@ absHelper :: (?globals :: Globals)
   -> Maybe Type
   -> TypeScheme
   -> Synthesiser (Expr () Type, Ctxt (Assumption, Structure Id), Substitution, Bindings, Bool)
-absHelper defs allowRSync gamma omega resourceScheme grade goalTy@(Forall _ binders constraints (FunTy name t1 t2)) = do
+absHelper defs allowRSync gamma omega resourceScheme grade goalTy@(Forall _ binders constraints (FunTy name Nothing t1 t2)) = do
     -- Fresh var
     id <- useBinderNameOrFreshen name
     state <- Synthesiser $ lift $ lift $ lift get
@@ -445,8 +450,8 @@ x2 ∉ Δ1
 appHelper (allowRSync, allowDef) defs left (var@(x, (a, s)) : right) sub@Subtractive{} grade goalTy@(Forall _ binders constraints _ ) =
   appHelper (allowRSync, allowDef) defs (var : left) right sub grade goalTy `try`
   (case getAssumptionType a of
-    (FunTy _ t1 t2) -> do
-      debugM "synthDebug" ("Trying to use a function " ++ show var ++ " to get goal " ++ pretty goalTy)
+    (FunTy _ _ t1 t2) -> do
+      debugM "synthDebug" ("Trying to use a function " ++ pretty var ++ " to get goal " ++ pretty goalTy)
 
       let omega = left ++ right
       (canUse, omega', t) <- useVar var omega sub grade
@@ -487,7 +492,7 @@ Additive (Pruning)
 appHelper (allowRSync, allowDef) defs left (var@(x, (a, s)) : right) add@(Additive mode) grade goalTy@(Forall _ binders constraints _ ) =
   appHelper (allowRSync, allowDef) defs (var : left) right add grade goalTy `try`
   (case getAssumptionType a of
-    (FunTy _ tyA tyB) -> do
+    (FunTy _ _ tyA tyB) -> do
       let omega = left ++ right
       (canUse, useContextOut, _) <- useVar var omega add grade
       if canUse
@@ -693,7 +698,7 @@ constrIntroHelper (True, allowDef) defs gamma mode grade goalTy@(Forall s binder
       let adtConstructors = concatMap snd (filter (\x -> fst x == name) (constructors state))
 
       -- For each relevent data constructor, we must now check that it's type matches the goal
-      adtConstructors' <- foldM (\ a (id, (conTy@(Forall s binders constraints conTy'), subst)) -> do
+      adtConstructors' <- foldM (\ a (id, (conTy@(Forall s binders constraints conTy'), subst, indices)) -> do
          (success, specTy, specSubst) <- checkConstructor conTy subst
          case (success, specTy) of
            (True, Just specTy') -> do
@@ -715,7 +720,7 @@ constrIntroHelper (True, allowDef) defs gamma mode grade goalTy@(Forall s binder
     checkConstructor con@(Forall _ binders coercions conTy) subst = do
       (result, local) <- conv $ peekChecker $ do
 
-        (conTyFresh, tyVarsFreshD, substFromFreshening, constraints, coercions') <- freshPolymorphicInstance InstanceQ False con subst
+        (conTyFresh, tyVarsFreshD, constraints, coercions') <- freshPolymorphicInstance InstanceQ False con subst []
 
         -- Take the rightmost type of the function type, collecting the arguments along the way
         let (conTy'', args) = rightMostFunTy conTyFresh
@@ -743,7 +748,6 @@ constrIntroHelper (True, allowDef) defs gamma mode grade goalTy@(Forall s binder
 
         case result of
           QED -> do -- If the solver succeeds, return the specialised type
-            spec <- substitute substFromFreshening spec
             return (success, Just $ reconstructFunTy spec (reverse args), subst')
           _ ->
             return (False, Nothing, [])
@@ -793,7 +797,7 @@ constrIntroHelper (True, allowDef) defs gamma mode grade goalTy@(Forall s binder
 
     constrArgs (TyCon _) = Just []
     constrArgs (TyApp _ _) = Just []
-    constrArgs (FunTy _ e1 e2) = do
+    constrArgs (FunTy _ Nothing e1 e2) = do
       res <- constrArgs e2
       return $ e1 : res
     constrArgs _ = Nothing
@@ -829,7 +833,7 @@ constrElimHelper (allowRSync, allowDef) defs left (var@(x, (a, structure)):right
         -- (_, cases) <- conv $ generateCases nullSpanNoFile (constructors state) [(x, Linear (Box grade t))] [x] (Just $ FunTy Nothing (Box grade t) goalTy)
           let adtConstructors = concatMap snd (filter (\x -> fst x == name) (constructors state))
           -- For each relevent data constructor, we must now check that it's type matches the goal
-          cases <- foldM (\ a (id, (conTy@(Forall s binders constraints conTy'), subst)) -> do
+          cases <- foldM (\ a (id, (conTy@(Forall s binders constraints conTy'), subst, indices)) -> do
             (success, (pat, assumptions, subst')) <- checkConstructor id topLevelDefId conTy assumptionTy subst grade
             case (success, pat) of
               (True, Just pat) -> do
@@ -862,7 +866,7 @@ constrElimHelper (allowRSync, allowDef) defs left (var@(x, (a, structure)):right
     checkConstructor name topLevelDef con@(Forall  _ binders constraints conTy) assumptionTy subst grade = do
       (result, local) <- conv $ peekChecker $ do
 
-        (conTyFresh, tyVarsFreshD, substFromFreshening, constraints, coercions') <- freshPolymorphicInstance InstanceQ False con subst
+        (conTyFresh, tyVarsFreshD, constraints, coercions') <- freshPolymorphicInstance InstanceQ False con subst []
 
         -- Take the rightmost type of the function type, collecting the arguments along the way
         let (conTy'', args) = rightMostFunTy conTyFresh
@@ -891,7 +895,6 @@ constrElimHelper (allowRSync, allowDef) defs left (var@(x, (a, structure)):right
         case result of
           QED -> do -- If the solver succeeds, return the specialised type
             debugM "success!" (show name)
-            spec <- substitute substFromFreshening spec
 
             -- Construct pattern based on constructor arguments specialised by type equality
             assmps <- mapM (\ arg -> do
@@ -1101,7 +1104,7 @@ defHelper left [] _ _ _ _ = none
 defHelper left (def@(x, t):right) gamma  sub@Subtractive{} grade goalTy@(Forall _ binders constraints _ ) =
  defHelper (def:left) right gamma sub grade goalTy `try`
   (case t of
-    (FunTy _ t1 t2) -> do
+    (FunTy _ Nothing t1 t2) -> do
       debugM "entered def helper t: " (show t ++ "goal: " <> show goalTy <> "gamma: " <> show gamma)
       id <- freshIdentifier
       let (gamma', omega') = bindToContext (id, (Linear t2, None)) gamma [] (isLAsync t2)
@@ -1121,7 +1124,7 @@ defHelper left (def@(x, t):right) gamma  sub@Subtractive{} grade goalTy@(Forall 
 defHelper left (def@(x, t) : right) gamma add@(Additive mode) grade goalTy@(Forall _ binders constraints goalTy') =
  defHelper (def:left) right gamma add grade goalTy `try`
  (case t of
-    (FunTy _ tyA tyB) -> do
+    (FunTy _ Nothing tyA tyB) -> do
       x2 <- freshIdentifier
       debugM "entered def helper t: " (pretty t ++ " \n goal: " <> pretty goalTy <> " \n gamma: " <> show gamma)
       let (gamma', omega') = bindToContext (x2, (Linear tyB, None)) gamma [] (isLAsync tyB)

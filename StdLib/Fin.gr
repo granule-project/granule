@@ -15,7 +15,7 @@ data Fin : Nat -> Type where
   FS : forall {k : Nat} . Fin k -> Fin (k + 1)
 
 -- If m < n then (x in Fin m) -> (x in Fin n)
-upcast : forall {n : Nat, m : Nat} . {m <= n} => Fin m -> Fin n
+upcast : forall {n : Nat, m : Nat} . {m .<= n} => Fin m -> Fin n
 upcast FZ = FZ;
 upcast (FS n) = FS (upcast n)
 

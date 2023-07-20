@@ -1,0 +1,6 @@
+Type checking failed: 
+Falsifiable theorem: frontend/tests/cases/negative/graded-base/zero-pattern-consumption.gr:4:1:
+  When checking `neg`, expected 0 uses, but instead there are (1 : Nat) actual uses.
+
+Falsifiable theorem: frontend/tests/cases/negative/graded-base/zero-pattern-consumption.gr:5:1:
+  When checking `neg`, expected 0 uses, but instead there are (1 : Nat) actual uses.

@@ -27,7 +27,7 @@ typeAliases :: [(Id, ([Id], Type))]
 typeAliases =
     -- IO = {p | p in IOElem}
     [(mkId "IO", ([], TySet Normal (map tyCon ioElems)))
-    ,(mkId "Inverse", ([mkId "a"], FunTy Nothing (TyVar $ mkId "a") (TyCon $ mkId "()")))]
+    ,(mkId "Inverse", ([mkId "a"], FunTy Nothing Nothing (TyVar $ mkId "a") (TyCon $ mkId "()")))]
   where
     ioElems = ["Stdout", "Stdin", "Stderr", "Open", "Read", "Write", "IOExcept", "Close"]
 
@@ -36,98 +36,104 @@ capabilities =
    [(mkId "Console", funTy (tyCon "String") (tyCon "()"))
   , (mkId "TimeDate", funTy (tyCon "()") (tyCon "String"))]
 
-    
+overlapsAllowed :: [Id]
+overlapsAllowed = [mkId "One", mkId "Private", mkId "Public", mkId "Unused"]
 
 -- Associates type constuctors names to their:
 --    * kind
 --    * list of (finite) matchable constructor names (but not the actual set of constructor names which could be infinite)
---    * boolean flag on whether they are indexed types or not
-typeConstructors :: (?globals :: Globals) => [(Id, (Type, [Id], Bool))]
+--    * list of which type parameters are indices (proxy for whether they are indexed types or not)
+typeConstructors :: (?globals :: Globals) => [(Id, (Type, [Id], [Int]))]
 typeConstructors =
   -- If we have the security levels extension turned on then include these things
-  (extensionDependent [(SecurityLevels, [(mkId "Level",    (kcoeffect, [], False))
-                                       , (mkId "Unused",   (tyCon "Level", [], False))
-                                      , (mkId "Dunno",    (tyCon "Level", [], False))])] [])
+  (extensionDependent [(SecurityLevels, [(mkId "Level",    (kcoeffect, [], []))
+                                       , (mkId "Unused",   (tyCon "Level", [], []))
+                                       , (mkId "Dunno",    (tyCon "Level", [], []))])] [])
  ++
   -- Everything else is always in scope
-    [ (mkId "Coeffect",  (Type 0, [], False))
-    , (mkId "Effect",    (Type 0, [], False))
-    , (mkId "Guarantee", (Type 0, [], False))
-    , (mkId "Predicate", (Type 0, [], False))
-    , (mkId "->",     (funTy (Type 0) (funTy (Type 0) (Type 0)), [], False))
-    , (mkId ",,",     (funTy kcoeffect (funTy kcoeffect kcoeffect), [mkId ",,"], False))
-    , (mkId "ExactSemiring", (funTy (tyCon "Semiring") (tyCon "Predicate"), [], True))
-    , (mkId "Int",    (Type 0, [], False))
-    , (mkId "Float",  (Type 0, [], False))
-    , (mkId "DFloat",  (Type 0, [], False)) -- special floats that can be tracked for sensitivty
-    , (mkId "Char",   (Type 0, [], False))
-    , (mkId "String", (Type 0, [], False))
-    , (mkId "Inverse", ((funTy (Type 0) (Type 0)), [], False))
+    [ (mkId "Coeffect",  (Type 2, [], []))
+    , (mkId "Effect",    (Type 2, [], []))
+    , (mkId "Guarantee", (Type 2, [], []))
+    , (mkId "Predicate", (Type 2, [], []))
+    , (mkId "->",     (funTy (Type 0) (funTy (Type 0) (Type 0)), [], []))
+    , (mkId ",,",     (funTy kcoeffect (funTy kcoeffect kcoeffect), [mkId ",,"], []))
+    , (mkId "ExactSemiring", (funTy (tyCon "Semiring") (tyCon "Predicate"), [], []))
+    , (mkId "Int",    (Type 0, [], []))
+    , (mkId "Float",  (Type 0, [], []))
+    , (mkId "DFloat",  (Type 0, [], [])) -- special floats that can be tracked for sensitivty
+    , (mkId "Char",   (Type 0, [], []))
+    , (mkId "String", (Type 0, [], []))
+    , (mkId "Inverse", ((funTy (Type 0) (Type 0)), [], []))
     -- Session type related things
-    , (mkId "Protocol", (Type 0, [], False))
-    , (mkId "SingleAction", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], True))
-    , (mkId "ReceivePrefix", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], True))
-    , (mkId "Sends", (funTy (tyCon "Nat") (funTy (tyCon "Protocol") (tyCon "Predicate")), [], True))
-    , (mkId "Graded", (funTy (tyCon "Nat") (funTy (tyCon "Protocol") (tyCon "Protocol")), [], True))
+    , (mkId "Protocol", (Type 0, [], []))
+    , (mkId "SingleAction", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], [0]))
+    , (mkId "ReceivePrefix", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], [0]))
+    , (mkId "Sends", (funTy (tyCon "Nat") (funTy (tyCon "Protocol") (tyCon "Predicate")), [], [0]))
+    , (mkId "Graded", (funTy (tyCon "Nat") (funTy (tyCon "Protocol") (tyCon "Protocol")), [], [0]))
 
     -- # Coeffect types
-    , (mkId "Nat",      (kcoeffect, [], False))
-    , (mkId "Q",        (kcoeffect, [], False)) -- Rationals
-    , (mkId "OOZ",      (kcoeffect, [], False)) -- 1 + 1 = 0
-    , (mkId "LNL",      (kcoeffect, [], False)) -- Linear vs Non-linear semiring
+    , (mkId "Nat",      (kcoeffect, [], []))
+    , (mkId "Q",        (kcoeffect, [], [])) -- Rationals
+    , (mkId "OOZ",      (kcoeffect, [], [])) -- 1 + 1 = 0
+    , (mkId "LNL",      (kcoeffect, [], [])) -- Linear vs Non-linear semiring
     -- LNL members
-    , (mkId "Zero",     (tyCon "LNL", [], False))
-    , (mkId "One",      (tyCon "LNL", [], False))
-    , (mkId "Many",     (tyCon "LNL", [], False))
+    , (mkId "Zero",     (tyCon "LNL", [], []))
+    , (mkId "One",      (tyCon "LNL", [], []))
+    , (mkId "Many",     (tyCon "LNL", [], []))
 
-    , (mkId "Cartesian", (kcoeffect, [], False))
-    , (mkId "Any", (tyCon "Cartesian", [], False))
+    , (mkId "Cartesian", (kcoeffect, [], []))
+    , (mkId "Any", (tyCon "Cartesian", [], []))
     -- Security levels
-    
+
     -- Note that Private/Public can be members of Sec (and map to Hi/Lo) or if 'SecurityLevels' is
     -- turned on then they are part of the 'Level' semiring
-    , (mkId "Private",  (extensionDependent [(SecurityLevels, tyCon "Level")] (tyCon "Sec"), [], False))
-    , (mkId "Public",   (extensionDependent [(SecurityLevels, tyCon "Level")] (tyCon "Sec"), [], False))
+    -- Borrowing
+    , (mkId "Borrowing", (kcoeffect, [], []))
+    , (mkId "One",       (tyCon "Borrowing", [], []))
+    , (mkId "Beta",      (tyCon "Borrowing", [], []))
+    , (mkId "Omega",     (tyCon "Borrowing", [], []))
+    -- Security levels
+    , (mkId "Private",  (extensionDependent [(SecurityLevels, tyCon "Level")] (tyCon "Sec"), [], []))
+    , (mkId "Public",   (extensionDependent [(SecurityLevels, tyCon "Level")] (tyCon "Sec"), [], []))
     -- Alternate security levels (a la Gaboardi et al. 2016 and Abel-Bernardy 2020)
-    , (mkId "Sec",  (kcoeffect, [], False))
-    , (mkId "Hi",    (tyCon "Sec", [], False))
-    , (mkId "Lo",    (tyCon "Sec", [], False))
+    , (mkId "Sec",  (kcoeffect, [], []))
+    , (mkId "Hi",    (tyCon "Sec", [], []))
+    , (mkId "Lo",    (tyCon "Sec", [], []))
     -- Uniqueness
-    , (mkId "Uniqueness", (kguarantee, [], False))
-    , (mkId "Unique", (tyCon "Uniqueness", [], False))
+    , (mkId "Uniqueness", (kguarantee, [], []))
+    , (mkId "Unique", (tyCon "Uniqueness", [], []))
     -- Integrity
-    , (mkId "Integrity", (kguarantee, [], False))
-    , (mkId "Trusted", (tyCon "Integrity", [], False))
+    , (mkId "Integrity", (kguarantee, [], []))
+    , (mkId "Trusted", (tyCon "Integrity", [], []))
     -- Other coeffect constructors
-    , (mkId "Interval", (kcoeffect .-> kcoeffect, [], False))
+    , (mkId "Interval", (kcoeffect .-> kcoeffect, [], []))
     -- Channels and protocol types
-    , (mkId "Send", (funTy (Type 0) (funTy protocol protocol), [], False))
-    , (mkId "Recv", (funTy (Type 0) (funTy protocol protocol), [], False))
-    , (mkId "End" , (protocol, [], False))
-    , (mkId "Select" , (funTy protocol (funTy protocol protocol), [], False))
-    , (mkId "Offer" , (funTy protocol (funTy protocol protocol), [], False))
-    , (mkId "Chan", (funTy protocol (Type 0), [], True))
-    , (mkId "LChan", (funTy protocol (Type 0), [], True))
-    , (mkId "Dual", (funTy protocol protocol, [], True))
-    , (mkId "->", (funTy (Type 0) (funTy (Type 0) (Type 0)), [], False))
+    , (mkId "Send", (funTy (Type 0) (funTy protocol protocol), [], []))
+    , (mkId "Recv", (funTy (Type 0) (funTy protocol protocol), [], []))
+    , (mkId "End" , (protocol, [], []))
+    , (mkId "Select" , (funTy protocol (funTy protocol protocol), [], []))
+    , (mkId "Offer" , (funTy protocol (funTy protocol protocol), [], []))
+    , (mkId "Chan", (funTy protocol (Type 0), [], [0]))
+    , (mkId "LChan", (funTy protocol (Type 0), [], [0]))
+    , (mkId "Dual", (funTy protocol protocol, [], [0]))
     -- Top completion on a coeffect, e.g., Ext Nat is extended naturals (with ∞)
-    , (mkId "Ext", (funTy kcoeffect kcoeffect, [], True))
+    , (mkId "Ext", (funTy kcoeffect kcoeffect, [], [0]))
     -- Effect grade types - Sessions
-    , (mkId "Session",  (tyCon "Com", [], True))
-    , (mkId "Com",      (keffect, [], False))
+    , (mkId "Session",  (tyCon "Com", [], []))
+    , (mkId "Com",      (keffect, [], []))
     -- Effect grade types - IO
-    , (mkId "IO",       (keffect, [], False))
+    , (mkId "IO",       (keffect, [], []))
 
     --Effect grade types - Exceptions
-    , (mkId "Exception", (keffect, [], False))
-    , (mkId "Success", (tyCon "Exception", [], False))
-    , (mkId "MayFail", (tyCon "Exception", [], False))
+    , (mkId "Exception", (keffect, [], []))
+    , (mkId "Success", (tyCon "Exception", [], []))
+    , (mkId "MayFail", (tyCon "Exception", [], []))
 
     -- Arrays
-    , (mkId "FloatArray", (Type 0, [], False))
+    , (mkId "FloatArray", (Type 0, [], []))
 
     -- Capability related things
-    , (mkId "CapabilityType", (funTy (tyCon "Capability") (Type 0), [], True))
+    , (mkId "CapabilityType", (funTy (tyCon "Capability") (Type 0), [], [0]))
     ]
 
 -- Various predicates and functions on type operators
@@ -585,13 +591,13 @@ uniqueBind
   . (*a -> !b) -> !a -> !b
 uniqueBind = BUILTIN
 
-uniquePush 
-  : forall {a b : Type} 
+uniquePush
+  : forall {a b : Type}
   . *(a, b)  -> (*a, *b)
 uniquePush = BUILTIN
 
-uniquePull 
-  : forall {a b : Type} 
+uniquePull
+  : forall {a b : Type}
   . (*a, *b) -> *(a, b)
 uniquePull = BUILTIN
 
