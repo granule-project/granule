@@ -1,4 +1,0 @@
-import Existential
-
-unpack : forall {t : Type, f : Type -> Type, a : Type} . Exists f -> (f t -> a) -> a
-unpack (MkExists x) f = f x

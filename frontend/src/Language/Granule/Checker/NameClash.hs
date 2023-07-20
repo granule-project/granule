@@ -6,18 +6,35 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Language.Granule.Checker.Monad
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Span
+import Language.Granule.Syntax.Type
 import Language.Granule.Utils
+import qualified Language.Granule.Checker.Primitives as Primitives
 
-checkNameClashes :: AST () () -> Checker ()
-checkNameClashes (AST dataDecls defs _ _ _) =
+checkNameClashes :: (?globals :: Globals)
+                 => [(Id, (Type, [Id], [Int]))] -> [DataDecl] -> AST () () -> Checker ()
+checkNameClashes typeConstructors builtinDataDecls (AST dataDecls defs _ _ _) =
     case concat [typeConstructorErrs, dataConstructorErrs, defErrs] of
-      [] -> pure ()
+      []     -> pure ()
       (d:ds) -> throwError (d:|ds)
   where
+    dataDecls' = builtinDataDecls
+              <> dataDecls
+             <> tcsAsDataDecls
+                       (filter (\x -> not (fst x `elem` Primitives.overlapsAllowed)) typeConstructors)
+
     typeConstructorErrs
       = fmap mkTypeConstructorErr
       . duplicatesBy (sourceName . dataDeclId)
-      $ dataDecls
+      $ dataDecls'
+
+    -- From a list of built-type constructors, make them into dummy data type definitions for this check
+    tcsAsDataDecls = map toDataDecl
+      where
+        span = nullSpan {filename = "primitive"}
+        toDataDecl (id, (kind, dataConstrNames, _)) =
+          DataDecl span id [] (Just kind) (map toDataConsDecl dataConstrNames)
+        toDataConsDecl id = DataConstrNonIndexed span id []
 
     mkTypeConstructorErr (x2, xs)
       = NameClashTypeConstructors
@@ -28,9 +45,9 @@ checkNameClashes (AST dataDecls defs _ _ _) =
 
     dataConstructorErrs
       = fmap mkDataConstructorErr                -- make errors for duplicates
-      . duplicatesBy (sourceName . dataConstrId)   -- get the duplicates by source id
+      . duplicatesBy (sourceName . dataConstrId) -- get the duplicates by source id
       . concatMap dataDeclDataConstrs            -- get data constructor definitions
-      $ dataDecls                                -- from data declarations
+      $ dataDecls'                               -- from data declarations
 
     mkDataConstructorErr (x2, xs)
       = NameClashDataConstructors

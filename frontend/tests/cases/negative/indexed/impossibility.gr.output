@@ -1,0 +1,3 @@
+Type checking failed: 
+Type error: frontend/tests/cases/negative/indexed/impossibility.gr:6:14:
+Expected `Vec 0 a1` but got `(Vec (n0 + 1) a2) [(0 : Ext Nat)..∞]`

@@ -1,6 +1,0 @@
-Type checking failed: 
-Unpromotable error: frontend/tests/cases/negative/resourceAllocator.gr:2:8:
-Cannot promote a value of type `(LChan (Recv Int End)) [2]` in call-by-value mode.
-
-Unpromotable error: frontend/tests/cases/negative/resourceAllocator.gr:5:9:
-Cannot promote a value of type `(LChan (Recv Int End), Int) [2]` in call-by-value mode.

@@ -1,0 +1,3 @@
+Type checking failed: 
+Unbound type constructor: frontend/tests/cases/negative/graded/polyo.gr:4:1:
+`Bool`

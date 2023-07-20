@@ -1,0 +1,6 @@
+Type checking failed: 
+Counter example: frontend/tests/cases/negative/graded/impossibilityCheck.gr:3:1:
+  When checking `bad2`, expected n uses, but instead there are (0 : Nat) actual uses.
+
+Counter-example:
+  n = 1 :: Integer

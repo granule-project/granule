@@ -53,6 +53,8 @@ replaceInExpr (Val s a b v) = Val s a b v
 replaceInExpr (Case s a b e patsAndExprs) =
   Case s a b (replaceInExpr e) (map (\(a, b) -> (a, replaceInExpr b)) patsAndExprs)
 replaceInExpr (Hole s a b ids) = Hole s a b ids
+replaceInExpr (Unpack s a b tyVar var e1 e2) =
+  Unpack s a b tyVar var (replaceInExpr e1) (replaceInExpr e2)
 
 replaceInTypeScheme :: TypeScheme -> TypeScheme
 replaceInTypeScheme (Forall s quants constraints t) =

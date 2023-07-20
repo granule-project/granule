@@ -1,0 +1,7 @@
+Type checking failed: 
+Counter example: frontend/tests/cases/negative/indexed/badRecursiveArgument.gr:7:1:
+  The following constraint associated with `fibble` is false:
+	  (n1 = n0 + 1) ∧ (n0 = n1)
+
+Counter-example:
+  n = 2 :: Integer

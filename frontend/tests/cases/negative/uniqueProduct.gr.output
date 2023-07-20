@@ -1,3 +1,0 @@
-Type checking failed: 
-Linearity error: frontend/tests/cases/negative/uniqueProduct.gr:5:22:
-Linear variable `arrs` is used more than once.

@@ -1,0 +1,4 @@
+data Wrap a = Wrap a
+
+unwrap : forall {a : Type} . !(Wrap a) -> a
+unwrap [Wrap x] = x

@@ -3,5 +3,5 @@ Counter example: frontend/tests/cases/negative/flatten/flattenLevel.gr:2:1:
   When checking `flattenLevel`, l ∧ k value cannot be moved to level (k ∨ l) * (1 : Level)
 
 Counter-example:
-  l = Private :: Level
-  k = Public :: Level
+  l = 0 :: Level
+  k = 0 :: Level

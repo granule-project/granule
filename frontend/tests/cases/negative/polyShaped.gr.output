@@ -1,6 +1,0 @@
-Type checking failed: 
-Kind mismatch: frontend/tests/cases/negative/polyShaped.gr:6:30:
-Expected kind `Coeffect` for type `n` but actual kind is `↑Nat`
-
-Kind mismatch: frontend/tests/cases/negative/polyShaped.gr:7:31:
-Expected kind `Coeffect` for type `n` but actual kind is `↑Nat`

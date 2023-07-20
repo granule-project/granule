@@ -1,3 +1,0 @@
-Type checking failed: 
-Linearity error: frontend/tests/cases/negative/nonLinearCase.gr:4:1:
-Linear variable `x` is never used.

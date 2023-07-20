@@ -1,5 +1,3 @@
-import Nat
-
 data Vec (n : Nat) t where
   Nil  : Vec 0 t;
   Cons : t -> Vec n t -> Vec (n+1) t

@@ -1,0 +1,5 @@
+import Existential
+
+unpackBad : forall {t : Type, f : Type -> Type, a : Type}
+       . Exists f -> (f t -> a) -> a
+unpackBad (MkExists x) f = unpack < a , y > = x in f y

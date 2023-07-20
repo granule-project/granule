@@ -1,0 +1,18 @@
+-- gr --no-eval
+
+-- Test of case vs equations for matching on constructor
+-- with polymorphic grades
+
+data BFLevel (c : Nat) a where
+  Node : a → (BFLevel c a) [0..c] → BFLevel c a;
+  Root : a → BFLevel c a
+
+labelAlt : ∀ {a : Type} . BFLevel 1 a → a
+labelAlt (Node l [_]) = l;
+labelAlt (Root l)     = l
+
+label : ∀ {a : Type} . BFLevel 1 a → a
+label x =
+  case x of
+    (Node l [_]) → l;
+    (Root l)     → l

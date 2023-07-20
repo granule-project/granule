@@ -1,3 +1,0 @@
-Type checking failed: 
-Grading error: frontend/tests/cases/negative/leak.gr:4:1:
-Public is not approximatable by Private for type Sec

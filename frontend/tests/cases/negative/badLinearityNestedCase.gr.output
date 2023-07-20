@@ -1,3 +1,0 @@
-Type checking failed: 
-Linearity error: frontend/tests/cases/negative/badLinearityNestedCase.gr:8:21:
-Linear variable `x` is used more than once.

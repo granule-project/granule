@@ -1,6 +1,0 @@
-Type checking failed: 
-Falsifiable theorem: frontend/tests/cases/negative/sets-ordering.gr:19:1:
-  When checking `bad1`, (1 : Set X) is not approximatable by {B, C} for type Set X
-
-Falsifiable theorem: frontend/tests/cases/negative/sets-ordering.gr:22:1:
-  When checking `bad2`, (1 : Set X) is not approximatable by ({} : Set X) for type Set X

@@ -311,6 +311,18 @@ evalInWHNF ctxt e@(Case s a b guardExpr cases) = do
           error $ "Incomplete pattern match:\n  cases: "
               <> pretty cases <> "\n  expr: " <> pretty guardExpr
 
+evalInWHNF ctxt (Unpack s a rf tyVar var e1 e2) = do
+  e1' <- evalInWHNF ctxt e1
+  case e1' of
+    (Val _ _ _ (Pack _ _ ty eInner _ _ _)) -> do
+      p <- pmatch ctxt [(PVar s () False var, e2)] eInner
+      case p of
+        Just ei -> return ei
+        Nothing -> error $ "Failed pattern match for unpack on " <> pretty e1'
+    other ->
+      evalInWHNF ctxt (Unpack s a rf tyVar var e1' e2)
+
+
 evalInWHNF ctxt Hole {} =
   error "Trying to evaluate a hole, which should not have passed the type checker."
 
@@ -406,6 +418,17 @@ evalInCBV ctxt (TryCatch s _ _ e1 p _ e2 e3) = do
       (\(e :: IOException) -> evalInCBV ctxt e3)
     other -> fail $ "Runtime exception: Expecting a diamond value but got: " <> prettyDebug other
 
+evalInCBV ctxt (Unpack s a rf tyVar var e1 e2) = do
+  v1 <- evalInCBV ctxt e1
+  case v1 of
+    (Pack _ _ ty eInner _ _ _) -> do
+      v <- evalInCBV ctxt eInner
+      pmatch ctxt [(PVar s () False var, e2)] (valExpr v) >>=
+        \case
+          Just e2' -> evalInCBV ctxt e2'
+          Nothing  -> fail $ "Runtime exception: Failed pattern match " <> pretty var <> " in try at " <> pretty s
+    other -> fail $ "Runtime exception: Expecting a pack value but got: " <> prettyDebug other
+
 {-
 -- Hard-coded 'scale', removed for now
 evalInCBV _ (Val _ _ _ (Var _ v)) | internalName v == "scale" = return
@@ -421,7 +444,7 @@ evalInCBV ctxt (Val _ _ _ (Var _ x)) =
     case lookup x ctxt of
       Just val@(Ext _ (PrimitiveClosure f)) -> return $ Ext () $ Primitive (f ctxt)
       Just val -> return val
-      Nothing  -> fail $ "Variable '" <> sourceName x <> "' is undefined in context."
+      Nothing  -> fail $ "Variable '" <> sourceName x <> "' is undefined in context. Context is " <> show ctxt
 
 evalInCBV ctxt (Val s _ _ (Promote _ e)) =
   if CBN `elem` globalsExtensions ?globals
@@ -571,7 +594,6 @@ pmatchCBN ctxt psAll@((PFloat _ _ _ n, eb):ps) eg =
         else
           pmatchCBN ctxt ps eg
 
-
 -- CBV version of pattern matching
 pmatchCBV ::
   (?globals :: Globals)
@@ -621,6 +643,7 @@ pmatchCBV ctxt ((PFloat _ _ _ n, e):ps) (Val _ _ _ (NumFloat m)) =
 
 pmatchCBV ctxt (_:ps) v = pmatchCBV ctxt ps v
 
+-- Wrap a value into an expression
 valExpr :: ExprFix2 g ExprF ev () -> ExprFix2 ExprF g ev ()
 valExpr = Val nullSpanNoFile () False
 
@@ -1084,6 +1107,7 @@ instance RuntimeRep Expr where
   toRuntimeRep (TryCatch s a rf e1 p t e2 e3) = TryCatch s a rf (toRuntimeRep e1) p t (toRuntimeRep e2) (toRuntimeRep e3)
   toRuntimeRep (Case s a rf e ps) = Case s a rf (toRuntimeRep e) (map (second toRuntimeRep) ps)
   toRuntimeRep (Hole s a rf vs) = Hole s a rf vs
+  toRuntimeRep (Unpack s a rf tyVar var e1 e2) = Unpack s a rf tyVar var (toRuntimeRep e1) (toRuntimeRep e2)
 
 instance RuntimeRep Value where
   toRuntimeRep (Ext a ()) = error "Bug: Parser generated an extended value case when it shouldn't have"
@@ -1098,6 +1122,7 @@ instance RuntimeRep Value where
   toRuntimeRep (Var a x) = Var a x
   toRuntimeRep (NumInt x) = NumInt x
   toRuntimeRep (NumFloat x) = NumFloat x
+  toRuntimeRep (Pack s a ty e var k ty') = Pack s a ty (toRuntimeRep e) var k ty'
 
 eval :: (?globals :: Globals) => AST () () -> IO (Maybe RValue)
 eval = evalAtEntryPoint (mkId entryPoint)

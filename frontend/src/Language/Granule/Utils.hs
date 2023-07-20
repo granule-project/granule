@@ -9,6 +9,7 @@ module Language.Granule.Utils where
 import Control.Applicative ((<|>))
 import Control.Exception (SomeException, catch, throwIO, try)
 import Control.Monad (when, forM)
+import Control.Monad.State.Class
 import Data.List ((\\), nub, sortBy)
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NonEmpty
@@ -22,6 +23,8 @@ import System.FilePath (splitFileName)
 import System.IO (hClose, hPutStr, hPutStrLn, openTempFile, stderr)
 import System.IO.Unsafe (unsafePerformIO)
 import "Glob" System.FilePath.Glob (glob)
+
+import Control.Monad.IO.Class
 
 
 import Language.Granule.Syntax.Span
@@ -52,11 +55,11 @@ data Globals = Globals
   , globalsGradeOnRule         :: Maybe Bool
   , globalsSynthTimeoutMillis  :: Maybe Integer
   , globalsSynthIndex          :: Maybe Integer
-  , globalsExtensions           :: [Extension]
+  , globalsExtensions          :: [Extension]
   } deriving (Read, Show)
 
 -- | Allowed extensions
-data Extension = Base | CBN | NoTopLevelApprox | SecurityLevels
+data Extension = Base | CBN | NoTopLevelApprox | SecurityLevels | Report | GradedBase | UnsafePromotion
  deriving (Eq, Read, Show)
 
 -- | Given a map from `Extension`s to `a` pick the first
@@ -71,6 +74,10 @@ extensionDependent emap def =
       case lookup e emap of
         Just a -> a
         Nothing -> aux es
+
+-- Predicate on whether a particular extension is turned on or not.
+usingExtension :: (?globals :: Globals) => Extension -> Bool
+usingExtension x = x `elem` globalsExtensions ?globals
 
 -- | Parse valid extension names
 parseExtensions :: String -> Maybe Extension
@@ -204,11 +211,23 @@ mkSpan (start, end) = Span start end sourceFilePath
 nullSpan :: (?globals :: Globals) => Span
 nullSpan = Span (0, 0) (0, 0) sourceFilePath
 
+reportM :: (?globals :: Globals, MonadIO f) => String -> f ()
+reportM message =
+  when (usingExtension Report) (liftIO $ putStrLn $ message)
+
+reportMsep :: (?globals :: Globals, MonadIO f) => f ()
+reportMsep = reportM (replicate 80 '-')
 
 debugM :: (?globals :: Globals, Applicative f) => String -> String -> f ()
 debugM explanation message =
     when debugging $ traceM $
       ((unsafePerformIO getTimeString) <> (bold $ cyan $ "Debug: ") <> explanation <> " \n") <> message <> "\n"
+
+debugHeadingM :: (?globals :: Globals, Applicative f) => String -> f ()
+debugHeadingM explanation =
+    when debugging $ traceM $
+      ((unsafePerformIO getTimeString) <> (bold $ cyan $ "Debug: ") <> explanation <> " \n")
+
 
 debugM' :: (?globals :: Globals, Applicative f) => String -> String -> f ()
 debugM' explanation message =
@@ -376,3 +395,28 @@ snd3 (_, x, _) = x
 
 thd3 :: (a, b, c) -> c
 thd3 (_, _, x) = x
+
+-- Other utils
+ifM :: Monad m => m Bool -> m a -> m a -> m a
+ifM condM f g = do
+  cond <- condM
+  if cond then f else g
+
+whenM :: Monad m => m Bool -> m () -> m ()
+whenM condM f = ifM condM f (return ())
+
+mapMaybeM :: Monad m => (a -> m (Maybe b)) -> [a] -> m [b]
+mapMaybeM f [] = return []
+mapMaybeM f (x : xs) = do
+  my <- f x
+  ys <- mapMaybeM f xs
+  case my of
+    Just y  -> return $ y : ys
+    Nothing -> return ys
+
+-- modify primitive but which can have effects
+modifyM :: MonadState s m => (s -> m s) -> m ()
+modifyM f = do
+  s <- get
+  s' <- f s
+  put s'

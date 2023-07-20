@@ -1,0 +1,19 @@
+language GradedBase
+
+data Maybe a where
+  Nothing : Maybe a;
+  Just    : a -> Maybe a
+
+fromMaybe : forall {a : Type} . a % (0..1) -> Maybe a -> a
+fromMaybe d Nothing = d;
+fromMaybe d (Just x) = x
+
+lambdaTest : forall {a b : Type} . a -> b % 0 -> a
+lambdaTest = \x -> \y -> x
+
+fmap : forall {a : Type, b : Type} . (a -> b) % (0..1) -> Maybe a -> Maybe b
+fmap f Nothing = Nothing;
+fmap f (Just x) = Just (f x)
+
+dubMap : forall {a b : Type} . (a -> b) % (0..2) -> Maybe a -> Maybe a -> (Maybe b, Maybe b)
+dubMap f x y = (fmap f x, fmap f y)

@@ -80,7 +80,7 @@ nonIndexedToIndexed _  _     _      d@DataConstrIndexed{} = d
 nonIndexedToIndexed id tName tyVars (DataConstrNonIndexed sp dName params)
     = DataConstrIndexed sp dName (Forall sp [] [] ty)
   where
-    ty = foldr (FunTy Nothing) (returnTy (GrType.TyCon id) tyVars) params
+    ty = foldr (FunTy Nothing Nothing) (returnTy (GrType.TyCon id) tyVars) params
     returnTy t [] = t
     returnTy t (v:vs) = returnTy (GrType.TyApp t ((GrType.TyVar . fst) v)) vs
 
@@ -114,7 +114,7 @@ cgPat (GrPat.PConstr _ _ _ i l_pt)
 
 cgType :: Compiler m => GrType.Type -> m (Hs.Type ())
 cgType (GrType.Type i) = return $ TyStar ()
-cgType (GrType.FunTy _ t1 t2) = do
+cgType (GrType.FunTy _ _ t1 t2) = do
   t1' <- cgType t1
   t2' <- cgType t2
   return $ Hs.TyFun () t1' t2'
@@ -141,7 +141,7 @@ cgType (GrType.TyInfix t1 t2 t3) = return mkUnit
 cgType (GrType.TySet p l_t) = return mkUnit
 cgType (GrType.TyCase t l_p_tt) = unsupported "cgType: tycase not implemented"
 cgType (GrType.TySig t t2) = unsupported "cgType: tysig not implemented"
-
+cgType (GrType.TyExists _ _ _) = unsupported "cgType: tyexists not implemented"
 
 isTupleType :: GrType.Type -> Bool
 isTupleType (GrType.TyApp (GrType.TyCon id) _) = id == Id "," ","
@@ -182,6 +182,7 @@ cgExpr (GrExpr.Case _ _ _ ge cases) = do
     e' <- cgExpr e
     return $ alt p' e'
   return $ caseE ge' cases'
+cgExpr GrExpr.Unpack{} = error "cgExpr: existentials not implement"
 cgExpr GrExpr.Hole{} = error "cgExpr: hole not implemented"
 
 isTupleExpr :: CExpr -> Bool
@@ -217,6 +218,7 @@ cgVal (Abs _ p _ ex) = do
   p' <- cgPat p
   ex' <- cgExpr ex
   return $ lamE [p'] ex'
+cgVal Pack{} = error "Existentials unsupported in code gen"
 cgVal Ext{} = unexpected "cgVal: unexpected Ext"
 
 

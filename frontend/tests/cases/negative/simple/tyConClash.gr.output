@@ -1,0 +1,12 @@
+Type checking failed: 
+Type constructor name clash: frontend/tests/cases/negative/simple/tyConClash.gr:5:1:
+`()` already defined at
+	(location redacted)
+
+Type constructor name clash: primitive:
+`Float` already defined at
+	(location redacted)
+
+Type constructor name clash: primitive:
+`Int` already defined at
+	(location redacted)

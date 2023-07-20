@@ -1,0 +1,3 @@
+Type checking failed: 
+Type error: frontend/tests/cases/negative/simple/comments.gr:4:7:
+Expected `Int` but got `String`

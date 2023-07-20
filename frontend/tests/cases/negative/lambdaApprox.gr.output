@@ -1,3 +1,0 @@
-Type checking failed: 
-Falsifiable theorem: frontend/tests/cases/negative/lambdaApprox.gr:2:1:
-  When checking `lambdaApprox`, (1 : Interval Nat) is not approximatable by 0..0 for type Interval Nat

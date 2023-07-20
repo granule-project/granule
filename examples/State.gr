@@ -1,0 +1,47 @@
+import Prelude
+
+-- State monad example
+
+data State s a = State (s -> a × s)
+
+mapState
+  : forall {a : Type, b : Type, s : Type}
+  . (a -> b) -> State s a -> State s b
+mapState f (State ka) = State (\s -> let (a, s) = ka s in (f a, s))
+
+pureState
+  : forall {a : Type, s : Type}
+  . a -> State s a
+pureState a = State (\s -> (a, s))
+
+amapState
+  : forall {a : Type, b : Type, s : Type}
+  . State s (a -> b) -> State s a -> State s b
+amapState (State kf) (State ka) = State
+    (\s ->
+      let (f, s) = kf s;
+          (a, s) = ka s
+      in (f a, s)
+    )
+
+joinState
+  : forall {a : Type, s : Type}
+  . State s (State s a) -> State s a
+joinState (State kka) = State (\s -> let ((State ka), s) = kka s in ka s)
+
+mmapState
+  : forall {a : Type, b : Type, s : Type}
+  . (a -> State s b) -> State s a -> State s b
+mmapState k = joinState ∘ mapState k
+
+-- here things get interesitng
+-- `get` duplicates the state, so the usual implementation is not well typed
+-- get
+--   : forall {s : Type}
+--   . State s s
+-- get = State (\s -> (s, s))
+
+get
+  : forall {s : Type}
+  . State (s [0..Inf]) s
+get = State (\([x] : s [0..Inf]) -> (x, [x]))

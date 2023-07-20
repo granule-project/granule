@@ -1,3 +1,0 @@
-Type checking failed: 
-Falsifiable theorem: frontend/tests/cases/negative/localBinding.gr:3:1:
-  When checking `foof`, expected 3 uses, but instead there are 1 actual uses.

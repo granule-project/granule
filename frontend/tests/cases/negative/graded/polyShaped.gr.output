@@ -1,0 +1,15 @@
+Type checking failed: 
+Counter example: frontend/tests/cases/negative/graded/polyShaped.gr:6:1:
+  The following constraint associated with `pushEither` is false:
+	  (prom_[6:29]0 = n) ∧ (n = prom_[6:29]0) ∧ ((1 : Nat) = n)
+
+Counter-example:
+  n = 0 :: Integer
+
+
+Counter example: frontend/tests/cases/negative/graded/polyShaped.gr:7:1:
+  The following constraint associated with `pushEither` is false:
+	  (prom_[7:30]0 = n) ∧ (n = prom_[7:30]0) ∧ ((1 : Nat) = n)
+
+Counter-example:
+  n = 0 :: Integer

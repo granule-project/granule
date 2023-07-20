@@ -1,5 +1,0 @@
-id : forall {a : Type} . a -> a
-id x = x
-
-usethis : Int
-usethis = id 42

@@ -1,0 +1,10 @@
+language GradedBase
+
+id : forall {a : Type} . a % 1 -> a
+id x = x
+
+weak : forall {a : Type} . a % 0 -> ()
+weak _ = ()
+
+copy : forall {a : Type} . a % 2 -> (a, a)
+copy x = (x, x)

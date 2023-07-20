@@ -1,0 +1,3 @@
+data Bool = True | False
+bug : Int -> Int
+bug x = let () = drop@ Int x in (if True then x else 7)

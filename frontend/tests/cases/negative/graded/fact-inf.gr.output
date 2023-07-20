@@ -1,0 +1,14 @@
+Type checking failed: 
+Counter example: frontend/tests/cases/negative/graded/fact-inf.gr:12:1:
+  When checking `fact`, (1 : Interval (Ext Nat)) is not approximatable by ((∞ : Ext Nat))..((∞ : Ext Nat)) for type Interval (Ext Nat)
+
+Counter-example:
+  n = 0 :: Integer
+
+
+Counter example: frontend/tests/cases/negative/graded/fact-inf.gr:13:1:
+  The following constraint associated with `fact` is false:
+	  ((1 : Interval (Ext Nat)) + (((∞ : Ext Nat))..((∞ : Ext Nat))) ≤ ((∞ : Ext Nat))..((∞ : Ext Nat))) ∧ (n3 = n2) ∧ ((1 : Interval (Ext Nat)) ≤ ((∞ : Ext Nat))..((∞ : Ext Nat)))
+
+Counter-example:
+  n = 1 :: Integer

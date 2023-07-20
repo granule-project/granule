@@ -1,3 +1,0 @@
-Type checking failed: 
-Kind mismatch: frontend/tests/cases/negative/unknownTyCon.gr:2:1:
-Expected kind `One` for type `∞` but actual kind is `Ext s1`

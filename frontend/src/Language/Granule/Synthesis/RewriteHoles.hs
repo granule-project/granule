@@ -114,6 +114,8 @@ holeRefactorExpr goal (Case sp a rf e cases) =
 -- TODO: for maximum expressivity with holes we should recursively refacor inside values as well (as they contain exprs)
 holeRefactorExpr goal (Val sp a rf v) = Val sp a rf (holeRefactorVal goal v)
 holeRefactorExpr goal (TryCatch{}) = error "To do: implement hole refactoring for try catch"
+holeRefactorExpr goal (Unpack s a rf tyVar var e1 e2)  =
+  Unpack s a rf tyVar var (holeRefactorExpr goal e1) (holeRefactorExpr goal e2)
 
 holeRefactorVal :: Expr () Type -> Value () () -> Value () ()
 holeRefactorVal goal (Abs a p mt expr) = Abs a p mt (holeRefactorExpr goal expr)

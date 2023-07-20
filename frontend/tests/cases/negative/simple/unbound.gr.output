@@ -1,0 +1,3 @@
+Type checking failed: 
+Unbound variable error: frontend/tests/cases/negative/simple/unbound.gr:2:9:
+`🍊`

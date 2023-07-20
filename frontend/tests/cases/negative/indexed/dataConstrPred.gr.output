@@ -1,0 +1,4 @@
+Type checking failed: 
+Falsifiable theorem: frontend/tests/cases/negative/indexed/dataConstrPred.gr:10:1:
+  The following constraint associated with `atLeastThree` is false:
+	  (n0 = 2) ∧ (m0 = 3) ∧ (m0 < n0)

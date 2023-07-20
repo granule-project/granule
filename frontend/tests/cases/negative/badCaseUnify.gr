@@ -1,7 +1,0 @@
-import Maybe
-
-reflect : forall {a : Type} . Maybe a -> (() -> (a [0..1]) <MayFail>)
-reflect mb = 
-    case mb of
-        None -> (\() -> throw);
-        Some x -> (\() -> x)

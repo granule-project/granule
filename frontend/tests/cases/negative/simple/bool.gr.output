@@ -1,0 +1,3 @@
+Type checking failed: 
+Wrong return type in data constructor: 
+Expected return result to be of type constructor `Bool`, but got type `Int`

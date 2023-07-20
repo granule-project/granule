@@ -1,0 +1,10 @@
+Type checking failed: 
+Data constructor name clash: frontend/tests/cases/negative/simple/name-clash-data-constr.gr:1:14:
+`A` already defined at
+	(location redacted)
+	(location redacted)
+	(location redacted)
+
+Data constructor name clash: frontend/tests/cases/negative/simple/name-clash-data-constr.gr:7:3:
+`B` already defined at
+	(location redacted)

@@ -1,0 +1,15 @@
+import Vec
+import List
+
+listToVec : ∀ {a : Type} . List a → exists {n : Nat} . Vec n a
+listToVec Empty = pack < 0 , Nil > as exists {n : Nat} . Vec n a;
+listToVec (Next x xs) =
+  unpack < m , v > = listToVec xs
+  in pack < m + 1 , (Cons x v) > as exists {n : Nat} . Vec n a
+
+vecToList : ∀ {a : Type, n : Nat} . Vec n a → List a
+vecToList Nil = Empty;
+vecToList (Cons x xs) = Next x (vecToList xs)
+
+iso : forall {a : Type} . List a -> List a
+iso x = unpack < n , list > = listToVec x in vecToList list

@@ -1,6 +1,0 @@
-Type checking failed: 
-Duplicate binding: frontend/tests/cases/negative/duplicates/pattern.gr:3:1:
-Variable `x` bound more than once.
-
-Duplicate binding: frontend/tests/cases/negative/duplicates/pattern.gr:3:1:
-Variable `y` bound more than once.

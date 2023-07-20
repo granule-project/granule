@@ -1,0 +1,6 @@
+Type checking failed: 
+Type error: frontend/tests/cases/negative/simple/two-errors.gr:4:7:
+Expected `Int` but got `()`
+
+Type error: frontend/tests/cases/negative/simple/two-errors.gr:7:7:
+Expected `()` but got `Int`

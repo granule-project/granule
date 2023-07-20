@@ -1,0 +1,6 @@
+data N (n : Nat) where
+  Z : N 0;
+  S : N n -> N (n+1)
+
+foo : N 1 -> ()
+foo (S (S Z)) = ()

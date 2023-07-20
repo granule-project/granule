@@ -1,0 +1,12 @@
+data Vec (n : Nat) t where
+  Nil  : Vec 0 t;
+  Cons : t -> Vec n t -> Vec (n+1) t
+
+data Two a where
+  TwoBox : a [2] → Two a
+
+three : ∀ {a : Type} . Two a → Vec 3 a
+three c = case c of (TwoBox [x]) → Cons x (Cons x (Cons x Nil))
+
+main : Vec 3 Int
+main = three (TwoBox [0])
