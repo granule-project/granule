@@ -4,14 +4,16 @@
   clear: both;
   padding: 10px;
   margin: 5px;
+  border-bottom: solid 3px #ccc;
 }
 
 .desc {
   font-family: sans-serif;
   padding: 10px;
   margin: 5px;
-  margin-left: 20px;
+  padding-left: 20px;
   margin-bottom: 15px;
+  border-left: solid 1px #ccc;
 }
 
 .constName {
@@ -41,7 +43,7 @@
 }
 
 #content {
-  width: calc(65vw - 2 * 20px);
+  width: calc(60vw - 2 * 20px);
   margin: 0px;
   padding: 20px;
   font-family: sans-serif;

@@ -115,53 +115,60 @@ run
   -> String
   -> IO (Either InterpreterError InterpreterResult)
 run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrFlags input) <> ?globals in do
-    result <- try $ parseAndDoImportsAndFreshenDefs input
-    case result of
-      -- Parse error
-      Left (e :: SomeException) -> return . Left . ParseError $ show e
-
+    if grDocMode config
       -- Generate docs mode
-      Right (ast, extensions) | grDocMode config -> do
-        grDoc input ast
-        return $ Right NoEval
+      then do
+        result <- try $ parseAndFreshenDefs input
+        case result of
+          -- Parse error
+         Left (e :: SomeException) -> return . Left . ParseError $ show e
+         Right (ast, extensions) -> do
+            grDoc input ast
+            return $ Right NoEval
 
       -- Normal mode
-      Right (ast, extensions) ->
-        -- update globals with extensions
-        let ?globals = ?globals { globalsExtensions = extensions } in do
-        -- Print to terminal when in debugging mode:
-        debugM "Pretty-printed AST:" $ pretty ast
-        debugM "Raw AST:" $ show ast
-        -- Check and evaluate
-        checked <- try $ check ast
-        case checked of
-          Left (e :: SomeException) -> return .  Left . FatalError $ displayException e
-          Right (Left errs) -> do
-            let holeErrors = getHoleMessages errs
-            if ignoreHoles && length holeErrors == length errs
-              then do
-                printSuccess $ "OK " ++ (blue $ "(but with " ++ show (length holeErrors) ++ " holes)")
-                return $ Right NoEval
-              else
-                case (globalsRewriteHoles ?globals, holeErrors) of
-                  (Just True, holes@(_:_)) ->
-                    runHoleSplitter input config errs holes
-                  _ -> return . Left $ CheckerError errs
-          Right (Right (ast', derivedDefs)) -> do
-            if noEval then do
-              printSuccess "OK"
-              return $ Right NoEval
-            else do
-              printSuccess "OK, evaluating..."
-              result <- try $ eval (extendASTWith derivedDefs ast)
-              case result of
-                Left (e :: SomeException) ->
-                  return . Left . EvalError $ displayException e
-                Right Nothing -> if testing
-                  then return $ Right NoEval
-                  else return $ Left NoEntryPoint
-                Right (Just result) -> do
-                  return . Right $ InterpreterResult result
+      else do
+        result <- try $ parseAndDoImportsAndFreshenDefs input
+        case result of
+          -- Parse error
+          Left (e :: SomeException) -> return . Left . ParseError $ show e
+
+          Right (ast, extensions) ->
+            -- update globals with extensions
+            let ?globals = ?globals { globalsExtensions = extensions } in do
+            -- Print to terminal when in debugging mode:
+            debugM "Pretty-printed AST:" $ pretty ast
+            debugM "Raw AST:" $ show ast
+            -- Check and evaluate
+            checked <- try $ check ast
+            case checked of
+              Left (e :: SomeException) -> return .  Left . FatalError $ displayException e
+              Right (Left errs) -> do
+                let holeErrors = getHoleMessages errs
+                if ignoreHoles && length holeErrors == length errs
+                  then do
+                    printSuccess $ "OK " ++ (blue $ "(but with " ++ show (length holeErrors) ++ " holes)")
+                    return $ Right NoEval
+                  else
+                    case (globalsRewriteHoles ?globals, holeErrors) of
+                      (Just True, holes@(_:_)) ->
+                        runHoleSplitter input config errs holes
+                      _ -> return . Left $ CheckerError errs
+              Right (Right (ast', derivedDefs)) -> do
+                if noEval then do
+                  printSuccess "OK"
+                  return $ Right NoEval
+                else do
+                  printSuccess "OK, evaluating..."
+                  result <- try $ eval (extendASTWith derivedDefs ast)
+                  case result of
+                    Left (e :: SomeException) ->
+                      return . Left . EvalError $ displayException e
+                    Right Nothing -> if testing
+                      then return $ Right NoEval
+                      else return $ Left NoEntryPoint
+                    Right (Just result) -> do
+                      return . Right $ InterpreterResult result
 
   where
     getHoleMessages :: NonEmpty CheckerError -> [CheckerError]
