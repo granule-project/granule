@@ -42,6 +42,7 @@ monus m Z = m;
 monus Z (S n') = monus Z n';
 monus (S m') (S n') = monus m' n'
 
+-- Subtraction
 sub
   : forall {m n : Nat}
   . {n .≥ m} => N n -> N m -> N (n - m)

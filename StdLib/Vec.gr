@@ -110,6 +110,7 @@ tail [Cons _ xs] = xs
 --init [Cons _ Nil] = Nil;
 --init [Cons x xs] = Cons x (init [xs])
 
+--- Take a vector and return the head element paired with the tail
 uncons
   : forall {a : Type, n : Nat}
   . Vec (n + 1) a -> (a, Vec n a)

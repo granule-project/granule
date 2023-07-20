@@ -3,12 +3,16 @@ module Stack where
 -- Use vectors to implement stacks
 import Vec
 
+
+--- Pop most recently added item from the stack
 pop : forall {n : Nat, a : Type} . Vec (n+1) a -> (a, Vec n a)
 pop = uncons
 
+--- Push item onto the stack
 push : forall {n : Nat, a : Type} . a -> Vec n a -> Vec (n+1) a
 push = Cons
 
+--- Pop the most recent item from the stack without removing it
 peek : forall {n : Nat, a : Type} . (Vec (n+1) a) [1..2] -> (a, Vec (n+1) a)
 peek [Cons x xs] = (x, Cons x xs)
 
