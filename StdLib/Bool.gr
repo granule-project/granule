@@ -8,6 +8,8 @@
 --- Repository: https://github.com/dorchard/granule
 ------
 
+module Bool where
+
 --- # Boolean type
 
 --- Boolean

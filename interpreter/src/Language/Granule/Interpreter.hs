@@ -50,6 +50,7 @@ import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Synthesis.RewriteHoles
 import Language.Granule.Utils
+import Language.Granule.Doc
 import Paths_granule_interpreter (version)
 
 main :: IO ()
@@ -114,45 +115,61 @@ run
   -> String
   -> IO (Either InterpreterError InterpreterResult)
 run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrFlags input) <> ?globals in do
-    result <- try $ parseAndDoImportsAndFreshenDefs input
-    case result of
-      Left (e :: SomeException) -> return . Left . ParseError $ show e
-      Right (ast, extensions) ->
-        -- update globals with extensions
-        let ?globals = ?globals { globalsExtensions = extensions } in do
-        -- Print to terminal when in debugging mode:
-        debugM "Pretty-printed AST:" $ pretty ast
-        debugM "Raw AST:" $ show ast
-        -- Check and evaluate
-        checked <- try $ check ast
-        case checked of
-          Left (e :: SomeException) -> return .  Left . FatalError $ displayException e
-          Right (Left errs) -> do
-            let holeErrors = getHoleMessages errs
-            if ignoreHoles && length holeErrors == length errs
-              then do
-                printSuccess $ "OK " ++ (blue $ "(but with " ++ show (length holeErrors) ++ " holes)")
-                return $ Right NoEval
-              else
-                case (globalsRewriteHoles ?globals, holeErrors) of
-                  (Just True, holes@(_:_)) ->
-                    runHoleSplitter input config errs holes
-                  _ -> return . Left $ CheckerError errs
-          Right (Right (ast', derivedDefs)) -> do
-            if noEval then do
-              printSuccess "OK"
-              return $ Right NoEval
-            else do
-              printSuccess "OK, evaluating..."
-              result <- try $ eval (extendASTWith derivedDefs ast)
-              case result of
-                Left (e :: SomeException) ->
-                  return . Left . EvalError $ displayException e
-                Right Nothing -> if testing
-                  then return $ Right NoEval
-                  else return $ Left NoEntryPoint
-                Right (Just result) -> do
-                  return . Right $ InterpreterResult result
+    if grDocMode config
+      -- Generate docs mode
+      then do
+        result <- try $ parseAndFreshenDefs input
+        case result of
+          -- Parse error
+         Left (e :: SomeException) -> return . Left . ParseError $ show e
+         Right (ast, extensions) -> do
+            grDoc input ast
+            printSuccess "Docs built."
+            return $ Right NoEval
+
+      -- Normal mode
+      else do
+        result <- try $ parseAndDoImportsAndFreshenDefs input
+        case result of
+          -- Parse error
+          Left (e :: SomeException) -> return . Left . ParseError $ show e
+
+          Right (ast, extensions) ->
+            -- update globals with extensions
+            let ?globals = ?globals { globalsExtensions = extensions } in do
+            -- Print to terminal when in debugging mode:
+            debugM "Pretty-printed AST:" $ pretty ast
+            debugM "Raw AST:" $ show ast
+            -- Check and evaluate
+            checked <- try $ check ast
+            case checked of
+              Left (e :: SomeException) -> return .  Left . FatalError $ displayException e
+              Right (Left errs) -> do
+                let holeErrors = getHoleMessages errs
+                if ignoreHoles && length holeErrors == length errs
+                  then do
+                    printSuccess $ "OK " ++ (blue $ "(but with " ++ show (length holeErrors) ++ " holes)")
+                    return $ Right NoEval
+                  else
+                    case (globalsRewriteHoles ?globals, holeErrors) of
+                      (Just True, holes@(_:_)) ->
+                        runHoleSplitter input config errs holes
+                      _ -> return . Left $ CheckerError errs
+              Right (Right (ast', derivedDefs)) -> do
+                if noEval then do
+                  printSuccess "OK"
+                  return $ Right NoEval
+                else do
+                  printSuccess "OK, evaluating..."
+                  result <- try $ eval (extendASTWith derivedDefs ast)
+                  case result of
+                    Left (e :: SomeException) ->
+                      return . Left . EvalError $ displayException e
+                    Right Nothing -> if testing
+                      then return $ Right NoEval
+                      else return $ Left NoEntryPoint
+                    Right (Just result) -> do
+                      return . Right $ InterpreterResult result
 
   where
     getHoleMessages :: NonEmpty CheckerError -> [CheckerError]
@@ -209,6 +226,7 @@ parseGrFlags
 
 data GrConfig = GrConfig
   { grRewriter        :: Maybe (String -> String)
+  , grDocMode         :: Bool -- are we generating docs instead of checking/running?
   , grKeepBackup      :: Maybe Bool
   , grLiterateEnvName :: Maybe String
   , grShowVersion     :: Bool
@@ -227,6 +245,7 @@ literateEnvName = fromMaybe "granule" . grLiterateEnvName
 instance Semigroup GrConfig where
   c1 <> c2 = GrConfig
     { grRewriter    = grRewriter    c1 <|> grRewriter  c2
+    , grDocMode     = grDocMode c1 || grDocMode c2
     , grKeepBackup      = grKeepBackup      c1 <|> grKeepBackup      c2
     , grLiterateEnvName = grLiterateEnvName c1 <|> grLiterateEnvName c2
     , grGlobals         = grGlobals         c1 <>  grGlobals         c2
@@ -236,6 +255,7 @@ instance Semigroup GrConfig where
 instance Monoid GrConfig where
   mempty = GrConfig
     { grRewriter    = Nothing
+    , grDocMode     = False
     , grKeepBackup      = Nothing
     , grLiterateEnvName = Nothing
     , grGlobals         = mempty
@@ -298,6 +318,11 @@ parseGrConfig = info (go <**> helper) $ briefDesc
           flag Nothing (Just True)
             $ long "debug"
             <> help "Debug mode"
+
+        grDocMode <-
+          flag False True
+            $ long "grdoc"
+            <> help "Generated docs for the specified file"
 
         grShowVersion <-
           flag False True
@@ -420,7 +445,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             <> (help . unwords)
             [ "Index of synthesised programs"
             , "Defaults to"
-            , show synthIndex 
+            , show synthIndex
             ]
 
         grRewriter
@@ -456,6 +481,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
           ( globPatterns
           , GrConfig
             { grRewriter
+            , grDocMode
             , grKeepBackup
             , grLiterateEnvName
             , grShowVersion

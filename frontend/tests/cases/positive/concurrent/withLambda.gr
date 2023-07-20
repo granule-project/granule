@@ -1,0 +1,2 @@
+test0 : (LChan (Recv Int End))
+test0 = forkLinear (\c -> close (send c 42))

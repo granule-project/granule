@@ -1,0 +1,62 @@
+.code {
+  font-family: monospace;
+  background: rgb(250,250,250);
+  clear: both;
+  padding: 10px;
+  margin: 5px;
+  border-bottom: solid 3px #ccc;
+}
+
+.desc {
+  font-family: sans-serif;
+  padding: 10px;
+  margin: 5px;
+  padding-left: 20px;
+  margin-bottom: 15px;
+  border-left: solid 1px #ccc;
+}
+
+.constName {
+  color: rgb(16, 145, 59);
+}
+
+.coeff {
+  color: rgb(6, 74, 209);
+}
+
+.eff {
+  color: rgb(204, 102, 6);
+}
+
+.keyword {
+  color: rgb(110, 12, 5);
+}
+
+#navigator {
+  width: calc(25vw - 20px - 2 * 20px);
+  margin: 0px;
+  padding: 20px;
+  margin-right: 20px;
+  background: rgb(230,230,230);
+  font-family: sans-serif;
+  float: left;
+}
+
+#content {
+  width: calc(60vw - 2 * 20px);
+  margin: 0px;
+  padding: 20px;
+  font-family: sans-serif;
+  float: left;
+}
+
+#logo {
+  float: right;
+}
+#logo img {
+  width: 100px;
+}
+
+a, a:visited {
+  color: #404d5f;
+}

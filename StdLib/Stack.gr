@@ -1,3 +1,5 @@
+module Stack where
+
 -- Use vectors to implement stacks
 import Vec
 

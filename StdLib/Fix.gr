@@ -8,6 +8,8 @@
 --- Repository: https://github.com/granule-project/granule
 ------
 
+module Fix where
+
 data Fix (f : Type -> Type) = Fix (f (Fix f))
 
 unfix : forall {a : Type, f : Type -> Type} . Fix f -> f (Fix f)

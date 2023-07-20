@@ -8,7 +8,7 @@
 --- Repository: https://github.com/dorchard/granule
 ------
 
--- # Operations on vectors
+module Vec where
 
 import Nat
 import Fin

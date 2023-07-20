@@ -8,11 +8,13 @@
 --- Repository: https://github.com/dorchard/granule
 ------
 
+module Prelude where
+
 import Bool
 
 --- # Standard functional components
 
---- Identitiy function
+--- Identity function
 id : forall {a : Type} . a -> a
 id x = x
 
