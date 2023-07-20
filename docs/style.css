@@ -23,18 +23,20 @@
 }
 
 #navigator {
-  width: calc(30vw - 20px - 2 * 20px);
+  width: calc(25vw - 20px - 2 * 20px);
   margin: 0px;
   padding: 20px;
   margin-right: 20px;
   background: rgb(230,230,230);
   font-family: sans-serif;
+  float: left;
 }
 
 #content {
-  width: calc(70vw - 2 * 20px);
+  width: calc(65vw - 2 * 20px);
   margin: 0px;
   padding: 20px;
   font-family: sans-serif;
+  float: left;
 }
 
