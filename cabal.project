@@ -1,0 +1,7 @@
+packages:
+    ./frontend
+    ./interpreter
+    ./repl
+    ./server
+    ./compiler
+    ./runtime

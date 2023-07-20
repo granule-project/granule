@@ -57,10 +57,15 @@ Temporary Items
 *.bak
 
 # Cabal files, because we are using hpack
-*.cabal
+# TODO 2023-07-20 raehik: committing Cabal files is handy and suggested by the
+# creator of Stack: https://www.fpcomplete.com/blog/storing-generated-cabal-files/
+#*.cabal
 
 # Compiler Examples
 compiler-examples/
 
 # VSCode
 .vscode
+
+# Nix
+/result

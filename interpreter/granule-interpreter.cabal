@@ -1,0 +1,127 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.35.2.
+--
+-- see: https://github.com/sol/hpack
+
+name:           granule-interpreter
+version:        0.9.3.0
+synopsis:       The Granule interpreter
+homepage:       https://github.com/dorchard/granule#readme
+bug-reports:    https://github.com/dorchard/granule/issues
+author:         Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Jack Hughes, Preston Keel, Daniel Marshall, Michael Vollmer
+maintainer:     Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Jack Hughes, Preston Keel, Daniel Marshall, Michael Vollmer
+copyright:      2018-22 authors
+license:        BSD3
+build-type:     Simple
+
+source-repository head
+  type: git
+  location: https://github.com/dorchard/granule
+
+library
+  exposed-modules:
+      Language.Granule.Interpreter
+      Language.Granule.Interpreter.Eval
+      Language.Granule.Interpreter.Desugar
+  other-modules:
+      Language.Granule.Doc
+      Paths_granule_interpreter
+  hs-source-dirs:
+      src
+  default-extensions:
+      LambdaCase
+      RecordWildCards
+      ImplicitParams
+      ScopedTypeVariables
+      OverloadedStrings
+  ghc-options: -O0 -Wall -Werror -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -Wno-unused-matches -Wno-name-shadowing -Wno-type-defaults
+  build-depends:
+      Glob
+    , array
+    , base >=4.10 && <5
+    , clock
+    , concurrent-extra
+    , directory
+    , extra
+    , filepath
+    , gitrev
+    , granule-frontend
+    , granule-runtime
+    , logict >=0.7.1.0
+    , mtl >=2.2.1
+    , optparse-applicative
+    , text
+  default-language: Haskell2010
+
+executable gr
+  main-is: Language/Granule/Interpreter.hs
+  other-modules:
+      Language.Granule.Doc
+      Language.Granule.Interpreter.Desugar
+      Language.Granule.Interpreter.Eval
+      Paths_granule_interpreter
+  hs-source-dirs:
+      src
+  default-extensions:
+      LambdaCase
+      RecordWildCards
+      ImplicitParams
+      ScopedTypeVariables
+      OverloadedStrings
+  ghc-options: -O0 -Wall -Werror -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -Wno-unused-matches -Wno-name-shadowing -Wno-type-defaults -main-is Language.Granule.Interpreter
+  build-depends:
+      Glob
+    , array
+    , base >=4.10 && <5
+    , clock
+    , concurrent-extra
+    , directory
+    , extra
+    , filepath
+    , gitrev
+    , granule-frontend
+    , granule-interpreter
+    , granule-runtime
+    , logict >=0.7.1.0
+    , mtl >=2.2.1
+    , optparse-applicative
+    , text
+  default-language: Haskell2010
+
+test-suite gr-golden
+  type: exitcode-stdio-1.0
+  main-is: Golden.hs
+  other-modules:
+      Paths_granule_interpreter
+  hs-source-dirs:
+      tests
+  default-extensions:
+      LambdaCase
+      RecordWildCards
+      ImplicitParams
+      ScopedTypeVariables
+      OverloadedStrings
+  ghc-options: -O0 -Wall -Werror -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -Wno-unused-matches -Wno-name-shadowing -Wno-type-defaults
+  build-depends:
+      Diff
+    , Glob
+    , array
+    , base >=4.10 && <5
+    , clock
+    , concurrent-extra
+    , directory
+    , extra
+    , filepath
+    , gitrev
+    , granule-frontend
+    , granule-interpreter
+    , granule-runtime
+    , logict >=0.7.1.0
+    , mtl >=2.2.1
+    , optparse-applicative
+    , strict
+    , tasty
+    , tasty-golden
+    , text
+  default-language: Haskell2010
