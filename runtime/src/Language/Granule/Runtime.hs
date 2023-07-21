@@ -150,7 +150,7 @@ newFloatArray = unsafePerformIO . newFloatArraySafe
 newFloatArraySafe :: Int -> IO FloatArray
 newFloatArraySafe size = do
   ptr <- callocArray size
-  return $ PointerArray (size-1) ptr
+  return $ PointerArray size ptr
 
 {-# NOINLINE newFloatArrayI #-}
 newFloatArrayI :: Int -> FloatArray
@@ -159,7 +159,7 @@ newFloatArrayI = unsafePerformIO . newFloatArrayISafe
 newFloatArrayISafe :: Int -> IO FloatArray
 newFloatArrayISafe size = do
   arr <- MA.newArray (0,size-1) 0.0
-  return $ HaskellArray (size-1) arr
+  return $ HaskellArray size arr
 
 {-# NOINLINE writeFloatArray #-}
 writeFloatArray :: FloatArray -> Int -> Float -> FloatArray

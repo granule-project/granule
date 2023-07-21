@@ -1035,12 +1035,12 @@ builtIns =
       return $ Constr () (mkId ",") [NumFloat e, Ext () $ Runtime fa']
 
     lengthFloatArray :: RValue -> IO RValue
-    lengthFloatArray = \(Nec () (Val _ _ _ (Ext () (Runtime fa)))) -> return $ Ext () $ Primitive $ \(NumInt i) ->
+    lengthFloatArray = \(Nec () (Val _ _ _ (Ext () (Runtime fa)))) ->
       let (e,fa') = RT.lengthFloatArray fa
       in return $ Constr () (mkId ",") [NumInt e, Nec () (Val nullSpan () False $ Ext () $ Runtime fa')]
 
     lengthFloatArrayI :: RValue -> IO RValue
-    lengthFloatArrayI = \(Ext () (Runtime fa)) -> return $ Ext () $ Primitive $ \(NumInt i) ->
+    lengthFloatArrayI = \(Ext () (Runtime fa)) ->
       let (e,fa') = RT.lengthFloatArray fa
       in return $ Constr () (mkId ",") [NumInt e, Ext () $ Runtime fa']
 
