@@ -101,7 +101,10 @@ generateModulePage' modName title input ast =
          <> (if strip docs == "" then miniBreak else descDiv docs))
 
     anchor :: Text -> Text
-    anchor x = tagWithAttributes "a" ("name = " <> toUrlName x) (tag "h3" x)
+    anchor x = tagWithAttributes "a"
+                 ("name = " <> toUrlName x)
+                   (tag "h3" ((tagWithAttributes "a" ("href='#' class='toplink'") "[top]") <> x))
+
 
     internalNav [] = ""
     internalNav xs = section "" $ navDiv

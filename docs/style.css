@@ -24,6 +24,7 @@
   width: 80%;
 }
 
+
 .constName {
   color: rgb(16, 145, 59);
 }
@@ -67,4 +68,14 @@
 
 a, a:visited {
   color: #404d5f;
+}
+
+a.toplink {
+  margin: 0px;
+  float:left;
+  margin-left:-3em;
+  font-weight: 400;
+  font-size: 10pt;
+  margin-right: 2em;
+  color: #c9c9c9;
 }
