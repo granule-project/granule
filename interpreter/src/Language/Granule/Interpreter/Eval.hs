@@ -215,7 +215,7 @@ evalInCBNdeep ctxt (App s a b e1 e2) = do
         pResult <- pmatchCBN ctxt [(p, e3)] e2
         case pResult of
           Just e3' -> evalInCBNdeep ctxt e3'
-          _ -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in application at " <> pretty s
+          _ -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " against " <> pretty e2 <> " in application at " <> pretty s
 
       (Constr s' c vs) -> do
         v2 <- evalInCBNdeep ctxt e2
@@ -360,7 +360,7 @@ evalInCBV ctxt (App s _ _ e1 e2) = do
         pResult <- pmatch ctxt [(p, e3)] (valExpr v2)
         case pResult of
           Just e3' -> evalInCBV ctxt e3'
-          _ -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in application at " <> pretty s
+          _ -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " against " <> pretty v2 <> " in application at " <> pretty s
 
       Constr _ c vs -> do
         -- (cf. APP_R)
