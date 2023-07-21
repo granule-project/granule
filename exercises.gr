@@ -1,0 +1,90 @@
+-- # Section 2
+-- ## Q1
+
+dub : Int → Int
+dub x = 2 * x
+
+-- ## Q2
+
+const : forall {a b : Type} . a -> b [] -> a
+const x [y] = x
+
+ap : forall {a b c : Type}. (c -> a -> b) -> (c -> a) -> (c [] -> b)
+ap f x [ctx] = f ctx (x ctx)
+
+-- ## Q3
+
+import Bool
+
+copyBool : Bool -> (Bool, Bool)
+copyBool False = (False, False);
+copyBool True  = (True, True)
+
+-- ## Q4
+
+andShortCircuit : Bool -> Bool [] -> Bool
+andShortCircuit False [_] = False;
+andShortCircuit True  [x] = x
+
+-- # Section 3
+
+-- ## Q1
+
+twice : forall {a : Type} . (a -> a) [2] -> a -> a
+twice [f] x = f (f x)
+
+example31 : Int
+example31 = twice [\x -> x + 1] 1
+
+-- ## Q2
+
+twiceP : forall {a : Type, r : Semiring} . (a -> a) [(1 + 1):r] -> a -> a
+twiceP [f] x = f (f x)
+
+twice' : forall {a : Type} . (a -> a) [2] -> a -> a
+twice' = twiceP
+
+-- ## Q3
+
+import Cake
+
+mange : forall {n : Nat, m : Nat} . Cake [n + m] -> (Cake [n], Happy [m])
+mange [c] = ([have c], [eat c])
+
+-- ## Q4
+
+data ABVec (a : Type) (b : Type) (n : Nat) (m : Nat) where
+  NilAB   : ABVec a b 0 0;
+  ConsA : a -> ABVec a b n m -> ABVec a b (n+1) m;
+  ConsB : b -> ABVec a b n m -> ABVec a b n (m+1)
+
+abmap : forall {a a' b b' : Type, n m : Nat} . (a -> a') [n] -> (b -> b') [m] -> ABVec a b n m -> ABVec a' b' n m
+abmap [f] [g] NilAB = NilAB;
+abmap [f] [g] (ConsA x xs) = ConsA (f x) (abmap [f] [g] xs);
+abmap [f] [g] (ConsB x xs) = ConsB (g x) (abmap [f] [g] xs)
+
+-- ## Q5
+
+import Vec
+
+data Patient = Patient (String [Public]) (String [Private])
+
+sampleCities : forall {n : Nat, k : Nat} . N k -> (Vec (n+k) Patient) [0..1] -> Vec k (String [Public])
+sampleCities Z [_] = Nil;
+sampleCities (S n) [Cons (Patient [city] [name]) ps] = Cons [city] (sampleCities n [ps]
+
+
+import Maybe
+
+-- import Nat
+
+-- twice : forall {a : Type} . (a -> a) [2] -> a -> a
+-- twice [f] x = f (f x)
+
+-- nth : forall {c : Nat, n : Nat} . N n -> (Int [c] -> Int) [n] -> Int [c * n] -> Int
+-- nth Z [g] [x] = 0;
+-- nth (S n) [g] [x] = nth n [g] [x] + g [x]
+
+-- fact : forall {n : Nat} . (N n) [1..(n+1)] -> Int
+-- fact [Z] = 1;
+-- fact [S m] = natToInt (S m) * (fact [m])
