@@ -56,13 +56,13 @@ generateCases span constructors ctxt toSplit = do
   let cases = combineCases orderedPatterns
 
   -- The Nothing case should be unreachable, as this function is only ever
-  -- called after checkEquation, where equationTy is set.
+  -- called after checkEquation, where splittingTy is set.
   st <- get
-  case equationTy st of
+  case splittingTy st of
     Nothing -> return ([], [])
-    Just eqTy -> do
+    Just ty -> do
       -- Filter the patterns if they are impossible.
-      patternsAndMaybeBinders <- mapM (caseFilter span eqTy) (snd cases)
+      patternsAndMaybeBinders <- mapM (caseFilter span ty) (snd cases)
       let validPatterns = catMaybes patternsAndMaybeBinders
       return (fst cases, validPatterns)
 

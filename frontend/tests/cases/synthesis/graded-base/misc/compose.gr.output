@@ -1,0 +1,5 @@
+language GradedBase
+
+comp : forall {k : Coeffect, n m : k, a : Type, b : Type, c : Type} .
+       (a % m -> b) % n -> (b % n -> c) %(1 : k) -> a %(n * m) -> c
+comp x y z = y (x z)

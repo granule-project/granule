@@ -1,0 +1,9 @@
+language GradedBase
+
+data Bool = True | False
+
+f : Bool %2 -> (Bool, Bool)
+f x = 
+    (case x of
+      True -> (x, True);
+      False -> (x, True))

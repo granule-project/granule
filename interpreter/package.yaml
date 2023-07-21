@@ -20,6 +20,7 @@ dependencies:
 - text
 - logict >= 0.7.1.0
 - clock
+- time
 - array
 
 default-extensions:

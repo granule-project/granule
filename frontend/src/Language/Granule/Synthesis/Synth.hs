@@ -1,1458 +1,1518 @@
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 
 
+{-# options_ghc -fno-warn-unused-imports #-}
 {-# options_ghc -fno-warn-incomplete-uni-patterns #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Redundant return" #-}
 module Language.Granule.Synthesis.Synth where
 
---import Data.List
---import Control.Monad (forM_)
---import System.IO.Unsafe
-import qualified Data.Map as M
-
-import Data.List (sortBy)
+import Data.List (sortBy,nub, nubBy, intercalate, find)
 
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Identifiers
+-- import Control.Monad.Logic
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Span
 
+-- import Data.List.NonEmpty (NonEmpty(..))
+
 import Language.Granule.Context
 
--- import Language.Granule.Checker.Checker
-import Language.Granule.Checker.CoeffectsTypeConverter
-import Language.Granule.Checker.Constraints
+import Language.Granule.Checker.Constraints.Compile
+import Language.Granule.Checker.Coeffects(getGradeFromArrow)
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Kinding
+import Language.Granule.Checker.Patterns
 import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Types
 import Language.Granule.Checker.Variables
-    ( freshIdentifierBase, freshTyVarInContext )
 import Language.Granule.Synthesis.Builders
 import Language.Granule.Synthesis.Monad
+import Language.Granule.Synthesis.Contexts
+import Language.Granule.Synthesis.Common
 
-import Data.Either (rights)
--- import Control.Monad.Except
---import Control.Monad.Trans.List
---import Control.Monad.Writer.Lazy
+
+import Data.Either (lefts, rights, fromRight)
 import Control.Monad.State.Strict
 
-import qualified Control.Monad.State.Strict as State (get)
+-- import qualified Control.Monad.State.Strict as State (get)
 import qualified System.Clock as Clock
+-- import qualified Control.Monad.Memo as Memo
+import qualified System.Timeout
+import qualified Data.List.Ordered as Ordered
 
 import Language.Granule.Utils
-import Data.Maybe (fromJust, catMaybes, fromMaybe)
-import Control.Arrow (second)
+import Data.Maybe (fromMaybe)
+-- import Control.Arrow (second)
+-- import Control.Monad.Omega
 import System.Clock (TimeSpec)
--- import Language.Granule.Checker.Constraints.Compile (compileTypeConstraintToConstraint)
--- import Control.Monad.Trans.Except (runExceptT)
--- import Control.Monad.Error.Class
+
+-- import Control.Monad.Except
+-- import Control.Monad.Logic
+import Data.Ord
+import Debug.Trace
+import Language.Granule.Syntax.Def
+import qualified Control.Exception as Ex
+import Language.Granule.Synthesis.RewriteHoles (holeRefactor)
+import qualified Data.SBV.Control as System
+import qualified Control.Monad
+import Data.List.NonEmpty (NonEmpty)
+import qualified Data.List.NonEmpty as NonEmpty
+import Language.Granule.Checker.Checker (checkExpr, Polarity (Positive, Negative), checkDef, check)
+import qualified Language.Granule.Checker.Primitives as Primitives
+import Language.Granule.Synthesis.Monad (SynthesisData(gradedProgram), Measurement (cartAttempts))
+
+------------------------------
+
+-- Additional semiring-dependent constraints for additive resource management.
+-- If we are in additive mode, we can finish early if such a constraint is not
+-- satisfiable:
+--
+-- ∀x,y . x ⊑︎ y => xRy
+--
+increasingConstraints :: (?globals :: Globals) => Ctxt SAssumption -> Ctxt SAssumption -> Synthesiser ()
+increasingConstraints gamma delta = increasingConstraints' gamma delta False
+  where
+    increasingConstraints' [] delta addedConstraints = do
+      res <- if addedConstraints then solve else return True
+      boolToSynthesiser res ()
+    increasingConstraints' (gVar@(name, SVar (Discharged _ grade) _ _):gamma) delta addedConstraints =
+      case lookup name delta of
+        Just (SVar (Discharged _ grade') _ _) -> do
+          (kind, _, _) <- conv $ synthKind ns grade
+          addIncreasingConstraint kind grade grade'
+          increasingConstraints' gamma delta True
+        _ -> increasingConstraints' gamma delta addedConstraints
 
 
-solve :: (?globals :: Globals)
-  => Synthesiser Bool
-solve = do
-  cs <- conv State.get
-  let pred = Conj $ predicateStack cs
-  debugM "synthDebug" ("SMT on pred = " ++ pretty pred)
-  tyVars <- conv $ includeOnlyGradeVariables nullSpanNoFile (tyVarContext cs)
-  -- Prove the predicate
-  start  <- liftIO $ Clock.getTime Clock.Monotonic
-  constructors <- conv allDataConstructorNames
-  (smtTime', result) <- liftIO $ provePredicate pred tyVars constructors
-  -- Force the result
-  _ <- return result
-  end    <- liftIO $ Clock.getTime Clock.Monotonic
-  let proverTime' = fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double)
-  --state <- Synthesiser $ lift $ lift $ lift get
-  -- traceM  $ show state
-  -- Update benchmarking data
+addIncreasingConstraint :: Kind -> Type -> Type -> Synthesiser ()
+addIncreasingConstraint k@(isInterval -> Just t) gradeIn gradeOut = do
+  st <- conv get
+  var <- freshIdentifier
+  conv $ existentialTopLevel var k
+  liftIO $ putStrLn $ "gradeIn: " <> show gradeIn
+  liftIO $ putStrLn $ "gradeOut: " <> show gradeOut
+  -- modifyPred st $ addConstraintViaConjunction (ApproximatedBy ns (TyInfix TyOpPlus gradeOut (TyVar var)) gradeIn k) (predicateContext st)
+
+addIncreasingConstraint k@(TyCon con) gradeIn gradeOut  =
+  case internalName con of
+
+    -- Natural Numbers: R = {(x, y) | ∃z. x + z ⊑ y}
+    "Nat" -> do
+      st <- conv get
+      var <- freshIdentifier
+      conv $ existentialTopLevel var k
+      liftIO $ putStrLn $ "gradeIn: " <> show gradeIn
+      liftIO $ putStrLn $ "gradeOut: " <> show gradeOut
+      -- modifyPred st $ addConstraintViaConjunction (ApproximatedBy ns (TyInfix TyOpPlus gradeOut (TyVar var)) gradeIn k) (predicateContext st)
+
+    -- Linear/Non Linear: R = {(x, y) | }
+    "LNL" -> do
+      st <- conv get
+      var <- freshIdentifier
+      conv $ existentialTopLevel var k
+      liftIO $ putStrLn $ "gradeIn: " <> show gradeIn
+      liftIO $ putStrLn $ "gradeOut: " <> show gradeOut
+      -- modifyPred st $ addConstraintViaConjunction (ApproximatedBy ns (TyInfix TyOpPlus gradeOut (TyVar var)) gradeIn k) (predicateContext st)
+
+    -- TBD
+    "Level" -> return ()
+    "Borrowing" -> return ()
+    "OOZ" -> return ()
+addIncreasingConstraint _ _ _ = return ()
+
+
+noneWithMaxReached :: (?globals :: Globals) => Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id, RuleInfo)
+noneWithMaxReached = do
   Synthesiser $ lift $ lift $ lift $ modify (\state ->
-            state {
-             smtCallsCount = 1 + smtCallsCount state,
-             smtTime = smtTime' + smtTime state,
-             proverTime = proverTime' + proverTime state,
-             theoremSizeTotal = toInteger (length tyVars) + sizeOfPred pred + theoremSizeTotal state
-                  })
+                  state {
+                    maxReached = True
+                    })
+  none
 
-  case result of
-    QED -> do
-      debugM "synthDebug" "SMT said: Yes."
-      return True
-    NotValid s -> do
-      debugM "synthDebug" "SMT said: No."
-      return False
-    SolverProofError msgs ->
-      return False
-    OtherSolverError reason ->
-      return False
-    Timeout ->
-      return False
-    _ ->
-      return False
 
--- * Context manipulations
 
-ctxtSubtract :: (?globals :: Globals) => Ctxt (Assumption, Structure Id)  -> Ctxt (Assumption, Structure Id) -> Synthesiser (Ctxt (Assumption, Structure Id))
-ctxtSubtract gam [] = return gam
-ctxtSubtract gam ((x, (Linear t, structure)):del) =
-  case lookupAndCutout x gam of
-    Just (gam', _) -> ctxtSubtract gam' del
-    Nothing -> none
 
-ctxtSubtract gam ((x, (Discharged t g2, structure)):del) =
-  case lookupAndCutout x gam of
-    Just (gam', (Discharged t2 g1, structure')) -> do
-      g3 <- g1 `gradeSub` g2
-      ctx <- ctxtSubtract gam' del
-      return ((x, (Discharged t g3, structure')):ctx)
-    _ -> none
-    where
-      gradeSub g g' = do
-        -- g - g' = c
-        -- therefore
-        -- g = c + g'
-        (kind, _, _) <- conv $ synthKind nullSpan g
-        var <- conv $ freshTyVarInContext (mkId "c") kind
-        conv $ existential var kind
-        conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyInfix TyOpPlus (TyVar var) g') g kind)
-        -- maximality
-        varOther' <- conv $ freshIdentifierBase "cOther"
-        let varOther = mkId varOther'
-        conv $ addPredicate (Impl [(varOther, kind)]
-                                (Conj [Con $ ApproximatedBy nullSpanNoFile (TyInfix TyOpPlus (TyVar varOther) g') g kind])
-                                (Conj [Con $ ApproximatedBy nullSpanNoFile (TyVar varOther) (TyVar var) kind]))
-        return $ TyVar var
-
-ctxtMultByCoeffect :: Type -> Ctxt (Assumption, Structure Id) -> Synthesiser (Ctxt (Assumption, Structure Id))
-ctxtMultByCoeffect _ [] = return []
-ctxtMultByCoeffect g1 ((x, (Discharged t g2, structure)):xs) = do
-      ctxt <- ctxtMultByCoeffect g1 xs
-      return ((x, (Discharged t (TyInfix TyOpTimes g1 g2), structure)): ctxt)
-ctxtMultByCoeffect _ _ = none
-
-ctxtDivByCoeffect :: (?globals :: Globals) => Type -> Ctxt (Assumption, Structure Id) -> Synthesiser (Ctxt (Assumption, Structure Id))
-ctxtDivByCoeffect _ [] = return []
-ctxtDivByCoeffect g1 ((x, (Discharged t g2, structure)):xs) =
-    do
-      ctxt <- ctxtDivByCoeffect g1 xs
-      var <- gradeDiv g1 g2
-      return ((x, (Discharged t var, structure)): ctxt)
+markRecursiveType :: Id -> Type -> Bool
+markRecursiveType tyCon dataTy = markRecursiveType' tyCon dataTy False
   where
-    gradeDiv g g' = do
-      (kind, _, _) <- conv $ synthKind nullSpan g
-      var <- conv $ freshTyVarInContext (mkId "c") kind
-      conv $ existential var kind
-      conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyInfix TyOpTimes g (TyVar var)) g' kind)
-      return $ TyVar var
-ctxtDivByCoeffect _ _ = none
-
-ctxtMerge :: (?globals :: Globals)
-          => (Type -> Type -> Type) -- lattice operator
-          -> Ctxt (Assumption, Structure Id)
-          -> Ctxt (Assumption, Structure Id)
-          -> Synthesiser (Ctxt (Assumption, Structure Id))
-
--- Base cases
---  * Empties
-ctxtMerge _ [] [] = return []
-
---  * Can meet/join an empty context to one that has graded assumptions
-ctxtMerge operator [] ((x, (Discharged t g, structure)) : ctxt) = do
-  -- Left context has no `x`, so assume it has been weakened (0 gade)
-  (kind, _, _) <- conv $ synthKind nullSpan g
-  ctxt' <- ctxtMerge operator [] ctxt
-  return $ (x, (Discharged t g, structure)) : ctxt'
---  return $ (x, Discharged t (operator (TyGrade (Just kind) 0) g)) : ctxt'
-
---  * Cannot meet/join an empty context to one with linear assumptions
-ctxtMerge _ [] ((_, (Linear t, structure)) : ctxt) = none
-
--- Inductive cases
-ctxtMerge operator ((x, (Discharged t1 g1, structure)) : ctxt1') ctxt2 =
-  case lookupAndCutout x ctxt2 of
-    Just (ctxt2', (Discharged t2 g2, structure)) ->
-      if t1 == t2 -- Just in case but should always be true
-        then do
-          ctxt' <- ctxtMerge operator ctxt1' ctxt2'
-          return $ (x, (Discharged t1 (operator g1 g2), structure)) : ctxt'
-
-        else none
-
-    Just (_, (Linear _, _)) -> none -- mode mismatch
-
-    Nothing -> do
-      -- Right context has no `x`, so assume it has been weakened (0 gade)
-      ctxt' <- ctxtMerge operator ctxt1' ctxt2
-      (kind, _, _) <- conv $ synthKind nullSpan g1
-      return $ (x, (Discharged t1 g1, structure)) : ctxt'
-      --return $ (x, Discharged t1 (operator g1 (TyGrade (Just kind) 0))) : ctxt'
-
-ctxtMerge operator ((x, (Linear t1, structure)) : ctxt1') ctxt2 =
-  case lookupAndCutout x ctxt2 of
-    Just (ctxt2', (Linear t2, structure)) ->
-      if t1 == t2 -- Just in case but should always be true
-        then do
-          ctxt' <- ctxtMerge operator ctxt1' ctxt2'
-          return $ (x, (Linear t1, structure)) : ctxt1'
-        else none
-
-    Just (_, (Discharged{}, _)) -> none -- mode mismatch
-
-    Nothing -> none -- Cannot weaken a linear thing
-
-ctxtAdd :: Ctxt (Assumption, Structure Id) -> Ctxt (Assumption, Structure Id) -> Maybe (Ctxt (Assumption, Structure Id))
-ctxtAdd [] y = Just y
-ctxtAdd ((x, (Discharged t1 g1, structure)):xs) ys =
-  case lookupAndCutout x ys of
-    Just (ys', (Discharged t2 g2, structure')) -> do
-      ctxt <- ctxtAdd xs ys'
-      return $ (x, (Discharged t1 (TyInfix TyOpPlus g1 g2), structure')) : ctxt
-    Nothing -> do
-      ctxt <- ctxtAdd xs ys
-      return $ (x, (Discharged t1 g1, structure)) : ctxt
-    _ -> Nothing
-ctxtAdd ((x, (Linear t1, structure)):xs) ys =
-  case lookup x ys of
-    Just (Linear t2, structure') -> Nothing
-    Nothing -> do
-      ctxt <- ctxtAdd xs ys
-      return $ (x, (Linear t1, structure)) : ctxt
-    _ -> Nothing
-
-isRAsync :: Type -> Bool
-isRAsync FunTy {} = True
-isRAsync _ = False
-
-isLAsync :: Type -> Bool
-isLAsync ProdTy{} = True
-isLAsync SumTy{} = True
-isLAsync Box{} = True
-isLAsync (TyCon (internalName -> "()")) = True
-isLAsync (TyApp _ _) = True
-isLAsync (TyCon _) = True
-isLAsync _ = False
-
-isAtomic :: Type -> Bool
-isAtomic TyVar {} = True
-isAtomic _ = False
-
-isADT  :: Type -> Bool
-isADT (TyCon _) = True
-isADT (TyApp t _) = isADT t
-isADT _ = False
-
-
-adtName :: Type -> Maybe Id
-adtName (TyCon id) = Just id
-adtName (TyApp e1 e2) = adtName e1
-adtName _ = Nothing
-
-
-rightMostFunTy :: Type -> (Type, [Type])
-rightMostFunTy (FunTy _ _ arg t) = let (t', args) = rightMostFunTy t in (t', arg : args)
-rightMostFunTy t = (t, [])
-
-reconstructFunTy :: Type -> [Type] -> Type
-reconstructFunTy = foldl (flip (FunTy Nothing Nothing))
-
-
-data AltOrDefault = Default | Alternative
-  deriving (Show, Eq)
-
-data ResourceScheme a = Additive a | Subtractive a
-  deriving (Show, Eq)
-
-type Bindings = [(Id, (Id, Type))]
-
-data Structure a = None | Arg a | Dec a
-  deriving (Show, Eq)
-
-instance Pretty a => Pretty (Structure a) where
-  pretty None    = "None"
-  pretty (Arg a) = "Arg " <> pretty a
-  pretty (Dec a) = "Dec " <> pretty a
-
-bindToContext :: (Id, (Assumption, Structure Id)) -> Ctxt (Assumption, Structure Id) -> Ctxt (Assumption, Structure Id) -> Bool -> (Ctxt (Assumption, Structure Id), Ctxt (Assumption, Structure Id))
-bindToContext var gamma omega True = (gamma, omega ++ [var])
-bindToContext var gamma omega False = (gamma ++ [var], omega)
-
-isDecreasing :: Structure Id -> Bool
-isDecreasing (Dec id) = True
-isDecreasing _ = False
-
--- Note that the way this is used, the (var, assumption) pair in the first
--- argument is not contained in the provided context (second argument)
-useVar :: (?globals :: Globals)
-  => (Id, (Assumption, Structure Id))
-  -> Ctxt (Assumption, Structure Id)
-  -> ResourceScheme AltOrDefault
-  -> Maybe Type -- Grade on rule style of synthesis
-  -> Synthesiser (Bool, Ctxt (Assumption, Structure Id), Type)
--- Subtractive
-useVar (name, (Linear t, _)) gamma Subtractive{} _ = return (True, gamma, t)
-useVar (name, (Discharged t grade, structure)) gamma Subtractive{} Nothing = do
-  (kind, _, _) <- conv $ synthKind nullSpan grade
-  var <- conv $ freshTyVarInContext (mkId "c") kind
-  conv $ existential var kind
-  -- conv $ addPredicate (Impl [] (Con (Neq nullSpanNoFile (CZero kind) grade kind))
-  --                              (Con (ApproximatedBy nullSpanNoFile (CPlus (TyVar var) (COne kind)) grade kind)))
-  conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyInfix TyOpPlus (TyVar var) (TyGrade (Just kind) 1)) grade kind)
-  res <- solve
-  if res then
-    return (True, replace gamma name (Discharged t (TyVar var), structure), t) else
-    return (False, [], t)
-useVar (name, (Discharged t grade, structure)) gamma Subtractive{} (Just grade') = do
-  (kind, _, _) <- conv $ synthKind nullSpan grade
-  var <- conv $ freshTyVarInContext (mkId "c") kind
-  conv $ existential var kind
-  conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyInfix TyOpPlus (TyVar var) grade') grade kind)
-  res <- solve
-  if res then
-    return (True, replace gamma name (Discharged t (TyVar var), structure), t) else
-    return (False, [], t)
-
--- Additive
-useVar (name, (Linear t, structure)) _ Additive{} _ = return (True, [(name, (Linear t, structure))], t)
-useVar (name, (Discharged t grade, structure)) _ Additive{} Nothing = do
-  (kind, _, _) <- conv $ synthKind nullSpan grade
-  return (True, [(name, (Discharged t (TyGrade (Just kind) 1), structure))], t)
-useVar (name, (Discharged t grade, structure)) _ Additive{} (Just grade') = do
-  (kind, _, _) <- conv $ synthKind nullSpan grade
-  return (True, [(name, (Discharged t  grade', structure))], t)
-
-
-
-{--
-Subtractive
-
------------------------- :: lin_var
-Γ, x : A ⊢ A ⇒ x ; Γ
-
-      ∃s. s + 1 = r
------------------------- :: gr_var
-Γ, x : [A] r ⊢ A ⇒ x ; Γ, x : [A] s
-
-Additive
-
------------------------- :: lin_var
-Γ, x : A ⊢ A ⇒ x ; x : A
-
------------------------- :: gr_var
-Γ, x : [A] r ⊢ A ⇒ x ; x : [A] 1
-
---}
-varHelper :: (?globals :: Globals)
-  => Ctxt (Assumption, Structure Id)
-  -> Ctxt (Assumption, Structure Id)
-  -> ResourceScheme AltOrDefault
-  -> Maybe Type
-  -> TypeScheme
-  -> Synthesiser (Expr () Type, Ctxt (Assumption, Structure Id), Substitution, Bindings, Bool)
-varHelper left [] _ _ _ = none
-varHelper left (var@(x, (a, s)) : right) resourceScheme grade goalTy@(Forall _ binders constraints goalTy') =
- varHelper (var:left) right resourceScheme grade goalTy `try`
-   (do
-      conv $ resetAddedConstraintsFlag -- reset the flag that says if any constraints were added
-      (success, specTy, subst) <- conv $ equalTypes nullSpanNoFile (getAssumptionType a) goalTy'
-      if success then do
-          -- see if any constraints were added
-          st <- conv $ get
-          solved <- if addedConstraints st
-                      then solve
-                      else return True
-          -- now to do check we can actually use it
-          if solved then do
-              (canUse, gamma, t) <- useVar var (left ++ right) resourceScheme grade
-              boolToSynthesiser canUse (makeVar x goalTy, gamma, subst, [], isDecreasing s)
-            else
-              none
-      else none)
-
-
-{--
-Subtractive
-
-x ∉ Δ
-Γ, x : A ⊢ B ⇒ t ; Δ
------------------------- :: abs
-Γ ⊢ A → B ⇒ λx . t ; Δ
-
-Additive
-
-Γ, x : A ⊢ B ⇒ t ; Δ, x : A
------------------------- :: abs
-Γ ⊢ A → B ⇒ λx . t ; Δ
-
---}
-absHelper :: (?globals :: Globals)
-  => Ctxt Type
-  -> Bool
-  -> Ctxt (Assumption, Structure Id)
-  -> Ctxt (Assumption, Structure Id)
-  -> ResourceScheme AltOrDefault
-  -> Maybe Type
-  -> TypeScheme
-  -> Synthesiser (Expr () Type, Ctxt (Assumption, Structure Id), Substitution, Bindings, Bool)
-absHelper defs allowRSync gamma omega resourceScheme grade goalTy@(Forall _ binders constraints (FunTy name Nothing t1 t2)) = do
-    -- Fresh var
-    id <- useBinderNameOrFreshen name
-    state <- Synthesiser $ lift $ lift $ lift get
-    -- Build recursive context depending on focus mode
-    let (gamma', omega') =
-          if isLAsync t1 then
-            (gamma, (id, (Linear t1, Arg (topLevelDef state))):omega)
-          else
-            ((id, (Linear t1, None)):gamma, omega)
-
-    -- Synthesis body
-    debugM "synthDebug" $ "Lambda-binding " ++ pretty [(id, Linear t1)]
-    (e, delta, subst, bindings, sd) <- synthesiseInner defs False resourceScheme gamma' omega' grade (Forall nullSpanNoFile binders constraints t2) (True, allowRSync, False)
-    debugM "synthDebug" $ "Made a lambda: " ++ pretty (makeAbs id e goalTy)
-
-
-    -- Check resource use at the end
-    case (resourceScheme, lookupAndCutout id delta) of
-      (Additive{}, Just (delta', (Linear _, _))) ->
-        return (makeAbs id e goalTy, delta', subst, bindings, sd)
-      (Subtractive{}, Nothing) ->
-        return (makeAbs id e goalTy, delta, subst, bindings, sd)
-      _ ->
-        none
-absHelper _ _ _ _ _ _ _ = none
-
-
-appHelper :: (?globals :: Globals)
-  => (Bool, Bool)
-  -> Ctxt Type
-  -> Ctxt (Assumption, Structure Id)
-  -> Ctxt (Assumption, Structure Id)
-  -> ResourceScheme AltOrDefault
-  -> Maybe Type
-  -> TypeScheme
-  -> Synthesiser (Expr () Type, Ctxt (Assumption, Structure Id), Substitution, Bindings, Bool)
-appHelper _ _ left [] _ _ _ = none
-
-{-
-Subtractive
-
-x2 ∉ Δ1
-Γ, x2 : B ⊢ C ⇒ t1 ; Δ1
-Δ1 ⊢ A ⇒ t2 ; Δ2
------------------------- :: app
-Γ, x1 : A → B ⊢ C ⇒ [(x1 t2) / x2] t1 ; Δ2
-
--}
-appHelper (allowRSync, allowDef) defs left (var@(x, (a, s)) : right) sub@Subtractive{} grade goalTy@(Forall _ binders constraints _ ) =
-  appHelper (allowRSync, allowDef) defs (var : left) right sub grade goalTy `try`
-  (case getAssumptionType a of
-    (FunTy _ _ t1 t2) -> do
-      debugM "synthDebug" ("Trying to use a function " ++ pretty var ++ " to get goal " ++ pretty goalTy)
-
-      let omega = left ++ right
-      (canUse, omega', t) <- useVar var omega sub grade
-      if canUse
-        then do
-          id <- freshIdentifier
-          let (gamma', omega'') = bindToContext (id, (Linear t2, None)) omega' [] (isLAsync t2)
-
-          debugM "synthDebug" ("Inside app, try to synth the goal " ++ pretty goalTy ++ " under context of " ++ pretty [(id, Linear t2)])
-          (e1, delta1, sub1, bindings1, sd1) <- synthesiseInner defs False sub gamma' omega'' grade goalTy (False, allowRSync, False)
-          case lookup id delta1 of
-            Nothing -> do
-              -- Check that `id` was used by `e1` (and thus is not in `delta1`)
-              debugM "synthDebug" ("Inside app, try to synth the argument at type " ++ pretty t1)
-              (e2, delta2, sub2, bindings2, sd2) <- synthesiseInner defs False sub delta1 [] grade (Forall nullSpanNoFile binders constraints t1) (False, allowRSync, False)
-              debugM "synthDebug" ("Inside app, made a " ++ (pretty $ Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTy t) id e1 ))
-              subst <- conv $ combineSubstitutions nullSpanNoFile sub1 sub2
-              return (Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTy t) id e1, delta2, subst, bindings1 ++ bindings2, sd1 || sd2)
-            _ -> none
-        else none
-    _ -> none)
-{-
-Additive
-
-Γ, x2 : B ⊢ C ⇒ t1 ; Δ1, x2 : B
-Γ ⊢ A ⇒ t2 ; Δ2
------------------------- :: app
-Γ, x1 : A → B ⊢ C ⇒ [(x1 t2) / x2] t1 ; (Δ1 + Δ2), x1: A → B
-
-Additive (Pruning)
-
-Γ, x2 : B ⊢ C ⇒ t1 ; Δ1, x2 : B
-Γ - Δ1 ⊢ A ⇒ t2 ; Δ2
------------------------- :: app
-Γ, x1 : A → B ⊢ C ⇒ [(x1 t2) / x2] t1 ; (Δ1 + Δ2), x1: A → B
-
--}
-appHelper (allowRSync, allowDef) defs left (var@(x, (a, s)) : right) add@(Additive mode) grade goalTy@(Forall _ binders constraints _ ) =
-  appHelper (allowRSync, allowDef) defs (var : left) right add grade goalTy `try`
-  (case getAssumptionType a of
-    (FunTy _ _ tyA tyB) -> do
-      let omega = left ++ right
-      (canUse, useContextOut, _) <- useVar var omega add grade
-      if canUse
-        then do
-          x2 <- freshIdentifier
-          -- Extend context (focussed) with x2 : B
-
-          let (gamma', omega') = bindToContext (x2, (Linear tyB, None)) omega [] (isLAsync tyB)
-          -- Synthesise new goal binding result `x2`
-          (e1, delta1, sub1, bindings1, sd1) <- synthesiseInner defs False add gamma' omega' grade goalTy (False, allowRSync, False)
-          -- Make sure that `x2` appears in the result
-          case lookupAndCutout x2 delta1 of
-            Just (delta1',  (Linear _, _)) -> do
-              -- Pruning subtraction
-
-              gamma2 <-
-                case mode of
-                  Default     -> return omega
-                  Alternative -> ctxtSubtract (gamma' ++ omega') delta1'
-
-              -- Synthesise the argument
-              (e2, delta2, sub2, bindings2, sd2) <- synthesiseInner defs False add gamma2 [] grade (Forall nullSpanNoFile binders constraints tyA) (False, allowRSync, False)
-
-              -- Add the results
-              deltaOut <- maybeToSynthesiser $ ctxtAdd useContextOut delta1'
-              deltaOut' <- maybeToSynthesiser $ ctxtAdd deltaOut delta2
-
-              subst <- conv $ combineSubstitutions nullSpan sub1 sub2
-              debugM "synthDebug" ("Inside app, made a " ++ (pretty $ Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTy tyA) x2 e1 ))
-              return (Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTy tyA) x2 e1, deltaOut', subst, bindings1 ++ bindings2, sd1 || sd2)
-            _ -> none
-        else none
-    _ -> none)
-
-{-
-Subtractive
-
-Γ ⊢ A ⇒ t ; Δ
------------------------- :: box
-Γ ⊢ [] r A ⇒ t ; Γ - r * (G - Δ)
-
-Additive
-
-Γ ⊢ A ⇒ t ; Δ
----------------------------- :: box
-Γ ⊢ [] r A ⇒ [t] ; r * Δ
-
--}
-boxHelper :: (?globals :: Globals)
-  => Ctxt Type
-  -> Ctxt (Assumption, Structure Id)
-  -> ResourceScheme AltOrDefault
-  -> Maybe Type
-  -> TypeScheme
-  -> Synthesiser (Expr () Type, Ctxt (Assumption, Structure Id), Substitution, Bindings, Bool)
-boxHelper defs gamma resourceScheme grade goalTy =
-  case goalTy of
-    (Forall _ binders constraints (Box g t)) ->
-      let newGrade = case grade of
-              Just grade' -> Just $ TyInfix TyOpTimes grade' g
-              Nothing -> Nothing
-      in
-      case resourceScheme of
-        Additive{} -> do
-            (e, delta, subst, bindings, sd) <- synthesiseInner defs False resourceScheme gamma [] newGrade (Forall nullSpanNoFile binders constraints t) (False, True, False)
-            deltaOut <- case newGrade of
-                  Just _ -> return delta
-                  Nothing -> ctxtMultByCoeffect g delta
-            return (makeBox goalTy e, deltaOut, subst, bindings, sd)
-        Subtractive Default -> do
-            (e, delta, subst, bindings, sd) <- synthesiseInner defs False resourceScheme gamma [] newGrade (Forall nullSpanNoFile binders constraints t) (False, True, False)
-            deltaOut <- case newGrade of
-                  Just _ -> return delta
-                  Nothing -> do
-                    used <- ctxtSubtract gamma delta
-                    -- Compute what was used to synth e
-                    delta' <- ctxtMultByCoeffect g used
-                    ctxtSubtract gamma delta'
-            res <- solve
-            boolToSynthesiser res (makeBox goalTy e, deltaOut, subst, bindings, sd)
-        Subtractive Alternative -> do
-          gamma' <- ctxtDivByCoeffect g gamma
-          (e, delta, subst, bindings, sd) <- synthesiseInner defs False resourceScheme gamma' [] newGrade (Forall nullSpanNoFile binders constraints t) (False, True, False)
-          delta' <- ctxtMultByCoeffect g delta
-          res <- solve
-          boolToSynthesiser res (makeBox goalTy e, delta', subst, bindings, sd)
-    _ -> none
-
-
-unboxHelper :: (?globals :: Globals)
-  => Ctxt Type
-  -> Ctxt (Assumption, Structure Id)
-  -> Ctxt (Assumption, Structure Id)
-  -> Ctxt (Assumption, Structure Id)
-  -> ResourceScheme AltOrDefault
-  -> Maybe Type
-  -> TypeScheme
-  -> Synthesiser (Expr () Type, Ctxt (Assumption, Structure Id), Substitution, Bindings, Bool)
-unboxHelper _ left [] _ _ _ _ = none
-
-{-
-Subtractive
-0 <= s
-Γ, x2 : [A] r ⊢ B ⇒ e ; Δ, x2 : [A] s
--------------------------------------------- :: unbox
-Γ, x1 : [] r A ⊢ B ⇒ let [x2] = x1 in e; Δ
-
--}
-
-unboxHelper defs left (var@(x1, (a, structure)) : right) gamma sub@Subtractive{} grade goalTy =
-  unboxHelper defs (var : left) right gamma sub grade goalTy `try`
-    (case getAssumptionType a of
-      tyBoxA@(Box grade_r tyA) -> do
-        debugM "synthDebug" $ "Trying to unbox " ++ pretty tyBoxA
-
-        let omega = left ++ right
-        (canUse, omega', _) <- useVar var omega sub grade
-        if canUse then do
-          --
-          x2 <- freshIdentifier
-          let (gamma', omega'') = bindToContext (x2, (Discharged tyA grade_r, structure)) gamma omega' (isLAsync tyA)
-          -- Synthesise inner
-          debugM "synthDebug" $ "Inside unboxing try to synth for " ++ pretty goalTy ++ " under " ++ pretty [(x2, Discharged tyA grade_r)]
-          (e, delta, subst, bindings, sd) <- synthesiseInner defs False sub gamma' omega'' grade goalTy (True, True, False)
-          ---
-          case lookupAndCutout x2 delta of
-            Just (delta', (Discharged _ grade_s, _)) -> do
-              -- Check that: 0 <= s
-              (kind, _, _) <- conv $ synthKind nullSpan grade_s
-              conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyGrade (Just kind) 0) grade_s kind)
-              res <- solve
-              -- If we succeed, create the let binding
-              debugM "made aaaa: " (pretty $ makeUnbox x2 x1 goalTy (Box grade_r tyA) tyA e)
-              boolToSynthesiser res (makeUnbox x2 x1 goalTy (Box grade_r tyA) tyA e, delta', subst, (x1, (x2, Box grade_r tyA)):bindings, sd)
-
-            _ -> none
-        else none
-      _ -> none)
-
-{-
-Additive
-
-s <= r
-Γ, x2 : [A] r ⊢ B ⇒ t ; D, x2 : [A] s
---------------------------------------------------------- :: unbox
-Γ, x1 : [] r A ⊢ B ⇒ let [x2] = x1 in t ; Δ, x1 : [] r A
-
--}
-unboxHelper defs left (var@(x, (a, structure)) : right) gamma add@(Additive mode) ruleGrade goalTy =
-  unboxHelper defs (var : left) right gamma add ruleGrade goalTy `try`
-   (case a of
-     (Linear (Box grade t')) -> do
-       let omega = left ++ right
-       (canUse, omega', t) <- useVar var omega add ruleGrade
-       if canUse
-          then do
-            x2 <- freshIdentifier
-            -- omega1 <- ctxtSubtract omega omega'
-            let (gamma', omega'') = bindToContext (x2, (Discharged t' grade, structure)) gamma omega (isLAsync t')
-
-            -- Synthesise the body of a `let` unboxing
-            (e, delta, subst, bindings, sd) <- synthesiseInner defs False add gamma' omega'' ruleGrade goalTy (True, True, False)
-
-            -- Add usage at the binder to the usage in the body
-            delta' <- maybeToSynthesiser $ ctxtAdd omega' delta
-
-            case lookupAndCutout x2 delta' of
-              Just (delta'', (Discharged _ usage, _)) -> do
-                (kind, _, _) <- conv $ synthKind nullSpan grade
-
-                debugM "check" (pretty usage ++ " <=? " ++ pretty grade)
-                conv $ addConstraint (ApproximatedBy nullSpanNoFile usage grade kind)
-                res <- solve
-                if res then
-                  return (makeUnbox x2 x goalTy t' (Box grade t') e,  delta'', subst, (x, (x2, Box grade t')):bindings, sd) else none
-              _ -> do
-                (kind, _, _) <- conv $ synthKind nullSpan grade
-                conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyGrade (Just kind) 0) grade kind)
-                res <- solve
-                if res then
-                  return (makeUnbox x2 x goalTy t' (Box grade t') e,  delta', subst, (x, (x2, Box grade t')):bindings, sd) else none
-          else none
-     _ -> none)
-
-
-
-constrIntroHelper :: (?globals :: Globals)
-  => (Bool, Bool)
-  -> Ctxt Type
-  -> Ctxt (Assumption, Structure Id)
-  -> ResourceScheme AltOrDefault
-  -> Maybe Type
-  -> TypeScheme
-  -> Synthesiser (Expr () Type, Ctxt (Assumption, Structure Id), Substitution, Bindings, Bool)
-constrIntroHelper (True, allowDef) defs gamma mode grade goalTy@(Forall s binders constraints t) =
-  case (isADT t, adtName t) of
-    (True, Just name) -> do
-      debugM "Entered constrIntro helper with goal: " (show goalTy)
-
-      state <- Synthesiser $ lift $ lift $ get
-
-      -- Retrieve the data constructors for the goal data type
-      let adtConstructors = concatMap snd (filter (\x -> fst x == name) (constructors state))
-
-      -- For each relevent data constructor, we must now check that it's type matches the goal
-      adtConstructors' <- foldM (\ a (id, (conTy@(Forall s binders constraints conTy'), subst, indices)) -> do
-         (success, specTy, specSubst) <- checkConstructor conTy subst
-         case (success, specTy) of
-           (True, Just specTy') -> do
-             subst' <- conv $ combineSubstitutions s subst specSubst
-             specTy'' <- conv $ substitute subst' specTy'
-             return $ (id, (Forall s binders constraints specTy'', subst')) : a
-           _ -> return a ) [] adtConstructors
-
-      -- Attempt to synthesise each applicable constructor, in order of ascending arity
-      synthesiseConstructors gamma (sortBy (flip compare') adtConstructors') mode goalTy
-    _ -> none
-  where
-
-
-    compare' con1@(_, (Forall _ _ _ ty1, _)) con2@(_, (Forall _ _ _ ty2, _)) = compare (arity ty1) (arity ty2)
-
-    -- | Given a data constructor and a substition of type indexes, check that the goal type ~ data constructor type
-    checkConstructor :: TypeScheme -> Substitution -> Synthesiser (Bool, Maybe Type, Substitution)
-    checkConstructor con@(Forall _ binders coercions conTy) subst = do
-      (result, local) <- conv $ peekChecker $ do
-
-        (conTyFresh, tyVarsFreshD, constraints, coercions') <- freshPolymorphicInstance InstanceQ False con subst []
-
-        -- Take the rightmost type of the function type, collecting the arguments along the way
-        let (conTy'', args) = rightMostFunTy conTyFresh
-
-        conTy'' <- substitute coercions' conTy''
-
-        (success, spec, subst') <- equalTypes nullSpanNoFile t conTy''
-
-
-        cs <- get
-        -- Run the solver (i.e. to check constraints on type indexes hold)
-        result <-
-          if addedConstraints cs then do
-            let predicate = Conj $ predicateStack cs
-            predicate <- substitute subst' predicate
-
-            debugM "pred: " (pretty predicate)
-            let ctxtCk  = tyVarContext cs
-            coeffectVars <- includeOnlyGradeVariables s ctxtCk
-            coeffectVars <- return (coeffectVars `deleteVars` Language.Granule.Checker.Predicates.boundVars predicate)
-            constructors <- allDataConstructorNames
-            (_, result) <- liftIO $ provePredicate predicate coeffectVars constructors
-            return result
-          else return QED
-
-        case result of
-          QED -> do -- If the solver succeeds, return the specialised type
-            return (success, Just $ reconstructFunTy spec (reverse args), subst')
-          _ ->
-            return (False, Nothing, [])
-      case result of
-        Right (success, Just spec, subst') -> conv $ local >> return (success, Just spec, subst')
-        _ -> return (False, Nothing, [])
-
-
-    -- Traverse the constructor types and attempt to synthesise a program for each one
-    synthesiseConstructors gamma [] mode goalTy = none
-    synthesiseConstructors gamma ((id, (Forall s binders' constraints' ty, subst)):cons) mode goalTy =
-      case constrArgs ty of
-        -- If the constructor type has no arguments, then it is a nullary constructor and we can simply return the introduction form
-        Just [] -> do
-          let delta = case mode of
-                Additive{} -> []
-                Subtractive{} -> gamma
-          return (makeNullaryConstructor id, delta, subst, [], False)
-          `try` synthesiseConstructors gamma cons mode goalTy
-        -- If the constructor has 1 or more arguments then we must synthesise each argument in turn
-        Just args -> do
-          (exprs, delta, subst', bindings, sd) <- synthConstructorArgs args binders' constraints' gamma mode subst
-          return (makeConstr exprs id ty, delta, subst', bindings, sd)
-          `try` synthesiseConstructors gamma cons mode goalTy
-        Nothing ->
-          none
-
-    -- Traverse the argument types to the constructor and synthesise a term for each one
-    synthConstructorArgs [t'] bs cs gamma mode constrSubst = do
-      (es, deltas, subst, bindings, sd) <- synthesiseInner defs False mode gamma [] grade (Forall s bs cs t') (True, True, allowDef)
-      subst' <- conv $ combineSubstitutions nullSpanNoFile constrSubst subst
-      return ([(es, t')], deltas, subst', bindings, sd)
-    synthConstructorArgs (t':ts) bs cs gamma mode constrSubst = do
-      (es, deltas, subst, bindings, sd) <- synthConstructorArgs ts bs cs gamma mode constrSubst
-      subst' <- conv $ combineSubstitutions nullSpanNoFile constrSubst subst
-      gamma2 <- case mode of
-            Additive Default -> return gamma
-            Additive Alternative -> ctxtSubtract gamma deltas -- Pruning
-            Subtractive{} -> return deltas
-      (e2, delta2, subst2, bindings2, sd2) <- synthesiseInner defs False mode gamma2 [] grade (Forall s bs cs t') (True, True, allowDef)
-      subst'' <- conv $ combineSubstitutions nullSpanNoFile subst2 subst'
-      delta3 <- case mode of
-            Additive{} -> maybeToSynthesiser $ ctxtAdd deltas delta2
-            Subtractive{} -> return delta2
-      return ((e2, t'):es, delta3, subst'', bindings ++ bindings2, sd || sd2)
-    synthConstructorArgs _ _ _ _ _ _ = none
-
-    constrArgs (TyCon _) = Just []
-    constrArgs (TyApp _ _) = Just []
-    constrArgs (FunTy _ Nothing e1 e2) = do
-      res <- constrArgs e2
-      return $ e1 : res
-    constrArgs _ = Nothing
-
-
-constrIntroHelper (_, allowDef) defs gamma mode _ goalTy@(Forall s binders constraints t) = none
-
-constrElimHelper :: (?globals :: Globals)
-  => (Bool, Bool)
-  -> Ctxt Type
-  -> Ctxt (Assumption, Structure Id)
-  -> Ctxt (Assumption, Structure Id)
-  -> Ctxt (Assumption, Structure Id)
-  -> ResourceScheme AltOrDefault
-  -> Maybe Type
-  -> TypeScheme
-  -> Synthesiser (Expr () Type, Ctxt (Assumption, Structure Id), Substitution, Bindings, Bool)
-constrElimHelper (allowRSync, allowDef) defs left [] _ _ _ _ = none
-constrElimHelper (allowRSync, allowDef) defs left (var@(x, (a, structure)):right) gamma mode grade goalTySch@(Forall _ _ _ goalTy) =
-  constrElimHelper (allowRSync, allowDef) defs (var:left) right gamma mode grade goalTySch `try` do
-    debugM "in constr elim" ""
-    let omega = left ++ right
-    (canUse, omega', _) <- useVar var omega mode grade
-    state <- Synthesiser $ lift $ lift $ lift get
-    let topLevelDefId = topLevelDef state
-    let (assumptionTy, grade) = case a of
-          Linear t -> (t, Nothing)
-          Discharged t g -> (t, Just g)
-    if canUse && isADT assumptionTy then
-      case adtName assumptionTy of
-        Just name -> do
-        -- (_, cases) <- conv $ generateCases nullSpanNoFile constructors [var] [x] (Just $ FunTy Nothing t goalTy)
-        -- (_, cases) <- conv $ generateCases nullSpanNoFile (constructors state) [(x, Linear (Box grade t))] [x] (Just $ FunTy Nothing (Box grade t) goalTy)
-          let adtConstructors = concatMap snd (filter (\x -> fst x == name) (constructors state))
-          -- For each relevent data constructor, we must now check that it's type matches the goal
-          cases <- foldM (\ a (id, (conTy@(Forall s binders constraints conTy'), subst, indices)) -> do
-            (success, (pat, assumptions, subst')) <- checkConstructor id topLevelDefId conTy assumptionTy subst grade
-            case (success, pat) of
-              (True, Just pat) -> do
-                subst'' <- conv $ combineSubstitutions s subst subst'
-                return $ (pat, assumptions, subst'') : a
-              _ -> return a) [] adtConstructors
-          debugM "linear cases: " (show cases <> " assumption ty: " <> show assumptionTy)
-          case (mode, grade) of
-            (Subtractive{}, Nothing) -> do
-              (patterns, delta, subst, bindings', sd) <- synthCases assumptionTy mode gamma omega' cases goalTySch
-              return (makeCase' assumptionTy x patterns goalTy, delta, subst, bindings', sd)
-            (Additive{}, Nothing) -> do
-              (patterns, delta, subst, bindings', sd) <- synthCases assumptionTy mode gamma omega cases goalTySch
-              delta2 <- maybeToSynthesiser $ ctxtAdd omega' delta
-              return (makeCase' assumptionTy x patterns goalTy, delta2, subst, bindings', sd)
-            (Subtractive{}, Just grade') -> do
-              let omega'' = deleteVar x omega'
-              (patterns, delta, subst, bindings', sd) <- synthCases assumptionTy mode gamma omega'' cases goalTySch
-              -- return (makeBoxCase assumptionTy grade' x patterns goalTy, omega' ++ delta, subst, bindings')
-              return (makeBoxCase assumptionTy grade' x patterns goalTy, delta, subst, bindings', sd)
-            (Additive{}, Just grade') -> do
-              (patterns, delta, subst, bindings', sd) <- synthCases assumptionTy mode gamma omega cases goalTySch
-              return (makeBoxCase assumptionTy grade' x patterns goalTy, delta, subst, bindings', sd)
-        _ -> none
-    else none
-
-  where
-
-    checkConstructor :: Id -> Id -> TypeScheme -> Type -> Substitution -> Maybe Type -> Synthesiser (Bool, (Maybe (Pattern ()), Ctxt (Assumption, Structure Id), Substitution))
-    checkConstructor name topLevelDef con@(Forall  _ binders constraints conTy) assumptionTy subst grade = do
-      (result, local) <- conv $ peekChecker $ do
-
-        (conTyFresh, tyVarsFreshD, constraints, coercions') <- freshPolymorphicInstance InstanceQ False con subst []
-
-        -- Take the rightmost type of the function type, collecting the arguments along the way
-        let (conTy'', args) = rightMostFunTy conTyFresh
-
-        conTy'' <- substitute coercions' conTy''
-
-        (success, spec, subst') <- equalTypes nullSpanNoFile assumptionTy conTy''
-
-        cs <- get
-
-        -- Run the solver (i.e. to check constraints on type indexes hold)
-        result <-
-          if addedConstraints cs then do
-            let predicate = Conj $ predicateStack cs
-            predicate <- substitute subst' predicate
-
-            debugM "pred: " (pretty predicate)
-            let ctxtCk  = tyVarContext cs
-            coeffectVars <- includeOnlyGradeVariables nullSpanNoFile ctxtCk
-            coeffectVars <- return (coeffectVars `deleteVars` Language.Granule.Checker.Predicates.boundVars predicate)
-            constructors <- allDataConstructorNames
-            (_, result) <- liftIO $ provePredicate predicate coeffectVars constructors
-            return result
-          else return QED
-
-        case result of
-          QED -> do -- If the solver succeeds, return the specialised type
-            debugM "success!" (show name)
-
-            -- Construct pattern based on constructor arguments specialised by type equality
-            assmps <- mapM (\ arg -> do
-              var <- freshIdentifierBase "x"
-              arg' <- substitute subst' arg
-
-
-              (structure, local) <- peekChecker $ do
-                (success, spec, subst') <- equalTypes nullSpanNoFile arg' assumptionTy
-                if success then return $ Dec topLevelDef else return $ Arg topLevelDef
-
-              let annotation = case structure of
-                    Right struct -> struct
-                    Left _ -> Arg topLevelDef
-
-            --  let structure' = case structure of
-            --        (Right struct, _) -> struct
-            --        (Left _, _) -> Arg topLevelDef
-
-              let assumption = case grade of
-                    Nothing -> (Linear arg', annotation)
-                    Just grade' -> (Discharged arg' grade', annotation)
-
-
-              debugM "constrElim assumption: " (show assumption)
-              return (mkId $ removeDots var, assumption, success)) args
-
-            let (vars, assmps', recursiveArgs) = unzip3 assmps
-            let assmps'' = zip vars assmps'
-
-
-            let structDecr = or recursiveArgs
-
-            let pat = makePattern name vars grade
-
-            return (success, structDecr, (Just pat, assmps'', subst'))
-          _ ->
-            return (False, False, (Nothing, [], []))
-      case result of
-        Right (True, structDecr, (pat, assmps, subst)) -> do
-
-          Synthesiser $ lift $ lift $ lift $ modify (\state ->
-              state {
-                structurallyDecreasing = structDecr
-                  })
-          conv $ local >> return (True, (pat, assmps, subst))
-        _ -> return (False, (Nothing, [], []))
-
-    removeDots xs =  [ x | x <- xs, x `notElem` "." ]
-
-    makePattern conId vars Nothing = PConstr nullSpanNoFile () False conId (map (PVar nullSpanNoFile () False) vars)
-    makePattern conId vars (Just grade) = PBox nullSpanNoFile () False (PConstr nullSpanNoFile () False conId (map (PVar nullSpanNoFile () False) vars))
-
-    synthCases adt mode g o [(p, assmps, conSubst)] goalTy = do
-      let (g', o', unboxed) = bindAssumptions assmps g o []
-      (e, delta, subst, bindings, sd1) <- synthesiseInner defs False mode g' o' grade goalTy (False, True, True)
-      debugM "in synth next cases - \n goal: " (show goalTy <> " \n e: " <> pretty e <> " \n delta: "  <> show delta ++ "\n g': " ++ show g' ++ "\n o': " ++ show o' ++ "\n p: " ++ show p ++ "\n asmps: " ++ show assmps)
-      del' <- checkAssumptions (x, getAssumptionType a) mode delta assmps unboxed
-      case transformPattern bindings adt (g' ++ o') p unboxed of
-        Just (pat, bindings') -> do
-          return ([(pat, e)], del', subst, bindings', sd1)
-        Nothing -> none
-
-    synthCases adt mode g o ((p, assmps, conSubst):cons) goalTy = do
-      (exprs, delta, subst, bindings, sd) <- synthCases adt mode g o cons goalTy
-      let (g', o', unboxed) = bindAssumptions assmps g o []
-      (e, delta', subst', bindings', sd') <- synthesiseInner defs False mode g' o' grade goalTy (False, True, True)
-      debugM "in synth cases: " (show e <> " " <> show delta' ++ "g': " ++ show g' ++ " o': " ++ show o' ++ "p: " ++ show p ++ " asmps: " ++ show assmps)
-      del' <- checkAssumptions (x, getAssumptionType a) mode delta' assmps unboxed
-      case transformPattern bindings' adt (g' ++ o') p unboxed of
-        Just (pat, bindings'') ->
-          let op = case mode of Additive{} -> TyInfix TyOpJoin ; _ -> TyInfix TyOpMeet
-          in do
-            returnDelta <- ctxtMerge op del' delta
-            returnSubst <- conv $ combineSubstitutions nullSpanNoFile subst subst'
-            return ((pat, e):exprs, returnDelta, returnSubst, bindings ++ bindings'', sd || sd')
-        Nothing -> none
-    synthCases adt mode g o _ goalTy = none
-
-
-checkAssumptions :: (?globals::Globals) => (Id, Type)
-  -> ResourceScheme a
-  -> [(Id, (Assumption, Structure Id))]
-  -> [(Id, (Assumption, Structure Id))]
-  -> Ctxt (Assumption, Structure Id) -> Synthesiser [(Id, (Assumption, Structure Id))]
-checkAssumptions _ mode del [] _ = return del
-checkAssumptions x sub@Subtractive{} del ((id, (Linear t, structure)):assmps) unboxed =
-  case lookup id del of
-    Nothing -> checkAssumptions x sub del assmps unboxed
-    _ -> none
-checkAssumptions (x, t') sub@Subtractive{} del ((id, (Discharged t g, structure)):assmps) unboxed =
-  case lookupAndCutout id del of
-    Just (del', (Discharged _ g', structure)) ->
-      case lookup id unboxed of
-        Just (Discharged _ g'', structure) -> do
-          del'' <- checkAssumptions (x, t') sub del' assmps unboxed
-          (kind, _, _) <- conv $ synthKind nullSpan g'
-          conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyGrade (Just kind) 0) g' kind)
-          res <- solve
-          if res then do
-            ctxtMerge (TyInfix TyOpMeet) [(x, (Discharged t' g, structure))] del''
-          else none
-        _ -> do
-          del'' <- checkAssumptions (x, t') sub del' assmps unboxed
-          (kind, _, _) <- conv $ synthKind nullSpan g'
-          conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyGrade (Just kind) 0) g' kind)
-          res <- solve
-          if res then
-            ctxtMerge (TyInfix TyOpMeet) [(x, (Discharged t' g', structure))] del''
-          else none
-    _ -> none
-checkAssumptions x add@Additive{} del ((id, (Linear t, structure)):assmps) unboxed =
-  case lookupAndCutout id del of
-    Just (del', _) ->
-      checkAssumptions x add del' assmps unboxed
-    _ -> none
-checkAssumptions (x, t') sub@Additive{} del ((id, (Discharged t g, structure)):assmps) unboxed = do
-      case lookupAndCutout id del of
-        Just (del', (Discharged _ g', structure)) ->
-          case lookup id unboxed of
-            Just (Discharged _ g'', structure) -> do
-              del'' <- checkAssumptions (x, t') sub del' assmps unboxed
-              (kind, _, _) <- conv $ synthKind nullSpan g'
-              conv $ addConstraint (ApproximatedBy nullSpanNoFile g' g'' kind)
-              res <- solve
-              if res then do
-                ctxtMerge (TyInfix TyOpJoin) [(x, (Discharged t' g, structure))] del''
-              else none
-            _ -> (do
-              del'' <- checkAssumptions (x, t') sub del' assmps unboxed
-              (kind, _, _) <- conv $ synthKind nullSpan g'
-              conv $ addConstraint (ApproximatedBy nullSpanNoFile g' g kind)
-              res <- solve
-              if res then do
-               ctxtMerge (TyInfix TyOpJoin) [(x, (Discharged t' g', structure))] del''
-              else none)
-        _ -> do
-          (kind, _, _) <- conv $ synthKind nullSpan g
-          conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyGrade (Just kind) 0) g kind)
-          res <- solve
-          if res then checkAssumptions (x, t') sub del assmps unboxed else none
-
-bindAssumptions ::
-  [(Id, (Assumption, Structure Id))]
-  -> Ctxt (Assumption, Structure Id)
-  -> Ctxt (Assumption, Structure Id)
-  -> Ctxt (Assumption, Structure Id)
-  -> (Ctxt (Assumption, Structure Id), Ctxt (Assumption, Structure Id), Ctxt (Assumption, Structure Id))
-bindAssumptions [] g o unboxed = (g, o, unboxed)
-bindAssumptions (assumption@(id, (Linear t, structure)):assmps) g o unboxed =
-  let (g', o') = bindToContext assumption g o (isLAsync t) in
-  bindAssumptions assmps g' o'  unboxed
-bindAssumptions (assumption@(id, (Discharged (Box grade t) grade', structure)):assmps) g o unboxed =
-  let (g', o') = bindToContext (id, (Discharged t (TyInfix TyOpTimes grade grade'), structure)) g o (isLAsync t) in
-  bindAssumptions assmps g' o' ((id, (Discharged t (TyInfix TyOpTimes grade grade'), structure)):unboxed)
-bindAssumptions (assumption@(id, (Discharged t _, structure)):assmps) g o unboxed =
-  let (g', o') = bindToContext assumption g o (isLAsync t) in
-  bindAssumptions assmps g' o' unboxed
-
-
--- Construct a typed pattern from an untyped one from the context
-transformPattern :: Ctxt (Id, Type) -> Type -> [(Id, (Assumption, Structure Id))] -> Pattern () -> Ctxt (Assumption, Structure Id) -> Maybe (Pattern Type, Ctxt (Id, Type))
-transformPattern bindings adt ctxt (PConstr s () b id pats) unboxed = do
-  (pats', bindings') <- transformPatterns bindings adt ctxt pats unboxed
-  Just (PConstr s adt b id pats', bindings)
-transformPattern bindings adt ctxt (PVar s () b name) unboxed =
-  let (pat, name', bindings') = case lookup name unboxed of
-        Just (Discharged ty _, structure) -> (PBox s ty False, name, bindings)
-        _ -> (id, name, bindings)
-  in
-  case lookup name ctxt of
-     Just (Linear t, structure) -> Just (pat $ PVar s t b name', bindings')
-     Just (Discharged t c, structure) -> Just (pat $ PVar s t b name', bindings')
-     Nothing -> Nothing
-transformPattern bindings adt ctxt (PBox s () b p) unboxed = do
-  (pat', bindings') <- transformPattern bindings adt ctxt p unboxed
-  Just (PBox s adt b pat', bindings')
-transformPattern _ _ _ _ _ = Nothing
-
-transformPatterns :: Ctxt (Id, Type) -> Type -> [(Id, (Assumption, Structure Id))] -> [Pattern ()] -> Ctxt (Assumption, Structure Id) -> Maybe ([Pattern Type], Ctxt (Id, Type))
-transformPatterns bindings adt ctxt [] unboxed = Just ([], bindings)
-transformPatterns bindings adt ctxt (p:ps) unboxed = do
-  (pat, bindings') <- transformPattern bindings adt ctxt p unboxed
-  (res, bindingsFinal) <- transformPatterns bindings' adt ctxt ps unboxed
-  return (pat:res, bindingsFinal)
-
-
-
-
-linearVars :: Ctxt (Assumption, Structure Id) -> Ctxt (Assumption, Structure Id)
-linearVars (var@(x, (Linear a, structure)):xs) = var : linearVars xs
-linearVars ((x, (Discharged{}, structure)):xs) = linearVars xs
-linearVars [] = []
-
-
-
-defHelper :: (?globals :: Globals)
-  => Ctxt Type
-  -> Ctxt Type
-  -> Ctxt (Assumption, Structure Id)
-  -> ResourceScheme AltOrDefault
-  -> Maybe Type
-  -> TypeScheme
-  -> Synthesiser (Expr () Type, Ctxt (Assumption, Structure Id), Substitution, Bindings, Bool)
-defHelper left [] _ _ _ _ = none
-
-defHelper left (def@(x, t):right) gamma  sub@Subtractive{} grade goalTy@(Forall _ binders constraints _ ) =
- defHelper (def:left) right gamma sub grade goalTy `try`
-  (case t of
-    (FunTy _ Nothing t1 t2) -> do
-      debugM "entered def helper t: " (show t ++ "goal: " <> show goalTy <> "gamma: " <> show gamma)
-      id <- freshIdentifier
-      let (gamma', omega') = bindToContext (id, (Linear t2, None)) gamma [] (isLAsync t2)
-      (e1, delta1, sub1, bindings1, sd1) <- synthesiseInner (left++right) False sub gamma' omega' grade goalTy (False, False, False)
-      debugM "defhelper made a: " (pretty e1)
-      case lookup id delta1 of
-        Nothing -> do
-          (e2, delta2, sub2, bindings2, sd2) <- synthesiseInner (left++right) False sub delta1 [] grade (Forall nullSpanNoFile binders constraints t1) (False, False, False)
-          if sd2 then do
-            debugM "defhelper also made a: " (pretty e2)
-            debugM "giving me a: " (pretty $ Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTy t) id e1)
-            subst <- conv $ combineSubstitutions nullSpanNoFile sub1 sub2
-            return (Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTy t) id e1, delta2, subst, bindings1 ++ bindings2, True)
-          else none
-        _ -> none
-    _ -> none)
-defHelper left (def@(x, t) : right) gamma add@(Additive mode) grade goalTy@(Forall _ binders constraints goalTy') =
- defHelper (def:left) right gamma add grade goalTy `try`
- (case t of
-    (FunTy _ Nothing tyA tyB) -> do
-      x2 <- freshIdentifier
-      debugM "entered def helper t: " (pretty t ++ " \n goal: " <> pretty goalTy <> " \n gamma: " <> show gamma)
-      let (gamma', omega') = bindToContext (x2, (Linear tyB, None)) gamma [] (isLAsync tyB)
-      (e1, delta1, sub1, bindings1, sd1) <- synthesiseInner (left++right) False add gamma' omega' grade goalTy (False, False, False)
-      case lookupAndCutout x2 delta1 of
-        Just (delta1', (Linear _, _)) -> do
-          gamma2 <-
-            case mode of
-              Default -> return gamma
-              Alternative -> ctxtSubtract (gamma' ++ omega') delta1'
-
-          debugM "defHelper gamma2: " (show gamma2)
-          debugM "defHelper binding: " (pretty x2)
-
-          debugM "defHelper e1: " (pretty e1)
-
-          (e2, delta2, sub2, bindings2, sd2) <- synthesiseInner (left++right) False add gamma2 [] grade (Forall nullSpanNoFile binders constraints tyA) (False, False, False)
-          if sd2 then do
-
-            debugM "defHelper gamma2: " (show gamma2)
-            debugM "defHelper binding: " (pretty x2)
-            debugM "defHelper e1: " (pretty e1)
-            debugM "defHelper e2: " (pretty e2 <> " for " <> pretty tyA)
-
-            -- Add the results
-            deltaOut' <- maybeToSynthesiser $ ctxtAdd delta1' delta2
-
-            subst <- conv $ combineSubstitutions nullSpan sub1 sub2
-            return (Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTy tyA) x2 e1, deltaOut', subst, bindings1 ++ bindings2, True)
-          else none
-        _ -> none
-    _ -> none)
-
-  -- where
-
-    -- Take a variable representing a recursive function definition and a possible argument
-    -- struct fun arg = undefined
-
-synthesiseInner :: (?globals :: Globals)
-           => Ctxt Type
-           -> Bool               -- Does this call immediately follow a dereliction?
-           -> ResourceScheme AltOrDefault      -- whether the synthesis is in additive mode or not
-           -> Ctxt (Assumption, Structure Id)    -- (unfocused) free variables
-           -> Ctxt (Assumption, Structure Id)    -- focused variables
-           -> Maybe Type
-           -> TypeScheme           -- type from which to synthesise
-           -> (Bool, Bool, Bool)
-           -> Synthesiser (Expr () Type, Ctxt (Assumption, Structure Id), Substitution, Bindings, Bool)
-synthesiseInner defs inDereliction resourceScheme gamma omega grade goalTy@(Forall _ binders _ goalTy') (allowLAsync, allowRSync, allowDef) = do
-  debugM "synthDebug" $ "Synth inner with gamma = " ++ show gamma ++ ", and omega = "
-                      ++ show omega ++ ", for goal = " ++ pretty goalTy
-                      ++ ", isRAsync goalTy = " ++ show (isRAsync goalTy')
-                      ++ ", isAtomic goalTy = " ++ show (isAtomic goalTy')
-                      ++ ", allowRSync = " ++ show allowRSync
-                      ++ ", allowLASync = " ++ show allowLAsync
-                      ++ ", allowDef = " ++ show allowDef
-                      ++ ", defs = " ++ show defs
-  currentTime    <- liftIO $ Clock.getTime Clock.Monotonic
-  state <- Synthesiser $ lift $ lift $ lift get
-  -- let elapsedTime = round $ fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec currentTime startTime)) / (10^(6 :: Integer)::Double)
-  if elapsedTime (startTime state) currentTime > synthTimeoutMillis && synthTimeoutMillis > 0 then Synthesiser (fail "Timeout")  else
-    case (isRAsync goalTy', omega, allowLAsync) of
-      (True, _, _) ->
-        -- Right Async : Decompose goalTy until synchronous
-        varHelper [] (gamma ++ omega) resourceScheme grade goalTy
-        `try`
-        absHelper defs allowRSync gamma omega resourceScheme grade goalTy
-      (False, x:xs, _) ->
-        -- Left Async : Decompose assumptions until they are synchronous (eliminators on assumptions)
-        let altSynthStructuring = fromMaybe False (globalsAltSynthStructuring ?globals) in
-        if altSynthStructuring && structurallyDecreasing state  then
-              (
-              varHelper [] (gamma ++ omega) resourceScheme grade goalTy
-              `try`
-              appHelper (allowRSync, allowDef) defs [] (gamma ++ omega) resourceScheme grade goalTy
-              `try`
-              boxHelper defs (gamma ++ omega) resourceScheme grade goalTy
-              `try`
-              constrIntroHelper (allowRSync, allowDef) defs (gamma ++ omega) resourceScheme grade goalTy
-              `try`
-              defHelper [] defs (gamma ++ omega) resourceScheme grade goalTy
-              )
-              `try`
-              unboxHelper defs [] omega gamma resourceScheme grade goalTy
-              `try`
-              constrElimHelper (allowRSync, allowDef) defs [] omega gamma resourceScheme grade goalTy
-        else
-          unboxHelper defs [] omega gamma resourceScheme grade goalTy
-          `try`
-          constrElimHelper (allowRSync, allowDef) defs [] omega gamma resourceScheme grade goalTy
-
-
-      (False, _, _) ->
-              varHelper [] (gamma ++ omega) resourceScheme grade goalTy
-              `try`
-              appHelper (allowRSync, allowDef) defs [] (gamma ++ omega) resourceScheme grade goalTy
-              `try`
-              boxHelper defs (gamma ++ omega) resourceScheme grade goalTy
-              `try`
-              constrIntroHelper (allowRSync, allowDef) defs (gamma ++ omega) resourceScheme grade goalTy
-              `try`
-              defHelper [] defs (gamma ++ omega) resourceScheme grade goalTy
-
-       --       `try`
-       --       if allowDef then defHelper [] defs startTime (gamma ++ omega) resourceScheme goalTy else none
-
-synthesise :: (?globals :: Globals)
-           => Ctxt Type
-           -> ResourceScheme AltOrDefault      -- whether the synthesis is in additive mode or not
-           -> Ctxt (Assumption, Structure Id)    -- (unfocused) free variables
-           -> Ctxt (Assumption, Structure Id)    -- focused variables
-           -> TypeScheme           -- type from which to synthesise
-           -> Synthesiser (Expr () Type, Ctxt (Assumption, Structure Id), Substitution)
-synthesise defs resourceScheme gamma omega goalTy = do
-  let gradeOnRule = fromMaybe False (globalsGradeOnRule ?globals)
-  let initialGrade = if gradeOnRule then Just (TyGrade Nothing 1)  else Nothing
-  relevantConstructors <- do
-      st <- get
-      let pats = map (second snd3) (typeConstructors st)
-      mapM (\ (a, b) -> do
-          dc <- conv $ mapM (lookupDataConstructor nullSpanNoFile) b
-          let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
-          return (a, sd)) pats
-
-  Synthesiser $ lift $ lift $ lift $ modify (\state ->
-            state {
-             constructors = relevantConstructors
-                  })
-
-  result@(expr, ctxt, subst, bindings, _) <- synthesiseInner defs False resourceScheme gamma omega initialGrade goalTy (True, True, False)
-  case resourceScheme of
-    Subtractive{} -> do
-      -- All linear variables should be gone
-      -- and all graded should approximate 0
-      consumed <- mapM (\(id, (a, s)) ->
-                    case a of
-                      Linear{} -> return False;
-                      Discharged _ grade -> do
-                        (kind, _, _) <-  conv $ synthKind nullSpan grade
-                        conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyGrade (Just kind) 0) grade kind)
-                        solve) ctxt
-      if and consumed
-        then return (expr, ctxt, subst)
-        else none
-
-    -- All linear variables should have been used
-    -- and all graded assumptions should have usages which approximate their original assumption
-    Additive{} -> do
-      consumed <- mapM (\(id, (a, s)) ->
-                    case lookup id ctxt of
-                      Just (Linear{}, _) -> return True;
-                      Just (Discharged _ gradeUsed, _) ->
-                        case a of
-                          Discharged _ gradeSpec -> do
-                            (kind, _, _) <- conv $ synthKind nullSpan gradeUsed
-                            conv $ addConstraint (ApproximatedBy nullSpanNoFile gradeUsed gradeSpec kind)
-                            solve
-                          _ -> return False
-                      Nothing ->
-                        case a of
-                          Discharged _ gradeSpec -> do
-                            (kind, _, _) <- conv $ synthKind nullSpan gradeSpec
-                            conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyGrade (Just kind) 0) gradeSpec kind)
-                            solve
-                          _ -> return False) (gamma ++ omega)
-      if and consumed
-        then return (expr, ctxt, subst)
-        else none
+    markRecursiveType' tyCon (FunTy _ _ t1 t2) onLeft = do
+      case markRecursiveType' tyCon t1 True of
+        True -> True
+        False -> markRecursiveType' tyCon t2 onLeft
+    markRecursiveType' tyCon (TyApp t1 t2) True = do
+      case markRecursiveType' tyCon t1 True of
+        True -> True
+        False -> markRecursiveType' tyCon t2 True
+    markRecursiveType' tyCon (TyCon tyCon') True = tyCon == tyCon'
+    markRecursiveType' _ _ _ = False
 
 -- Run from the checker
 synthesiseProgram :: (?globals :: Globals)
-           => Ctxt Type -- Top level definitions to use in synthesis
-           -> Id        -- Top level definition of the current expression being synthesised
-           -> ResourceScheme AltOrDefault       -- whether the synthesis is in additive mode or not
+           => Maybe Hints
+           -> Int -- index
+           -> Ctxt TypeScheme  -- Unrestricted Defs
+           -> Ctxt (TypeScheme, Type) -- Restricted Defs
+           -> Id
            -> Ctxt Assumption    -- (unfocused) free variables
-           -> Ctxt Assumption    -- focused variables
            -> TypeScheme           -- type from which to synthesise
            -> CheckerState
-           -> IO [(Expr () Type, Ctxt (Assumption, Structure Id), Substitution)]
-synthesiseProgram defs topLevelDef resourceScheme gamma omega goalTy checkerState = do
+           -> IO ([Expr () ()], Maybe Measurement)
+synthesiseProgram hints index unrComps rComps defId ctxt goalTy checkerState = do
+
   start <- liftIO $ Clock.getTime Clock.Monotonic
-  -- %%
-  let gamma' = map (\(v, a) -> (v, (a, None))) gamma
-  let omega' = map (\(v, a) -> (v, (a, None))) omega
-  let synRes = synthesise defs resourceScheme gamma' omega' goalTy
-  let initialState = SynthesisData {smtCallsCount= 0, smtTime= 0, proverTime= 0, theoremSizeTotal= 0, pathsExplored= 0, startTime=start, constructors=[], topLevelDef=topLevelDef, structurallyDecreasing = False}
-  (synthResults, aggregate) <- runStateT (runSynthesiser synRes checkerState) initialState
-  let results = rights (map fst synthResults)
-  -- Force eval of first result (if it exists) to avoid any laziness when benchmarking
-  () <- when benchmarking $ unless (null results) (return $ seq (show $ head results) ())
-  -- %%
-  end    <- liftIO $ Clock.getTime Clock.Monotonic
 
-  let timeoutMsg = if elapsedTime start end > synthTimeoutMillis && synthTimeoutMillis > 0 then  " - Timeout after: " <> (show synthTimeoutMillis  <> "ms") else ""
+  let (timeoutLim, index, resourceScheme) =
+         case hints of
+            Just hints' -> ( case (hTimeout hints', hNoTimeout hints') of
+                                  (_, True) -> -1
+                                  (Just lim, _) -> lim * 1000,
+                            index + (fromMaybe 0 $ hIndex hints'),
+                            let mode = if (hPruning hints' || alternateSynthesisMode) then Pruning else NonPruning
+                            in
+                            if (hSubtractive hints' || subtractiveSynthesisMode) then Subtractive else Additive mode
+                          )
+            Nothing ->    ( -1,
+                            index,
+                            let mode = if alternateSynthesisMode then Pruning else NonPruning
+                            in
+                            if subtractiveSynthesisMode then Subtractive else Additive mode)
 
-  debugM "results no: " (pretty $ map ( \(e, _, _) -> e) results)
-  debugM "synthDebug" ("Result = " ++ (case synthResults of ((Right (expr, _, _), _):_) -> pretty expr; _ -> "NO SYNTHESIS"))
-  case results of
+  let gamma = map (\(v, a)  -> (v, (SVar a $ Just $ NonDecreasing 0 ))) ctxt ++
+              map (\(v, (Forall _ _ _ ty, grade)) -> (v, (SVar (Discharged ty grade) $ Just $ NonDecreasing 0))) rComps
+  let initialGrade = Nothing -- if gradeOnRule then Just (TyGrade Nothing 1)  else Nothing
+
+  let initialState = SynthesisData {
+                         smtCallsCount= 0
+                      ,  smtTime= 0
+                      ,  proveTime= 0
+                      ,  theoremSizeTotal= 0
+                      ,  paths = 0
+                      ,  startTime=start
+                      ,  constructors=[]
+                      ,  currDef = [defId]
+                      ,  maxReached = False
+                      ,  attempts = 0
+                      ,  gradedProgram = Nothing
+                      }
+
+  let (hintELim, hintILim) = (1, 1) -- case (hasElimHint hints, hasIntroHint hints) of
+  --           (Just e, Just i)   -> (e, i)
+  --           (Just e, Nothing)  -> (e, 1)
+  --           (Nothing, Just i)  -> (1, i)
+  --           (Nothing, Nothing) -> (1, 1)
+
+  let timeOutLimit = if interactiveDebugging then maxBound :: Int else timeoutLim
+  result <-
+    liftIO $ System.Timeout.timeout timeOutLimit $ loop resourceScheme (hintELim, hintILim) index unrComps initialGrade gamma initialState
+  fin <- case result of
+    Just (synthResults, aggregate) ->  do
+      let results = nub $ map fst3 $ rights (map fst synthResults)
+
+      -- Force eval of first result (if it exists) to avoid any laziness when benchmarking
+      () <- when benchmarking $ unless (null results) (return $ seq (show $ head results) ())
+  -- %%
+      end    <- liftIO $ Clock.getTime Clock.Monotonic
+
+      debugM "mode used: " (show resourceScheme)
+      debugM "results: " (pretty results)
+      case results of
       -- Nothing synthed, so create a blank hole instead
-      []    -> do
-        debugM "Synthesiser" $ "No programs synthesised for " <> pretty goalTy
-        printInfo $ "No programs synthesised" <> timeoutMsg
-      _ ->
-        case last results of
-          (t, _, _) -> do
-            debugM "Synthesiser" $ "Synthesised: " <> pretty t
-            printSuccess "Synthesised"
+        []    -> do
+          debugM "Synthesiser" $ "No programs synthesised for " <> pretty goalTy
+          printInfo $ "No programs synthesised"
+        _ ->
+          case last results of
+            t -> do
+              debugM "Synthesiser" $ "Synthesised: " <> pretty t
+              printSuccess "Synthesised"
 
-  -- <benchmarking-output>
-  when benchmarking $
-      if benchmarkingRawData then
-        putStrLn $ "Measurement "
+      -- <benchmarking-output>
+      when benchmarking $
+        if benchmarkingRawData then
+          putStrLn $ "Measurement "
             <> "{ smtCalls = " <> show (smtCallsCount aggregate)
             <> ", synthTime = " <> show (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double))
-            <> ", proverTime = " <> show (proverTime aggregate)
+            <> ", proverTime = " <> show (proveTime aggregate)
             <> ", solverTime = " <> show (Language.Granule.Synthesis.Monad.smtTime aggregate)
             <> ", meanTheoremSize = " <> show (if smtCallsCount aggregate == 0 then 0 else fromInteger (theoremSizeTotal aggregate) / fromInteger (smtCallsCount aggregate))
             <> ", success = " <> (if null results then "False" else "True")
-            <> ", timeout = " <> (if null timeoutMsg then "False" else "True")
-            <> ", pathsExplored = " <> show (pathsExplored aggregate)
+            <> ", timeout = False"
+            <> ", pathsExplored = " <> show (paths aggregate)
             <> " } "
-      else do
-        -- Output benchmarking info
-        putStrLn "-------------------------------------------------"
-        putStrLn $ "Result = " ++ (case synthResults of ((Right (expr, _, _), _):_) -> pretty expr; _ -> "NO SYNTHESIS")
-        putStrLn $ "-------- Synthesiser benchmarking data (" ++ show resourceScheme ++ ") -------"
-        putStrLn $ "Total smtCalls     = " ++ show (smtCallsCount aggregate)
-        putStrLn $ "Total smtTime    (ms) = "  ++ show (Language.Granule.Synthesis.Monad.smtTime aggregate)
-        putStrLn $ "Total proverTime (ms) = "  ++ show (proverTime aggregate)
-        putStrLn $ "Total synth time (ms) = "  ++ show (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double))
-        putStrLn $ "Mean theoremSize   = " ++ show ((if smtCallsCount aggregate == 0 then 0 else fromInteger $ theoremSizeTotal aggregate) / fromInteger (smtCallsCount aggregate))
-  -- </benchmarking-output>
-  return results
+        else do
+          -- Output benchmarking info
+          putStrLn "-------------------------------------------------"
+          putStrLn $ "Result = " ++ (case synthResults of ((Right (expr, _, _), _):_) -> pretty expr; _ -> "NO SYNTHESIS")
+          putStrLn $ "-------- Synthesiser benchmarking data (" ++ show resourceScheme ++ ") -------"
+          putStrLn $ "Total smtCalls     = " ++ show (smtCallsCount aggregate)
+          putStrLn $ "Total smtTime    (ms) = "  ++ show (Language.Granule.Synthesis.Monad.smtTime aggregate)
+          putStrLn $ "Total proverTime (ms) = "  ++ show (proveTime aggregate)
+          putStrLn $ "Total synth time (ms) = "  ++ show (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double))
+          putStrLn $ "Mean theoremSize   = " ++ show ((if smtCallsCount aggregate == 0 then 0 else fromInteger $ theoremSizeTotal aggregate) / fromInteger (smtCallsCount aggregate))
+      -- </benchmarking-output>
+      return (map unannotateExpr results)
+    _ -> do
+      end    <- liftIO $ Clock.getTime Clock.Monotonic
+      printInfo $ "No programs synthesised - Timeout after: " <> (show timeoutLim  <> "ms")
+      return []
+  return (fin, Nothing)
 
-useBinderNameOrFreshen :: Maybe Id -> Synthesiser Id
-useBinderNameOrFreshen Nothing = freshIdentifier
-useBinderNameOrFreshen (Just n) = return n
+  where
 
-freshIdentifier :: Synthesiser Id
-freshIdentifier = do
-  let mappo = ["x","y","z","u","v","w","p","q"]
-  let base = "x"
-  checkerState <- get
-  let vmap = uniqueVarIdCounterMap checkerState
-  case M.lookup base vmap of
-    Nothing -> do
-      let vmap' = M.insert base 1 vmap
-      put checkerState { uniqueVarIdCounterMap = vmap' }
-      return $ mkId base
+      loop resourceScheme (elimMax, introMax) index defs grade gamma agg = do
 
-    Just n -> do
-      let vmap' = M.insert base (n+1) vmap
-      put checkerState { uniqueVarIdCounterMap = vmap' }
-      let n' = fromInteger . toInteger $ n
-      if n' < length mappo
-        then return $ mkId $ mappo !! n'
-        else return $ mkId $ base <> show n'
+--      Diagonal search
+        -- let diagonal = runOmega $ liftM2 (,) (each [0..elimMax]) (each [0..introMax])
+
+--      Rectilinear search
+        -- let norm (x,y) = sqrt (fromIntegral x^2+fromIntegral y^2)
+        -- let mergeByNorm = Ordered.mergeAllBy (comparing norm)
+        -- let rectSwap = mergeByNorm (map mergeByNorm [[[(x,y) | x <- [0..elimMax]] | y <- [0..introMax]]])
+
+        -- let lims = rectSwap
+        undefined
+
+
+
+        -- pRes <- do undefined -- foldM (\acc (elim, intro) ->
+        --   case acc of
+        --     (Just res, agg') -> return (Just res, agg')
+        --     (Nothing, agg')  -> do
+        --       putStrLn $  "elim: " <> (show elim) <> " intro: " <> (show intro)
+        --       let synRes = synthesise resourceScheme gamma (Focused []) (Depth elim 0 intro) grade (Goal goalTy $ Just NonDecreasing)
+        --       (res, agg'') <- runStateT (runSynthesiser index synRes checkerState) (resetState agg')
+        --       if (not $ solved res) && (depthReached agg'') then return (Nothing, agg'') else return (Just res, agg'')
+        --   ) (Nothing, agg) lims
+        -- case pRes of
+        --   (Just finRes, finAgg) -> do
+        --     return (finRes, finAgg)
+        --   (Nothing, finAgg) -> loop resourceScheme (elimMax, introMax) index defs grade gamma finAgg
+
+
+      -- solved res = case res of ((Right (expr, _, _), _):_) -> True ; _ -> False
+      -- resetState = undefined
+      -- resetState st = st { depthReached = False }
+
+
+
+      -- eval takes an unnanotaed AST, so we need to strip out annotations in order to stitch our synthed expr back into
+      -- the original AST. Why do we not synthesise unannotated exprs directly? It's possible we may want to use the type
+      -- info in the future.
+      unannotateExpr :: Expr () Type -> Expr () ()
+      unannotateExpr (App s a rf e1 e2)             = App s () rf (unannotateExpr e1) $ unannotateExpr e2
+      unannotateExpr (AppTy s a rf e1 t)            = AppTy s () rf (unannotateExpr e1) t
+      unannotateExpr (Binop s a b op e1 e2)         = Binop s () b op (unannotateExpr e1) $ unannotateExpr e2
+      unannotateExpr (LetDiamond s a b ps mt e1 e2) = LetDiamond s () b (unannotatePat ps) mt (unannotateExpr e1) $ unannotateExpr e2
+      unannotateExpr (TryCatch s a b e p mt e1 e2)  = TryCatch s () b (unannotateExpr e) (unannotatePat p) mt (unannotateExpr e1)  $ unannotateExpr e2
+      unannotateExpr (Val s a b val)                = Val s () b (unannotateVal val)
+      unannotateExpr (Case s a b expr pats)         = Case s () b (unannotateExpr expr) $ map (\(p, e) -> (unannotatePat p, unannotateExpr e)) pats
+      unannotateExpr (Hole s a b ids hints)         = Hole s () b ids hints
+
+
+      unannotateVal :: Value () Type -> Value () ()
+      unannotateVal (Abs a p mt e)        = Abs () (unannotatePat p) mt $ unannotateExpr e
+      unannotateVal (Promote a e)         = Promote () $ unannotateExpr e
+      unannotateVal (Pure a e)            = Pure () $ unannotateExpr e
+      unannotateVal (Nec a e)             = Nec () $ unannotateExpr e
+      unannotateVal (Constr a ident vals) = Constr () ident $ map unannotateVal vals
+      unannotateVal (Var a idv)           = Var () idv
+      unannotateVal (Ext a ev)            = Ext () ev
+      unannotateVal (NumInt n)            = NumInt n
+      unannotateVal (NumFloat n)          = NumFloat n
+      unannotateVal (CharLiteral c)       = CharLiteral c
+      unannotateVal (StringLiteral s)     = StringLiteral s
+
+
+      unannotatePat :: Pattern Type -> Pattern ()
+      unannotatePat (PVar s a rf nm)         = PVar s () rf nm
+      unannotatePat (PWild s a rf)           = PWild s () rf
+      unannotatePat (PBox s a rf p)          = PBox s () rf $ unannotatePat p
+      unannotatePat (PInt s a rf int)        = PInt s () rf int
+      unannotatePat (PFloat s a rf doub)     = PFloat s () rf doub
+      unannotatePat (PConstr s a rf nm pats) = PConstr s () rf nm $ map unannotatePat pats
+
+
+
+
+
 
 elapsedTime :: TimeSpec -> TimeSpec -> Integer
 elapsedTime start end = round $ fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double)
 
--- Calculate theorem sizes
 
-sizeOfPred :: Pred -> Integer
-sizeOfPred (Conj ps) = 1 + sum (map sizeOfPred ps)
-sizeOfPred (Disj ps) = 1 + sum (map sizeOfPred ps)
-sizeOfPred (Impl binders p1 p2) = 1 + toInteger (length binders) + sizeOfPred p1 + sizeOfPred p2
-sizeOfPred (Con c) = sizeOfConstraint c
-sizeOfPred (NegPred p) = 1 + sizeOfPred p
-sizeOfPred (Exists _ _ p) = 1 + sizeOfPred p
 
-sizeOfConstraint :: Constraint -> Integer
-sizeOfConstraint (Eq _ c1 c2 _) = 1 + sizeOfCoeffect c1 + sizeOfCoeffect c2
-sizeOfConstraint (Neq _ c1 c2 _) = 1 + sizeOfCoeffect c1 + sizeOfCoeffect c2
-sizeOfConstraint (ApproximatedBy _ c1 c2 _) = 1 + sizeOfCoeffect c1 + sizeOfCoeffect c2
-sizeOfConstraint (Hsup _ c1 c2 _) = 1 + sizeOfCoeffect c1 + sizeOfCoeffect c2
-sizeOfConstraint (Lub _ c1 c2 c3 _) = 1 + sizeOfCoeffect c1 + sizeOfCoeffect c2 + sizeOfCoeffect c3
-sizeOfConstraint (Lt _ c1 c2) = 1 + sizeOfCoeffect c1 + sizeOfCoeffect c2
-sizeOfConstraint (Gt _ c1 c2) = 1 + sizeOfCoeffect c1 + sizeOfCoeffect c2
-sizeOfConstraint (LtEq _ c1 c2) = 1 + sizeOfCoeffect c1 + sizeOfCoeffect c2
-sizeOfConstraint (GtEq _ c1 c2) = 1 + sizeOfCoeffect c1 + sizeOfCoeffect c2
 
-sizeOfCoeffect :: Type -> Integer
-sizeOfCoeffect (TyInfix _ c1 c2) = 1 + sizeOfCoeffect c1 + sizeOfCoeffect c2
-sizeOfCoeffect (TyGrade _ _) = 0
-sizeOfCoeffect (TyInt _) = 0
-sizeOfCoeffect (TyVar _) = 0
-sizeOfCoeffect _ = 0
 
---------------------------------
--- Testing code
+synthesiseGradedBase :: (?globals :: Globals)
+  => AST () ()
+  -> Maybe (Def () ())
+  -> CheckerError
+  -> Maybe (Spec () ())
+  -> ((?globals :: Globals) => AST () () -> IO Bool)
+  -> Maybe Hints
+  -> Int
+  -> Ctxt TypeScheme  -- Unrestricted Defs
+  -> Ctxt (TypeScheme, Type) -- Restricted Defs
+  -> Id
+  -> Ctxt (Ctxt (TypeScheme, Substitution))
+  -> Ctxt Assumption    -- (unfocused) free variables
+  -> TypeScheme           -- type from which to synthesise
+  -> CheckerState
+  -> IO ([(Expr () (), RuleInfo)], Maybe Measurement)
+synthesiseGradedBase ast gradedProgram hole spec eval hints index unrestricted restricted currentDef constructors ctxt (Forall _ _ constraints goalTy) cs = do
 
---topLevel :: (?globals :: Globals) => TypeScheme -> ResourceScheme AltOrDefault -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
---topLevel ts@(Forall _ binders constraints ty) resourceScheme = do
---  conv $ State.modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) binders})
---  synthesise [] True resourceScheme [] [] ts
 
-testGlobals :: Globals
-testGlobals = mempty
-  { globalsNoColors = Just True
-  , globalsSuppressInfos = Just True
-  , globalsTesting = Just True
-  }
+  -- Start timing and initialise state
+  start <- liftIO $ Clock.getTime Clock.Monotonic
+  let synthState = SynthesisData {
+                         smtCallsCount= 0
+                      ,  smtTime= 0
+                      ,  proveTime = 0
+                      ,  theoremSizeTotal= 0
+                      ,  paths = 0
+                      ,  startTime=start
+                      ,  constructors=[]
+                      ,  currDef = [currentDef]
+                      ,  maxReached = False
+                      ,  attempts = 0
+                      ,  gradedProgram = gradedProgram
+                      }
 
---testSyn :: Bool -> IO ()
---testSyn useReprint =
---  let ty =
-----        FunTy Nothing (Box (CInterval (CNat 2) (CNat 3)) (TyVar $ mkId "b") ) (FunTy Nothing (SumTy (TyVar $ mkId "a") (TyVar $ mkId "c")) (SumTy (ProdTy (TyVar $ mkId "a") (Box (CInterval (CNat 2) (CNat 2)) (TyVar $ mkId "b") )) (ProdTy (TyVar $ mkId "c") (Box (CInterval (CNat 3) (CNat 3)) (TyVar $ mkId "b") ))))
-----        FunTy Nothing (TyVar $ mkId "a") (SumTy (TyVar $ mkId "b") (TyVar $ mkId "a"))
---        FunTy Nothing (Box (CNat 3) (TyVar $ mkId "a")) (FunTy Nothing (Box (CNat 6) (TyVar $ mkId "b") ) (Box (CNat 3) (ProdTy (ProdTy (TyVar $ mkId "b") (TyVar $ mkId "b")) (TyVar $ mkId "a")) ))
-----        FunTy Nothing (Box (CNat 2) (TyVar $ mkId "a")) (ProdTy (TyVar $ mkId "a") (TyVar $ mkId "a"))
-----        FunTy Nothing (FunTy Nothing (TyVar $ mkId "a") (FunTy Nothing (TyVar $ mkId "b") (TyVar $ mkId "c"))) (FunTy Nothing (TyVar $ mkId "b") (FunTy Nothing (TyVar $ mkId "a") (TyVar $ mkId "c")))
-----        FunTy Nothing (TyVar $ mkId "a") (TyVar $ mkId "a")
-----        FunTy Nothing (Box (CNat 2) (TyVar $ mkId "a")) (ProdTy (TyVar $ mkId "a") (TyVar $ mkId "a"))
---        in
---    let ts = (Forall nullSpanNoFile [(mkId "a", KType), (mkId "b", KType), (mkId "c", KType)] [] ty) in
---    let ?globals = testGlobals in do
---     -- State.modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) [(mkId "a", KType)]})
---    let res = testOutput $ topLevel ts (Subtractive Default) in -- [(mkId "y", Linear (TyVar $ mkId "b")), (mkId "x", Linear (TyVar $ mkId "a"))] [] ty
---        if length res == 0
---        then  (putStrLn "No inhabitants found.")
---        else  (forM_ res (\(ast, _, sub) -> putStrLn $
---                           (if useReprint then pretty (reprintAsDef (mkId "f") ts ast) else pretty ast) ++ "\n" ++ (show sub) ))
---
---testOutput :: Synthesiser a -> [a]
---testOutput res =
---  rights $ map fst $ fst $ unsafePerformIO $ runStateT (runSynthesiser res initState) mempty
+  constructorsWithRecLabels <- mapM (\(tyId, dataCons) ->
+                          do
+                            hasRecCon <- foldM (\a (dataConName, (Forall _ _ _ dataTy, _)) ->
+                              (if a then return True else return $ markRecursiveType tyId dataTy)
+                              ) False dataCons
+                            return (tyId, (dataCons, hasRecCon))) constructors
 
---testData :: Synthesiser a -> SynthesisData
---testData res =
---  snd $ unsafePerformIO $ runSynthesiser res initState
+
+  -- Initialise input context with
+  -- local synthesis context
+  let gamma = map (\(v, a)  -> case (a, cartSynth) of
+          (Linear t, x) | x > 0 -> (v, SVar (Linear (toCart t)) (Just $ NonDecreasing 0) 0)
+          (Discharged t a, x) | x > 0 -> (v, SVar (Discharged (toCart t) (toCart a)) (Just $ NonDecreasing 0) 0)
+          (a, _)  -> (v, SVar a (Just $ NonDecreasing 0) 0)
+          ) ctxt ++
+
+              map (\(v, (tySch, grade)) -> (v, SDef tySch (if cartSynth > 0 then Just anyG else Just grade) 0)) restricted ++
+  -- unrestricted definitions given as hints
+              map (\(v, tySch) -> (v, SDef tySch (if cartSynth > 0 then Just anyG else Nothing) 0)) unrestricted
+
+  -- Add constraints from type scheme and from checker so far as implication
+  (_, cs') <- runChecker cs $ do
+    preds <- mapM (compileTypeConstraintToConstraint ns) constraints
+    modify (\s ->
+       case predicateStack s of
+        -- Take implication context off the stack from the incoming checker if there is one
+        (_:implContext:_) ->
+           s { predicateContext = ImplConsequent [] (Conj $ implContext : lefts preds) Top }
+        _ -> s { predicateContext = ImplConsequent [] (Conj $ lefts preds) Top })
+
+  let norm (x,y) = sqrt (fromIntegral x^2+fromIntegral y^2)
+  let mergeByNorm = Ordered.mergeAllBy (comparing norm)
+  let lims = mergeByNorm (map mergeByNorm [[[(x,y) | x <- [0..10]] | y <- [0..10]]])
+  let sParamList = map (\(elim,intro) -> defaultSearchParams { matchMax = elim, introMax = intro }) lims
+
+  let (goal, originalGoal) = if cartSynth > 0 then (toCart goalTy, Just goalTy) else (goalTy, Nothing)
+
+  let synRes = synLoop ast hole spec eval constructorsWithRecLabels index gamma [] originalGoal goal sParamList
+  (res, agg1) <- runStateT (runSynthesiser index synRes cs') synthState
+
+  end    <- liftIO $ Clock.getTime Clock.Monotonic
+  let (programs) = map (\(x1, x2, _) -> (x1, x2))
+        $ nubBy (\(expr1, _, _) (expr2, _, _) -> expr1 == expr2) $ rights (map fst res)
+  let datas = map (\(x1, x2, x3) -> x3)
+        $ nubBy (\(expr1, _, _) (expr2, _, _) -> expr1 == expr2) $ rights (map fst res)
+        -- <benchmarking-output>
+  let agg = case datas of (_:_) -> (last datas <> agg1) ; _ -> agg1
+
+
+  if benchmarking then
+    if benchmarkingRawData then
+      let measurement = Measurement
+                        { smtCalls = smtCallsCount agg
+                        , synthTime = fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double)
+                        , proverTime = proveTime agg
+                        , solverTime = Language.Granule.Synthesis.Monad.smtTime agg
+                        , meanTheoremSize = if smtCallsCount agg == 0 then 0 else fromInteger (theoremSizeTotal agg) / fromInteger (smtCallsCount agg)
+                        , success = if null programs then False else True
+                        , timeout = False
+                        , pathsExplored = paths agg
+                        , programSize =
+                            case programs of
+                              (_:_) -> sizeOfExpr $ fst $ last $ programs
+                              _ -> 0
+                        , contextSize = toInteger $ length gamma
+                        , examplesUsed =
+                            case spec of
+                              Just (Spec _ _ exs _) -> toInteger $ length $ filter (\(Example _ _ cartOnly)-> cartSynth > 0 || not cartOnly ) exs
+                              Nothing -> 0
+                        , cartesian = cartSynth > 0
+                        , cartAttempts = attempts agg
+                        } in
+                return (programs, Just measurement)
+          else do
+            -- Output benchmarking info
+            putStrLn "-------------------------------------------------"
+            putStrLn $ "Result = " ++ (case res of ((Right expr, _):_) -> pretty expr; _ -> "NO SYNTHESIS")
+            putStrLn $ "-------- Synthesiser benchmarking data (" ++ "Additive NonPruning" ++  ") -------"
+            putStrLn $ "Total smtCalls     = " ++ show (smtCallsCount agg)
+            putStrLn $ "Total smtTime    (ms) = "  ++ show (Language.Granule.Synthesis.Monad.smtTime agg)
+            putStrLn $ "Total proverTime (ms) = "  ++ show (proveTime agg)
+            putStrLn $ "Total synth time (ms) = "  ++ show (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double))
+            putStrLn $ "Mean theoremSize   = " ++ show ((if smtCallsCount agg == 0 then 0 else fromInteger $ theoremSizeTotal agg) / fromInteger (smtCallsCount agg))
+            return (programs, Nothing)
+        else
+          return (programs, Nothing)
+
+
+toCart :: Type -> Type
+toCart (FunTy id coeff t1 t2) = FunTy id (Just anyG) (toCart t1) (toCart t2)
+toCart (Box coeff t) = Box anyG (toCart t)
+toCart (Diamond ef t) = Diamond (toCart ef)  (toCart t)
+toCart (Star g t) = Star (toCart g) (toCart t)
+toCart (TyApp t1 t2) = (TyApp (toCart t1) (toCart t2))
+toCart t@TyGrade{} = anyG
+toCart (TyInfix op t1 t2) = TyInfix op (toCart t1) (toCart t2)
+toCart (TySet pol ts) = TySet pol (map toCart ts)
+toCart (TyCase t ts) = TyCase (toCart t) $ map (\(x,y) -> (toCart x, toCart y)) ts
+toCart (TySig t k) = TySig (toCart t) k
+toCart t = t
+
+anyG :: Coeffect
+anyG = TyCon $ mkId "Any"
+
+
+
+runExamples :: (?globals :: Globals)
+            => ((?globals :: Globals) => AST () () -> IO Bool)
+            -> AST () ()
+            -> [Example () ()]
+            -> Id
+            -> IO Bool
+runExamples eval ast@(AST decls defs imports hidden mod) examples defId = do
+  let examples' = filter (\(Example input output cartOnly) -> cartSynth > 0 || not cartOnly ) examples
+  if not $ null examples' then do
+    let exampleMainExprs =
+          map (\(Example input output _) -> makeEquality input output) examples'
+    -- remove the existing main function (should probably keep the main function so we can stitch it back in after)
+
+    let defsWithoutMain = filter (\(Def _ mIdent _ _ _ _) -> mIdent /= mkId entryPoint) defs
+
+    let foundBoolDecl = find (\(DataDecl _ dIdent _ _ _) ->  dIdent == mkId "Bool") decls
+    let declsWithBool = case foundBoolDecl of
+                        Just decl -> decls
+                        Nothing -> boolDecl : decls
+
+    let exampleMainExprsCombined = foldr (\mainExpr acc -> case acc of Just acc' -> Just $ makeAnd mainExpr acc' ; Nothing -> Just mainExpr) Nothing exampleMainExprs
+    case exampleMainExprsCombined of
+      Nothing -> error "Could not construct main definition for example AST!"
+      Just exampleMainExprsCombined' -> do
+      -- exmapleMainDef:
+      --    (&&') : Bool -> Bool [0..1] -> Bool
+      --    (&&') True [y] = y;
+      --    (&&') False [_] = False
+      --
+      --    main : IO ()
+      --    main = (example_in_1 == example_out_1) (&&') ... (&&') (example_in_n == example_out_n)
+        let exampleMainDef = Def nullSpanNoFile (mkId entryPoint) False Nothing
+                              (EquationList nullSpanNoFile (mkId entryPoint) False
+                                [(Equation nullSpanNoFile (mkId entryPoint) () False [] exampleMainExprsCombined')]) (Forall nullSpanNoFile [] [] (TyInt 0))
+        let astWithExampleMain = AST declsWithBool (defsWithoutMain ++ [exampleMainDef]) imports hidden mod
+        let timeout = 100000
+        res <- liftIO $ System.Timeout.timeout timeout $ eval astWithExampleMain
+        case res of
+          Just True -> return True;
+          _ -> do 
+            return False;
+  else return True
+
+  where
+    boolDecl :: DataDecl
+    boolDecl =
+      DataDecl nullSpanNoFile (mkId "Bool") [] Nothing
+        [ DataConstrNonIndexed nullSpanNoFile (mkId "True") []
+        , DataConstrNonIndexed nullSpanNoFile (mkId "False") [] ]
+
+
+
+synLoop :: (?globals :: Globals)
+        => AST () ()
+        -> CheckerError
+        -> Maybe (Spec () ())
+        -> ((?globals :: Globals) => AST () () -> IO Bool)
+        -> Ctxt (Ctxt (TypeScheme, Substitution), Bool)
+        -> Int
+        -> Ctxt SAssumption
+        -> Ctxt SAssumption
+        -> Maybe Type
+        -> Type
+        -> [SearchParameters]
+        -> Synthesiser (Expr () (), RuleInfo, SynthesisData)
+synLoop ast hole spec eval constrs index gamma omega originalGoal goal [] = none
+synLoop ast hole spec eval constrs index gamma omega originalGoal goal (sParams:rest) = do
+  Synthesiser $ lift $ lift $ lift $ modify (\state ->
+            state {
+             constructors = constrs
+                  })
+
+  synthState <- getSynthState
+  cs <- conv $ get
+  let sParams' = sParams -- { matchMax = 1, introMax = 1 }
+
+  (res, agg) <- liftIO $ runStateT (runSynthesiser index (gSynthOuter ast hole spec eval sParams' gamma omega originalGoal goal) cs) synthState
+  case res of
+    (_:_) ->
+      case last res of
+        (Right (expr, delta, _, _, _, ruleInfo), _) -> return (expr, ruleInfo, agg)
+        _ -> none
+    _ -> do
+      (res, ruleInfo, agg') <- synLoop ast hole spec eval constrs index gamma omega originalGoal goal rest
+      return (res, ruleInfo, agg <> agg')
+
+gSynthOuter :: (?globals :: Globals)
+            => AST () ()
+            -> CheckerError
+            -> Maybe (Spec () ())
+            -> ((?globals :: Globals) => AST () () -> IO Bool)
+            -> SearchParameters
+            -> Ctxt SAssumption
+            -> Ctxt SAssumption
+            -> Maybe Type
+            -> Type
+            -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id, RuleInfo)
+gSynthOuter
+  ast
+  (HoleMessage sp hgoal hctxt htyVars hVars synthCtxt _)
+  spec
+  eval
+  sParams
+  gamma
+  omega
+  originalGoal
+  goal = do
+
+  res@(expr, delta, _, _, _, _) <- gSynthInner sParams False RightAsync gamma (Focused omega) goal
+  consumed <- outerContextConsumed (gamma ++ omega) delta
+  if consumed
+    then do
+      -- Run the type checker if we used cartesian/"Any" mode
+      -- Only accept programs which check with the original non-cartesian semiring type
+      checked <- if cartSynth == 0 then return True else do
+        if cartSynth == 1 then do 
+          st <- getSynthState
+          case gradedProgram st of
+            Nothing -> return True
+            Just prog -> do
+              let hole = HoleMessage sp hgoal hctxt htyVars hVars synthCtxt [([], expr)]
+              let holeCases = concatMap (\h -> map (\(pats, e) -> (errLoc h, zip (getCtxtIds (holeVars h)) pats, e)) (cases h)) [hole]
+              let (AST _ defs' _ _ _) = holeRefactor holeCases ast
+              let [defId] = currDef st
+              Synthesiser $ lift $ lift $ lift $ modify (\state ->
+                state {
+                  attempts = 1 + attempts state
+                    })
+
+
+              case (find (\(Def _ id _ _ _ _) -> id == defId) defs', prog) of
+                (Just (Def _ _ _ _ (EquationList _ _ _ eqs) _), Def _ _ _ _ (EquationList _ _ _ eqs') _) ->  do
+                  return $ pretty eqs == pretty eqs'
+                _ -> return False
+        else do 
+          return True 
+
+        -- st <- getSynthState
+        -- liftIO $ do
+        --   let hole = HoleMessage sp hgoal hctxt htyVars hVars synthCtxt [([], expr)]
+        --   let holeCases = concatMap (\h -> map (\(pats, e) -> (errLoc h, zip (getCtxtIds (holeVars h)) pats, e)) (cases h)) [hole]
+        --   let ast' = holeRefactor holeCases ast
+        --   let timeout = 100000
+        --   res <- liftIO $ System.Timeout.timeout timeout $ Ex.try $ check ast'
+        --   case res of 
+        --     Just (Left (e :: Ex.SomeException)) -> return False
+        --     Just (Right (Left errs)) -> do
+        --           let holeErrors = getHoleMessages errs
+        --           return $ length holeErrors == length errs
+        --     Just (Right (Right _)) -> return True
+        --     Nothing -> return False
+
+      if checked then
+        case (spec, cartSynth == 1) of
+          (Just (Spec _ _ examples@(_:_) _), False) -> do
+            st <- getSynthState
+            let hole = HoleMessage sp hgoal hctxt htyVars hVars synthCtxt [([], expr)]
+            let holeCases = concatMap (\h -> map (\(pats, e) -> (errLoc h, zip (getCtxtIds (holeVars h)) pats, e)) (cases h)) [hole]
+            let ast' = holeRefactor holeCases ast
+            let [def] = currDef st
+            success <- liftIO $ runExamples eval ast' examples def
+            if success
+            then return res
+            else none
+          _ -> return res
+      else none
+    else none
+
+  -- where
+    -- getHoleMessages :: NonEmpty CheckerError -> [CheckerError]
+    -- getHoleMessages = NonEmpty.filter (\ e -> case e of HoleMessage{} -> True; _ -> False)
+gSynthOuter _ _ _ _ _ _ _ _ _ = none
+
+
+
+outerContextConsumed :: (?globals::Globals) => Ctxt SAssumption -> Ctxt SAssumption -> Synthesiser Bool
+outerContextConsumed input delta = do
+  res <- mapM (\(id, a) -> do
+                    case lookup id delta of
+                      Just (SVar (Discharged _ gradeUsed) _ _) ->
+                        case a of
+                          (SVar (Discharged _ gradeSpec) _ _) -> do
+                            (kind, _, _) <- conv $ synthKind nullSpan gradeUsed
+                            modifyPred $ addConstraintViaConjunction (ApproximatedBy ns gradeUsed gradeSpec kind)
+                            solve
+                          _ -> return False
+                      Just (SDef _ (Just gradeUsed) _) ->
+                        case a of
+                          (SDef _ (Just gradeSpec) _) -> do
+                            (kind, _, _) <- conv $ synthKind nullSpan gradeUsed
+                            modifyPred $ addConstraintViaConjunction (ApproximatedBy ns gradeUsed gradeSpec kind)
+                            solve
+                          _ -> return False
+                      Just (SDef _ Nothing _) -> return True
+                      Nothing -> return False
+                      ) input
+  return $ and res
+
+
+
+gSynthInner :: (?globals :: Globals)
+  => SearchParameters
+  -> Bool
+  -> FocusPhase
+  -> Ctxt SAssumption
+  -> FocusedCtxt SAssumption
+  -> Type
+  -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id, RuleInfo)
+gSynthInner sParams inIntroPhase focusPhase gamma (Focused omega) goal = do
+
+  case (focusPhase, omega) of
+    (RightAsync, _) -> do
+      absRule sParams inIntroPhase RightAsync gamma (Focused omega) goal
+      `try`
+      transitionToLeftAsync sParams inIntroPhase gamma omega goal
+
+    (LeftAsync, _:_) -> do
+      unboxRule sParams inIntroPhase LeftAsync gamma (Focused []) (Focused omega) goal
+      `try`
+      caseRule sParams inIntroPhase LeftAsync gamma (Focused []) (Focused omega) goal
+    -- Focus / shift to Sync phases
+    (LeftAsync, []) -> do
+      foc sParams inIntroPhase goal gamma
+
+    (RightSync, []) -> do
+      boxRule sParams inIntroPhase RightSync gamma goal
+      `try`
+      constrRule sParams inIntroPhase RightSync gamma goal
+
+
+    (LeftSync, [(_, var)]) ->
+      case tyAndGrade var of
+        Just (ty, _) -> do
+          varRule gamma (Focused []) (Focused omega) goal
+          `try`
+          appRule sParams inIntroPhase LeftSync gamma (Focused omega) goal
+          `try`
+          -- This stops us from synthesising things of the form 
+          -- Cons (case x of Cons _ _ -> ... ; Nil -> ...) 
+          if not inIntroPhase then
+            gSynthInner sParams inIntroPhase LeftAsync gamma (Focused omega) goal
+          else none
+        _ -> none
+
+    (LeftSync, _) ->
+        gSynthInner sParams inIntroPhase RightAsync gamma (Focused []) goal
+
+  where
+
+    foc sParams inIntroPhase goal gamma | not (isAtomic goal) && isRSync goal = do
+        focLeft sParams inIntroPhase [] gamma goal
+        `try`
+        focRight sParams inIntroPhase gamma goal
+    foc sParams inIntroPhase goal gamma =
+      focLeft sParams inIntroPhase [] gamma goal
+
+    focRight sParams inIntroPhase gamma = do
+      gSynthInner sParams inIntroPhase RightSync gamma (Focused [])
+
+    focLeft _ _ _ [] goal = none
+    focLeft sParams inIntroPhase left (var:right) goal = do
+      -- Try focusing first on var first
+        gSynthInner sParams inIntroPhase LeftSync (left ++ right) (Focused [var]) goal
+        `try`
+      -- If that fails pick a different var
+        focLeft sParams inIntroPhase (var:left) right goal
+
+    transitionToLeftAsync _ _ _ _ (FunTy{}) = none
+    transitionToLeftAsync sParams inIntroPhase gamma omega goal = gSynthInner sParams inIntroPhase LeftAsync gamma (Focused omega) goal
+
+
+
+
+
+
+
+
+{-
+
+--------------------------------- Var
+Γ, x :ᵣ A ⊢ A => x | 0·Γ, x :₁ A
+
+-}
+varRule :: (?globals :: Globals)
+  => Ctxt SAssumption
+  -> FocusedCtxt SAssumption
+  -> FocusedCtxt SAssumption
+  -> Type
+  -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id, RuleInfo)
+varRule _ _ (Focused []) _ = none
+-- varRule gamma (Focused left) (Focused (var@(name, SVar (Discharged t grade) sInfo _) : right)) goal = do
+varRule gamma (Focused left) (Focused (var@(name, assumption):right)) goal = do
+    -- let ruleInfo = VarRuleP var goal gamma (left ++ right) Nothing
+    -- conv $ modify (\s -> { searchTree = addRuleToSearchTree ruleInfo })
+    modifyPath ("var on: " <> (pretty name <> " : " <> pretty assumption) <> ", goal: " <> (pretty goal))
+    debugM "varRule, goal is" (pretty goal)
+    assumptionTy <- getSAssumptionType assumption
+    case assumptionTy of
+      (t, funDef, mGrade, mSInfo, tySch, _) -> do
+        conv resetAddedConstraintsFlag
+        st <- conv get
+        debugM "equality in var rule" ("tyVarContext = " ++ pretty (tyVarContext st) ++ "\n" ++ pretty t ++ " = "  ++ pretty goal)
+        (success, _, subst) <- conv $ equalTypes ns t goal
+        cs <- conv get
+        modifyPred $ addPredicateViaConjunction (Conj $ predicateStack cs)
+        conv $ modify (\s -> s { predicateStack = []})
+
+        if success then do
+          solved <- if addedConstraints cs
+                    then solve
+                    else return True
+          -- now to do check we can actually use it
+          if solved then do
+            case (funDef, mGrade) of
+              (False, Just grade) -> do
+                (kind, _, _) <- conv $ synthKind ns grade
+                delta <- ctxtMultByCoeffect (TyGrade (Just kind) 0) (gamma ++ left ++ right)
+                let singleUse = (name, SVar (Discharged t (TyGrade (Just kind) 1)) mSInfo 0)
+                let rInfo = VarRule name assumption goal gamma [] (singleUse:delta)
+                -- let ruleInfo' = modifyVarRule ruleInfo (singleUse:delta)
+                -- conv $ modify (\s -> { searchTree = addRuleToSearchTree ruleInfo' })
+                leafExpr (Val ns () False (Var () name), singleUse:delta, subst, isDecr mSInfo, Nothing, rInfo)
+
+              (True, Just grade) -> do
+                synSt <- getSynthState
+                if not $ name `elem` currDef synSt then do
+                  (kind, _, _) <- conv $ synthKind ns  grade
+                  delta <- ctxtMultByCoeffect (TyGrade (Just kind) 0) (gamma ++ left ++ right)
+                  let singleUse = (name, SDef tySch (Just $ TyGrade (Just kind) 1) 0)
+                  let rInfo = VarRule name assumption goal gamma [] (singleUse:delta)
+                  -- let ruleInfo' = modifyVarRule ruleInfo (singleUse:delta)
+                  -- conv $ modify (\s -> { searchTree = addRuleToSearchTree ruleInfo' })
+                  leafExpr (Val ns () False (Var () name), singleUse:delta, subst, False, Nothing, rInfo)
+
+                else none
+              (True, Nothing) -> do
+                synSt <- getSynthState
+                if not $ name `elem` currDef synSt then do
+                  delta <- ctxtMultByCoeffect (TyGrade Nothing 0) (gamma ++ left ++ right)
+                  let rInfo = VarRule name assumption goal gamma [] (var:delta)
+                  -- let ruleInfo' = modifyVarRule ruleInfo (var:delta)
+                  -- conv $ modify (\s -> { searchTree = addRuleToSearchTree ruleInfo' })
+                  leafExpr (Val ns () False (Var () name), var:delta, subst, False, Nothing, rInfo)
+
+                else none
+          else none
+        else none
+    `try` varRule gamma (Focused (var:left)) (Focused right) goal
+-- varRule _ _ _ _ = none
+
+
+recVarCount :: (?globals :: Globals)
+            => Ctxt SAssumption
+            -> Ctxt (Ctxt (TypeScheme, Substitution), Bool)
+            -> Int
+recVarCount ((_, SVar (Discharged ty _) _ _):xs) cons = do
+  let recVarCount' = recVarCount xs cons
+  if isRecursiveType ty cons then 1 + recVarCount'
+  else recVarCount'
+recVarCount (x:xs) cons = recVarCount xs cons
+recVarCount [] cons = 0
+
+
+
+
+{-
+
+Γ, x :ᵣ A ⊢ B => t | Δ, x :ᵣ A      r ⊑ q
+-------------------------------------------- Abs
+Γ ⊢ Aʳ → B => λᵣx.t | Δ
+
+-}
+absRule :: (?globals :: Globals)
+        => SearchParameters
+        -> Bool
+        -> FocusPhase
+        -> Ctxt SAssumption
+        -> FocusedCtxt SAssumption
+        -> Type
+        -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id, RuleInfo)
+absRule sParams inIntroPhase focusPhase gamma (Focused omega) goal@(FunTy name gradeM tyA tyB) = do
+  debugM "abs, goal is" (pretty goal)
+  modifyPath ("absBranchStart")
+  modifyPath ("absRule: "  <> (pretty goal))
+
+  -- Extract the graded arrow, or use generic 1 if there is no grade
+  let grade = getGradeFromArrow gradeM
+
+  x <-  useBinderNameOrFreshen name
+  st <- getSynthState
+
+  -- predicate on whether we want to focus on the argument type or delay
+  let bindToOmega =
+      -- argument type must be left async type
+          (isLAsync tyA)
+          -- && matchMax sParams > 0
+      -- if we are a recursive type then check whether we are below max depth
+        && ((isRecursiveType tyA (constructors st)) ==> ((matchCurrent sParams) + (recVarCount omega (constructors st)) ) + 1  <= matchMax sParams)
+
+  let (gamma', omega') = bindToContext (x, SVar (Discharged tyA grade) (Just $ NonDecreasing 0) 0) gamma omega bindToOmega
+
+
+  (t, delta, subst, struct, scrutinee, rInfo) <-
+     -- Recursive call
+    --  withPartialExprAt downExpr
+      --  (Val ns () False (Abs () (PVar ns () False x) Nothing hole))
+       (gSynthInner sParams inIntroPhase focusPhase gamma' (Focused omega') tyB)
+
+  cs <- conv get
+  (kind, _, _) <- conv $ synthKind nullSpan grade
+  case lookupAndCutout x delta of
+    Just (delta', SVar (Discharged _ grade_r) _ _) -> do
+      modifyPred $ addConstraintViaConjunction (ApproximatedBy ns grade_r grade kind)
+      res <- solve
+      -- _ <- if res then error "" else return ()
+      let rInfo' = AbsRule focusPhase goal gamma omega (x, SVar (Discharged tyA grade) (Just $ NonDecreasing 0) 0) t rInfo delta'
+      debugM "Path taken: \n" (printSynthesisPath (reverse $ synthesisPath cs) 0)
+      boolToSynthesiser res (Val ns () False (Abs () (PVar ns () False x) Nothing t), delta', subst, struct, scrutinee, rInfo')
+
+    Nothing -> do
+      modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (TyGrade (Just kind) 0) grade kind)
+      res <- solve
+      let rInfo' = AbsRule focusPhase goal gamma omega (x, SVar (Discharged tyA grade) (Just $ NonDecreasing 0) 0) t rInfo delta
+      boolToSynthesiser res (Val ns () False (Abs () (PVar ns () False x) Nothing t), delta, subst, struct, scrutinee, rInfo')
+
+
+absRule _ _ _ _ _ _ = none
+
+
+{-
+
+Γ, x :_r1 A^q → B, y :_r2 B ⊢ C => t₁ | Δ₁, x :_s1 A^q → B, y :_s2 B
+Γ, x :_r1 A^q → B ⊢ A => t₂ | Δ₂, x :_s3 : A^q → B
+----------------------------------------------------------------------------------------------:: app
+Γ, x : A → B ⊢ C => [(x t₂) / y] t₁ | (Δ₁ + s2 · q · Δ₂), x :_s2 + s1 + (s2 · q · s3) A^q → B
+
+let x2 = x1 t2 in t1
+
+-}
+appRule :: (?globals :: Globals)
+        => SearchParameters
+        -> Bool
+        -> FocusPhase
+        -> Ctxt SAssumption
+        -> FocusedCtxt SAssumption
+        -> Type
+        -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id, RuleInfo)
+appRule sParams inIntroPhase focusPhase gamma (Focused [var@(x1, assumption)]) goal =
+  do
+    assumptionTy <- getSAssumptionType assumption
+    st <- getSynthState
+    case (assumptionTy, scrutCurrent sParams < scrutMax sParams) of
+      ((FunTy bName gradeM tyA tyB, funDef, Just grade_r, sInfo, tySch, depth), _) -> do
+        if depth < appMax sParams then do
+          let grade_q = getGradeFromArrow gradeM
+          x2 <- freshIdentifier
+
+          -- predicate on whether we want to focus on the argument type or delay
+          let bindToOmega =
+              -- argument type must be left async type
+                  isLAsync tyB
+                -- && not (isRecursiveType tyB (constructors st))
+              -- if we are a recursive type then check whether we are below max depth
+
+          -- This is a temporary hack - allows us to track which app-generated assumptions belong to a multi-term recursive application 
+          let sInfo' = if x1 `elem` currDef st then Just $ NonDecreasing 42 else Nothing
+          let (gamma', omega') = bindToContext (x2, SVar (Discharged tyB grade_r) sInfo' 0) (gamma ++ [increaseDepth var]) [] bindToOmega
+
+
+
+          (t1, delta1, subst1, struct1, scrutinee, rInfo1) <-
+            -- withPartialExprAt (downExpr >=> rightExpr)
+            -- (letExpr ns (PVar ns () False x2) (App ns () False (Val ns () False (Var () x1)) hole) hole)
+            (gSynthInner sParams { scrutCurrent = (scrutCurrent sParams) + 1} inIntroPhase focusPhase gamma' (Focused omega') goal)
+          -- traceM $ "sParams: " <> (show sParams)
+          -- traceM $ "t1: " <> (pretty t1)
+
+
+
+          case lookupAndCutout x2 delta1 of
+            -- If the bound variable has a zero grade, then we didn't use it in the applicaton
+            Just (delta1', SVar (Discharged _ (TyInfix TyOpTimes (TyGrade _ 0) _)) _ _) -> none
+            Just (delta1', SVar (Discharged _ s2) _ _) ->
+              case lookupAndCutout x1 delta1' of
+                Just (delta1Out, varUsed) -> do
+                    let s1 = case varUsed of
+                          SVar (Discharged _ s1') _ _ -> s1'
+                          SDef tySch (Just s1') _   -> s1'
+                          SDef tySch Nothing _     -> undefined
+                    let isScrutinee = case scrutinee of Just scr -> scr == x2 ; _ -> False
+
+                    (t2, delta2, subst2, struct2, _, rInfo2) <- do
+
+                      navigatePartialExpr (upExpr >=> rightExpr)
+                      -- If we are synthesising the argument for a recursive definition, the argument MUST be a variable
+                      if x1 `elem` currDef st  || (case sInfo of Just (NonDecreasing 42) -> True ; _ -> False) then
+                        varRule [] (Focused []) (Focused $ gamma ++ [increaseDepth var]) tyA
+                      else
+                        gSynthInner (sParams { scrutCurrent = scrutCurrent sParams + 1 }) True RightAsync (gamma ++ [increaseDepth var]) (Focused []) tyA
+
+
+                    case lookupAndCutout x1 delta2 of
+                      Just (delta2', varUsed') -> do
+                        let s3 = case varUsed' of
+                              SVar (Discharged _ s3') _ _ -> s3'
+                              SDef tySch (Just s3') _   -> s3'
+                              SDef tySch Nothing _     -> undefined
+                        delta2Out <- (s2 `ctxtMultByCoeffect` delta2') >>= (\d2' -> grade_q `ctxtMultByCoeffect` d2')
+                        -- s2 + s1 + (s2 * q * s3)
+                        let outputGrade = s2 `gPlus` s1 `gPlus` (s2 `gTimes` grade_q `gTimes` s3)
+                        if (struct1 || struct2) || notElem x1 (currDef st) then
+                          case ctxtAdd delta1Out delta2Out of
+                            Just delta3 -> do
+                              substOut <- conv $ combineSubstitutions ns subst1 subst2
+                              let appExpr = App ns () False (Val ns () False (Var () x1)) t2
+                              let assumption' = if funDef
+                                  then (x1, SDef tySch (Just outputGrade) 0)
+                                  -- TODO: We should be able to return "Just grade_q" instead of "gradeM" here but this fails later on
+                                  -- (possibly related to the caseRule)
+                                  else (x1, SVar (Discharged (FunTy bName gradeM tyA tyB) outputGrade) sInfo 0)
+
+                              let rInfo' = AppRule focusPhase var goal gamma [] (x2, SVar (Discharged tyB grade_r) Nothing 0) t1 rInfo1 delta1 t2 rInfo2 delta2 (assumption':delta3)
+                              return (Language.Granule.Syntax.Expr.subst appExpr x2 t1, assumption':delta3, substOut, struct1 || struct2, if isScrutinee then Nothing else scrutinee, rInfo')
+                            _ -> none
+                          else none
+                      _ -> none
+                _ -> none
+            _ -> none
+        else none
+      _ -> none
+appRule _ _ _ _ _ _ = none
+  -- `try` appRule sParams inIntroPhase focusPhase gamma (Focused (var : left)) (Focused right) goal
+
+
+
+{-
+
+
+Γ ⊢ A => t | Δ
+------------------------ :: box
+Γ ⊢ □ᵣA => [t] | r · Δ
+
+-}
+boxRule :: (?globals :: Globals)
+        => SearchParameters
+        -> Bool
+        -> FocusPhase
+        -> Ctxt SAssumption
+        -> Type
+        -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id, RuleInfo)
+boxRule sParams inIntroPhase focusPhase gamma goal@(Box grade_r goal_inner) = do
+  debugM "boxRule, goal is" (pretty goal)
+  modifyPath ("box: "  <> (pretty goal))
+
+  (t, delta, subst, struct, scrutinee, rInfo) <-
+    -- withPartialExprAt downExpr
+    -- (Val ns () False (Promote () hole))
+    (gSynthInner sParams True RightAsync gamma (Focused []) goal_inner)
+
+  delta' <- ctxtMultByCoeffect grade_r delta
+  let boxExpr = Val ns () False (Promote () t)
+  let rInfo' = BoxRule focusPhase goal gamma t rInfo delta'
+  return (boxExpr, delta', subst, struct, scrutinee, rInfo')
+boxRule _ _ _ _ _ = none
+
+
+{-
+
+Γ, y :_r·q A, x :_r □q A ⊢ B => t | Δ, y : [A] s1, x :_s2 □q A
+∃s3 . s1 ⊑ s3 · q ⊑ r · q
+---------------------------------------------------------------- :: unbox
+Γ, x :_r □q A ⊢ B => case x of [y] -> t | Δ, x :_s3+s2 □q A
+
+-}
+unboxRule :: (?globals :: Globals)
+          => SearchParameters
+          -> Bool
+          -> FocusPhase
+          -> Ctxt SAssumption
+          -> FocusedCtxt SAssumption
+          -> FocusedCtxt SAssumption
+          -> Type
+          -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id, RuleInfo)
+unboxRule _ _ _ _ _ (Focused []) _ = none
+unboxRule sParams inIntroPhase focusPhase gamma (Focused right) (Focused (var_x@(x, SVar (Discharged (Box grade_q ty) grade_r) sInfo depth):left)) goal = do
+  if depth <= matchMax sParams then do
+    debugM "unboxRule, goal is" (pretty goal)
+
+    let omega = left++right
+    y <- freshIdentifier
+
+    st <- getSynthState
+
+    -- predicate on whether we want to focus on the argument type or delay
+    let bindToOmega =
+      -- argument type must be left async type
+           isLAsync ty
+      -- if we are a recursive type then check whether we are below max depth
+         && (isRecursiveType ty (constructors st) ==> matchCurrent sParams + recVarCount omega (constructors st) + 1 < matchMax sParams)
+    let (gamma', omega') = bindToContext (y, SVar (Discharged ty (grade_r `gTimes` grade_q)) Nothing 0) (gamma ++ [increaseDepth var_x]) omega bindToOmega
+
+    (t, delta, subst, struct, scrutinee, rInfo) <-
+        -- withPartialExprAt downExpr
+        -- (makeUnboxUntyped y (makeVarUntyped x) hole)
+        (gSynthInner sParams inIntroPhase focusPhase gamma' (Focused omega') goal)
+
+    case lookupAndCutout y delta of
+      Just (delta', SVar (Discharged _ grade_s1) _ _) ->
+        case lookupAndCutout x delta' of
+          Just (delta'', SVar (Discharged _ grade_s2) _ _) -> do
+            cs <- conv get
+
+            grade_id_s3 <- freshIdentifier
+            let grade_s3 = TyVar grade_id_s3
+            (kind, _, _) <- conv $ synthKind nullSpan grade_s1
+            conv $ existentialTopLevel grade_id_s3 kind
+
+            -- ∃s3 . s1 ⊑ s3 · q ⊑ r · q
+            modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (grade_s3 `gTimes` grade_q) (grade_r `gTimes` grade_q) kind)
+            modifyPred $ addConstraintViaConjunction (ApproximatedBy ns grade_s1 (grade_s3 `gTimes` grade_q) kind)
+
+            res <- solve
+
+            let var_x' = (x, SVar (Discharged (Box grade_q ty) (grade_s3 `gPlus` grade_s2)) sInfo 0)
+
+            let rInfo' = UnboxRule focusPhase var_x goal gamma omega (y, SVar (Discharged ty (grade_r `gTimes` grade_q)) Nothing 0) t rInfo (var_x':delta'')
+            boolToSynthesiser res (makeUnboxUntyped y (makeVarUntyped x) t, var_x':delta'', subst, struct, scrutinee, rInfo')
+          _ -> none
+      _ -> none
+  else none
+  -- `try`
+    -- unboxRule sParams inIntroPhase focusPhase gamma (Focused $ var_x:right) (Focused left) goal
+unboxRule _ _ _ _ _ _ _ = none
+
+
+
+{-
+
+(C: B₁^q₁ → ... → Bₙ^qₙ → K A ∈ D)
+Γ ⊢ Bᵢ => tᵢ | Δᵢ
+----------------------------------------------------:: constr
+Γ ⊢ K A => C t₁ ... tₙ | (q₁ · Δ₁) + ... + (qₙ · Δₙ)
+
+-}
+constrRule :: (?globals :: Globals)
+           => SearchParameters
+           -> Bool
+           -> FocusPhase
+           -> Ctxt SAssumption
+           -> Type
+           -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id, RuleInfo)
+constrRule sParams inIntroPhase focusPhase gamma goal = do
+  debugM "constrRule, goal is" (pretty goal)
+  st <- getSynthState
+  case ((introCurrent sParams < introMax sParams) || not (isRecursiveType goal (constructors st)), isADTorGADT goal) of
+    (reachedLim, Just datatypeName) -> do
+      synthState <- getSynthState
+      let (recDatacons, datacons) = relevantConstructors datatypeName $ constructors synthState
+      let datacons' = sortBy compareArity (recDatacons ++ datacons)
+      tryDatacons datatypeName [] datacons' goal reachedLim
+
+    -- (_, Just _) -> noneWithMaxReached
+    _ -> none
+
+
+  where
+    tryDatacons dtName _ [] _ _ = none
+    tryDatacons dtName right (con@(cName, (tySc@(Forall s bs cs cTy), cSubst)):left) goal underLim =
+       do
+        result <- checkConstructor tySc goal cSubst
+        case result of
+          (True, specTy, args, subst, substFromFreshening, predicate) -> do
+            modifyPred (addPredicateViaConjunction predicate)
+            case (args, underLim) of
+              -- Nullary constructor
+              ([], _) -> do
+                let kind = if cartSynth > 0
+                           then Just $ TyCon $ mkId "Cartesian"
+                           else Nothing
+                delta <- ctxtMultByCoeffect (TyGrade kind 0) gamma
+                let rInfo = ConstrRule focusPhase cName goal gamma (Val ns () False (Constr () cName [])) [] delta
+                leafExpr (Val ns () False (Constr () cName []), delta, [], False, Nothing, rInfo)
+
+              -- N-ary constructor
+              (args@(_:_), True) -> do
+                st <- getSynthState
+                let sParams' = if isRecursiveType goal (constructors st)
+                               then sParams { introCurrent = introCurrent sParams + 1 }
+                               else sParams
+                (ts, delta, substOut, structs, rInfos) <- synthArgs args subst sParams'
+                let rInfo = ConstrRule focusPhase cName goal gamma (makeConstrUntyped ts cName) rInfos delta
+                leafExpr (makeConstrUntyped ts cName, delta, substOut, False, Nothing, rInfo)
+              _ -> none
+          _ -> none
+      `try` tryDatacons dtName (con:right) left goal underLim
+
+
+    synthArgs [] _ _ = return ([], [], [], False, [])
+    synthArgs ((ty, mGrade_q):args) subst sParams = do
+      (ts, deltas, substs, structs, rInfos) <- synthArgs args subst sParams
+
+      ty' <- conv $ substitute subst ty
+      (t, delta, subst, struct, _, rInfo) <- gSynthInner sParams True RightAsync gamma (Focused []) ty'
+      delta' <- maybeToSynthesiser $ ctxtAdd deltas delta
+      substs' <- conv $ combineSubstitutions ns substs subst
+      delta'' <- case mGrade_q of
+        Just grade_q -> ctxtMultByCoeffect grade_q delta'
+        _ -> return delta'
+      return (t:ts, delta'', substs', struct || structs, rInfo:rInfos)
+
+
+{-
+
+(C: B₁^q₁ → ... → Bₙ^qₙ → K A ∈ D)
+
+Γ, x :ᵣ K A, y₁ⁱ :_(r · q₁) B₁ ... yₙⁱ :_(r · qₙ) Bₙ ⊢ B => tᵢ | Δᵢ, x :_rᵢ K A, y₁ⁱ :_s₁ⁱ B₁ ... yₙⁱ :_sₙⁱ Bₙ
+
+∃s'ⱼⁱ . sⱼⁱ ⊑ s'ⱼⁱ · qⱼⁱ ⊑ r · qⱼⁱ
+
+sᵢ = s'₁ⁱ ⊔ ... ⊔ s'ₙⁱ
+
+--------------------------------------------------------------------------------------------------------:: case (v1)
+Γ, x :ᵣ K A ⊢ B => case x of cᵢ y₁ⁱ ... yₙⁱ -> tᵢ | (Δ₁ ⊔ ... ⊔ Δₙ), x :_(r₁ ⊔ ... ⊔ rₙ)+(s₁ ⊔ ... ⊔ sₙ)
+
+i.e., with a goal of type `B` and `x : r K A` in context we want
+to case on it, which involves make a case, pattern matching on all
+the constructors `C`
+
+-}
+
+-- Output list of pattern->expr pair for the branch
+-- output context D
+-- substituion Theta
+-- grade r
+-- grade s
+casePatternMatchBranchSynth :: (?globals :: Globals) =>
+     SearchParameters
+  -> Bool
+  -> FocusPhase
+  -> Ctxt SAssumption                      -- gamma context
+  -> Ctxt SAssumption                      -- omega context
+  -> (Id, SAssumption)                     -- var being matched on
+  -> Id                                    -- name of the type constructor on which we are match
+                                           --    (should be consistent with first parameter)
+  -> Type                                  -- branch goal type
+  -> (Id, (TypeScheme, Substitution))      -- constructor info
+  -> Synthesiser
+       (Maybe ((Pattern (), Expr () ()), (Ctxt SAssumption, (Substitution, (Coeffect, Maybe Coeffect), (Id, Ctxt SAssumption, Expr () (), Ctxt SAssumption, RuleInfo)))))
+casePatternMatchBranchSynth
+  sParams
+  inIntroPhase
+  focusPhase
+  gamma
+  omega
+  var@(x, SVar (Discharged ty grade_r) sInfo depth)
+  datatypeName
+  goal
+  con@(cName, (tySc@(Forall s bs constraints cTy), cSubst)) = do
+  -- Debugging
+
+  debugM "case - constructor" (pretty con)
+
+
+  -- Check that we can use a constructor here
+  -- uses peekChecker so that we can roll back any state updates
+  (result, commitToCheckerState) <- peekCheckerInSynthesis $ checkConstructor tySc ty cSubst
+
+  case result of
+    (True, _, args, subst, _, predicate) -> do
+      -- commit to updating the checker state from `checkConstructor`
+      conv $ commitToCheckerState
+      -- New implication
+      modifyPred (newImplication [])
+      modifyPred (addPredicateViaConjunction predicate)
+      modifyPred (fromRight Top . moveToConsequent)
+      st <- getSynthState
+
+      -- args contains the types and maybe grade for each argument of this constructor
+
+      -- for every argument position of the constructor we need to create a variable
+      -- to bind the result:
+      (gamma', omega', branchBoundVarsAndGrades) <-
+        forallM args (gamma ++ [increaseDepth var], omega, []) (\(gamma, omega, vars) (argTy, mGrade_q) -> do
+          -- Three piece of information calculate:
+
+          -- (i) variable name
+          var <- freshIdentifier
+          -- (ii) grade
+          let grade_rq = case mGrade_q of
+                            Just grade_q -> grade_r `gTimes` grade_q
+                            -- Contains a small optimisation of avoiding a times * 1
+                            Nothing      -> grade_r
+          -- (iii) type
+          argTy' <- conv $ substitute subst argTy
+
+          -- Create an assumption for the variable and work out which synthesis environment
+          -- to insert it into
+          let assumption@(_, SVar _ _ _) =
+                -- Check if the constructor here is recursive
+                if positivePosition datatypeName argTy'
+                then (var, SVar (Discharged argTy' grade_rq) (Just $ Decreasing 0) 0)
+                else (var, SVar (Discharged argTy' grade_rq) (Just $ NonDecreasing 0) 0)
+
+          -- predicate on whether we want to focus on the argument type or delay
+          let bindToOmega = -- isLAsync argTy' && newDepth < matchMax sParams
+                 -- argument type must be left async type
+                   isLAsync argTy'
+                --  -- if we are a recursive type then check whether we are below max depth
+                  -- && matchCurrent sParams + 1 < matchMax sParams
+                && (isRecursiveType argTy' (constructors st) ==> (matchCurrent sParams + (recVarCount omega (constructors st))) + 1 < matchMax sParams)
+
+
+          -- construct focussing contexts
+          let (gamma', omega') = bindToContext assumption gamma omega bindToOmega
+          return (gamma', omega', (var, (argTy', getGradeFromArrow mGrade_q, grade_rq, sInfo)):vars)
+        )
+
+      let recursive =
+            if isRecursiveType ty (constructors st) then 1 else 0
+
+      let (vars, _) = unzip branchBoundVarsAndGrades
+      let constrPat = PConstr ns () False cName (map (PVar ns () False) $ reverse vars)
+
+      -- Synthesise the body of the branch which produces output context `delta`
+
+      -- traceM $ "case gamma': " <> (show gamma')
+      -- traceM $ "case omega': " <> (show omega')
+      (t, delta, subst, _, _, rInfo) <-
+         gSynthInner sParams { matchCurrent = (matchCurrent sParams) + recursive } inIntroPhase focusPhase gamma' (Focused omega') goal
+
+      (delta', grade_si) <- forallM delta ([], Nothing) (\(delta', mGrade) dVar@(dName, dAssumption) ->
+        case dAssumption of
+          SVar (Discharged ty grade_s) dSInfo _ ->
+            -- See if this is a variable being bound in the case
+            case lookup dName branchBoundVarsAndGrades of
+              Just (_, grade_q, grade_rq, _) -> do
+
+                grade_id_s' <- freshIdentifier
+                let grade_s' = TyVar grade_id_s'
+                (kind, _, _) <- conv $ synthKind ns grade_s
+                conv $ existentialTopLevel grade_id_s' kind
+                -- ∃s'_ij . s_ij ⊑ s'_ij · q_ij ⊑ r · q_ij
+                modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (grade_s' `gTimes` grade_q) grade_rq kind)
+                modifyPred $ addConstraintViaConjunction (ApproximatedBy ns grade_s (grade_s' `gTimes` grade_q) kind)
+                modifyPred $ (ExistsHere grade_id_s' kind)
+
+                -- s' \/ ...
+                grade_si <- computeJoin (Just kind) (fromMaybe grade_s' mGrade) (grade_s')
+                -- now do not include in the result as this is being bound
+                return (delta', Just grade_si)
+              -- Not a variable bound in the scope
+              _ -> do
+                return (dVar:delta', mGrade)
+          SDef{} -> do
+            return (dVar:delta', mGrade)
+        )
+
+      -- Concludes the implication
+      -- TODO: maybe run solve here per branch
+      modifyPred $ moveToNewConjunct
+
+      let branchCtxt = map (\(x, (argTy, _, grade_rq, sInfo)) -> (x, SVar (Discharged argTy grade_rq) sInfo depth)) branchBoundVarsAndGrades
+
+      case lookupAndCutout x delta' of
+        (Just (delta'', SVar (Discharged _ grade_r') sInfo _)) -> do
+          if null args then do
+            (kind, _, _) <- conv $ synthKind ns grade_r
+            let branchInfo = (cName, branchCtxt, t, delta'', rInfo)
+            return $ Just ((constrPat, t), (delta'', (subst, (grade_r', Just (TyGrade (Just kind) 1)), branchInfo )))
+          else do
+            let branchInfo = (cName, branchCtxt, t, delta'', rInfo)
+            return $ Just ((constrPat, t), (delta'', (subst, (grade_r', grade_si), branchInfo)))
+
+        _ -> error "Granule bug in synthesiser. Please report on GitHub: scrutinee not in the output context"
+    _ -> do
+      return Nothing
+
+caseRule :: (?globals :: Globals)
+   => SearchParameters
+   -> Bool
+   -> FocusPhase
+   -> Ctxt SAssumption
+   -> FocusedCtxt SAssumption
+   -> FocusedCtxt SAssumption
+   -> Type
+   -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id, RuleInfo)
+caseRule _ _ _ _ _ (Focused []) _ = none
+caseRule sParams inIntroPhase focusPhase gamma (Focused left) (Focused (var@(x, assumption@(SVar (Discharged ty grade_r) sInfo depth)):right)) goal =
+  do
+    debugM "caseRule, goal is" (pretty goal)
+    let omega = left ++ right
+
+    synthState <- getSynthState
+    case (matchCurrent sParams < matchMax sParams && depth == 0 && (isScrutinee sInfo ==> not (isRecursiveType ty (constructors synthState))), leftmostOfApplication ty) of
+      (True, TyCon datatypeName) -> do
+          cs <- conv get
+        -- If the type is polyshaped then add constraint that we incur a usage
+          let (recCons, nonRecCons) = relevantConstructors datatypeName (constructors synthState)
+
+          let datacons = sortBy compareArity (recCons ++ nonRecCons)
+
+          -- Process each data constructor
+          branchInformation <-
+            mapMaybeM (casePatternMatchBranchSynth
+                           sParams inIntroPhase focusPhase  -- synth configs
+                           gamma omega         -- contexts
+                           var                 -- var being match on
+                           datatypeName
+                           goal) datacons
+
+
+          let (patExprs, contextsAndSubstsGrades) = unzip branchInformation
+          let (deltas, substsAndGrades)           = unzip contextsAndSubstsGrades
+          let (substs, grades, branchInfos)                    = unzip3 substsAndGrades
+          -- TODO: more clear names here
+          let (grade_rs, grade_ss)                = unzip grades
+
+          (kind, _,_ ) <- conv $ synthKind ns grade_r
+          -- join contexts
+          delta <- foldM (ctxtMerge (computeJoin (Just kind))) (head deltas) (tail deltas)
+
+          -- join grades
+          grade_r_out <- foldM (computeJoin (Just kind))  (head grade_rs) (tail grade_rs)
+          grade_s_out <- foldM (computeJoin' (Just kind)) (head grade_ss) (tail grade_ss)
+
+
+
+          -- join substitutions
+          subst <- conv $ combineManySubstitutions ns substs
+
+          grade_final <- case grade_s_out of
+                  -- Add the usages of each branch to the usages of x inside each branch
+                  Just grade_s_out' -> return $ grade_r_out `gPlus` grade_s_out'
+                  -- Not sure when this case should arise, since nullary constrguctors get a 1 grade
+                  Nothing -> return grade_r_out
+          -- Focussed variable output assumption
+          let var_x_out = (x, SVar (Discharged ty grade_final) sInfo 0)
+
+          debugM "synth candidate" (pretty $ makeCaseUntyped x patExprs)
+          solved <-
+            ifM (conv $ polyShaped ty)
+              (do
+                (kind, _, _) <- conv $ synthKind ns grade_r
+                debugM ("polyShaped for " ++ pretty goal) (pretty grade_r)
+                modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (TyGrade (Just kind) 1) (getGradeFromArrow grade_s_out) kind)
+                res <- solve
+                debugM "solver result" (show res)
+                return res)
+              solve
+
+          if solved && not (null patExprs)
+            then do
+
+              let rInfo = CaseRule focusPhase var goal gamma omega (makeCaseUntyped x patExprs) branchInfos (var_x_out:delta)
+              return (makeCaseUntyped x patExprs, var_x_out:delta, subst, False, Just x, rInfo)
+            else none
+      (False, TyCon _) -> none
+      _ -> none
+  `try`
+  caseRule sParams inIntroPhase focusPhase gamma (Focused $ var:left) (Focused right) goal
+
+  where
+
+    -- Temporarily disallow casing on the result of a recursive function call : This is broken and needs a substantial fix!
+    isScrutinee :: Maybe StructInfo -> Bool
+    isScrutinee (Just (NonDecreasing 42)) = True
+    isScrutinee Nothing = True
+    isScrutinee _ = False
+caseRule _ _ _ _ _ _ _ = none
+
+-- Given two grades, returns their join.
+-- and where the first input may specify their kind if its already known
+
+-- Note however that this may also generate predicates
+-- (and hence lives in the `Synthesis` monad) as some
+-- grades do *not* have a join.
+
+computeJoin :: (?globals :: Globals) => Maybe Kind -> Type -> Type -> Synthesiser Type
+computeJoin maybeK g1 g2 = do
+  k <- case maybeK of
+         Nothing -> conv $ do { (k, _, _) <- synthKind ns g1; return k }
+         Just k  -> return k
+  upperBoundGradeVarId <- conv $ freshIdentifierBase $ "ub"
+  let upperBoundGradeVar = mkId upperBoundGradeVarId
+  modify (\st -> st { tyVarContext = (upperBoundGradeVar, (k, InstanceQ)) : tyVarContext st })
+  let upperBoundGrade = TyVar upperBoundGradeVar
+  modifyPred $ addConstraintViaConjunction (Lub ns g1 g2 upperBoundGrade k False)
+  return upperBoundGrade
+
+-- Version of computeJoin' where the inputs may be Nothing i.e.,
+-- implicit 1 grade
+computeJoin' :: (?globals :: Globals) => Maybe Kind -> Maybe Type -> Maybe Type -> Synthesiser (Maybe Type)
+computeJoin' mKind mg1 mg2 = do
+  x <- computeJoin mKind (getGradeFromArrow mg1) (getGradeFromArrow mg2)
+  return $ Just x
+
+gPlus :: Type -> Type -> Type
+gPlus = TyInfix TyOpPlus
+
+gTimes :: Type -> Type -> Type
+gTimes = TyInfix TyOpTimes
+
+exprFold :: Span -> Expr () () -> Expr () () -> Expr () ()
+exprFold s newExpr (App s' a rf e1 e2) = App s' a rf (exprFold s newExpr e1) (exprFold s newExpr e2)
+exprFold s newExpr (AppTy s' a rf e1 t) = AppTy s' a rf (exprFold s newExpr e1) t
+exprFold s newExpr (Binop s' a b op e1 e2) = Binop s' a b op (exprFold s newExpr e1) (exprFold s newExpr e2)
+exprFold s newExpr (LetDiamond s' a b ps mt e1 e2) = LetDiamond s' a b ps mt (exprFold s newExpr e1) (exprFold s newExpr e2)
+exprFold s newExpr (TryCatch s' a b e p mt e1 e2) = TryCatch s' a b (exprFold s newExpr e) p mt (exprFold s newExpr e1) (exprFold s newExpr e2)
+exprFold s newExpr (Val s' a b val) = Val s' a b (valueFold s newExpr val)
+exprFold s newExpr (Case s' a b expr pats) = Case s' a b (exprFold s newExpr expr) pats
+exprFold s newExpr (Hole s' a b ids hints) = if s == s' then newExpr else Hole s' a b ids hints
+
+
+valueFold :: Span -> Expr () () -> Value () () -> Value () ()
+valueFold s newExpr (Abs a pats mt e) = Abs a pats mt (exprFold s newExpr e)
+valueFold s newExpr (Promote a e) = Promote a (exprFold s newExpr e)
+valueFold s newExpr (Pure a e) = Pure a (exprFold s newExpr e)
+valueFold s newExpr (Nec a e) = Nec a (exprFold s newExpr e)
+valueFold s newExpr (Constr a ident vals) = Constr a ident $ map (valueFold s newExpr) vals
+valueFold s newExpr v = v
+
+
+

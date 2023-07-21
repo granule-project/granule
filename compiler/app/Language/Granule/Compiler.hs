@@ -202,6 +202,11 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             $ long "debug"
             <> help "Debug mode"
 
+        globalsInteractiveDebugging <-
+          flag Nothing (Just True)
+            $ long "interactive"
+            <> help "Interactive debug mode (for synthesis)"
+
         grShowVersion <-
           flag False True
             $ long "version"
@@ -248,6 +253,25 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             , show solverTimeoutMillis <> "ms."
             ]
 
+        globalsExampleLimit <-
+          (optional . option (auto @Int))
+            $ long "example-limit"
+            <> (help . unwords)
+            [ "Limit to the number of times synthed terms should be tried on examples before giving up"
+            , "Defaults to"
+            , show exampleLimit <> ""
+            ]
+
+        globalsCartesianSynth <-
+          (optional . option (auto @Int))
+            $ long "cart-synth"
+            <> (help . unwords)
+            [ "Synthesise using the cartesian semiring (for benchmarking)"
+            , "Defaults to"
+            , show cartSynth <> ""
+            ]
+
+
         globalsIncludePath <-
           optional $ strOption
             $ long "include-path"
@@ -288,6 +312,16 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             $ long "ignore-holes"
             <> help "Suppress information from holes (treat holes as well-typed)"
 
+        globalsHaskellSynth <-
+          flag Nothing (Just True)
+           $ long "linear-haskell"
+            <> help "Synthesise Linear Haskell programs"
+
+        globalsSynthHtml <-
+          flag Nothing (Just True)
+           $ long "synth-html"
+            <> help "Output synthesis tree as HTML file"
+
         globalsSubtractiveSynthesis <-
           flag Nothing (Just True)
            $ long "subtractive"
@@ -297,34 +331,6 @@ parseGrConfig = info (go <**> helper) $ briefDesc
           flag Nothing (Just True)
            $ long "alternate"
             <> help "Use alternate mode for synthesis (subtractive divisive, additive naive)"
-
-        globalsAltSynthStructuring <-
-          flag Nothing (Just True)
-           $ long "altsynthstructuring"
-            <> help "Use alternate structuring of synthesis rules"
-
-        globalsGradeOnRule <-
-          flag Nothing (Just True)
-           $ long "gradeonrule"
-            <> help "Use alternate grade-on-rule mode for synthesis"
-
-        globalsSynthTimeoutMillis <-
-          (optional . option (auto @Integer))
-            $ long "synth-timeout"
-            <> (help . unwords)
-            [ "Synthesis timeout in milliseconds (negative for unlimited)"
-            , "Defaults to"
-            , show solverTimeoutMillis <> "ms."
-            ]
-
-        globalsSynthIndex <-
-          (optional . option (auto @Integer))
-            $ long "synth-index"
-            <> (help . unwords)
-            [ "Index of synthesised programs"
-            , "Defaults to"
-            , show synthIndex
-            ]
 
         grRewriter
           <- flag'
@@ -364,6 +370,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             , grShowVersion
             , grGlobals = Globals
               { globalsDebugging
+              , globalsInteractiveDebugging
               , globalsNoColors
               , globalsAlternativeColors
               , globalsNoEval
@@ -383,10 +390,10 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsBenchmarkRaw
               , globalsSubtractiveSynthesis
               , globalsAlternateSynthesisMode
-              , globalsAltSynthStructuring
-              , globalsGradeOnRule
-              , globalsSynthTimeoutMillis
-              , globalsSynthIndex
+              , globalsHaskellSynth
+              , globalsCartesianSynth
+              , globalsSynthHtml
+              , globalsExampleLimit
               , globalsExtensions = []
               }
             }

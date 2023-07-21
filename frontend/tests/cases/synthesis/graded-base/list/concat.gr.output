@@ -1,0 +1,12 @@
+language GradedBase 
+
+data List a = Cons a (List a) | Nil
+
+concat : forall {a : Type} . (List a) %1..∞ -> (List a) %1..∞ ->  List a
+spec 
+    concat (Cons 0 Nil) Nil = (Cons 0 Nil)                                                                          !Cartesian;
+    concat (Cons 0 Nil) (Cons 1 Nil) = (Cons 0 (Cons 1 Nil))                                                        !Cartesian;
+    concat (Cons 0 (Cons 1 (Cons 2 Nil))) (Cons 3 (Cons 4 Nil)) = Cons 0 (Cons 1 (Cons 2 (Cons 3 (Cons 4 Nil))))    !Cartesian;
+    concat % 0..∞
+concat Nil y = y;
+concat (Cons z u) y = (Cons z) ((concat u) y)

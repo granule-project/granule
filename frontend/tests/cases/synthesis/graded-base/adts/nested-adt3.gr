@@ -1,0 +1,6 @@
+language GradedBase
+
+data Test c d where First c d | Second c d
+
+f : forall a b . (Test a (Test a (Test b b))) %1..1 -> ((a, a), (b, b))
+f = ?

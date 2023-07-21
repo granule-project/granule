@@ -173,7 +173,9 @@ evalBinOp op v1 v2 = case op of
       (NumInt n1, NumInt n2) -> Constr () (mkId . show $ n1 == n2) []
       (CharLiteral n1, CharLiteral n2) -> Constr () (mkId . show $ n1 == n2) []
       (NumFloat n1, NumFloat n2) -> Constr () (mkId . show $ n1 == n2) []
-      _ -> evalFail
+      -- This seems very bad
+      (v1, v2) -> Constr () (mkId $ show (show v1 == show v2)) []
+      -- _ -> evalFail
     OpNotEq -> case (v1, v2) of
       (NumInt n1, NumInt n2) -> Constr () (mkId . show $ n1 /= n2) []
       (NumFloat n1, NumFloat n2) -> Constr () (mkId . show $ n1 /= n2) []
@@ -1077,7 +1079,7 @@ buildVec (c:cs) f = Constr () (mkId "Cons") [f $ Ext () $ Chan c, buildVec cs f]
 
 evalDefs :: (?globals :: Globals) => Ctxt RValue -> [Def (Runtime ()) ()] -> IO (Ctxt RValue)
 evalDefs ctxt [] = return ctxt
-evalDefs ctxt (Def _ var _ (EquationList _ _ _ [Equation _ _ _ rf [] e]) _ : defs) = do
+evalDefs ctxt (Def _ var _ _ (EquationList _ _ _ [Equation _ _ _ rf [] e]) _ : defs) = do
     val <- evalIn ctxt e
     case extend ctxt var val of
       Just ctxt -> evalDefs ctxt defs
@@ -1091,7 +1093,7 @@ class RuntimeRep t where
   toRuntimeRep :: t () () -> t (Runtime ()) ()
 
 instance RuntimeRep Def where
-  toRuntimeRep (Def s i rf eqs tys) = Def s i rf (toRuntimeRep eqs) tys
+  toRuntimeRep (Def s i rf spec eqs tys) = Def s i rf Nothing (toRuntimeRep eqs) tys
 
 instance RuntimeRep EquationList where
   toRuntimeRep (EquationList s i rf eqns) = EquationList s i rf (map toRuntimeRep eqns)
@@ -1107,8 +1109,8 @@ instance RuntimeRep Expr where
   toRuntimeRep (LetDiamond s a rf p t e1 e2) = LetDiamond s a rf p t (toRuntimeRep e1) (toRuntimeRep e2)
   toRuntimeRep (TryCatch s a rf e1 p t e2 e3) = TryCatch s a rf (toRuntimeRep e1) p t (toRuntimeRep e2) (toRuntimeRep e3)
   toRuntimeRep (Case s a rf e ps) = Case s a rf (toRuntimeRep e) (map (second toRuntimeRep) ps)
-  toRuntimeRep (Hole s a rf vs) = Hole s a rf vs
   toRuntimeRep (Unpack s a rf tyVar var e1 e2) = Unpack s a rf tyVar var (toRuntimeRep e1) (toRuntimeRep e2)
+  toRuntimeRep (Hole s a rf vs hs) = Hole s a rf vs hs
 
 instance RuntimeRep Value where
   toRuntimeRep (Ext a ()) = error "Bug: Parser generated an extended value case when it shouldn't have"
@@ -1130,7 +1132,7 @@ eval = evalAtEntryPoint (mkId entryPoint)
 
 evalAtEntryPoint :: (?globals :: Globals) => Id -> AST () () -> IO (Maybe RValue)
 evalAtEntryPoint entryPoint (AST dataDecls defs _ _ _) = do
-    bindings <- evalDefs builtIns (map toRuntimeRep defs)
+    bindings <- evalDefs builtIns (map toRuntimeRep defs) 
     case lookup entryPoint bindings of
       Nothing             -> return Nothing
       -- Evaluate inside a promotion of pure if its at the top-level
@@ -1148,5 +1150,5 @@ evalAtEntryPoint entryPoint (AST dataDecls defs _ _ _) = do
 isReducible :: Expr ev a -> Bool
 isReducible (Val _ _ _ (Var _ _)) = True
 isReducible (Val _ _ _ _)    = False
-isReducible (Hole _ _ _ _) = False
+isReducible (Hole _ _ _ _ _) = False
 isReducible _              = True

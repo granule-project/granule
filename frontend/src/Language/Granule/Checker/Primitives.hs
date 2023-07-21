@@ -148,6 +148,7 @@ closedOperation =
     TyOpJoin -> True
     TyOpInterval -> True
     TyOpConverge -> True
+    TyOpImpl     -> True
     _        -> False
 
 coeffectResourceAlgebraOps :: TypeOperator -> Bool
@@ -160,9 +161,10 @@ coeffectResourceAlgebraOps =
     TyOpInterval -> True
     _ -> False
 
+
 tyOps :: TypeOperator -> (Kind, Kind, Kind)
 tyOps = \case
-    TyOpLesserNat -> (kNat, kNat, (TyCon (mkId "Predicate")))
+    TyOpLesserNat -> (kNat, kNat, kpredicate)
     TyOpLesserEqNat -> (kNat, kNat, (TyCon (mkId "Predicate")))
     TyOpLesserEq -> (tyVar "k", tyVar "k", (TyCon (mkId "Predicate")))
     TyOpGreaterNat -> (kNat, kNat, (TyCon (mkId "Predicate")))
@@ -178,6 +180,7 @@ tyOps = \case
     TyOpJoin -> (kNat, kNat, kNat)
     TyOpInterval -> (tyVar "k", tyVar "k", tyVar "k")
     TyOpConverge -> (kNat, kNat, kNat)
+    TyOpImpl    -> (kpredicate, kpredicate, kpredicate)
 
 dataTypes :: [DataDecl]
 dataTypes =
@@ -704,7 +707,7 @@ builtins :: [(Id, TypeScheme)]
         Left err -> error err
 
       unDef :: Def () () -> (Id, TypeScheme)
-      unDef (Def _ name _ _ (Forall _ bs cs t)) = (name, Forall nullSpanBuiltin bs cs t)
+      unDef (Def _ name _ _ _ (Forall _ bs cs t)) = (name, Forall nullSpanBuiltin bs cs t)
 
 -- List of primitives that can't be promoted in CBV
 unpromotables :: [String]

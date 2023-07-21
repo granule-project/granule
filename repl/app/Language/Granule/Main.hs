@@ -334,7 +334,7 @@ relevantMessages ignoreHoles es =
 
 -- Adds a definition into the context (unless it is already there)
 loadInQueue :: (?globals::Globals) => Def () () -> REPLStateIO  ()
-loadInQueue def@(Def _ id _ _ _) = do
+loadInQueue def@(Def _ id _ _ _ _) = do
   st <- get
   if M.member (pretty id) (defns st)
     then return ()
@@ -345,7 +345,7 @@ dumpStateAux m = pDef (M.toList m)
   where
     pDef :: [(String, (Def () (), [String]))] -> [String]
     pDef [] = []
-    pDef ((k,(v@(Def _ _ _ _ ty),dl)):xs) =  (pretty k <> " : " <> pretty ty) : pDef xs
+    pDef ((k,(v@(Def _ _ _ _ _ ty),dl)):xs) =  (pretty k <> " : " <> pretty ty) : pDef xs
 
 extractFreeVars :: Id -> [Id] -> [String]
 extractFreeVars _ []     = []
@@ -380,6 +380,6 @@ buildCheckerState dataDecls = do
 
 buildDef :: Int -> TypeScheme -> Expr () () -> Def () ()
 buildDef rfv ts ex =
-  Def nullSpanInteractive id False
+  Def nullSpanInteractive id False Nothing
    (EquationList nullSpanInteractive id False [Equation nullSpanInteractive id () False [] ex]) ts
   where id = mkId (" repl" <> show rfv)

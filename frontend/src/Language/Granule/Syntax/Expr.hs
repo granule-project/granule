@@ -136,9 +136,10 @@ data ExprF ev a expr value =
      -- try e1 as p : t in e2 catch e3
   | ValF Span a Bool value
   | CaseF Span a Bool expr [(Pattern a, expr)]
-  | HoleF Span a Bool [Id]
+  -- | HoleF Span a Bool [Id]
   | UnpackF Span a Bool Id Id expr expr
      -- unpack <a, x> = e1 in e2
+  | HoleF Span a Bool [Id] (Maybe Hints)
   deriving (Generic, Eq, Rp.Data)
 
 data Operator
@@ -153,6 +154,19 @@ data Operator
   | OpDiv
   | OpMinus
   deriving (Generic, Eq, Ord, Show, Rp.Data)
+
+
+data Hints =
+  Hints {
+    hSubtractive :: Bool,
+    hPruning     :: Bool,
+    hNoTimeout   :: Bool,
+    hLinHaskell  :: Maybe Span, -- The location of the hole in the original Haskell file
+    hTimeout     :: Maybe Int,
+    hIndex       :: Maybe Int
+  }
+  deriving (Generic, Eq, Show, Rp.Data)
+
 
 deriving instance (Show ev, Show a, Show value, Show expr)
     => Show (ExprF ev a value expr)
@@ -222,9 +236,6 @@ pattern Case :: --forall {g :: * -> * -> * -> * -> *} {ev} {a}.
                 -> ExprFix2 ExprF g ev a
 pattern Case sp a rf swexp arms = (ExprFix2 (CaseF sp a rf swexp arms))
 
-pattern Hole :: --forall {g :: * -> * -> * -> * -> *} {ev} {a}.
-                Span -> a -> Bool -> [Id] -> ExprFix2 ExprF g ev a
-pattern Hole sp a rf vs = ExprFix2 (HoleF sp a rf vs)
 
 pattern Unpack :: Span
     -> a
@@ -237,8 +248,17 @@ pattern Unpack :: Span
 pattern Unpack sp a rf tyVar var e1 e2 = ExprFix2 (UnpackF sp a rf tyVar var e1 e2)
 
 
-{-# COMPLETE App, Binop, LetDiamond, TryCatch, Val, Case, Hole, Unpack #-}
 
+pattern Hole :: -- forall {g :: * -> * -> * -> * -> *} {ev} {a}.
+                Span
+                -> a
+                -> Bool
+                -> [Id]
+                -> Maybe Hints
+                -> ExprFix2 ExprF g ev a
+pattern Hole sp a rf vs hs = ExprFix2 (HoleF sp a rf vs hs)
+
+{-# COMPLETE App, Binop, LetDiamond, TryCatch, Val, Case, Hole, Unpack #-}
 
 -- Cannot be automatically derived unfortunately
 instance Functor (Value ev) where
@@ -264,9 +284,9 @@ instance Functor (Expr ev) where
   fmap f (TryCatch s a b e p mt e1 e2) = TryCatch s (f a) b (fmap f e) (fmap f p) mt (fmap f e1) (fmap f e2)
   fmap f (Val s a b val) = Val s (f a) b (fmap f val)
   fmap f (Case s a b expr pats) = Case s (f a) b (fmap f expr) (map (\(p, e) -> (fmap f p, fmap f e)) pats)
-  fmap f (Hole s a b ids)  = Hole s (f a) b ids
   fmap f (Unpack s a rf tyVar var e1 e2) =
     Unpack s (f a) rf tyVar var (fmap f e1) (fmap f e2)
+  fmap f (Hole s a b ids hints)  = Hole s (f a) b ids hints
 
 instance Bifunctor (f ev a)
     => Birecursive (ExprFix2 f g ev a) (ExprFix2 g f ev a) where
@@ -307,7 +327,7 @@ instance Rp.Refactorable (Expr ev a) where
   isRefactored (TryCatch _ _ True _ _ _ _ _) = Just Rp.Replace
   isRefactored (Val _ _ True _) = Just Rp.Replace
   isRefactored (Case _ _ True _ _) = Just Rp.Replace
-  isRefactored (Hole _ _ True _) = Just Rp.Replace
+  isRefactored (Hole _ _ True _ _) = Just Rp.Replace
   isRefactored _ = Nothing
 
   getSpan = convSpan . getFirstParameter
@@ -334,6 +354,10 @@ typedPair left right =
 pairType :: Type -> Type -> Type
 pairType leftType rightType =
     TyApp (TyApp (TyCon (Id "," ",")) leftType) rightType
+
+-- let p = e1 in e2
+letExpr :: Span -> Pattern () -> Expr ev () -> Expr ev () -> Expr ev ()
+letExpr s p e1 e2 = App s () False (Val s () False (Abs () p Nothing e2)) e1
 
 class Substitutable t where
   -- Syntactic substitution of a term into an expression
@@ -444,9 +468,9 @@ instance Term (Expr v a) where
     freeVars (Val _ _ _ e)                = freeVars e
     freeVars (Case _ _ _ e cases)         = freeVars e <> (concatMap (freeVars . snd) cases
                                       \\ concatMap (boundVars . fst) cases)
-    freeVars (Hole _ _ _ vars) = vars
     freeVars (Unpack s a _ tyVar var e1 e2) =
       freeVars e1 <> (freeVars e2 \\ [tyVar, var])
+    freeVars (Hole _ _ _ vars _) = vars
 
     hasHole (App _ _ _ e1 e2) = hasHole e1 || hasHole e2
     hasHole (AppTy _ _ _ e _) = hasHole e
@@ -538,10 +562,10 @@ instance Monad m => Freshenable m (Expr v a) where
      v <- freshen v
      return (Val s a rf v)
 
-    freshen (Hole s a rf vars) = do
+    freshen (Hole s a rf vars hints) = do
       -- Freshen hole variables like they are normal variables
       vars' <- mapM freshenId vars
-      return $ Hole s a rf vars'
+      return $ Hole s a rf vars' hints
 
     freshen (Unpack s a rf tyVar var e1 e2) = do
       e1    <- freshen e1

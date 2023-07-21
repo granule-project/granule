@@ -1,0 +1,19 @@
+language GradedBase
+
+data Test c where First c | Second c
+
+f : forall { a : Type } . (Test (Test (a [3]))) %1..2 -> ((a, (a, a)), (a, (a, a)))
+f (First y) = (
+    (case y of
+      First x10 -> let [x11] = x10 in (x11, (x11, x11));
+      Second x14 -> let [x15] = x14 in (x15, (x15, x15))), 
+    (case y of
+      First z -> let [u] = z in (u, (u, u));
+      Second p -> let [q] = p in (q, (q, q))));
+f (Second x19) = (
+    (case x19 of
+      First x28 -> let [x29] = x28 in (x29, (x29, x29));
+      Second x32 -> let [x33] = x32 in (x33, (x33, x33))), 
+    (case x19 of
+      First x20 -> let [x21] = x20 in (x21, (x21, x21));
+      Second x24 -> let [x25] = x24 in (x25, (x25, x25))))

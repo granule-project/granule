@@ -7,7 +7,7 @@ import Test.Hspec
 import Language.Granule.Context
 import Language.Granule.Checker.DataTypes
 import Language.Granule.Checker.Primitives as Primitives
-import Language.Granule.Syntax.Def
+import Language.Granule.Syntax.Def hiding (Spec)
 import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Type
 import Language.Granule.Checker.Kinding

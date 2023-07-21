@@ -59,6 +59,13 @@ compileAtType s op c1 c2 coeffTy = do
     TyOpGreaterEq -> return $ Con (ApproximatedBy s c2 c1 coeffTy)
     TyOpLesserEqNat -> return $ Con (LtEq s c1 c2)
     TyOpGreaterEqNat -> return $ Con (GtEq s c1 c2)
+    TyOpImpl         -> do
+      p1 <- compileTypeConstraintToConstraint s c1
+      p2 <- compileTypeConstraintToConstraint s c2
+      case (p1, p2) of
+        (Left p1, Left p2) -> return $ Impl [] p1 p2
+        -- Something odd
+        _                  -> return $ Conj []
     _ -> error $ pretty s <> ": I don't know how to compile binary operator " <> pretty op
 
 

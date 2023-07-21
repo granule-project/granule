@@ -20,35 +20,45 @@
 module Language.Granule.Interpreter where
 
 import Control.Exception (SomeException, displayException, try)
-import Control.Monad ((<=<), forM)
+import Control.Monad -- ((<=<), forM, forM_)
+-- import Control.Monad.IO.Class (liftIO)
 import Development.GitRev
 import Data.Char (isSpace)
 import Data.Either (isRight)
-import Data.List (intercalate, isPrefixOf, stripPrefix)
+import Data.List (intercalate, isPrefixOf, stripPrefix, find)
 import Data.List.Extra (breakOn)
 import Data.List.NonEmpty (NonEmpty, toList)
 import qualified Data.List.NonEmpty as NonEmpty (filter)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, fromJust)
 import Data.Version (showVersion)
 import System.Exit
 
 import System.Directory (getAppUserDataDirectory, getCurrentDirectory)
 import System.FilePath (takeFileName)
+import qualified System.Timeout
 import "Glob" System.FilePath.Glob (glob)
 import Options.Applicative
 import Options.Applicative.Help.Pretty (string)
+import Control.Monad.State.Strict
 
 import Language.Granule.Context
 import Language.Granule.Checker.Checker
 import Language.Granule.Checker.Monad (CheckerError(..))
 import Language.Granule.Interpreter.Eval
-import Language.Granule.Syntax.Def (extendASTWith)
+import Language.Granule.Syntax.Def
+import Language.Granule.Syntax.Expr
+import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Preprocessor
 import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Preprocessor.Ascii
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
+import Language.Granule.Synthesis.DebugTree
 import Language.Granule.Synthesis.RewriteHoles
+import Language.Granule.Synthesis.Synth
+import Language.Granule.Synthesis.Monad (Measurement)
+import Language.Granule.Synthesis.LinearHaskell
 import Language.Granule.Utils
 import Language.Granule.Doc
 import Paths_granule_interpreter (version)
@@ -78,14 +88,24 @@ runGrOnFiles globPatterns config = let ?globals = grGlobals config in do
           let fileName = if pwd `isPrefixOf` path then takeFileName path else path
           let ?globals = ?globals{ globalsSourceFilePath = Just fileName } in do
             printInfo $ "Checking " <> fileName <> "..."
-            src <- preprocess
-              (rewriter config)
-              (keepBackup config)
-              path
-              (literateEnvName config)
-            result <- run config src
-            printResult result
-            return result
+            case globalsHaskellSynth ?globals of
+              Just True -> do
+                (ast, hsSrc) <- processHaskell path
+                result <- synthesiseLinearHaskell ast hsSrc
+                case result of
+                  Just srcModified -> do
+                    writeHaskellToFile path srcModified
+                    return $ Right NoEval
+                  _ -> return $ Left $ FatalError "Couldn't synthesise Linear Haskell..."
+              _ -> do
+                src <- preprocess
+                  (rewriter config)
+                  (keepBackup config)
+                  path
+                  (literateEnvName config)
+                result <- run config src
+                printResult result
+                return result
     if all isRight (concat results) then exitSuccess else exitFailure
 
 runGrOnStdIn :: GrConfig -> IO ()
@@ -128,48 +148,54 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
             return $ Right NoEval
 
       -- Normal mode
-      else do
-        result <- try $ parseAndDoImportsAndFreshenDefs input
-        case result of
-          -- Parse error
-          Left (e :: SomeException) -> return . Left . ParseError $ show e
-
-          Right (ast, extensions) ->
-            -- update globals with extensions
-            let ?globals = ?globals { globalsExtensions = extensions } in do
-            -- Print to terminal when in debugging mode:
-            debugM "Pretty-printed AST:" $ pretty ast
-            debugM "Raw AST:" $ show ast
-            -- Check and evaluate
-            checked <- try $ check ast
-            case checked of
-              Left (e :: SomeException) -> return .  Left . FatalError $ displayException e
-              Right (Left errs) -> do
-                let holeErrors = getHoleMessages errs
-                if ignoreHoles && length holeErrors == length errs
-                  then do
-                    printSuccess $ "OK " ++ (blue $ "(but with " ++ show (length holeErrors) ++ " holes)")
-                    return $ Right NoEval
-                  else
-                    case (globalsRewriteHoles ?globals, holeErrors) of
-                      (Just True, holes@(_:_)) ->
-                        runHoleSplitter input config errs holes
-                      _ -> return . Left $ CheckerError errs
-              Right (Right (ast', derivedDefs)) -> do
-                if noEval then do
-                  printSuccess "OK"
+    else do
+      result <- try $ parseAndDoImportsAndFreshenDefs input
+      case result of
+        Left (e :: SomeException) -> return . Left . ParseError $ show e
+        Right (ast, extensions) ->
+          -- update globals with extensions
+          let ?globals = ?globals { globalsExtensions = extensions } in do
+          -- Print to terminal when in debugging mode:
+          debugM "Pretty-printed AST:" $ pretty ast
+          debugM "Raw AST:" $ show ast
+          -- Check and evaluate
+          checked <- try $ check ast
+          case checked of
+            Left (e :: SomeException) -> return .  Left . FatalError $ displayException e
+            Right (Left errs) -> do
+              let holeErrors = getHoleMessages errs
+              if ignoreHoles && length holeErrors == length errs && not (fromMaybe False $ globalsSynthesise ?globals)
+                then do
+                  printSuccess $ "OK " ++ (blue $ "(but with " ++ show (length holeErrors) ++ " holes)")
                   return $ Right NoEval
-                else do
-                  printSuccess "OK, evaluating..."
-                  result <- try $ eval (extendASTWith derivedDefs ast)
-                  case result of
-                    Left (e :: SomeException) ->
-                      return . Left . EvalError $ displayException e
-                    Right Nothing -> if testing
-                      then return $ Right NoEval
-                      else return $ Left NoEntryPoint
-                    Right (Just result) -> do
-                      return . Right $ InterpreterResult result
+                else
+                  case (globalsRewriteHoles ?globals, holeErrors) of
+                    (Just True, holes@(_:_)) ->
+                      case (globalsSynthesise ?globals, length holeErrors == length errs) of
+                        (Just True, True) -> do
+                          holes' <- runSynthesiser config holes ast (GradedBase `elem` globalsExtensions ?globals)
+                          runHoleSplitter input config errs holes'
+                        _ -> runHoleSplitter input config errs holes
+                    _ ->  if fromMaybe False (globalsSynthesise ?globals) && not (null holeErrors) then do
+                            _ <- runSynthesiser config holeErrors ast (GradedBase `elem` globalsExtensions ?globals)
+                            return $ Right NoEval
+                            -- return . Left $ CheckerError errs
+                          else return . Left $ CheckerError errs
+            Right (Right (ast', derivedDefs)) -> do
+              if noEval then do
+                printSuccess "OK"
+                return $ Right NoEval
+              else do
+                printSuccess "OK, evaluating..."
+                result <- try $ eval (extendASTWith derivedDefs ast)
+                case result of
+                  Left (e :: SomeException) ->
+                    return . Left . EvalError $ displayException e
+                  Right Nothing -> if testing
+                    then return $ Right NoEval
+                    else return $ Left NoEntryPoint
+                  Right (Just result) -> do
+                    return . Right $ InterpreterResult result
 
   where
     getHoleMessages :: NonEmpty CheckerError -> [CheckerError]
@@ -194,13 +220,89 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
           rewriteHoles input noImportAst (keepBackup config) holeCases
           case globalsSynthesise ?globals of
             Just True -> do
-              printSuccess "Synthesised"
+              -- printSuccess "Synthesised"
               return $ Right NoEval
             _         -> return . Left . CheckerError $ errs
 
     holeInPosition :: Pos -> CheckerError -> Bool
-    holeInPosition pos (HoleMessage sp _ _ _ _ _) = spanContains pos sp
+    holeInPosition pos (HoleMessage sp _ _ _ _ _ _) = spanContains pos sp
     holeInPosition _ _ = False
+
+
+    runSynthesiser :: (?globals :: Globals) => GrConfig -> [CheckerError] -> AST () () -> Bool -> IO [CheckerError]
+    runSynthesiser config holes ast isGradedBase = do
+      let holesWithEmptyMeasurements = map (\h -> (h, Nothing, 0)) holes
+      res <- synthesiseHoles config ast holesWithEmptyMeasurements isGradedBase
+      let (holes', measurements, _) = unzip3 res
+      when benchmarkingRawData $ do 
+        forM_ measurements (\m -> case m of (Just m') -> putStrLn $ show m' ; _ -> return ()) 
+      return holes'
+
+
+    synthesiseHoles :: (?globals :: Globals) => GrConfig -> AST () () -> [(CheckerError, Maybe Measurement, Int)] -> Bool -> IO [(CheckerError, Maybe Measurement, Int)]
+    synthesiseHoles config _ [] _ = return []
+    synthesiseHoles config astSrc ((hole@(HoleMessage sp goal ctxt tyVars hVars synthCtxt@(Just (cs, defs, (Just defId, spec), index, hints, constructors)) hcases), aggregate, attemptNo):holes) isGradedBase = do
+      -- TODO: this magic number shouldn't here I don't think...
+      let timeout = if interactiveDebugging then maxBound :: Int else 10000000
+      rest <- synthesiseHoles config astSrc holes isGradedBase
+
+      gradedExpr <- if cartSynth > 0 then getGradedExpr config defId else return Nothing
+      let defs' = map (\(x, (Forall tSp con bind ty)) ->
+              if cartSynth > 0
+                then (x,  (Forall tSp con bind (toCart ty)))
+                else (x, (Forall tSp con bind ty))
+                 ) defs
+      let (unrestricted, restricted) = case spec of
+            Just (Spec _ _ _ comps) ->
+              foldr (\(id, compTy) (unres, res) ->
+                case lookup id defs' of
+                  Just tySch -> case compTy of
+                        Just usage -> (unres, (id, (tySch, usage)):res)
+                        _ -> ((id, tySch):unres, res)
+                  _ -> (unres, res)
+                ) ([], []) comps
+            _ -> ([], [])
+      res <- liftIO $ System.Timeout.timeout timeout $
+                synthesiseGradedBase astSrc gradedExpr hole spec synEval hints index unrestricted restricted defId constructors ctxt (Forall nullSpan [] [] goal) cs
+      case res of
+        Just ([], measurement) -> do
+          return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt hcases, measurement, attemptNo) : rest
+        Nothing -> do
+          _ <- if benchmarkingRawData 
+            then return ()
+            else printInfo $ "No programs synthesised - Timeout after: " <> show (fromIntegral timeout / (10^(6 :: Integer)::Double))  <> "s"
+          return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt hcases, Just mempty, attemptNo) : rest
+        Just (programs@(_:_), measurement) -> do
+          when synthHtml $ do
+            printSynthOutput $ uncurry synthTreeToHtml (last programs)
+          return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt [([], fst $ last $ programs)], measurement, attemptNo) : rest
+
+
+    synthesiseHoles config ast (hole:holes) isGradedBase = do
+      rest <- synthesiseHoles config ast holes isGradedBase
+      return $ hole : rest
+
+synEval :: (?globals :: Globals) => AST () () -> IO Bool
+synEval ast = do
+  res <- try $ eval ast
+  case res of
+    Left (e :: SomeException) -> do
+      return False
+    Right (Just (Constr _ idv [])) | mkId "True" == idv -> return True
+    Right _ -> return False
+
+
+getGradedExpr :: (?globals :: Globals) => GrConfig -> Id -> IO (Maybe (Def () ()))
+getGradedExpr config def = do 
+  let file = (fromJust $ globalsSourceFilePath ?globals) <> ".output"
+  src <- preprocess
+          (rewriter config)
+          (keepBackup config)
+          file
+          (literateEnvName config) 
+  ((AST _ defs _ _ _), _) <- parseDefsAndDoImports src
+  return $ find (\(Def _ id _ _ _ _) -> id == def) defs
+
 
 -- | Get the flags embedded in the first line of a file, e.g.
 -- "-- gr --no-eval"
@@ -323,6 +425,10 @@ parseGrConfig = info (go <**> helper) $ briefDesc
           flag False True
             $ long "grdoc"
             <> help "Generated docs for the specified file"
+        globalsInteractiveDebugging <-
+          flag Nothing (Just True)
+            $ long "interactive"
+            <> help "Interactive debug mode (for synthesis)"
 
         grShowVersion <-
           flag False True
@@ -368,6 +474,24 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             [ "SMT solver timeout in milliseconds (negative for unlimited)"
             , "Defaults to"
             , show solverTimeoutMillis <> "ms."
+            ]
+
+        globalsExampleLimit <-
+          (optional . option (auto @Int))
+            $ long "example-limit"
+            <> (help . unwords)
+            [ "Limit to the number of times synthed terms should be tried on examples before giving up"
+            , "Defaults to"
+            , show exampleLimit <> ""
+            ]
+
+        globalsCartesianSynth <-
+          (optional . option (auto @Int))
+            $ long "cart-synth"
+            <> (help . unwords)
+            [ "Synthesise using the cartesian semiring (for benchmarking)"
+            , "Defaults to"
+            , show cartSynth <> ""
             ]
 
         globalsIncludePath <-
@@ -420,33 +544,15 @@ parseGrConfig = info (go <**> helper) $ briefDesc
            $ long "alternate"
             <> help "Use alternate mode for synthesis (subtractive divisive, additive naive)"
 
-        globalsAltSynthStructuring <-
+        globalsHaskellSynth <-
           flag Nothing (Just True)
-           $ long "altsynthstructuring"
-            <> help "Use alternate structuring of synthesis rules"
+           $ long "linear-haskell"
+            <> help "Synthesise Linear Haskell programs"
 
-        globalsGradeOnRule <-
+        globalsSynthHtml <-
           flag Nothing (Just True)
-           $ long "gradeonrule"
-            <> help "Use alternate grade-on-rule mode for synthesis"
-
-        globalsSynthTimeoutMillis <-
-          (optional . option (auto @Integer))
-            $ long "synth-timeout"
-            <> (help . unwords)
-            [ "Synthesis timeout in milliseconds (negative for unlimited)"
-            , "Defaults to"
-            , show solverTimeoutMillis <> "ms."
-            ]
-
-        globalsSynthIndex <-
-          (optional . option (auto @Integer))
-            $ long "synth-index"
-            <> (help . unwords)
-            [ "Index of synthesised programs"
-            , "Defaults to"
-            , show synthIndex
-            ]
+           $ long "synth-html"
+            <> help "Output synthesis tree as HTML file"
 
         grRewriter
           <- flag'
@@ -487,6 +593,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             , grShowVersion
             , grGlobals = Globals
               { globalsDebugging
+              , globalsInteractiveDebugging
               , globalsNoColors
               , globalsAlternativeColors
               , globalsNoEval
@@ -506,10 +613,10 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsBenchmarkRaw
               , globalsSubtractiveSynthesis
               , globalsAlternateSynthesisMode
-              , globalsAltSynthStructuring
-              , globalsGradeOnRule
-              , globalsSynthTimeoutMillis
-              , globalsSynthIndex
+              , globalsCartesianSynth
+              , globalsHaskellSynth
+              , globalsSynthHtml
+              , globalsExampleLimit
               , globalsExtensions = []
               }
             }

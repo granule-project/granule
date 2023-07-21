@@ -126,7 +126,7 @@ sLtTree (SynJoin s s') (SynJoin t t')   = liftM2 (.&&) (sLtTree s t) (sLtTree s'
 sLtTree (SynMerge sb s s') (SynMerge sb' t t') =
   fmap (((.&&)) (sb .== sb')) (liftM2 (.&&) (sLtTree s t) (sLtTree s' t'))
 sLtTree (SynLeaf Nothing) (SynLeaf Nothing) = return sFalse
-sLtTree (SynLeaf (Just n)) (SynLeaf (Just n')) = return $ n .< n'
+sLtTree (SynLeaf (Just n)) (SynLeaf (Just n')) = return sFalse
 sLtTree _ _ = return sFalse
 
 ---- SGrade operations
@@ -354,6 +354,18 @@ symGradeJoin (SExt r isInf) (SExt r' isInf') = do
     ite isInf (SExt r isInf)
       (ite isInf' (SExt r' isInf')
         (SExt join sFalse))
+
+symGradeJoin s@(SLNL n) t@(SLNL m) = return $ SLNL (n `smax` m)
+
+
+-- symGradeJoin s@(SLNL n) t@(SLNL m) =
+--   return $ ite (n .== literal manyRep)
+--                (SLNL $ literal manyRep)
+--                (ite (n .== literal zeroRep .&& m .== literal zeroRep )
+--                     (SLNL $ literal zeroRep)
+--                       (SLNL $ literal oneRep))
+
+
 symGradeJoin s t = solverError $ cannotDo "join" s t
 
 -- | Plus operation on symbolic grades
@@ -480,13 +492,13 @@ symGradeMinus s t = solverError $ cannotDo "minus" s t
 
 
 symGradeHsup :: SGrade -> SGrade -> Symbolic SBool
--- | For LNL grades, when both grades are linear allow pushing, otherwise, pushing is disallowed. 
--- | Check the grades are concrete to disallow hsup on grades which are polymorphic within the LNL semiring. 
+-- | For LNL grades, when both grades are linear allow pushing, otherwise, pushing is disallowed.
+-- | Check the grades are concrete to disallow hsup on grades which are polymorphic within the LNL semiring.
 symGradeHsup (SLNL n) (SLNL m) | isConcrete m, isConcrete n =  return (n .== literal oneRep .&& m .== literal oneRep)
 symGradeHsup (SLNL n) (SLNL m) = return sFalse
 -- | Disallow hsup for polymorphic grades
 symGradeHsup (SUnknown s1) (SUnknown s2) = return sFalse
--- | For all other grades, allow pushing 
+-- | For all other grades, allow pushing
 symGradeHsup (SExt r _) (SExt r' _) = symGradeHsup r r'
 symGradeHsup s1 s2 = return sTrue
 

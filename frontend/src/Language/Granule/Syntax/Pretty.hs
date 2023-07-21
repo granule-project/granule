@@ -189,6 +189,7 @@ instance Pretty TypeOperator where
    TyOpJoin            -> "∨"
    TyOpInterval        -> ".."
    TyOpConverge        -> "#"
+   TyOpImpl            -> "=>"
 
 instance Pretty v => Pretty (AST v a) where
   pretty (AST dataDecls defs imprts hidden name) =
@@ -208,10 +209,20 @@ instance Pretty v => Pretty (AST v a) where
       pretty' = intercalate "\n\n" . map pretty
 
 instance Pretty v => Pretty (Def v a) where
-    pretty (Def _ v _ eqs (Forall _ [] [] t))
+    pretty (Def _ v _ (Just spec) eqs (Forall _ [] [] t))
+      = pretty v <> " : " <> pretty t <> "\n" <> pretty spec <> "\n" <> pretty eqs
+    pretty (Def _ v _ _ eqs (Forall _ [] [] t))
       = pretty v <> " : " <> pretty t <> "\n" <> pretty eqs
-    pretty (Def _ v _ eqs tySch)
+    pretty (Def _ v _ (Just spec) eqs tySch)
+      = pretty v <> " : " <> pretty tySch <> "\n" <> pretty spec <> "\n" <> pretty eqs
+    pretty (Def _ v _ _ eqs tySch)
       = pretty v <> " : " <> pretty tySch <> "\n" <> pretty eqs
+
+instance Pretty v => Pretty (Spec v a) where
+    pretty (Spec _ _ exs comps) = "spec" <> "\n" <> (intercalate "\n\t" $ map pretty exs) <> "\t" <> (intercalate "," $ map prettyComp comps)
+
+instance Pretty v => Pretty (Example v a) where
+    pretty (Example input output _) = pretty input <> " = " <> pretty output
 
 instance Pretty v => Pretty (EquationList v a) where
   pretty (EquationList _ v _ eqs) = intercalate ";\n" $ map pretty eqs
@@ -305,8 +316,9 @@ instance Pretty (Value v a) => Pretty (Expr v a) where
   pretty (Case _ _ _ e ps) = "\n    (case " <> pretty e <> " of\n      "
                       <> intercalate ";\n      " (map (\(p, e') -> pretty p
                       <> " -> " <> pretty e') ps) <> ")"
-  pretty (Hole _ _ _ []) = "?"
-  pretty (Hole _ _ _ vs) = "{!" <> unwords (map pretty vs) <> "!}"
+  pretty (Hole _ _ _ [] Nothing) = "?"
+  pretty (Hole _ _ _ [] (Just hints)) = "{!" <> (pretty hints) <> " !}"
+  pretty (Hole _ _ _ vs _) = "{!" <> unwords (map pretty vs) <> "!}"
 
   pretty (Unpack _ _ _ tyVar var e1 e2) =
     "unpack <" <> pretty tyVar <> ", " <> pretty var <> "> = " <> pretty e1 <> " in " <> pretty e2
@@ -327,6 +339,13 @@ instance Pretty Operator where
 ticks :: String -> String
 ticks x = "`" <> x <> "`"
 
+prettyComp :: (?globals :: Globals) => (Id, Maybe Type) -> String
+prettyComp (var, Just ty) = pretty var <> " % " <> pretty ty
+prettyComp (var, Nothing) = pretty var
+
+instance {-# OVERLAPPABLE #-} Show a => Pretty a where
+  pretty = show
+
 instance Pretty Span where
   pretty
     | testing = const "(location redacted)"
@@ -338,5 +357,21 @@ instance Pretty Span where
 instance Pretty Pos where
     pretty (l, c) = show l <> ":" <> show c
 
-instance {-# OVERLAPPABLE #-} Show a => Pretty a where
-    pretty = show
+instance Pretty Hints where
+    pretty (Hints hSub hPrun hNoTime hLin hTime hIndex) = ""
+      --  \case 
+
+      -- HSubtractive      -> " -s"
+      -- HPruning          -> " -p"
+      -- HNoMaxIntro       -> " -i" 
+      -- HMaxIntro x       -> " -i " <> show x
+      -- HNoMaxElim        -> " -e"
+      -- HMaxElim x        -> " -e " <> show x
+      -- HSynNoTimeout     -> " -t"
+      -- HSynTimeout x     -> " -t " <> show x
+      -- HSynIndex x       -> " -n " <> show x
+      -- HUseAllDefs       -> " -d"
+      -- HUseDefs ids      -> " -d " <> (unwords $ map pretty ids)
+      -- HUseRec           -> " -r"
+      -- HGradeOnRule      -> " -g"
+

@@ -1,0 +1,7 @@
+data Either a b = Left a | Right b
+
+fromEither : forall {a : Type, b : Type, c : Type} .
+            (a % 1..1 -> c) % 0..1 ->
+            (b % 1..1 -> c) % 0..1 ->
+            Either a b % 1..1 -> c
+fromEither = ?

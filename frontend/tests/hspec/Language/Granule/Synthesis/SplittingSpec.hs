@@ -68,6 +68,6 @@ runSplitter ty dataCons tyCons tyVarCtxt ctxt boundIds = do
   , dataConstructors = concatMap snd dataCons
   , typeConstructors = tyCons
   , tyVarContext     = tyVarCtxt
-  , equationTy       = Just ty }
+  , splittingTy       = Just ty }
   (Right (ids, res), _) <- runChecker st (generateCases nullSpan dataCons ctxt boundIds)
   return (ids, map fst res)

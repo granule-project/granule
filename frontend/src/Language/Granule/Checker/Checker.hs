@@ -60,7 +60,6 @@ import Language.Granule.Syntax.Type hiding (Polarity)
 
 import Language.Granule.Synthesis.Deriving
 import Language.Granule.Synthesis.Splitting
-import qualified Language.Granule.Synthesis.Synth as Syn
 
 import Language.Granule.Utils
 
@@ -77,12 +76,12 @@ check ast@(AST _ _ _ hidden _) = do
       debugHeadingM "Register data constructors"
       _    <- runAll registerDataConstructors (Primitives.dataTypes <> dataDecls)
       defs <- runAll kindCheckDef defs
-      let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
-      defs <- runAll (checkDef defCtxt) defs
+      let defCtxt = map (\(Def _ name _ _ _ tys) -> (name, tys)) defs
+      defs' <- runAll (checkDef defCtxt) defs
       -- Add on any definitions computed by the type checker (derived)
       st <- get
       let derivedDefs = map (snd . snd) (derivedDefinitions st)
-      pure $ (AST dataDecls defs imports hidden name, derivedDefs))
+      pure $ (AST dataDecls defs' imports hidden name, derivedDefs))
 
 -- Synthing the type of a single expression in the context of an asy
 synthExprInIsolation :: (?globals :: Globals)
@@ -96,7 +95,7 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
       _    <- runAll registerDataConstructors (Primitives.dataTypes ++ dataDecls)
       defs <- runAll kindCheckDef defs
 
-      let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
+      let defCtxt = map (\(Def _ name _ _ _ tys) -> (name, tys)) defs
 
       -- also check the defs
       defs <- runAll (checkDef defCtxt) defs
@@ -146,22 +145,25 @@ checkDef :: (?globals :: Globals)
          => Ctxt TypeScheme  -- context of top-level definitions
          -> Def () ()        -- definition
          -> Checker (Def () Type)
-checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
+checkDef defCtxt (Def s defName rf spec el@(EquationList _ _ _ equations)
                  tys@(Forall s_t foralls constraints ty)) = do
     -- duplicate forall bindings
     case duplicates (map (sourceName . fst) foralls) of
       [] -> pure ()
       (d:ds) -> throwError $ fmap (DuplicateBindingError s_t) (d :| ds)
 
+    -- _ <- checkSpec defCtxt spec ty
+
     -- Clean up knowledge shared between equations of a definition
-    modify (\st -> st { guardPredicates = [[]]
+    modify (\st -> st { currentDef = (Just defName, spec)
+                      , guardPredicates = [[]]
                       , patternConsumption = initialisePatternConsumptions equations } )
 
     elaboratedEquations :: [Equation () Type] <- runAll elaborateEquation equations
 
     checkGuardsForExhaustivity s defName ty equations
     let el' = el { equations = elaboratedEquations }
-    pure $ Def s defName rf el' tys
+    pure $ Def s defName rf Nothing el' tys
   where
     elaborateEquation :: Equation () () -> Checker (Equation () Type)
     elaborateEquation equation = do
@@ -218,6 +220,35 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
 
         pure elaboratedEq
 
+-- checkSpec :: (?globals :: Globals) =>
+checkSpec ::
+     Ctxt TypeScheme
+  -> Maybe (Spec () ())
+  -> Type
+  -> Checker (Maybe (Spec () Type))
+checkSpec defCtxt Nothing defTy = return Nothing
+checkSpec defCtxt (Just (Spec span refactored examples components)) defTy = undefined -- do
+
+  -- elaboratedExamples :: [Example () Type] <- runAll elaborateExample examples
+
+  -- forM_ components (\(ident, _) -> do
+  --     case lookup ident defCtxt of
+  --         Just _ -> return ()
+  --         _ -> throw UnboundVariableError{ errLoc = span, errId = ident})
+
+  -- return (Just (Spec span refactored elaboratedExamples components))
+
+  -- where
+  --   elaborateExample :: Example () () -> Checker (Example () Type)
+  --   elaborateExample (Example input output) = do
+  --     (_, _, elaboratedInput) <- checkExpr defCtxt [] Positive True (resultType defTy) input
+  --     (_, _, elaboratedOutput) <- checkExpr defCtxt [] Positive True (resultType defTy) output
+  --     return (Example elaboratedInput elaboratedOutput)
+
+
+
+
+
 checkEquation :: (?globals :: Globals) =>
      Ctxt TypeScheme -- context of top-level definitions
   -> Id              -- Name of the definition
@@ -262,11 +293,11 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ binders
 
   -- The type of the equation, after substitution.
   equationTy' <- substitute subst defTy
-  let equationTy = calculateequationTy patternGam equationTy'
+  let splittingTy = calculateSplittingTy patternGam equationTy'
 
   -- Store the equation type in the state in case it is needed when splitting
   -- on a hole.
-  modify (\st -> st { equationTy = Just equationTy})
+  modify (\st -> st { splittingTy = Just splittingTy})
 
   --patternGam <- substitute subst patternGam
   debugM "context in checkEquation 1" $ (show patternGam)
@@ -334,8 +365,8 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ binders
     -- and use these to build a function from these sub-patterns to
     -- the return type of our input type.
 
-    calculateequationTy :: [(Id, Assumption)] -> Type -> Type
-    calculateequationTy patternGam ty =
+    calculateSplittingTy :: [(Id, Assumption)] -> Type -> Type
+    calculateSplittingTy patternGam ty =
       case patternGam of
         [] -> ty
         (_:_) ->
@@ -389,14 +420,18 @@ checkExpr :: (?globals :: Globals)
           -> Checker (Ctxt Assumption, Substitution, Expr () Type)
 
 -- Hit an unfilled hole
-checkExpr defs ctxt _ _ t (Hole s _ _ vars) = do
+checkExpr defs ctxt _ _ t (Hole s _ _ vars hints) = do
   debugM "checkExpr[Hole]" (pretty s <> " : " <> pretty t)
 
+  st <- get
   let boundVariables = map fst $ filter (\ (id, _) -> sourceName id `elem` map sourceName vars) ctxt
   let unboundVariables = filter (\ x -> isNothing (lookup x ctxt)) vars
 
   -- elaborated hole
-  let hexpr = Hole s t False vars
+  let hexpr = Hole s () False vars hints
+  let hindex = case hints of
+        Just hints' -> fromMaybe 1 $ hIndex hints'
+        _ -> 1
 
   case unboundVariables of
     (v:_) -> throw UnboundVariableError{ errLoc = s, errId = v }
@@ -405,24 +440,34 @@ checkExpr defs ctxt _ _ t (Hole s _ _ vars) = do
       -- Running in synthesis mode
       case globalsSynthesise ?globals of
         Just True -> do
-          synthedExpr <- do
-              -- Check to see if this hole is something we are interested in
-              case globalsHolePosition ?globals of
-                -- Synth everything mode
-                Nothing -> programSynthesise defs ctxt vars t
-                Just pos ->
-                  if spanContains pos s
-                    -- This is a hole we want to synth on
-                    then programSynthesise defs ctxt vars t
-                    -- This is not a hole we want to synth on
-                    else  return hexpr
 
-          st <- get
+          relevantConstructors <- do
+            let snd3 (a, b, c) = b
+                tripleToTup (a, b, c) = (a, b)
+            st <- get
+            let pats = map (second snd3) (typeConstructors st)
+            mapM (\ (a, b) -> do
+              dc <- mapM (lookupDataConstructor nullSpanNoFile) b
+              let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
+              return (a, ctxtMap tripleToTup sd)) pats
+
           let holeVars = map (\id -> (id, id `elem` boundVariables)) (map fst ctxt)
-          throw $ HoleMessage s t ctxt (tyVarContext st) holeVars [([], synthedExpr)]
+          -- Check to see if this hole is something we are interested in
+          case globalsHolePosition ?globals of
+            -- Synth everything mode
+            Nothing -> do
+              throw $ HoleMessage s t ctxt (tyVarContext st) holeVars (Just (st, defs, currentDef st, hindex, hints, relevantConstructors)) [([], hexpr)]
+            Just pos ->
+              if spanContains pos s
+              -- This is a hole we want to synth on
+              then do
+                throw $ HoleMessage s t ctxt (tyVarContext st) holeVars (Just (st, defs, currentDef st, hindex, hints, relevantConstructors)) [([], hexpr)]
+                -- This is not a hole we want to synth on
+              else
+                throw $ HoleMessage s t ctxt (tyVarContext st) holeVars Nothing [([], hexpr)]
+
 
         _ -> do
-              st <- get
               let pats = map (second snd3) (typeConstructors st)
               constructors <- mapM (\ (a, b) -> do
                   dc <- mapM (lookupDataConstructor s) b
@@ -433,11 +478,13 @@ checkExpr defs ctxt _ _ t (Hole s _ _ vars) = do
               -- If we are in synthesise mode, also try to synthesise a
               -- term for each case split goal *if* this is also a hole
               -- of interest
-              let casesWithHoles = zip (map fst cases) (repeat (Hole s t True []))
+              let casesWithHoles = zip (map fst cases) (repeat (Hole s () True [] Nothing))
 
               let holeVars = map (\id -> (id, id `elem` boundVariables)) (map fst ctxt)
-              throw $ HoleMessage s t ctxt (tyVarContext st) holeVars casesWithHoles
-
+              throw $ HoleMessage s t ctxt (tyVarContext st) holeVars Nothing casesWithHoles
+            -- _ -> do
+            --   let holeVars = map (\id -> (id, id `elem` boundVariables)) (map fst ctxt)
+              -- throw $ HoleMessage s t ctxt (tyVarContext st) holeVars Nothing [([], hexpr)]
 
 -- Checking of constants
 checkExpr _ _ _ _ ty@(TyCon c) (Val s _ rf (NumInt n))   | internalName c == "Int" = do
@@ -691,8 +738,17 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
   ixed <- isIndexedType guardTy
   when ixed (throw $ CaseOnIndexedType s guardTy)
 
-  -- Determine if matching on type with more than one constructor
+  -- (DEBUGGING) Determine if matching on type with more than one constructor
   isPolyShaped <- polyShaped guardTy
+
+  -- if graded base
+  scrutinee <-
+    if usingExtension GradedBase
+      then do
+        s <- freshTyVarInContext (mkId "s") kcoeffect
+        r <- freshTyVarInContext (mkId "scrutinee") (TyVar s)
+        return (Just (TyVar r, TyVar s))
+      else return Nothing
 
   newCaseFrame
 
@@ -702,7 +758,8 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
 
       -- Build the binding context for the branch pattern
       newConjunct
-      (patternGam, eVars, subst, elaborated_pat_i, _) <- ctxtFromTypedPattern s InCase guardTy pat_i NotFull
+      (patternGam, eVars, subst, elaborated_pat_i, _) <-
+        ctxtFromTypedPattern' scrutinee s InCase guardTy pat_i NotFull
       newConjunct
 
       -- Checking the case body
@@ -743,7 +800,10 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
         -- Anything that was bound in the pattern but not used correctly
         p:ps -> illLinearityMismatch s (p:|ps)
 
+  let (branchCtxts, substs, elaboratedCases) = unzip3 branchCtxtsAndSubst
+
   -- All branches must be possible
+  applySubstitutionsOnGuardPredicates s substs
   checkGuardsForImpossibility s (mkId "case") []
 
   -- Pop from stacks related to case
@@ -751,15 +811,21 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
   popCaseFrame
 
   -- Find the upper-bound of the contexts
-  let (branchCtxts, substs, elaboratedCases) = unzip3 branchCtxtsAndSubst
   (branchesGam, tyVars) <- foldM (\(ctxt, vars) ctxt' -> do
     (ctxt'', vars') <- joinCtxts s ctxt ctxt'
     return (ctxt'', vars ++ vars')) (head branchCtxts, []) (tail branchCtxts)
 
   -- Contract the outgoing context of the guard and the branches (joined)
-  g <- ctxtPlus s branchesGam guardGam
+  (g, substExtra) <-
+    if usingExtension GradedBase
+      then do
+        -- r * guardGam + branchesGam
+        (guardGam', subst) <- ctxtMult s (fst $ fromJust scrutinee) guardGam
+        ctxtPlus s branchesGam guardGam' <.*> (return subst)
 
-  subst <- combineManySubstitutions s (substG : substs)
+      else ctxtPlus s branchesGam guardGam <.*> return []
+
+  subst <- combineManySubstitutions s (substG : substExtra : substs)
 
   -- Exisentially quantify any ty variables generated by joining contexts
   mapM_ (uncurry existentialTopLevel) tyVars
@@ -803,7 +869,7 @@ synthExpr :: (?globals :: Globals)
           -> Checker (Type, Ctxt Assumption, Substitution, Expr () Type)
 
 -- Hit an unfilled hole
-synthExpr _ ctxt _ (Hole s _ _ _) = do
+synthExpr _ ctxt _ (Hole s _ _ _ _) = do
   debugM "synthExpr[Hole]" (pretty s)
   throw $ InvalidHolePosition s
 
@@ -897,8 +963,18 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
   ixed <- isIndexedType guardTy
   when ixed (throw $ CaseOnIndexedType s guardTy)
 
-  -- Determine if matching on type with more than one constructor
+  -- (DEBUGGING) Determine if matching on type with more than one constructor
   isPolyShaped <- polyShaped guardTy
+
+  -- if graded base
+  scrutinee <-
+    if usingExtension GradedBase
+      then do
+        s <- freshTyVarInContext (mkId "s") kcoeffect
+        r <- freshTyVarInContext (mkId "scrutinee") (TyVar s)
+        return (Just (TyVar r, TyVar s))
+      else return Nothing
+
 
   newCaseFrame
 
@@ -906,7 +982,8 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
     forM cases $ \(pati, ei) -> do
       -- Build the binding context for the branch pattern
       newConjunct
-      (patternGam, eVars, subst, elaborated_pat_i, _) <- ctxtFromTypedPattern s InCase guardTy pati NotFull
+      (patternGam, eVars, subst, elaborated_pat_i, _) <-
+        ctxtFromTypedPattern' scrutinee s InCase guardTy pati NotFull
       newConjunct
 
       -- combine ghost variables from pattern using converge/meet
@@ -940,14 +1017,15 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
                     , (elaborated_pat_i, elaborated_i))
          p:ps -> illLinearityMismatch s (p:|ps)
 
-  -- All branches must be possible
-  checkGuardsForImpossibility s (mkId "case") []
-
-  popCaseFrame
-
   let (branchTys, branchCtxtsAndSubsts, elaboratedCases) = unzip3 branchTysAndCtxtsAndSubsts
   let (branchCtxts, branchSubsts) = unzip branchCtxtsAndSubsts
   let branchTysAndSpans = zip branchTys (map (getSpan . snd) cases)
+
+  -- All branches must be possible
+  applySubstitutionsOnGuardPredicates s branchSubsts
+  checkGuardsForImpossibility s (mkId "case") []
+
+  popCaseFrame
 
   -- Finds the upper-bound return type between all branches
   (branchType, substBT) <-
@@ -972,9 +1050,16 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
     return (ctxt'', vars ++ vars')) (head branchCtxts, []) (tail branchCtxts)
 
   -- Contract the outgoing context of the guard and the branches (joined)
-  gamNew <- ctxtPlus s branchesGam guardGam
+  (gamNew, gamNewSubst) <-
+      if usingExtension GradedBase
+      then do
+        -- r * guardGam + branchesGam
+        (guardGam', subst) <- ctxtMult s (fst $ fromJust scrutinee) guardGam
+        ctxtPlus s branchesGam guardGam' <.*> (return subst)
 
-  subst <- combineManySubstitutions s (substBT : substG : branchSubsts)
+      else ctxtPlus s branchesGam guardGam <.*> return []
+
+  subst <- combineManySubstitutions s (substBT : substG : gamNewSubst : branchSubsts)
 
   -- Exisentially quantify any ty variables generated by joining contexts
   mapM_ (uncurry existentialTopLevel) tyVars
@@ -1200,7 +1285,7 @@ synthExpr defs gam pol (App s _ rf e1 e2) | usingExtension GradedBase = do
       when unpr (throw $ UnpromotableError{errLoc = s, errTy = sig })
 
       -- Check the argument against `sig`
-      (gam2, subst2, elab_e2) <- checkExpr defs gam (flipPol pol) False sig e2
+      (gam2, subst2, elab_e2) <- checkExpr defs gam pol False sig e2
 
       let r = case grade of
                 Just r  -> r
@@ -1914,13 +1999,13 @@ relateByLUB _ (_, Linear _) (_, Linear _) (_, Linear _) = return []
 -- Discharged coeffect assumptions
 relateByLUB s (_, Discharged _ c1) (_, Discharged _ c2) (_, Discharged _ c3) = do
   (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c1 c2
-  addConstraint (Lub s (inj1 c1) (inj2 c2) c3 kind)
+  addConstraint (Lub s (inj1 c1) (inj2 c2) c3 kind True)
   return subst
 
 -- TODO: handle new ghost variables
 relateByLUB s (_, Ghost c1) (_, Ghost c2) (_, Ghost c3) = do
   (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c1 c2
-  addConstraint (Lub s (inj1 c1) (inj2 c2) c3 kind)
+  addConstraint (Lub s (inj1 c1) (inj2 c2) c3 kind True)
   return subst
 
 -- Linear binding and a graded binding (likely from a promotion)
@@ -2142,27 +2227,6 @@ freshenTySchemeForVar s rf id tyScheme = do
   return (ty', [], [], elaborated)
 
 
--- Hook into the synthesis engine.
-programSynthesise :: (?globals :: Globals) =>
-  Ctxt TypeScheme -> Ctxt Assumption -> [Id] -> Type -> Checker (Expr () Type)
-programSynthesise defs ctxt vars ty = do
-  currentState <- get
-  -- Run the synthesiser in this context
-  let mode = if alternateSynthesisMode then Syn.Alternative else Syn.Default
-  synRes <-
-  -- TODO: needs fixing, there is some part I am missing here for defs (which is now undefined)
-      liftIO $ Syn.synthesiseProgram undefined (mkId "")
-                  (if subtractiveSynthesisMode then (Syn.Subtractive mode) else (Syn.Additive mode))
-                  ctxt [] (Forall nullSpan [] [] ty) currentState
-
-  case synRes of
-    -- Nothing synthed, so create a blank hole instead
-    []    ->
-      return (Hole nullSpan ty True [])
-    ((_, _, _):_) ->
-      case last synRes of
-        (t, _, _) -> return t
-
 -- Classified those expressions which are resource allocators
 resourceAllocator :: Expr a t -> Bool
 resourceAllocator (Val _ _ _ (Var _ p)) =
@@ -2180,3 +2244,13 @@ resourceAllocator (Case _ _ _ eg cases) =
 resourceAllocator (TryCatch _ _ _ e1 _ _ e2 e3) =
     resourceAllocator e1 || resourceAllocator e2 || resourceAllocator e3
 resourceAllocator _ = False
+
+applySubstitutionsOnGuardPredicates :: (?globals::Globals) => Span -> [Substitution] -> Checker ()
+applySubstitutionsOnGuardPredicates s substs = do
+  modifyM (\st -> do
+                subst <- combineManySubstitutions s substs
+                guardPreds' <- mapM (mapM (\((ctxt, pred), sp) -> do
+                  ctxt' <- substitute subst ctxt
+                  pred' <- substitute subst pred
+                  return ((ctxt', pred'), sp))) (guardPredicates st)
+                return (st { guardPredicates = guardPreds' }))
