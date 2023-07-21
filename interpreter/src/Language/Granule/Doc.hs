@@ -13,10 +13,11 @@ import Language.Granule.Utils
 import System.Directory
 import System.FilePath
 import Data.Text hiding
-   (map, concatMap, filter, lines, take, takeWhile, dropWhile, drop, break, isPrefixOf, reverse)
+   (map, concatMap, filter, lines, take, takeWhile, dropWhile
+   , drop, break, isPrefixOf, reverse, splitAt, all)
 import qualified Data.Text as Text
 
-import Data.List (isPrefixOf, sort)
+import Data.List (isPrefixOf, sort, sortOn)
 import Data.Version (showVersion)
 import Paths_granule_interpreter (version)
 
@@ -72,14 +73,25 @@ generateModulePage' modName title input ast =
    where
     inputLines = lines input
     content = (section "Meta-data" preamble)
-           <> (section "Data types" (Text.concat dataDefs))
-           <> (section "Definitions" (Text.concat defs))
+           <> (section "Contents" (Text.concat (map prettyDef topLevelDefs)))
     preamble = parsePreamble inputLines
-    dataDefs = map (codeDiv . pack . pretty) (dataTypes ast)
-    defs     = map prettyDef (definitions ast)
-    prettyDef d =
-         (codeDiv $ pack $ pretty (defId d) <> " : " <> pretty (defTypeScheme d))
-      <> (descDiv $ scrapeDoc inputLines (defSpan d))
+
+    -- Combine the data type and function definitions together
+    topLevelDefs = sortOn startLine $ (map Left (dataTypes ast)) <> (map Right (definitions ast))
+    startLine = fst . startPos . defSpan'
+    defSpan' (Left dataDecl) = dataDeclSpan dataDecl
+    defSpan' (Right def)     = defSpan def
+
+    prettyDef (Left d) =
+      let (docs, heading) = scrapeDoc inputLines (dataDeclSpan d)
+      in  (maybe "" (tag "h3") heading)
+       <> (codeDiv . pack . pretty $ d)
+       <> (descDiv docs)
+    prettyDef (Right d) =
+      let (docs, heading) = scrapeDoc inputLines (defSpan d)
+      in  (maybe "" (tag "h3") heading)
+       <> (codeDiv $ pack $ pretty (defId d) <> " : " <> pretty (defTypeScheme d))
+       <> (descDiv docs)
 
 -- Generates the text of the index
 generateIndexPage :: IO Text
@@ -129,14 +141,23 @@ generateNavigatorText ctxt = do
 -- Helpers for manipulating raw source
 
 -- Scape comments preceding a particular point if they start with ---
-scrapeDoc :: [String] -> Span -> Text
+scrapeDoc :: [String] -> Span -> (Text, Maybe Text)
 scrapeDoc inputLines span =
-    Text.concat (reverse relevantLinesFormatted)
+    (Text.concat (reverse relevantLinesFormatted), heading)
   where
     relevantLinesFormatted = map (pack . drop 3) relevantLines
     relevantLines = takeWhile ("--- " `isPrefixOf`) (dropWhile (== "") (reverse before))
     (before, _) = Prelude.splitAt (line - 1) inputLines
     (line, _) = startPos span
+
+    --- See if we have any headings here.
+    lessRelevantLines = dropWhile ("--- " `isPrefixOf`) (dropWhile (== "") (reverse before))
+    lessRelevantLines' =
+       dropWhile (\x -> x == "" || all (== ' ') x || ("--" `isPrefixOf` x && not ("--- #" `isPrefixOf` x))) lessRelevantLines
+    heading =
+      case lessRelevantLines' of
+        (x:_) | "--- #" `isPrefixOf` x -> let (_, heading) = splitAt 5 x in Just $ pack heading
+        _                              -> Nothing
 
 
 -- Parse the preamble from the front of a module file (if present)

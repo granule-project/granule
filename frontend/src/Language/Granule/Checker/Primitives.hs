@@ -257,6 +257,8 @@ builtinSrc = [r|
 
 import Prelude
 
+--- # Core linear functional combinators
+
 --- Unit type
 data () = ()
 
@@ -272,7 +274,7 @@ compose = BUILTIN
 -- Defined in the interpreter as \g -> \f -> \x -> g (f x)
 
 --------------------------------------------------------------------------------
--- Arithmetic
+--- # Arithmetic
 --------------------------------------------------------------------------------
 
 --- Integer division
@@ -280,7 +282,7 @@ div : Int -> Int -> Int
 div = BUILTIN
 
 --------------------------------------------------------------------------------
--- Graded Possiblity
+--- # Graded Possiblity
 --------------------------------------------------------------------------------
 
 --- Inject into a computation for any graded monad
@@ -296,7 +298,7 @@ fromPure
 fromPure = BUILTIN
 
 --------------------------------------------------------------------------------
--- I/O
+--- # I/O
 --------------------------------------------------------------------------------
 
 --- IO effect operation information
@@ -316,14 +318,14 @@ toStderr : String -> () <{Stderr}>
 toStderr = BUILTIN
 
 --------------------------------------------------------------------------------
--- Exceptions
+--- # Exceptions
 --------------------------------------------------------------------------------
 
 throw : forall {a : Type, k : Coeffect} . (a [0 : k]) <MayFail>
 throw = BUILTIN
 
 --------------------------------------------------------------------------------
--- Conversions
+--- # Conversions
 --------------------------------------------------------------------------------
 
 showChar : Char -> String
@@ -342,7 +344,7 @@ readInt : String -> Int
 readInt = BUILTIN
 
 --------------------------------------------------------------------------------
--- Thread / Sessions
+--- # Concurrency and Session Types
 --------------------------------------------------------------------------------
 
 fork
@@ -385,19 +387,6 @@ offer : forall {p1 p2 : Protocol, a : Type}
       . (LChan p1 -> a) -> (LChan p2 -> a) -> LChan (Offer p1 p2) -> a
 offer = BUILTIN
 
-gsend
-  : forall {a : Type, s : Protocol}
-  . Chan (Send a s) -> a -> (Chan s) <Session>
-gsend = BUILTIN
-
-grecv
-  : forall {a : Type, s : Protocol}
-  . Chan (Recv a s) -> (a, Chan s) <Session>
-grecv = BUILTIN
-
-gclose : Chan End -> () <Session>
-gclose = BUILTIN
-
 -- trace : String -> () <>
 -- trace = BUILTIN
 
@@ -417,8 +406,27 @@ forkReplicateExactly : forall {p : Protocol, n : Nat} . {ReceivePrefix p}
                   => (LChan p -> ()) [n] ->  N n -> Vec n (LChan (Dual p))
 forkReplicateExactly = BUILTIN
 
+---------------------------------
+--- # Concurrency primitives using side effects
+----------------------------------
+
+gsend
+  : forall {a : Type, s : Protocol}
+  . Chan (Send a s) -> a -> (Chan s) <Session>
+gsend = BUILTIN
+
+grecv
+  : forall {a : Type, s : Protocol}
+  . Chan (Recv a s) -> (a, Chan s) <Session>
+grecv = BUILTIN
+
+gclose : Chan End -> () <Session>
+gclose = BUILTIN
+
+
+
 --------------------------------------------------------------------------------
--- File Handles
+--- # File Handles
 --------------------------------------------------------------------------------
 
 data Handle : HandleType -> Type where
@@ -464,9 +472,8 @@ isEOF = BUILTIN
 isEOF' : Handle RW -> (Handle RW, Bool) <{Read,IOExcept}>
 isEOF' = BUILTIN
 
-
 --------------------------------------------------------------------------------
--- Char
+--- # Char
 --------------------------------------------------------------------------------
 
 -- module Char
@@ -489,7 +496,7 @@ moveString : String -> String []
 moveString = BUILTIN
 
 --------------------------------------------------------------------------------
--- String manipulation
+--- # String manipulation
 --------------------------------------------------------------------------------
 
 stringAppend : String → String → String
@@ -555,7 +562,7 @@ stringSnoc = BUILTIN
 -- copyArray = BUILTIN
 
 --------------------------------------------------------------------------------
--- Cost
+--- # Cost
 --------------------------------------------------------------------------------
 
 tick : () <1>
@@ -593,7 +600,7 @@ tick = BUILTIN
 -- freePtr = BUILTIN
 
 --------------------------------------------------------------------------------
--- Uniqueness monadic operations
+--- # Uniqueness modality
 --------------------------------------------------------------------------------
 
 uniqueReturn
@@ -627,7 +634,7 @@ trustedBind
 trustedBind = BUILTIN
 
 --------------------------------------------------------------------------------
--- Mutable arrays
+--- # Mutable and immutable array operations
 --------------------------------------------------------------------------------
 
 newFloatArray : Int -> *FloatArray
@@ -658,7 +665,7 @@ deleteFloatArray : *FloatArray -> ()
 deleteFloatArray = BUILTIN
 
 --------------------------------------------------------------------------------
--- Benchmarking
+--- # Benchmarking
 --------------------------------------------------------------------------------
 
 data BenchList where BenchGroup String BenchList BenchList ; Bench Int String (Int [] -> () <{Stdout}>) BenchList; Done
@@ -667,13 +674,14 @@ mkIOBenchMain : BenchList -> () <>
 mkIOBenchMain = BUILTIN
 
 ---------------------
+--- # Sensitivity
+---------------------
 
 scale : (k : Float) -> DFloat [k] -> DFloat
 scale = BUILTIN
 
-
 --------------------------------------------------------------------------------
--- Capabilities
+--- # Capabilities
 --------------------------------------------------------------------------------
 
 data Capability = Console | TimeDate
@@ -688,11 +696,11 @@ cap = BUILTIN
 -- with : forall {a b : Type} . a [0..1] -> b [0..1] -> a & b
 -- with = BUILTIN
 
-projL : forall {a b : Type} . a & b -> a
-projL = BUILTIN
+-- projL : forall {a b : Type} . a & b -> a
+-- projL = BUILTIN
 
-projR : forall {a b : Type} . a & b -> b
-projR = BUILTIN
+-- projR : forall {a b : Type} . a & b -> b
+-- projR = BUILTIN
 
 |]
 
