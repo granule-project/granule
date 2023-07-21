@@ -1,20 +1,20 @@
-data Maybe a = Nothing | Just a
+data Maybe a = None | Some a
 
 data InOrOut : Bool -> Type -> Type where
-  In : forall {a : Type} . a -> InOrOut (Just ()) a;
-  Out : forall {a : Type} . InOrOut Nothing a
+  In : forall {a : Type} . a -> InOrOut (Some ()) a;
+  Out : forall {a : Type} . InOrOut None a
 
 test : forall {m : Maybe Int} . InOrOut b Int -> InOrOut b Int
 test (In x) = In (x * 2);
 test Out = Out
 
-lala : forall {m : Maybe Int} . InOrOut (Just ()) Int -> Int
+lala : forall {m : Maybe Int} . InOrOut (Some ()) Int -> Int
 lala (In x) = x
 
 -- last checked by @buggymcbugfix on 2019-02-26
 
 -- Checking frontend/tests/cases/positive/promote-data-poly.gr...
 -- Fatal error: frontend/tests/cases/positive/promote-data-poly.gr:
---   frontend/tests/cases/positive/promote-data-poly.gr:4:3I'm afraid I can't yet promote the polymorphic data constructor:Just
+--   frontend/tests/cases/positive/promote-data-poly.gr:4:3I'm afraid I can't yet promote the polymorphic data constructor:Some
 -- CallStack (from HasCallStack):
 --   error, called at src/Language/Granule/Checker/Kinds.hs:80:23 in granule-frontend-0.7.3.0-BwdxWJOLWzl5t6OilnbXBU:Language.Granule.Checker.Kinds

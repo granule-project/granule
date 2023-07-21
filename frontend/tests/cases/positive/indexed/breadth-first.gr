@@ -30,8 +30,8 @@ ex0 = Next [Node 2 [root]] (Next [Node 3 [root]] Empty)
 last : ∀ {a : Type} . BFTree a → Maybe a
 last x =
   case x of
-    Empty → Nothing;
-    (Next [x] Empty) → Just (label x);
+    Empty → None;
+    (Next [x] Empty) → Some (label x);
     (Next [x] xs)    → last xs
 
 exLast : Int

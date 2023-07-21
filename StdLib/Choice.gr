@@ -1,6 +1,7 @@
 ------
 --- Module: Choice
---- Description: A datatype with two elements. The only way to consume it is by either choosing the first or the second element. You must choose exactly one.
+--- Description: A datatype with two elements. The only way to consume it is by either
+---   choosing the first or the second element. You must choose exactly one.
 --- Authors: Vilem-Benjamin Liepelt
 --- License: BSD3
 --- Copyright: (c) Authors 2018

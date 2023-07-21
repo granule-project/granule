@@ -1,4 +1,4 @@
-data Maybe a = Nothing | Just a
+data Maybe a = None | Some a
 
 data Vec (n : Nat) t where
   Nil  : Vec 0 t;

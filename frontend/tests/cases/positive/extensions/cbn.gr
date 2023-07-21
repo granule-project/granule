@@ -3,12 +3,12 @@
 
 language CBN
 
-data Maybe a = Nothing | Just a
+data Maybe a = None | Some a
 
 -- Interval grades
 fromMaybe : forall {a : Type} . a [0..1] -> Maybe a -> a
-fromMaybe [d] Nothing     = d;
-fromMaybe [_] (Just x) = x
+fromMaybe [d] None     = d;
+fromMaybe [_] (Some x) = x
 
 -- Indexed types
 data Vec (n : Nat) (a : Type) where
@@ -20,8 +20,8 @@ append Nil ys = ys;
 append (Cons x xs) ys = Cons x (append xs ys)
 
 head : forall {a : Type, n : Nat} . (Vec n a) [] -> Maybe a
-head [Cons x xs] = Just x;
-head [Nil] = Nothing
+head [Cons x xs] = Some x;
+head [Nil] = None
 
 main : (Vec 3 Int, Int)
 main = (append (Cons 1 (Cons 2 Nil)) (Cons 3 Nil),

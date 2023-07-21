@@ -12,10 +12,9 @@ module Bool where
 
 --- # Boolean type
 
---- Boolean data type
+--- Boolean
 data Bool = False | True
 
---- Drop a boolean. Equivalent to `drop @Bool`
 dropB : Bool -> ()
 dropB False = ();
 dropB True = ()

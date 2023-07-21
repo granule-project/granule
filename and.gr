@@ -1,4 +1,0 @@
-data Bool = True | False
-
-and : Bool %0..1 -> Bool %0..1 -> Bool
-and = ?

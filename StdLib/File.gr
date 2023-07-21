@@ -2,7 +2,7 @@ module File where
 
 import Maybe
 
-readMany : Int → Handle R → (Handle R, String) <IO>
+readMany : Int → Handle R → (Handle R, String) <IO> 
 readMany 0 h = pure (h, "");
 readMany n h =
   let (h, c)  ← readChar h;
@@ -28,8 +28,8 @@ readFile fileName = let
 auxiliaryWriteFile : Handle W -> String -> (Handle W) <{Write, IOExcept}>
 auxiliaryWriteFile h rest =
   case stringUncons rest of
-    Nothing -> pure h;
-    Just (c, rest) -> let
+    None -> pure h;
+    Some (c, rest) -> let
       h <- writeChar h c
       in auxiliaryWriteFile h rest
 

@@ -1,6 +1,0 @@
-language GradedBase
-data Bool = True | False
-flib : Bool %1..2 -> (Bool, Bool)
-flib = ?
-flob : forall {a : Type} . a%2 -> (a, a)
-flob = ?

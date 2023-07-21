@@ -71,15 +71,12 @@ generateModulePage' modName title input ast =
     generateFromTemplate ModulePage modName title content
    where
     inputLines = lines input
-    content = (section "" preamble)
+    content = (section "Meta-data" preamble)
            <> (section "Data types" (Text.concat dataDefs))
            <> (section "Definitions" (Text.concat defs))
     preamble = parsePreamble inputLines
-    dataDefs = map prettyDataDef (dataTypes ast)
+    dataDefs = map (codeDiv . pack . pretty) (dataTypes ast)
     defs     = map prettyDef (definitions ast)
-    prettyDataDef d =
-         (codeDiv $ pack $ pretty d)
-      <> (descDiv $ scrapeDoc inputLines (dataDeclSpan d))
     prettyDef d =
          (codeDiv $ pack $ pretty (defId d) <> " : " <> pretty (defTypeScheme d))
       <> (descDiv $ scrapeDoc inputLines (defSpan d))

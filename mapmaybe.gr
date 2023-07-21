@@ -1,8 +1,0 @@
-language GradedBase
-data Maybe a = Just a | Nothing
-
-data List a = Nil | Cons a (List a)
-
-map_list : forall {a : Type, b : Type}
-         . List a %0..Inf -> (a % 0..Inf -> b) %0..1 -> List b
-map_list = ?

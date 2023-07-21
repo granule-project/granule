@@ -1,7 +1,7 @@
 -- The following is fine but just takes an unreasonable amount of time to check
 -- ~45s for DAO on 16/05/2019
 
-data Maybe a = Nothing | Just a
+data Maybe a = None | Some a
 data Bool = True | False
 
 data Vec (n : Nat) t where
@@ -11,9 +11,9 @@ data Vec (n : Nat) t where
 -- Lookup function
 lookupBy : forall {a : Type, b : Type, n : Nat}
          . (a -> a -> Bool) [0..n] -> a [0..n] -> (Vec n (a, b)) [0..1] -> Maybe b
-lookupBy [p] [k] [Nil] = Nothing;
+lookupBy [p] [k] [Nil] = None;
 lookupBy [p] [k] [Cons (k', v) xs] =
-  if p k k' then Just v else lookupBy [p] [k] [xs]
+  if p k k' then Some v else lookupBy [p] [k] [xs]
 
   -- Note if either of [0..n] is replaced with [0..Inf] then the solver time goes down
   -- to a couple of seconds, strangely.

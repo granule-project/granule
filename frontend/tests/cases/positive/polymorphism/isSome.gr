@@ -1,16 +1,16 @@
 -- gr --no-eval
 
 data Maybe a where
-  Nothing : Maybe a;
-  Just : a → Maybe a
+  None : Maybe a;
+  Some : a → Maybe a
 
 data Bool where
   True  : Bool;
   False : Bool
 
---- The isSome function returns True iff its argument is of the form Just _.
+--- The isSome function returns True iff its argument is of the form Some _.
 isSome : ∀ {a : Type} . Maybe (a [0]) → Bool
 isSome m =
   case m of
-    (Just [x]) → True;
-    Nothing       → False
+    (Some [x]) → True;
+    None       → False

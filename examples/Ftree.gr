@@ -41,7 +41,7 @@ roseTree' : FTree' List Int
 roseTree' = Node' 1 (Empty)
 
 --- Alternative where `f` controls when the F-Tree stops, e.g. `Nil` case for `List`,
---- `Nothing` case for `Maybe`.
+--- `None` case for `Maybe`.
 data Multi (f : Type → Type) a where
   Multi : a → f (Multi f a) → Multi f a
 

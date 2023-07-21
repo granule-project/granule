@@ -5,5 +5,5 @@ import Maybe
 maybePair : ∀ {a : Type, b : Type} . Maybe (a, b [0]) → a [0..1] → a
 maybePair x [d] =
   case x of
-    Nothing → d;
-    Just (a, [b]) → a
+    None → d;
+    Some (a, [b]) → a

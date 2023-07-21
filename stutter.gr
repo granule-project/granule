@@ -1,9 +1,0 @@
-language GradedBase
-
-data List a = Cons a (List a) | Nil
-
-stutter : forall a . List (a [2]) %1..∞ -> List a
-spec
-    stutter % 0..∞
-stutter Nil = Nil;
-stutter (Cons [u] z) = (Cons u) ((Cons u) (stutter z))
