@@ -44,6 +44,8 @@
         # uses streamLayeredImage so as to not place the image in the Nix store
         # to use, run result script and load into your container daemon. e.g.
         # for podman, `nix build .#image && ./result | podman load`
+        # for some reason, I don't need justStaticExecutables to get a small
+        # image here. not sure why but sure!
         packages.image = pkgs.dockerTools.streamLayeredImage {
           name = "granule-repl";
           # equivalent to `git rev-parse HEAD`
