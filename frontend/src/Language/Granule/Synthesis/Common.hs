@@ -375,6 +375,7 @@ positivePosition id (TySet _ t)       = any (positivePosition id) t
 positivePosition id (TyCase t ts)     = positivePosition id t || any (positivePosition id . snd) ts
 positivePosition id (TySig t _)       = positivePosition id t
 positivePosition id (Type  _)         = False
+positivePosition id _         = False
 
 isDecreasing :: Id -> [Type] -> Bool
 isDecreasing id1 [] = False
@@ -531,6 +532,7 @@ sizeOfExpr (Case _ _ _ e patExprs) =
   let (pats, exprs) = unzip patExprs in
     1 + sizeOfExpr e + sum (map sizeOfPat pats) + sum (map sizeOfExpr exprs)
 sizeOfExpr Hole{} = 1
+sizeOfExpr _ = 1
 
 sizeOfVal :: Value () () -> Integer
 sizeOfVal (Abs _ p _ e) = 1 + sizeOfExpr e
