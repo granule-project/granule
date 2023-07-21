@@ -272,6 +272,7 @@ compose = BUILTIN
 -- Arithmetic
 --------------------------------------------------------------------------------
 
+--- Integer division
 div : Int -> Int -> Int
 div = BUILTIN
 
@@ -279,11 +280,13 @@ div = BUILTIN
 -- Graded Possiblity
 --------------------------------------------------------------------------------
 
+--- Inject into a computation for any graded monad
 pure
   : forall {a : Type}
   . a -> a <>
 pure = BUILTIN
 
+--- Extract form a pure computation
 fromPure
   : forall {a : Type}
   . a <Pure> -> a
@@ -293,14 +296,19 @@ fromPure = BUILTIN
 -- I/O
 --------------------------------------------------------------------------------
 
+--- IO effect operation information
+
 data IOElem = Stdout | Stdin | Stderr | Open | Read | Write | IOExcept | Close
 
+--- Read from standard input
 fromStdin : String <{Stdin}>
 fromStdin = BUILTIN
 
+--- Write to standard output
 toStdout : String -> () <{Stdout}>
 toStdout = BUILTIN
 
+--- Write to standard output
 toStderr : String -> () <{Stderr}>
 toStderr = BUILTIN
 
