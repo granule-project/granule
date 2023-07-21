@@ -5,14 +5,14 @@ import Maybe
 
 parseInt : String -> (Maybe Int, String)
 parseInt str = case stringUnsnoc str of
-  None -> (None, ""); -- fail on empty string
-  Some (init,c) -> parseIntInner (stringSnoc init c)
+  Nothing -> (Nothing, ""); -- fail on empty string
+  Just (init,c) -> parseIntInner (stringSnoc init c)
 
 parseIntInner : String -> (Maybe Int, String)
 parseIntInner str = case stringUnsnoc str of
-  None -> (0, "");
-  Some (str,c) -> case digitToInt c of
-    Left c -> (None, stringSnoc str c);
+  Nothing -> (0, "");
+  Just (str,c) -> case digitToInt c of
+    Left c -> (Nothing, stringSnoc str c);
     Right n -> case parseIntInner str of
 
 
@@ -20,19 +20,19 @@ parseIntInner str = case stringUnsnoc str of
 
 
   case [digitToInt [c]] of
-    [None] -> None;
-    [Some n] -> case parseInt [init] of
-      None -> None;
-      Some m -> Some (n + (m * 10))
+    [Nothing] -> Nothing;
+    [Just n] -> case parseInt [init] of
+      Nothing -> Nothing;
+      Just m -> Just (n + (m * 10))
 
 parseInt : String [0..1] -> Maybe Int
 parseInt [str] = case [stringUnsnoc str] of
-  [None] -> Some 0;
-  [Some (init,c)] -> case [digitToInt [c]] of
-    [None] -> None;
-    [Some n] -> case parseInt [init] of
-      None -> None;
-      Some m -> Some (n + (m * 10))
+  [Nothing] -> Just 0;
+  [Just (init,c)] -> case [digitToInt [c]] of
+    [Nothing] -> Nothing;
+    [Just n] -> case parseInt [init] of
+      Nothing -> Nothing;
+      Just m -> Just (n + (m * 10))
 
 -- main : Maybe Int
 -- main = parseInt ["123456"]
