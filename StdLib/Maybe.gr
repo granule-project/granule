@@ -42,10 +42,10 @@ fromMaybe [d] Nothing = d;
 fromMaybe [_] (Just x) = x
 
 --- Whether a `Maybe a` value is `Just a`
-isSome : forall {a : Type} . Maybe (a [0]) -> Bool
-isSome Nothing = False;
-isSome (Just [_]) = True
+isJust : forall {a : Type} . Maybe (a [0]) -> Bool
+isJust Nothing = False;
+isJust (Just [_]) = True
 
 --- Whether a `Maybe a` value is `Nothing`
-isNone : forall {a : Type} . Maybe (a [0]) -> Bool
-isNone m = not (isSome m)
+isNothing : forall {a : Type} . Maybe (a [0]) -> Bool
+isNothing m = not (isJust m)
