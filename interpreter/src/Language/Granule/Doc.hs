@@ -154,7 +154,7 @@ parsePreamble inputLines =
       -- Not lines that are all "-" though
       filter (not . Prelude.all (== '-'))
       -- Only lines that start with "---"
-      $ takeWhile (\line -> "--- " `isPrefixOf` line) inputLines
+      $ takeWhile (\line -> "---" `isPrefixOf` line) inputLines
 
 
 ---
