@@ -508,48 +508,48 @@ stringSnoc = BUILTIN
 -- Arrays
 --------------------------------------------------------------------------------
 
-data
-  ArrayStack
-    (capacity : Nat)
-    (maxIndex : Nat)
-    (a : Type)
-  where
+-- data
+--   ArrayStack
+--     (capacity : Nat)
+--     (maxIndex : Nat)
+--     (a : Type)
+--   where
 
-push
-  : ∀ {a : Type, cap : Nat, maxIndex : Nat}
-  . {maxIndex < cap}
-  ⇒ ArrayStack cap maxIndex a
-  → a
-  → ArrayStack cap (maxIndex + 1) a
-push = BUILTIN
+-- push
+--   : ∀ {a : Type, cap : Nat, maxIndex : Nat}
+--   . {maxIndex < cap}
+--   ⇒ ArrayStack cap maxIndex a
+--   → a
+--   → ArrayStack cap (maxIndex + 1) a
+-- push = BUILTIN
 
-pop
-  : ∀ {a : Type, cap : Nat, maxIndex : Nat}
-  . {maxIndex > 0}
-  ⇒ ArrayStack cap maxIndex a
-  → a × ArrayStack cap (maxIndex - 1) a
-pop = BUILTIN
+-- pop
+--   : ∀ {a : Type, cap : Nat, maxIndex : Nat}
+--   . {maxIndex > 0}
+--   ⇒ ArrayStack cap maxIndex a
+--   → a × ArrayStack cap (maxIndex - 1) a
+-- pop = BUILTIN
 
--- Boxed array, so we allocate cap words
-allocate
-  : ∀ {a : Type, cap : Nat}
-  . N cap
-  → ArrayStack cap 0 a
-allocate = BUILTIN
+-- -- Boxed array, so we allocate cap words
+-- allocate
+--   : ∀ {a : Type, cap : Nat}
+--   . N cap
+--   → ArrayStack cap 0 a
+-- allocate = BUILTIN
 
-swap
-  : ∀ {a : Type, cap : Nat, maxIndex : Nat}
-  . ArrayStack cap (maxIndex + 1) a
-  → Fin (maxIndex + 1)
-  → a
-  → a × ArrayStack cap (maxIndex + 1) a
-swap = BUILTIN
+-- swap
+--   : ∀ {a : Type, cap : Nat, maxIndex : Nat}
+--   . ArrayStack cap (maxIndex + 1) a
+--   → Fin (maxIndex + 1)
+--   → a
+--   → a × ArrayStack cap (maxIndex + 1) a
+-- swap = BUILTIN
 
-copyArray
-  : ∀ {a : Type, cap : Nat, maxIndex : Nat}
-  . ArrayStack cap maxIndex (a [2])
-  → ArrayStack cap maxIndex a × ArrayStack cap maxIndex a
-copyArray = BUILTIN
+-- copyArray
+--   : ∀ {a : Type, cap : Nat, maxIndex : Nat}
+--   . ArrayStack cap maxIndex (a [2])
+--   → ArrayStack cap maxIndex a × ArrayStack cap maxIndex a
+-- copyArray = BUILTIN
 
 --------------------------------------------------------------------------------
 -- Cost
@@ -682,8 +682,8 @@ cap = BUILTIN
 -- Additive conjunction (linear logic)
 --------------------------------------------------------------------------------
 
-with : forall {a b : Type} . a [0..1] -> b [0..1] -> a & b
-with = BUILTIN
+-- with : forall {a b : Type} . a [0..1] -> b [0..1] -> a & b
+-- with = BUILTIN
 
 projL : forall {a b : Type} . a & b -> a
 projL = BUILTIN
