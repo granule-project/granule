@@ -1,0 +1,8 @@
+language Report
+
+data N (n : Nat) where
+  Z : N 0;
+  S : N n -> N (n+1)
+
+foo : forall {n : Nat} . N (n + 1) -> N n
+foo (S n) = n

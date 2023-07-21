@@ -1,0 +1,15 @@
+language GradedBase
+
+data Maybe a = Just a | Nothing
+
+-- odd : forall {a : Type} . (Maybe a) %2 -> ((), Maybe a)
+-- odd x =
+--     (case x of
+--       Nothing -> ((), x);
+--       Just y -> ((), Just y))
+
+odd : forall {a : Type} . (Maybe a) %2 -> ((), Maybe a)
+odd x =
+    (case x of
+      Nothing -> ();
+      Just y -> (), x)

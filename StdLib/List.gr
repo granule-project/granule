@@ -32,9 +32,9 @@ lmap [f] (Next x xs) = Next (f x) (lmap [f] xs)
 -- Lookup function
 lookupBy : forall {a : Type, b : Type}
          . (a -> a -> Bool) [0..∞] -> a [0..∞] -> (List (a, b)) [0..1] -> Maybe b
-lookupBy [p] [k] [Empty] = None;
+lookupBy [p] [k] [Empty] = Nothing;
 lookupBy [p] [k] [Next (k', v) xs] =
-  if p k k' then Some v else lookupBy [p] [k] [xs]
+  if p k k' then Just v else lookupBy [p] [k] [xs]
 
 -- Safe head function
 head_list : forall {a : Type} . (List a) [0..1] -> Result a

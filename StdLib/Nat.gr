@@ -10,10 +10,13 @@
 
 module Nat where
 
+--- Unary natural number representation, with type indexed
+--- to create lightweight dependent types
 data N (n : Nat) where
   Z : N 0;
   S : N n -> N (n+1)
 
+--- Copies an indexed natural number
 copyNat : forall {n : Nat} . N n -> (N n, N n)
 copyNat Z = (Z, Z);
 copyNat (S n) = let (x, y) = copyNat n in (S x, S y)
@@ -34,7 +37,7 @@ add
 add Z m = m;
 add (S n') m = S (add n' m)
 
--- Cut-off subtraction
+--- Cut-off subtraction
 monus
   : forall {m n : Nat}
   . N m -> N n -> N (m - n)
@@ -42,7 +45,9 @@ monus m Z = m;
 monus Z (S n') = monus Z n';
 monus (S m') (S n') = monus m' n'
 
--- Subtraction
+--- Subtraction, but using a predicate to enfroce
+--- that the second parameter is less than or equal
+--- to the first.
 sub
   : forall {m n : Nat}
   . {n .≥ m} => N n -> N m -> N (n - m)

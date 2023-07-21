@@ -1,0 +1,3 @@
+forkLinearAlt : forall {s : Protocol}
+    . (LChan (Dual s) -> ()) -> LChan s
+forkLinearAlt = forkLinear

@@ -1,0 +1,15 @@
+language GradedBase
+
+data N = S N | Z
+
+drop : forall a .  N %(0 : Ext Nat)..(∞ : Ext Nat) -> ()
+drop x =
+    (case x of
+      Z -> ();
+      S z -> (drop z))
+
+-- dropB : forall a .  N [0..∞] -> List a
+-- dropB x =
+--     (case x of
+--       [Z] -> Nil;
+--       [S z] -> (dropB [z]))

@@ -1,0 +1,18 @@
+language Report
+
+data N (a : Type) (n : Nat) where
+  Z : N a 0;
+  S : N a n -> N a (n+1)
+
+inc
+  : forall {n : Nat, a : Type}
+  . N a n -> N a (1 + n)
+inc Z = S Z;
+inc (S x) = S (inc x)
+
+
+-- add
+--   : forall {m n : Nat, a : Type}
+--   . N a n -> N a m -> N a (n + m)
+-- add Z m = m;
+-- add (S n') m = S (add n' m)

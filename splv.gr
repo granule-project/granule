@@ -1,0 +1,2 @@
+copy : forall {a : Type} . a [] -> (a, a)
+copy [x] = (x, x)

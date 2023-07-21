@@ -180,8 +180,8 @@ import Maybe
 
 stringToVec : String → exists {n : Nat} . Vec n Char
 stringToVec s = case stringUncons s of
-  None → pack < 0 , Nil > as exists {n : Nat} . Vec n Char;
-  Some (c, s) →
+  Nothing → pack < 0 , Nil > as exists {n : Nat} . Vec n Char;
+  Just (c, s) →
     unpack < m , v > = stringToVec s
     in pack < m + 1 , (Cons c v) > as exists {n : Nat} . Vec n Char
 

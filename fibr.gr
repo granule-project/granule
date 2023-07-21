@@ -1,0 +1,7 @@
+data N (n : Nat) where
+    Z : N 0;
+    S : forall {n : Nat} . N n -> N (n+1)
+
+flibble : forall {m : Nat, n : Nat} . {m .<= n} => (N n -> Int) [1..n] -> (N m) [1] -> Int
+flibble [f] Z = 0;
+flibble [f] (S n) = f (S n) + flibble [f] n

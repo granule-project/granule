@@ -1,0 +1,7 @@
+data Bool = True | False
+
+bug : Char[] -> Char[]
+bug c = let [c'] : Char[] = c
+        in (case True of
+                True -> c;
+                False -> ['a'])

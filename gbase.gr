@@ -1,0 +1,4 @@
+language GradedBase
+
+quad : forall {a : Type, b : Type} . (a, b) %2..2 -> ((b, a), (b, a))
+quad = ?

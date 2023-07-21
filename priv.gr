@@ -1,0 +1,3 @@
+data Bool = True | False
+privNot : Bool[Private] -> Bool[Private]
+privNot [x] = [case [x] of [True] -> False; [False] -> True]
