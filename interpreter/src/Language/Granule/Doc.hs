@@ -137,7 +137,7 @@ scrapeDoc inputLines span =
     Text.concat (reverse relevantLinesFormatted)
   where
     relevantLinesFormatted = map (pack . drop 3) relevantLines
-    relevantLines = takeWhile ("---" `isPrefixOf`) (dropWhile (== "") (reverse before))
+    relevantLines = takeWhile ("--- " `isPrefixOf`) (dropWhile (== "") (reverse before))
     (before, _) = Prelude.splitAt (line - 1) inputLines
     (line, _) = startPos span
 
@@ -147,24 +147,28 @@ parsePreamble :: [String] -> Text
 parsePreamble inputLines =
     ul $ Text.concat (map presentPrequelLine prequelLines)
   where
-    presentPrequelLine line = li $ (tag "b" (pack name)) <> pack info
+    presentPrequelLine line =
+        if name == "Module" -- drop duplicate module info
+          then ""
+          else li $ (tag "b" (pack name)) <> pack info
       where
        (name, info) = break (== ':') (drop 4 line)
     prequelLines =
       -- Not lines that are all "-" though
       filter (not . Prelude.all (== '-'))
       -- Only lines that start with "---"
-      $ takeWhile (\line -> "---" `isPrefixOf` line) inputLines
+      $ takeWhile (\line -> "--- " `isPrefixOf` line) inputLines
 
 
 ---
 -- HTML generation helpers
 
 section :: Text -> Text -> Text
+section "" contents   = tag "section" contents
 section name contents = tag "section" (tag "h2" name <> contents)
 
 codeDiv :: Text -> Text
-codeDiv = tagWithAttributes "div" ("class='code'")
+codeDiv = tagWithAttributes "div" ("class='code'") . tag "pre"
 
 descDiv :: Text -> Text
 descDiv = tagWithAttributes "div" ("class='desc'")

@@ -13,64 +13,68 @@ module Vec where
 import Nat
 import Fin
 
+--- Sized vectors
 data Vec (n : Nat) t where
   Nil  : Vec 0 t;
   Cons : t -> Vec n t -> Vec (n+1) t
 
--- Length of an indexed vector into an indexed nat
--- discarding the elements
+--- Length of an indexed vector into an indexed nat
+--- discarding the elements
 length
   : forall {a : Type, n : Nat}
   . Vec n (a [0]) -> N n
 length Nil = Z;
 length (Cons [_] xs) = S (length xs)
 
--- Length of a `Vec` into an indexed `N`, preserving the elements
+-- -Length of a `Vec` into an indexed `N`, preserving the elements
 length'
   : forall {a : Type, n : Nat}
   . Vec n a -> (N n, Vec n a)
 length' Nil = (Z, Nil);
 length' (Cons x xs) = let (n, xs) = length' xs in (S n, Cons x xs)
 
---- Map function
+---- Map function
 map
   : forall {a b : Type, n : Nat}
   . (a -> b) [n] -> Vec n a -> Vec n b
 map [_] Nil = Nil;
 map [f] (Cons x xs) = Cons (f x) (map [f] xs)
 
--- Safe random-access indexing from a vector
+--- Safe random-access indexing from a vector
 index : forall {a : Type, n m : Nat}
      . {m > n} => N n -> (Vec m a) [0..1] -> a
 index Z     [Cons x _]   = x;
 index (S k) [Cons _ xs'] = index k [xs']
 
--- Standard foldr on vectors
+--- Right fold
 foldr
   : forall {a b : Type, n : Nat}
   . (a -> b -> b) [n] -> b -> Vec n a -> b
 foldr [_] z Nil = z;
 foldr [f] z (Cons x xs) = f x (foldr [f] z xs)
 
+--- Foldr1 (no need for an initial value as vector has at least one element)
 foldr1
   : forall {a : Type, n : Nat}
   . (a -> a -> a) [n] -> Vec (n + 1) a -> a
 foldr1 [_] (Cons x Nil) = x;
 foldr1 [mag] (Cons x (Cons x' xs)) = foldr1 [mag] (Cons (x `mag` x') xs)
 
+--- Left fold
 foldl
   : forall {a b : Type, n : Nat}
   . (b -> a -> b) [n] -> b -> Vec n a -> b
 foldl [_] acc Nil = acc;
 foldl [op] acc (Cons x xs) = foldl [op] (acc `op` x) xs
 
--- Append two vectors
+--- Append two vectors
 append
   : forall {a : Type, m n : Nat}
   . Vec n a -> Vec m a -> Vec (n + m) a
 append Nil ys = ys;
 append (Cons x xs) ys = Cons x (append xs ys)
 
+--- Drop the first `m` elements
 drop
   : forall {a : Type, m n : Nat}
   . N m -> (Vec n a) [0..1] -> Vec (n - m) a
@@ -78,6 +82,7 @@ drop Z [xs] = xs;
 drop (S n) [Nil] = drop n [Nil];
 drop (S n) [Cons _ xs] = drop n [xs]
 
+--- Take the first `m` elements
 take
   : forall {a : Type, m n : Nat}
   . N m -> (Vec n a) [0..1] -> Vec (n + (m - n)) a
@@ -123,12 +128,13 @@ split
 split Z xs = (Nil, xs);
 split (S n) (Cons x xs) = let (xs', ys') = split n xs in (Cons x xs', ys')
 
---- Simple folds
+--- Sum a vector of integers (using `foldr`)
 sum
   : forall {n : Nat}
   . Vec n Int -> Int
 sum = foldr [\(x : Int) -> \(y : Int) -> x + y] 0
 
+--- Product of a vector of integers (using `foldr`)
 product
   : forall {n : Nat}
   . Vec n Int -> Int
@@ -168,6 +174,7 @@ pushVec : ∀ {a : Type, s : Semiring, k : s, n : Nat} . {(1 : s) <= k}
       => (Vec n a) [k] → Vec n (a [k])
 pushVec = push @Vec
 
+--- Copy the spine of a vector
 copySpine
   : forall {a : Type, n : Nat}
   . Vec n a -> Vec n () × Vec n a
@@ -178,6 +185,7 @@ copySpine (Cons x xs) = let
 
 import Maybe
 
+--- Convert a string into a vector
 stringToVec : String → exists {n : Nat} . Vec n Char
 stringToVec s = case stringUncons s of
   Nothing → pack < 0 , Nil > as exists {n : Nat} . Vec n Char;

@@ -52,6 +52,9 @@ class Pretty t where
 instance {-# OVERLAPPABLE #-} (Pretty a, Pretty b) => Pretty (a, b) where
    pretty (a, b) = "(" <> pretty a <> ", " <> pretty b <> ")"
 
+instance {-# OVERLAPPABLE #-} Pretty (Id, Type) where
+   pretty (a, b) = "(" <> pretty a <> " : " <> pretty b <> ")"
+
 instance {-# OVERLAPPABLE #-} (Pretty a, Pretty b, Pretty c) => Pretty (a, b,c) where
    pretty (a, b, c) = "(" <> pretty a <> ", " <> pretty b <> "," <> pretty c <> ")"
 
@@ -221,10 +224,10 @@ instance Pretty DataDecl where
     pretty (DataDecl _ tyCon tyVars kind dataConstrs) =
       let tvs = case tyVars of [] -> ""; _ -> (unwords . map pretty) tyVars <> " "
           ki = case kind of Nothing -> ""; Just k -> pretty k <> " "
-      in "data " <> pretty tyCon <> " " <> tvs <> ki <> "where\n  " <> pretty dataConstrs
+      in "data " <> pretty tyCon <> " " <> tvs <> ki <> "where\n    " <> pretty dataConstrs
 
 instance Pretty [DataConstr] where
-    pretty = intercalate ";\n  " . map pretty
+    pretty = intercalate ";\n    " . map pretty
 
 instance Pretty DataConstr where
     pretty (DataConstrIndexed _ name typeScheme) = pretty name <> " : " <> pretty typeScheme

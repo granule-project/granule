@@ -254,11 +254,15 @@ builtinSrc = [r|
 
 import Prelude
 
+--- Unit type
 data () = ()
 
+--- Allows a linear variable to be promoted to a graded modality
+--- specifying an exact usage of 1
 use : forall {a : Type} . a -> a [1]
 use = BUILTIN
 
+--- Linear function composition
 compose : forall {a : Type, b : Type, c : Type}
   . (b -> c) -> (a -> b) -> (a -> c)
 compose = BUILTIN
