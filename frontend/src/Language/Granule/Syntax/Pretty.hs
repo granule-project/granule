@@ -52,7 +52,7 @@ class Pretty t where
 instance {-# OVERLAPPABLE #-} (Pretty a, Pretty b) => Pretty (a, b) where
    pretty (a, b) = "(" <> pretty a <> ", " <> pretty b <> ")"
 
-instance {-# OVERLAPPABLE #-} Pretty (Id, Type) where
+instance {-# OVERLAPS #-} Pretty (Id, Type) where
    pretty (a, b) = "(" <> pretty a <> " : " <> pretty b <> ")"
 
 instance {-# OVERLAPPABLE #-} (Pretty a, Pretty b, Pretty c) => Pretty (a, b,c) where
@@ -231,7 +231,7 @@ instance Pretty [DataConstr] where
 
 instance Pretty DataConstr where
     pretty (DataConstrIndexed _ name typeScheme) = pretty name <> " : " <> pretty typeScheme
-    pretty (DataConstrNonIndexed _ name params) = pretty name <> (unwords . map pretty) params
+    pretty (DataConstrNonIndexed _ name params) = pretty name <> " " <> (intercalate " " $ map pretty params)
 
 instance Pretty (Pattern a) where
     pretty (PVar _ _ _ v)     = pretty v
