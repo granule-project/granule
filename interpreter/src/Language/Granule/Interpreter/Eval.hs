@@ -682,6 +682,7 @@ builtIns =
   , (mkId "drop@Char", Ext () $ Primitive $ const $ return $ Constr () (mkId "()") [])
   , (mkId "drop@Float", Ext () $ Primitive $ const $ return $ Constr () (mkId "()") [])
   , (mkId "drop@String", Ext () $ Primitive $ const $ return $ Constr () (mkId "()") [])
+  , (mkId "drop@FloatArray", Ext () $ Primitive $ const $ return $ Constr () (mkId "()") [])
   , (mkId "pure",       Ext () $ Primitive $ \v -> return $ Pure () (Val nullSpan () False v))
   , (mkId "fromPure",   Ext () $ Primitive $ \(Pure () (Val nullSpan () False v)) -> return v)
   , (mkId "tick",       Pure () (Val nullSpan () False (Constr () (mkId "()") [])))
