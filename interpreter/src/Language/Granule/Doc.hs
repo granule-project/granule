@@ -92,13 +92,13 @@ generateModulePage' modName title input ast =
       in  (heading,
             (maybe "" anchor heading)
          <> (codeDiv . pack . pretty $ d)
-         <> (descDiv docs))
+         <> (if strip docs == "" then miniBreak else descDiv docs))
     prettyDef (Right d) =
       let (docs, heading) = scrapeDoc inputLines (defSpan d)
       in  (heading
           , (maybe "" anchor heading)
          <> (codeDiv $ pack $ pretty (defId d) <> " : " <> pretty (defTypeScheme d))
-         <> (descDiv docs))
+         <> (if strip docs == "" then miniBreak else descDiv docs))
 
     anchor :: Text -> Text
     anchor x = tagWithAttributes "a" ("name = " <> toUrlName x) (tag "h3" x)
@@ -215,6 +215,9 @@ navDiv = tagWithAttributes "div" ("class='mininav'")
 
 span :: Text -> Text -> Text
 span name = tagWithAttributes "span" ("class='" <> name <> "'")
+
+miniBreak :: Text
+miniBreak = "<br />"
 
 ul :: Text -> Text
 ul = tag "ul"
