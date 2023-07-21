@@ -253,7 +253,10 @@ binaryOperators = \case
 
 -- TODO make a proper quasi quoter that parses this at compile time
 builtinSrc :: String
-builtinSrc = [r|
+builtinSrc = [r|------
+--- Module: Primitives
+--- Description: Built-in primitive definitions
+------
 
 import Prelude
 
@@ -325,7 +328,7 @@ throw : forall {a : Type, k : Coeffect} . (a [0 : k]) <MayFail>
 throw = BUILTIN
 
 --------------------------------------------------------------------------------
---- # Conversions
+--- # Conversions
 --------------------------------------------------------------------------------
 
 showChar : Char -> String

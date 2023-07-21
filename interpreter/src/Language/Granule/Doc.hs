@@ -17,6 +17,8 @@ import Data.Text hiding
    , drop, break, isPrefixOf, reverse, splitAt, all)
 import qualified Data.Text as Text
 
+import Data.Char (isAlpha)
+import Data.Maybe (catMaybes)
 import Data.List (isPrefixOf, sort, sortOn)
 import Data.Version (showVersion)
 import Paths_granule_interpreter (version)
@@ -72,9 +74,12 @@ generateModulePage' modName title input ast =
     generateFromTemplate ModulePage modName title content
    where
     inputLines = lines input
-    content = (section "Meta-data" preamble)
-           <> (section "Contents" (Text.concat (map prettyDef topLevelDefs)))
+    content = (if Text.strip preamble == "" then "" else section "Meta-data" preamble)
+           <> (section "Contents" ((internalNav headings') <> Text.concat contentDefs))
     preamble = parsePreamble inputLines
+    (headings, contentDefs) = unzip (map prettyDef topLevelDefs)
+    headings' = catMaybes headings
+
 
     -- Combine the data type and function definitions together
     topLevelDefs = sortOn startLine $ (map Left (dataTypes ast)) <> (map Right (definitions ast))
@@ -84,14 +89,25 @@ generateModulePage' modName title input ast =
 
     prettyDef (Left d) =
       let (docs, heading) = scrapeDoc inputLines (dataDeclSpan d)
-      in  (maybe "" (tag "h3") heading)
-       <> (codeDiv . pack . pretty $ d)
-       <> (descDiv docs)
+      in  (heading,
+            (maybe "" anchor heading)
+         <> (codeDiv . pack . pretty $ d)
+         <> (descDiv docs))
     prettyDef (Right d) =
       let (docs, heading) = scrapeDoc inputLines (defSpan d)
-      in  (maybe "" (tag "h3") heading)
-       <> (codeDiv $ pack $ pretty (defId d) <> " : " <> pretty (defTypeScheme d))
-       <> (descDiv docs)
+      in  (heading
+          , (maybe "" anchor heading)
+         <> (codeDiv $ pack $ pretty (defId d) <> " : " <> pretty (defTypeScheme d))
+         <> (descDiv docs))
+
+    anchor :: Text -> Text
+    anchor x = tagWithAttributes "a" ("name = " <> toUrlName x) (tag "h3" x)
+
+    internalNav [] = ""
+    internalNav xs = section "" $ navDiv
+                       $ ul (Text.concat (map makeLink xs))
+    makeLink x = li $ tagWithAttributes "a" ("href='#" <> toUrlName x <> "'") x
+
 
 -- Generates the text of the index
 generateIndexPage :: IO Text
@@ -181,6 +197,9 @@ parsePreamble inputLines =
 ---
 -- HTML generation helpers
 
+toUrlName :: Text -> Text
+toUrlName = (replace " " "-") . (Text.filter isAlpha) . Text.toLower
+
 section :: Text -> Text -> Text
 section "" contents   = tag "section" contents
 section name contents = tag "section" (tag "h2" name <> contents)
@@ -190,6 +209,9 @@ codeDiv = tagWithAttributes "div" ("class='code'") . tag "pre"
 
 descDiv :: Text -> Text
 descDiv = tagWithAttributes "div" ("class='desc'")
+
+navDiv :: Text -> Text
+navDiv = tagWithAttributes "div" ("class='mininav'")
 
 span :: Text -> Text -> Text
 span name = tagWithAttributes "span" ("class='" <> name <> "'")

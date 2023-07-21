@@ -16,6 +16,14 @@
   border-left: solid 1px #ccc;
 }
 
+.mininav {
+  font-family: sans-serif;
+  background: rgb(255,250,240);
+  margin-left: 20px;
+  border: solid 1px #ccc;
+  width: 80%;
+}
+
 .constName {
   color: rgb(16, 145, 59);
 }
