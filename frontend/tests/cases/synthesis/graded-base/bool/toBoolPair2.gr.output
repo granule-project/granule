@@ -3,7 +3,4 @@ language GradedBase
 data Bool = True | False
 
 f : Bool %2 -> (Bool %1 -> Bool) %2 -> (Bool, Bool)
-f x y = 
-    (case x of
-      True -> (y True, y x);
-      False -> (y True, y x))
+f = ?
