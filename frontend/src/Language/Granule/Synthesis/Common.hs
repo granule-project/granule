@@ -107,7 +107,8 @@ data RuleInfo =
       (Expr () ()) -- Sub term
       [(Id, Ctxt SAssumption, Expr () (), Ctxt SAssumption, RuleInfo)] -- Branch info
       (Ctxt SAssumption) -- Delta
-  deriving (Show)
+  | EmptyRuleInfo
+  deriving (Show, Eq)
 
 
 -- An SAssumption is an assumption used for synthesis:

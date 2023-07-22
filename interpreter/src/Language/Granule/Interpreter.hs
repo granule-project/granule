@@ -262,8 +262,13 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
                   _ -> (unres, res)
                 ) ([], []) comps
             _ -> ([], [])
-      res <- liftIO $ System.Timeout.timeout timeout $
-                synthesiseGradedBase astSrc gradedExpr hole spec synEval hints index unrestricted restricted defId constructors ctxt (Forall nullSpan [] [] goal) cs
+      res <- if usingExtension GradedBase then do
+                liftIO $ System.Timeout.timeout timeout $
+                  synthesiseGradedBase astSrc gradedExpr hole spec synEval hints index unrestricted restricted defId constructors ctxt (Forall nullSpan [] [] goal) cs
+             else do 
+                liftIO $ System.Timeout.timeout timeout $
+                  synthesiseLinearBase Nothing 1 [] [] defId ctxt constructors (Forall nullSpan [] [] goal) cs
+
       case res of
         Just ([], measurement) -> do
           return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt hcases, measurement, attemptNo) : rest

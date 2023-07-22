@@ -26,8 +26,6 @@ import Language.Granule.Utils
 import Control.Monad.State.Strict
 import qualified System.Clock as Clock
 import Data.List (sortBy)
-import Data.Maybe (fromJust, catMaybes)
-import Control.Arrow (second)
 
 
 -- Note that the way this is used, the (var, assumption) pair in the first
@@ -941,21 +939,22 @@ synthesise :: (?globals :: Globals)
            -> FocusedCtxt SAssumption    -- focused variables
            -> Depth
            -> Maybe Type
+           -> Ctxt (Ctxt (TypeScheme, Substitution), Bool)
            -> Goal           -- type from which to synthesise
            -> Synthesiser (Expr () Type, Ctxt SAssumption, Substitution)
-synthesise resourceScheme gamma (Focused omega) depth grade goal = do
+synthesise resourceScheme gamma (Focused omega) depth grade constructorsWithRecs goal = do
 
   st' <- get
-  relevantConstructors <- do
-      let snd3 (a, b, c) = b
-      st <- get
-      let pats = map (second snd3) (typeConstructors st)
-      mapM (\ (a, b) -> do
-          dc <- conv $ mapM (lookupDataConstructor ns) b
-          let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
-          return (a, sd)) pats
+  -- relevantConstructors <- do
+  --     let snd3 (a, b, c) = b
+  --     st <- get
+  --     let pats = map (second snd3) (typeConstructors st)
+  --     mapM (\ (a, b) -> do
+  --         dc <- conv $ mapM (lookupDataConstructor ns) b
+  --         let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
+  --         return (a, sd)) pats
 
-  relevantConstructorsWithRecLabels <- undefined -- <- mapM (\(tyId, dataCons) ->
+  -- relevantConstructorsWithRecLabels <- mapM (\(tyId, dataCons) -> return (tyId, (dataCons, False))) relevantConstructors -- <- mapM (\(tyId, dataCons) ->
   --                         do
   --                           hasRecCon <- foldM (\a (dataConName, (Forall _ _ _ dataTy)) ->
   --                             case a of
@@ -966,7 +965,7 @@ synthesise resourceScheme gamma (Focused omega) depth grade goal = do
 
   Synthesiser $ lift $ lift $ lift $ modify (\state ->
             state {
-             constructors = relevantConstructorsWithRecLabels
+             constructors = constructorsWithRecs
                   })
 
   result@(expr, ctxt, subst, bindings, _) <- synthesiseInner resourceScheme False depth RightAsync gamma (Focused omega) grade goal

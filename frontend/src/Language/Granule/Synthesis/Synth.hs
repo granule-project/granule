@@ -35,6 +35,7 @@ import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Types
 import Language.Granule.Checker.Variables
 import Language.Granule.Synthesis.Builders
+import Language.Granule.Synthesis.SynthLinearBase
 import Language.Granule.Synthesis.Monad
 import Language.Granule.Synthesis.Contexts
 import Language.Granule.Synthesis.Common
@@ -156,21 +157,29 @@ markRecursiveType tyCon dataTy = markRecursiveType' tyCon dataTy False
     markRecursiveType' _ _ _ = False
 
 -- Run from the checker
-synthesiseProgram :: (?globals :: Globals)
+synthesiseLinearBase :: (?globals :: Globals)
            => Maybe Hints
            -> Int -- index
            -> Ctxt TypeScheme  -- Unrestricted Defs
            -> Ctxt (TypeScheme, Type) -- Restricted Defs
            -> Id
            -> Ctxt Assumption    -- (unfocused) free variables
+           -> Ctxt (Ctxt (TypeScheme, Substitution))
            -> TypeScheme           -- type from which to synthesise
            -> CheckerState
-           -> IO ([Expr () ()], Maybe Measurement)
-synthesiseProgram hints index unrComps rComps defId ctxt goalTy checkerState = do
+           -> IO ([(Expr () (), RuleInfo)], Maybe Measurement)
+synthesiseLinearBase hints index unrComps rComps defId ctxt constructors goalTy checkerState = do
 
   start <- liftIO $ Clock.getTime Clock.Monotonic
 
-  let (timeoutLim, index, resourceScheme) =
+  constructorsWithRecLabels <- mapM (\(tyId, dataCons) ->
+                          do
+                            hasRecCon <- foldM (\a (dataConName, (Forall _ _ _ dataTy, _)) ->
+                              (if a then return True else return $ markRecursiveType tyId dataTy)
+                              ) False dataCons
+                            return (tyId, (dataCons, hasRecCon))) constructors
+
+  let (_, index, resourceScheme) =
          case hints of
             Just hints' -> ( case (hTimeout hints', hNoTimeout hints') of
                                   (_, True) -> -1
@@ -186,8 +195,8 @@ synthesiseProgram hints index unrComps rComps defId ctxt goalTy checkerState = d
                             in
                             if subtractiveSynthesisMode then Subtractive else Additive mode)
 
-  let gamma = map (\(v, a)  -> (v, (SVar a $ Just $ NonDecreasing 0 ))) ctxt ++
-              map (\(v, (Forall _ _ _ ty, grade)) -> (v, (SVar (Discharged ty grade) $ Just $ NonDecreasing 0))) rComps
+  -- let gamma = map (\(v, a)  -> (v, (SVar a $ Just $ NonDecreasing 0 ))) ctxt ++
+              -- map (\(v, (Forall _ _ _ ty, grade)) -> (v, (SVar (Discharged ty grade) $ Just $ NonDecreasing 0))) rComps
   let initialGrade = Nothing -- if gradeOnRule then Just (TyGrade Nothing 1)  else Nothing
 
   let initialState = SynthesisData {
@@ -210,12 +219,15 @@ synthesiseProgram hints index unrComps rComps defId ctxt goalTy checkerState = d
   --           (Nothing, Just i)  -> (1, i)
   --           (Nothing, Nothing) -> (1, 1)
 
-  let timeOutLimit = if interactiveDebugging then maxBound :: Int else timeoutLim
-  result <-
-    liftIO $ System.Timeout.timeout timeOutLimit $ loop resourceScheme (hintELim, hintILim) index unrComps initialGrade gamma initialState
+  -- let timeOutLimit = if interactiveDebugging then maxBound :: Int else timeoutLim
+  -- result <-
+    -- liftIO $ System.Timeout.timeout timeOutLimit $ loop resourceScheme (hintELim, hintILim) index unrComps initialGrade gamma initialState
+
+  let synRes = synthesise resourceScheme [] (Focused []) (Depth hintELim 0 hintILim) initialGrade constructorsWithRecLabels (Goal goalTy $ Just $ NonDecreasing 0)
+  result <- runStateT (runSynthesiser 1 synRes checkerState) initialState -- (resetState agg')
   fin <- case result of
-    Just (synthResults, aggregate) ->  do
-      let results = nub $ map fst3 $ rights (map fst synthResults)
+    (synthResults, aggregate) ->  do
+      let results = nub $ map (\(x, y, z) -> (x, EmptyRuleInfo)) $ rights (map fst synthResults)
 
       -- Force eval of first result (if it exists) to avoid any laziness when benchmarking
       () <- when benchmarking $ unless (null results) (return $ seq (show $ head results) ())
@@ -231,7 +243,7 @@ synthesiseProgram hints index unrComps rComps defId ctxt goalTy checkerState = d
           printInfo $ "No programs synthesised"
         _ ->
           case last results of
-            t -> do
+            (t, _) -> do
               debugM "Synthesiser" $ "Synthesised: " <> pretty t
               printSuccess "Synthesised"
 
@@ -259,16 +271,12 @@ synthesiseProgram hints index unrComps rComps defId ctxt goalTy checkerState = d
           putStrLn $ "Total synth time (ms) = "  ++ show (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double))
           putStrLn $ "Mean theoremSize   = " ++ show ((if smtCallsCount aggregate == 0 then 0 else fromInteger $ theoremSizeTotal aggregate) / fromInteger (smtCallsCount aggregate))
       -- </benchmarking-output>
-      return (map unannotateExpr results)
-    _ -> do
-      end    <- liftIO $ Clock.getTime Clock.Monotonic
-      printInfo $ "No programs synthesised - Timeout after: " <> (show timeoutLim  <> "ms")
-      return []
+      return (map (\(x, y) -> (unannotateExpr x, y)) results)
   return (fin, Nothing)
 
   where
 
-      loop resourceScheme (elimMax, introMax) index defs grade gamma agg = do
+      -- loop resourceScheme (elimMax, introMax) index defs grade gamma agg = do
 
 --      Diagonal search
         -- let diagonal = runOmega $ liftM2 (,) (each [0..elimMax]) (each [0..introMax])
@@ -279,7 +287,7 @@ synthesiseProgram hints index unrComps rComps defId ctxt goalTy checkerState = d
         -- let rectSwap = mergeByNorm (map mergeByNorm [[[(x,y) | x <- [0..elimMax]] | y <- [0..introMax]]])
 
         -- let lims = rectSwap
-        undefined
+        -- undefined
 
 
 

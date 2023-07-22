@@ -56,6 +56,7 @@ synthTreeToHtml result path =
 
 
 successfulSynthPathToHtml :: (?globals :: Globals) => RuleInfo -> Html 
+successfulSynthPathToHtml EmptyRuleInfo = error "stop"
 successfulSynthPathToHtml (VarRule name assumption goal gamma omega delta) = do 
     H.span ! A.class_ (stringValue "caret") $ do toHtml ("Var, using var:") 
       ; H.p ! A.style (stringValue "color: green; display: inline;") $ toHtml (pretty name <> " : " <> pretty assumption)
