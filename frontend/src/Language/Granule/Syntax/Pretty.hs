@@ -241,7 +241,14 @@ instance Pretty DataDecl where
     pretty (DataDecl _ tyCon tyVars kind dataConstrs) =
       let tvs = case tyVars of [] -> ""; _ -> (unwords . map pretty) tyVars <> " "
           ki = case kind of Nothing -> ""; Just k -> ": " <> pretty k <> " "
-      in "data " <> pretty tyCon <> " " <> tvs <> ki <> "where\n    " <> pretty dataConstrs
+      in "data " <> pretty tyCon <> " " <> tvs <> ki <> "where\n    " <> prettyAlign dataConstrs
+      where
+        prettyAlign dataConstrs = intercalate "\n  ; " (map (pretty' indent) dataConstrs)
+          where indent = maximum (map (length . internalName . dataConstrId) dataConstrs)
+        pretty' col (DataConstrIndexed _ name typeScheme) =
+          pretty name <> (replicate (col - (length $ pretty name)) ' ') <> " : " <> pretty typeScheme
+        pretty' _   (DataConstrNonIndexed _ name params) = pretty name <> " " <> (intercalate " " $ map pretty params)
+
 
 instance Pretty [DataConstr] where
     pretty = intercalate ";\n    " . map pretty
