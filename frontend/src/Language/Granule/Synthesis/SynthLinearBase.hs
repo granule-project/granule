@@ -515,14 +515,15 @@ constrIntroHelper :: (?globals :: Globals)
   -> Maybe Type
   -> Goal
   -> Synthesiser (Expr () Type, Ctxt SAssumption, Substitution, Bindings, Bool)
-constrIntroHelper gamma resourceScheme False depth focusPhase grade goal@(Goal goalTySch@(Forall s binders constraints tyA) sInfo) =
+constrIntroHelper gamma resourceScheme False depth focusPhase grade goal@(Goal goalTySch@(Forall s binders constraints tyA) sInfo) = do
   case (isADTorGADT tyA) of
     Just name -> do
-      if iCurrent depth <= intros depth || isDecr sInfo then do
+      if True || iCurrent depth <= intros depth || isDecr sInfo then do
 
         state <- getSynthState
         let (recursiveCons, nonRecursiveCons) = relevantConstructors name (constructors state)
         let sortedCons = sortBy compareArity nonRecursiveCons ++ sortBy compareArity recursiveCons
+        -- traceM "here"
 
         -- For each relevent data constructor, we must now check that it's type matches the goal
         (maybeExpr, deltaOut, substOut, bindingsOut, structurallyDecrOut) <- tryConstructors name state [] sortedCons
@@ -538,35 +539,32 @@ constrIntroHelper gamma resourceScheme False depth focusPhase grade goal@(Goal g
       tryConstructors adtName state ((conName, (conTySch, conSubst)):right) left `try` do
         result <- checkConstructor conTySch tyA conSubst
         case result of
-          (True, specTy, _, specSubst, substFromFreshening, predicate) -> do
+          (True, specTy, args, specSubst, substFromFreshening, predicate) -> do
             modifyPred (addPredicateViaConjunction predicate)
             specTy' <- conv $ substitute substFromFreshening specTy
             subst' <- conv $ combineSubstitutions s conSubst specSubst
             specTy'' <- conv $ substitute subst' specTy'
-            debugM "synthDebug - constrIntroHelper - synthing arguments for: " (show conName)
-            case constrArgs conTy of
-              Just [] -> do
+            case args of
+              [] -> do
                 let delta = case resourceScheme of Additive{} -> [] ; Subtractive{} -> gamma
-
                 let conExpr = Val ns (TyCon conName) True (Constr (TyCon conName) conName [])
                 return (Just $ conExpr, delta, conSubst, [], False)
-              Just conArgs -> do
-                args <- conv $ mapM (\s -> do
-                  s' <- substitute substFromFreshening s
-                  s'' <- substitute specSubst s'
-                  return (s'', Just $ boolToStructure $ isDecreasing adtName [s])) conArgs
+              conArgs@(_:_) -> do
+                args <- conv $ mapM (\(s,_) -> do
+                  subst'' <- combineSubstitutions ns conSubst specSubst
+                  s' <- substitute subst'' s
+                  return (s', Just $ boolToStructure $ isDecreasing adtName [s'])) conArgs
                 (exprs, delta, subst, bindings, structurallyDecr) <- synthConArgs adtName (constructors state) args conBinders conConstraints conSubst
                 return (Just $ makeConstr exprs conName conTy, delta, subst, bindings, structurallyDecr)
-              Nothing -> none
           _ -> none
 
-    constrArgs :: Type -> Maybe [Type]
-    constrArgs (TyCon _) = Just []
-    constrArgs (TyApp _ _) = Just []
-    constrArgs (FunTy _ _ e1 e2) = do
-      res <- constrArgs e2
-      return $ e1 : res
-    constrArgs _ = Nothing
+    -- constrArgs :: Type -> Maybe [Type]
+    -- constrArgs (TyCon _) = Just []
+    -- constrArgs (TyApp _ _) = Just []
+    -- constrArgs (FunTy _ _ e1 e2) = do
+    --   res <- constrArgs e2
+    --   return $ e1 : res
+    -- constrArgs _ = Nothing
 
     -- Traverse the argument types to the constructor and synthesise a term for each one
     synthConArgs tyAName consGlobal [(argTyA, sInfo)] conBinders conConstraints conSubst = do
