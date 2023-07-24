@@ -57,7 +57,6 @@ typeConstructors =
     , (mkId "Predicate", (Type 2, [], []))
     , (mkId "->",     (funTy (Type 0) (funTy (Type 0) (Type 0)), [], []))
     , (mkId ",,",     (funTy kcoeffect (funTy kcoeffect kcoeffect), [mkId ",,"], []))
-    , (mkId "ExactSemiring", (funTy (tyCon "Semiring") (tyCon "Predicate"), [], []))
     , (mkId "Int",    (Type 0, [], []))
     , (mkId "Float",  (Type 0, [], []))
     , (mkId "DFloat",  (Type 0, [], [])) -- special floats that can be tracked for sensitivty
@@ -65,6 +64,7 @@ typeConstructors =
     , (mkId "String", (Type 0, [], []))
     , (mkId "Inverse", ((funTy (Type 0) (Type 0)), [], []))
     -- Session type related things
+    , (mkId "ExactSemiring", (funTy (tyCon "Semiring") (tyCon "Predicate"), [], []))
     , (mkId "Protocol", (Type 0, [], []))
     , (mkId "SingleAction", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], [0]))
     , (mkId "ReceivePrefix", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], [0]))
@@ -87,11 +87,6 @@ typeConstructors =
 
     -- Note that Private/Public can be members of Sec (and map to Hi/Lo) or if 'SecurityLevels' is
     -- turned on then they are part of the 'Level' semiring
-    -- Borrowing
-    , (mkId "Borrowing", (kcoeffect, [], []))
-    , (mkId "One",       (tyCon "Borrowing", [], []))
-    , (mkId "Beta",      (tyCon "Borrowing", [], []))
-    , (mkId "Omega",     (tyCon "Borrowing", [], []))
     -- Security levels
     , (mkId "Private",  (extensionDependent [(SecurityLevels, tyCon "Level")] (tyCon "Sec"), [], []))
     , (mkId "Public",   (extensionDependent [(SecurityLevels, tyCon "Level")] (tyCon "Sec"), [], []))
@@ -148,6 +143,7 @@ closedOperation =
     TyOpJoin -> True
     TyOpInterval -> True
     TyOpConverge -> True
+    TyOpImpl     -> True
     _        -> False
 
 coeffectResourceAlgebraOps :: TypeOperator -> Bool
@@ -160,9 +156,10 @@ coeffectResourceAlgebraOps =
     TyOpInterval -> True
     _ -> False
 
+
 tyOps :: TypeOperator -> (Kind, Kind, Kind)
 tyOps = \case
-    TyOpLesserNat -> (kNat, kNat, (TyCon (mkId "Predicate")))
+    TyOpLesserNat -> (kNat, kNat, kpredicate)
     TyOpLesserEqNat -> (kNat, kNat, (TyCon (mkId "Predicate")))
     TyOpLesserEq -> (tyVar "k", tyVar "k", (TyCon (mkId "Predicate")))
     TyOpGreaterNat -> (kNat, kNat, (TyCon (mkId "Predicate")))
@@ -178,6 +175,8 @@ tyOps = \case
     TyOpJoin -> (kNat, kNat, kNat)
     TyOpInterval -> (tyVar "k", tyVar "k", tyVar "k")
     TyOpConverge -> (kNat, kNat, kNat)
+    TyOpImpl    -> (kpredicate, kpredicate, kpredicate)
+    TyOpHsup    -> (tyVar "k", tyVar "k", kpredicate)
 
 dataTypes :: [DataDecl]
 dataTypes =
@@ -250,65 +249,82 @@ binaryOperators = \case
 
 -- TODO make a proper quasi quoter that parses this at compile time
 builtinSrc :: String
-builtinSrc = [r|
+builtinSrc = [r|------
+--- Module: Primitives
+--- Description: Built-in primitive definitions
+------
 
 import Prelude
 
+--- # Core linear functional combinators
+
+--- Unit type
 data () = ()
 
+--- Allows a linear variable to be promoted to a graded modality
+--- specifying an exact usage of 1
 use : forall {a : Type} . a -> a [1]
 use = BUILTIN
 
+--- Linear function composition
 compose : forall {a : Type, b : Type, c : Type}
   . (b -> c) -> (a -> b) -> (a -> c)
 compose = BUILTIN
 -- Defined in the interpreter as \g -> \f -> \x -> g (f x)
 
 --------------------------------------------------------------------------------
--- Arithmetic
+--- # Arithmetic
 --------------------------------------------------------------------------------
 
+--- Integer division
 div : Int -> Int -> Int
 div = BUILTIN
 
 --------------------------------------------------------------------------------
--- Graded Possiblity
+--- # Graded Possiblity
 --------------------------------------------------------------------------------
 
+--- Inject into a computation for any graded monad
 pure
   : forall {a : Type}
   . a -> a <>
 pure = BUILTIN
 
+--- Extract form a pure computation
 fromPure
   : forall {a : Type}
   . a <Pure> -> a
 fromPure = BUILTIN
 
 --------------------------------------------------------------------------------
--- I/O
+--- # I/O
 --------------------------------------------------------------------------------
+
+--- IO effect operation information
 
 data IOElem = Stdout | Stdin | Stderr | Open | Read | Write | IOExcept | Close
 
+--- Read from standard input
 fromStdin : String <{Stdin}>
 fromStdin = BUILTIN
 
+--- Write to standard output
 toStdout : String -> () <{Stdout}>
 toStdout = BUILTIN
 
+--- Write to standard output
 toStderr : String -> () <{Stderr}>
 toStderr = BUILTIN
 
 --------------------------------------------------------------------------------
--- Exceptions
+--- # Exceptions
 --------------------------------------------------------------------------------
 
 throw : forall {a : Type, k : Coeffect} . (a [0 : k]) <MayFail>
 throw = BUILTIN
 
 --------------------------------------------------------------------------------
--- Conversions
+--- # Conversions
 --------------------------------------------------------------------------------
 
 showChar : Char -> String
@@ -327,7 +343,7 @@ readInt : String -> Int
 readInt = BUILTIN
 
 --------------------------------------------------------------------------------
--- Thread / Sessions
+--- # Concurrency and Session Types
 --------------------------------------------------------------------------------
 
 fork
@@ -370,19 +386,6 @@ offer : forall {p1 p2 : Protocol, a : Type}
       . (LChan p1 -> a) -> (LChan p2 -> a) -> LChan (Offer p1 p2) -> a
 offer = BUILTIN
 
-gsend
-  : forall {a : Type, s : Protocol}
-  . Chan (Send a s) -> a -> (Chan s) <Session>
-gsend = BUILTIN
-
-grecv
-  : forall {a : Type, s : Protocol}
-  . Chan (Recv a s) -> (a, Chan s) <Session>
-grecv = BUILTIN
-
-gclose : Chan End -> () <Session>
-gclose = BUILTIN
-
 -- trace : String -> () <>
 -- trace = BUILTIN
 
@@ -402,8 +405,27 @@ forkReplicateExactly : forall {p : Protocol, n : Nat} . {ReceivePrefix p}
                   => (LChan p -> ()) [n] ->  N n -> Vec n (LChan (Dual p))
 forkReplicateExactly = BUILTIN
 
+---------------------------------
+--- # Concurrency primitives using side effects
+----------------------------------
+
+gsend
+  : forall {a : Type, s : Protocol}
+  . Chan (Send a s) -> a -> (Chan s) <Session>
+gsend = BUILTIN
+
+grecv
+  : forall {a : Type, s : Protocol}
+  . Chan (Recv a s) -> (a, Chan s) <Session>
+grecv = BUILTIN
+
+gclose : Chan End -> () <Session>
+gclose = BUILTIN
+
+
+
 --------------------------------------------------------------------------------
--- File Handles
+--- # File Handles
 --------------------------------------------------------------------------------
 
 data Handle : HandleType -> Type where
@@ -449,9 +471,8 @@ isEOF = BUILTIN
 isEOF' : Handle RW -> (Handle RW, Bool) <{Read,IOExcept}>
 isEOF' = BUILTIN
 
-
 --------------------------------------------------------------------------------
--- Char
+--- # Char
 --------------------------------------------------------------------------------
 
 -- module Char
@@ -474,7 +495,7 @@ moveString : String -> String []
 moveString = BUILTIN
 
 --------------------------------------------------------------------------------
--- String manipulation
+--- # String manipulation
 --------------------------------------------------------------------------------
 
 stringAppend : String → String → String
@@ -496,51 +517,51 @@ stringSnoc = BUILTIN
 -- Arrays
 --------------------------------------------------------------------------------
 
-data
-  ArrayStack
-    (capacity : Nat)
-    (maxIndex : Nat)
-    (a : Type)
-  where
+-- data
+--   ArrayStack
+--     (capacity : Nat)
+--     (maxIndex : Nat)
+--     (a : Type)
+--   where
 
-push
-  : ∀ {a : Type, cap : Nat, maxIndex : Nat}
-  . {maxIndex < cap}
-  ⇒ ArrayStack cap maxIndex a
-  → a
-  → ArrayStack cap (maxIndex + 1) a
-push = BUILTIN
+-- push
+--   : ∀ {a : Type, cap : Nat, maxIndex : Nat}
+--   . {maxIndex < cap}
+--   ⇒ ArrayStack cap maxIndex a
+--   → a
+--   → ArrayStack cap (maxIndex + 1) a
+-- push = BUILTIN
 
-pop
-  : ∀ {a : Type, cap : Nat, maxIndex : Nat}
-  . {maxIndex > 0}
-  ⇒ ArrayStack cap maxIndex a
-  → a × ArrayStack cap (maxIndex - 1) a
-pop = BUILTIN
+-- pop
+--   : ∀ {a : Type, cap : Nat, maxIndex : Nat}
+--   . {maxIndex > 0}
+--   ⇒ ArrayStack cap maxIndex a
+--   → a × ArrayStack cap (maxIndex - 1) a
+-- pop = BUILTIN
 
--- Boxed array, so we allocate cap words
-allocate
-  : ∀ {a : Type, cap : Nat}
-  . N cap
-  → ArrayStack cap 0 a
-allocate = BUILTIN
+-- -- Boxed array, so we allocate cap words
+-- allocate
+--   : ∀ {a : Type, cap : Nat}
+--   . N cap
+--   → ArrayStack cap 0 a
+-- allocate = BUILTIN
 
-swap
-  : ∀ {a : Type, cap : Nat, maxIndex : Nat}
-  . ArrayStack cap (maxIndex + 1) a
-  → Fin (maxIndex + 1)
-  → a
-  → a × ArrayStack cap (maxIndex + 1) a
-swap = BUILTIN
+-- swap
+--   : ∀ {a : Type, cap : Nat, maxIndex : Nat}
+--   . ArrayStack cap (maxIndex + 1) a
+--   → Fin (maxIndex + 1)
+--   → a
+--   → a × ArrayStack cap (maxIndex + 1) a
+-- swap = BUILTIN
 
-copyArray
-  : ∀ {a : Type, cap : Nat, maxIndex : Nat}
-  . ArrayStack cap maxIndex (a [2])
-  → ArrayStack cap maxIndex a × ArrayStack cap maxIndex a
-copyArray = BUILTIN
+-- copyArray
+--   : ∀ {a : Type, cap : Nat, maxIndex : Nat}
+--   . ArrayStack cap maxIndex (a [2])
+--   → ArrayStack cap maxIndex a × ArrayStack cap maxIndex a
+-- copyArray = BUILTIN
 
 --------------------------------------------------------------------------------
--- Cost
+--- # Cost
 --------------------------------------------------------------------------------
 
 tick : () <1>
@@ -578,7 +599,7 @@ tick = BUILTIN
 -- freePtr = BUILTIN
 
 --------------------------------------------------------------------------------
--- Uniqueness monadic operations
+--- # Uniqueness modality
 --------------------------------------------------------------------------------
 
 uniqueReturn
@@ -612,38 +633,42 @@ trustedBind
 trustedBind = BUILTIN
 
 --------------------------------------------------------------------------------
--- Mutable arrays
+--- # Mutable array operations
 --------------------------------------------------------------------------------
 
 newFloatArray : Int -> *FloatArray
 newFloatArray = BUILTIN
 
-newFloatArrayI : Int -> FloatArray
-newFloatArrayI = BUILTIN
-
 readFloatArray : *FloatArray -> Int -> (Float, *FloatArray)
 readFloatArray = BUILTIN
-
-readFloatArrayI : FloatArray -> Int -> (Float, FloatArray)
-readFloatArrayI = BUILTIN
 
 writeFloatArray : *FloatArray -> Int -> Float -> *FloatArray
 writeFloatArray = BUILTIN
 
-writeFloatArrayI : FloatArray -> Int -> Float -> FloatArray
-writeFloatArrayI = BUILTIN
-
 lengthFloatArray : *FloatArray -> (Int, *FloatArray)
 lengthFloatArray = BUILTIN
-
-lengthFloatArrayI : FloatArray -> (Int, FloatArray)
-lengthFloatArrayI = BUILTIN
 
 deleteFloatArray : *FloatArray -> ()
 deleteFloatArray = BUILTIN
 
 --------------------------------------------------------------------------------
--- Benchmarking
+--- # Imuutable array operations
+--------------------------------------------------------------------------------
+
+newFloatArrayI : Int -> FloatArray
+newFloatArrayI = BUILTIN
+
+readFloatArrayI : FloatArray -> Int -> (Float, FloatArray)
+readFloatArrayI = BUILTIN
+
+writeFloatArrayI : FloatArray -> Int -> Float -> FloatArray
+writeFloatArrayI = BUILTIN
+
+lengthFloatArrayI : FloatArray -> (Int, FloatArray)
+lengthFloatArrayI = BUILTIN
+
+--------------------------------------------------------------------------------
+--- # Benchmarking
 --------------------------------------------------------------------------------
 
 data BenchList where BenchGroup String BenchList BenchList ; Bench Int String (Int [] -> () <{Stdout}>) BenchList; Done
@@ -652,13 +677,14 @@ mkIOBenchMain : BenchList -> () <>
 mkIOBenchMain = BUILTIN
 
 ---------------------
+--- # Sensitivity
+---------------------
 
 scale : (k : Float) -> DFloat [k] -> DFloat
 scale = BUILTIN
 
-
 --------------------------------------------------------------------------------
--- Capabilities
+--- # Capabilities
 --------------------------------------------------------------------------------
 
 data Capability = Console | TimeDate
@@ -670,14 +696,14 @@ cap = BUILTIN
 -- Additive conjunction (linear logic)
 --------------------------------------------------------------------------------
 
-with : forall {a b : Type} . a [0..1] -> b [0..1] -> a & b
-with = BUILTIN
+-- with : forall {a b : Type} . a [0..1] -> b [0..1] -> a & b
+-- with = BUILTIN
 
-projL : forall {a b : Type} . a & b -> a
-projL = BUILTIN
+-- projL : forall {a b : Type} . a & b -> a
+-- projL = BUILTIN
 
-projR : forall {a b : Type} . a & b -> b
-projR = BUILTIN
+-- projR : forall {a b : Type} . a & b -> b
+-- projR = BUILTIN
 
 |]
 
@@ -692,7 +718,7 @@ builtins :: [(Id, TypeScheme)]
         Left err -> error err
 
       unDef :: Def () () -> (Id, TypeScheme)
-      unDef (Def _ name _ _ (Forall _ bs cs t)) = (name, Forall nullSpanBuiltin bs cs t)
+      unDef (Def _ name _ _ _ (Forall _ bs cs t)) = (name, Forall nullSpanBuiltin bs cs t)
 
 -- List of primitives that can't be promoted in CBV
 unpromotables :: [String]

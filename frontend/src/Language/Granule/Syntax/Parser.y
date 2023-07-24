@@ -55,6 +55,7 @@ import Language.Granule.Utils hiding (mkSpan)
     then  { TokenThen _ }
     else  { TokenElse _ }
     case  { TokenCase _ }
+    spec  { TokenSpec _ }
     of    { TokenOf _ }
     try    { TokenTry _ }
     as    { TokenAs _ }
@@ -118,6 +119,7 @@ import Language.Granule.Utils hiding (mkSpan)
     '&'   { TokenBorrow _ }
     '#'   { TokenHash _ }
     '*{'  { TokenStar _ }
+    '⨱'   { TokenHsup _ }
 
 %right '∘'
 %right in
@@ -174,15 +176,50 @@ Import :: { Import }
 
 Def :: { Def () () }
   : Sig NL Bindings
-    {% let name = fst3 $1
-       in case $3 of
-          (nameB, _) | not (nameB == name) ->
-            error $ "Name for equation `" <> nameB <> "` does not match the signature head `" <> name <> "`"
+      {%  let name = fst3 $1 in
+          case $3 of
+            (nameB, _) | not (nameB == name) ->
+              error $ "Name for equation `" <> nameB <> "` does not match the signature head `" <> name <> "`"
 
-          (_, bindings) -> do
-            span <- mkSpan (thd3 $1, endPos $ getSpan $ last (equations bindings))
-            return $ Def span (mkId name) False bindings (snd3 $1)
-    }
+            (_, bindings) -> do
+              span <- mkSpan (thd3 $1, endPos $ getSpan $ last (equations bindings))
+              return $ Def span (mkId name) False Nothing bindings (snd3 $1)
+      }
+  | Sig NL Spec NL Bindings
+      {%  let name = fst3 $1 in
+          let spec = $3 in
+          case $5 of
+            (nameB, _) | not (nameB == name) ->
+              error $ "Name for equation `" <> nameB <> "` does not match the signature head `" <> name <> "`"
+
+            (_, bindings) -> do
+              span <- mkSpan (thd3 $1, endPos $ getSpan $ last (equations bindings))
+              return $ Def span (mkId name) False spec bindings (snd3 $1)
+      }
+
+Spec :: { Maybe (Spec () ()) }
+  : spec SpecList           { let (exs, auxs)  = $2 in
+                                         Just $ Spec nullSpanNoFile False exs auxs }
+
+SpecList :: { ([Example () ()], [(Id, Maybe Type)]) }
+  : Example ';' SpecList            { let (exs, auxs) = $3
+                                           in ($1 : exs, auxs) }
+  | Components                          {   let auxs = $1
+                                           in ([], auxs) }
+  | {- empty -}                         { ([], []) }
+
+Example :: { Example () () }
+  : Expr '=' Expr '!' CONSTR               { Example $1 $3 True }
+  | Expr '=' Expr                          { Example $1 $3 False }
+
+Components :: { [(Id, Maybe Type)] }
+  : VAR                                   {% return [(mkId $ symString $1, Nothing)] }
+  | VAR '%' Coeffect                   {% return [(mkId $ symString $1, Just $3)] }
+  -- : VAR '[' Coeffect ']'                 {% return [(mkId $ symString $1, Just $3)] }
+  | VAR ',' Components                   { (mkId $ symString $1, Nothing) : $3 }
+  | VAR '%' Coeffect ',' Components  { (mkId $ symString $1, Just $3) : $5 }
+  -- | VAR '[' Coeffect ']' ',' Components  { (mkId $ symString $1, Just $3) : $6 }
+  | {- empty -}                           {% return [] }
 
 DataDecl :: { DataDecl }
   : data CONSTR TyVars KindAnn where DataConstrs
@@ -333,6 +370,14 @@ Vars1 :: { [String] }
   : VAR                       { [symString $1] }
   | VAR Vars1                 { symString $1 : $2 }
 
+Hint :: { (String, Int) }
+  : '-' VAR                      { (symString $2, 0) }
+  | '-' VAR INT                  { let TokenInt _ x  = $3 in (symString $2, x) }
+
+Hints :: { [(String, Int)] }
+  : Hint                      { [$1] }
+  | Hint Hints                { $1 : $2 }
+
 Kind :: { Kind }
   : Type                           { $1 }
 
@@ -367,6 +412,15 @@ TyJuxt :: { Type }
   | TyAtom '^' TyAtom         { TyInfix TyOpExpon $1 $3 }
   | TyAtom "/\\" TyAtom       { TyInfix TyOpMeet $1 $3 }
   | TyAtom "\\/" TyAtom       { TyInfix TyOpJoin $1 $3 }
+  | TyAtom '<=' TyAtom        { TyInfix TyOpLesserEq $1 $3 }
+  | TyAtom '.' '<=' TyAtom    { TyInfix TyOpLesserEqNat $1 $4 }
+  | TyAtom '>=' TyAtom        { TyInfix TyOpGreaterEq $1 $3 }
+  | TyAtom '.' '>=' TyAtom    { TyInfix TyOpGreaterEqNat $1 $4 }
+  | TyAtom '==' TyAtom        { TyInfix TyOpEq $1 $3 }
+  | TyAtom '/=' TyAtom        { TyInfix TyOpNotEq $1 $3 }
+  | TyAtom '=>' TyAtom        { TyInfix TyOpImpl $1 $3 }
+
+
 
 TyCases :: { [(Type, Type)] }
  : TyCase TyCasesNext             { $1 : $2 }
@@ -388,6 +442,8 @@ Constraint :: { Type }
   | TyAtom '.' '>=' TyAtom    { TyInfix TyOpGreaterEqNat $1 $4 }
   | TyAtom '==' TyAtom        { TyInfix TyOpEq $1 $3 }
   | TyAtom '/=' TyAtom        { TyInfix TyOpNotEq $1 $3 }
+  | TyAtom '=>' TyAtom        { TyInfix TyOpImpl $1 $3 }
+  | TyAtom '⨱' TyAtom         { TyInfix TyOpHsup $1 $3 }
 
 TyAtom :: { Type }
   : CONSTR                    { case constrString $1 of
@@ -604,9 +660,12 @@ Juxt :: { Expr () () }
   | Juxt '@' TyAtom           {% (mkSpan (getStart $1, getEnd $1)) >>= \sp -> return $ AppTy sp () False $1 $3 } -- TODO: span is not very accurate here
 
 Hole :: { Expr () () }
-  : '{!' Vars1 '!}'           {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $3)) >>= \sp -> return $ Hole sp () False (map mkId $2) }
-  | '{!' '!}'                 {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $2)) >>= \sp -> return $ Hole sp () False [] }
-  | '?'                       {% (mkSpan (fst . getPosToSpan $ $1, second (+1) . snd . getPosToSpan $ $1)) >>= \sp -> return $ Hole sp () False [] }
+  : '{!' Vars1 '!}'           {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $3)) >>= \sp -> return $ Hole sp () False (map mkId $2) Nothing }
+  | '{!' Hints '!}'           {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $3)) >>= \sp -> return $ Hole sp () False [] (Just $ parseHints $2) }
+  | '{!' Hints Vars1 '!}'     {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $4)) >>= \sp -> return $ Hole sp () False (map mkId $3) (Just $ parseHints $2) }
+  | '{!' Vars1 Hints '!}'     {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $4)) >>= \sp -> return $ Hole sp () False (map mkId $2) (Just $ parseHints $3) }
+  | '{!' '!}'                 {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $2)) >>= \sp -> return $ Hole sp () False [] Nothing }
+  | '?'                       {% (mkSpan (fst . getPosToSpan $ $1, second (+1) . snd . getPosToSpan $ $1)) >>= \sp -> return $ Hole sp () False [] Nothing }
 
 Atom :: { Expr () () }
   : '(' Expr ')'              { $2 }
@@ -668,6 +727,17 @@ parseError t = do
 
 parseDefs :: FilePath -> String -> Either String (AST () (), [Extension])
 parseDefs file input = runReaderT (runStateT (topLevel $ scanTokens input) []) file
+
+parseHints :: [(String, Int)] -> Hints
+parseHints hints =
+  Hints {
+    hSubtractive = ("s", 0) `elem` hints,
+    hPruning     = ("p", 0) `elem` hints,
+    hNoTimeout   = ("nt", 0) `elem` hints,
+    hTimeout     = lookup "t" hints,
+    hIndex       = lookup "i" hints,
+    hLinHaskell  = Nothing
+  }
 
 parseAndDoImportsAndFreshenDefs :: (?globals :: Globals) => String -> IO (AST () (), [Extension])
 parseAndDoImportsAndFreshenDefs input = do

@@ -1,8 +1,8 @@
 -- gr --no-eval
 
 data Maybe a where
-  None : Maybe a;
-  Some : a → Maybe a
+  Nothing : Maybe a;
+  Just : a → Maybe a
 
 data Either a b where
   Left : a → Either a b;

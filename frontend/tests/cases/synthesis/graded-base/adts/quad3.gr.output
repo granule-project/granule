@@ -1,0 +1,4 @@
+language GradedBase
+
+quad3 : forall {a b c d : Type} . (a , b) %2 -> (b, (a, (b, a)))
+quad3 (y, z) = (z, (y, (z, y)))

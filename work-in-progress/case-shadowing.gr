@@ -5,20 +5,20 @@ readFile : String -> (Maybe String) <O,R,C>
 readFile filename =
   let o <- openHandle filename ReadMode in
   case o of
-    None -> pure None;
-    Some h ->
+    Nothing -> pure Nothing;
+    Just h ->
       let (h, cs) <- readUntilEnd h;
           _ <- closeHandle h
-      in pure (Some cs)
+      in pure (Just cs)
 
 readUntilEnd : Handle R -> (Handle R, String) <R>
 readUntilEnd h =
   let (h, mc) <- readChar h in
   case mc of
-    Some c ->
+    Just c ->
       let (h, str) <- readUntilEnd h
       in pure (h, stringCons c str);
-    None -> pure (h, "")
+    Nothing -> pure (h, "")
 
 
 -- Type checking failed: work-in-progress/case-shadowing.gr:

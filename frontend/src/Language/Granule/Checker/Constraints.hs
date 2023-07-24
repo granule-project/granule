@@ -50,7 +50,9 @@ provePredicate predicate vars constructors
       debugM "solveConstraints" "Skipping solver because predicate is trivial."
       return (0.0, QED)
   | otherwise = do
+      debugM "compiletoSBV" (pretty vars ++ " . " ++ pretty predicate)
       let (sbvTheorem, _, unsats) = compileToSBV predicate vars constructors
+      --debugM "compiledtoSBV" ""
 
       -- Benchmarking start
       start  <- if benchmarking then Clock.getTime Clock.Monotonic else return 0
@@ -67,7 +69,7 @@ provePredicate predicate vars constructors
       end    <- if benchmarking then Clock.getTime Clock.Monotonic else return 0
       let duration = (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / 10^(6 :: Integer)::Double)
 
-      return $ (duration, case thmRes of
+      res <- return $ (duration, case thmRes of
         -- we're good: the negation of the theorem is unsatisfiable
         Unsatisfiable {} -> QED
         ProofError _ msgs _ -> SolverProofError $ unlines msgs
@@ -93,6 +95,8 @@ provePredicate predicate vars constructors
                    NotValid $ "is " <> show (ThmResult thmRes)
             Right (True, _) -> NotValid "returned probable model."
             Left str -> OtherSolverError str)
+      debugM "compiletoSBV" (case res of (_,QED) -> "True"; _ -> "False")
+      return res
 
 -- | Compile constraint into an SBV symbolic bool, along with a list of
 -- | constraints which are trivially unequal (if such things exist) (e.g., things like 1=0).
@@ -129,6 +133,9 @@ compileToSBV predicate tyVarContext constructors =
     -- Build the theorem, doing local creation of universal variables
     -- when needed (see Impl case)
     buildTheorem' :: Ctxt SGrade -> Pred -> Symbolic SBool
+    buildTheorem' solverVars (Conj []) = do
+      return $ sTrue
+
     buildTheorem' solverVars (Conj ps) = do
       ps' <- mapM (buildTheorem' solverVars) ps
       return $ sAnd ps'
@@ -296,7 +303,7 @@ compile vars (Hsup _ c1 c2 t) =
   bindM2And' (\c1' c2' -> (symGradeHsup c1' c2')) (compileCoeffect (normalise c1) t vars) (compileCoeffect (normalise c2) t vars)
 
 -- Assumes that c3 is already existentially bound
-compile vars (Lub _ c1 c2 c3@(TyVar v) t) =
+compile vars (Lub _ c1 c2 c3@(TyVar v) t doLeastCheck) =
   case t of
     {-
     -- An alternate procedure for computing least-upper bounds
@@ -319,14 +326,18 @@ compile vars (Lub _ c1 c2 c3@(TyVar v) t) =
       -- s3 is an upper bound
       pa1 <- approximatedByOrEqualConstraint s1 s3
       pb1 <- approximatedByOrEqualConstraint s2 s3
-      --- and it is the least such upper bound
-      pc <- freshSolverVarScoped compileQuantScoped (internalName v <> ".up") t ForallQ
-              (\(py, y) -> do
-                pc1 <- approximatedByOrEqualConstraint s1 y
-                pc2 <- approximatedByOrEqualConstraint s2 y
-                pc3 <- approximatedByOrEqualConstraint s3 y
-                return ((py .&& pc1 .&& pc2) .=> pc3))
-      return (p1 .&& p2 .&& p3 .&& pa1 .&& pb1 .&& pc)
+      if doLeastCheck then do
+           --- and it is the least such upper bound
+          pc <- freshSolverVarScoped compileQuantScoped (internalName v <> ".up") t ForallQ
+                  (\(py, y) -> do
+                    pc1 <- approximatedByOrEqualConstraint s1 y
+                    pc2 <- approximatedByOrEqualConstraint s2 y
+                    pc3 <- approximatedByOrEqualConstraint s3 y
+                    return ((py .&& pc1 .&& pc2) .=> pc3))
+          return (p1 .&& p2 .&& p3 .&& pa1 .&& pb1 .&& pc)
+        else
+          -- no least check, just some upper bound
+          return (p1 .&& p2 .&& p3 .&& pa1 .&& pb1)
 
 compile vars (ApproximatedBy _ c1 c2 t) =
   bindM2And' approximatedByOrEqualConstraint (compileCoeffect (normalise c1) t vars) (compileCoeffect (normalise c2) t vars)

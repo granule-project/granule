@@ -1,0 +1,4 @@
+language GradedBase 
+
+quad4 : forall {a b c d : Type} . ((a, a), (a, a)) %0..1 -> a
+quad4 ((w, p), (u, v)) = p

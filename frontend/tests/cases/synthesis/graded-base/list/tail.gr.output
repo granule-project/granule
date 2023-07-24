@@ -1,0 +1,9 @@
+language GradedBase
+
+data List a = Cons a (List a) | Nil 
+
+tail : forall a . List a %0..1 -> List a
+spec 
+    tail (Cons 1 (Cons 2 Nil)) = Cons 2 Nil;
+tail Nil = Nil;
+tail (Cons y z) = z

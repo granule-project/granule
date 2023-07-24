@@ -1,0 +1,3 @@
+Type checking failed: 
+Unification failed: frontend/tests/cases/negative/polymorphism/contravariance.gr:3:16:
+Cannot unify universally quantified type variable `c` of kind `Type` with `a`

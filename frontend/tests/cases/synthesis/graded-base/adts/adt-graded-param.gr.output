@@ -1,0 +1,6 @@
+language GradedBase
+
+data Test c where First c
+
+f : forall { a : Type } . (Test (a [2])) %1..1 -> (a, a)
+f (First [z]) = (z, z)

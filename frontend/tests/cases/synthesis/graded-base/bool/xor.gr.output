@@ -1,0 +1,14 @@
+language GradedBase
+
+data Bool = True | False
+
+xor : Bool %1 -> Bool %1 -> Bool
+spec 
+    xor True True = False;
+    xor False True = True;
+    xor True False = True;
+    xor False False = False;
+xor True True = False;
+xor False True = True;
+xor True False = True;
+xor False False = False

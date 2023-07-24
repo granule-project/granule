@@ -1,0 +1,4 @@
+language GradedBase
+
+quad5 : forall a b .  (a, b) %2..2 -> ((b, a), (b, a))
+quad5 = ?

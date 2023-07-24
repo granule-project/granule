@@ -45,7 +45,7 @@ type Injections = (Coeffect -> Coeffect, Coeffect -> Coeffect)
 -- | Check the kind of a definition
 -- | NOTE: Currently we expect that a type scheme has kind ktype
 kindCheckDef :: (?globals :: Globals) => Def v t -> Checker (Def v t)
-kindCheckDef (Def s id rf eqs (Forall s' quantifiedVariables constraints ty)) = do
+kindCheckDef (Def s id rf spec eqs (Forall s' quantifiedVariables constraints ty)) = do
   -- Reset the ty var context
   modify (\st -> st { tyVarContext = [] })
 -- Make local context of universal variables
@@ -77,7 +77,7 @@ kindCheckDef (Def s id rf eqs (Forall s' quantifiedVariables constraints ty)) = 
   modify (\st -> st { tyVarContext = [] })
 
   -- Update the def with the resolved quantifications
-  return (Def s id rf eqs (Forall s' qVars constraints tyElaborated))
+  return (Def s id rf spec eqs (Forall s' qVars constraints tyElaborated))
 
   where
     -- Universally quantifies everything in a context.
@@ -526,6 +526,11 @@ closedOperatorAtKind _ op (TyCon (internalName -> "Nat")) =
 closedOperatorAtKind s TyOpExpon t = do
   _ <- checkKind s t keffect
   return $ Just []
+
+-- => is closed
+closedOperatorAtKind s TyOpImpl t | t == kpredicate = do
+  return $ Just []
+
 
 -- TODO: ghost variables, do we need to worry about substitution?
 closedOperatorAtKind s TyOpConverge t = do

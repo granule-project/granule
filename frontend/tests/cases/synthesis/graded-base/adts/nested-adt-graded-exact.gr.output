@@ -1,0 +1,9 @@
+language GradedBase
+
+data Test c where First c | Second c
+
+f : forall { a : Type } . (Test (Test a)) % 1 -> a % 1 -> (a, a)
+f (First (First u)) y = (u, y);
+f (First (Second w)) y = (w, y);
+f (Second (First x9)) y = (x9, y);
+f (Second (Second x11)) y = (x11, y)

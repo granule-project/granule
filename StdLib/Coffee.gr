@@ -1,0 +1,23 @@
+------
+--- Module: Coffee
+--- Description: Coffee data type for uniqueness examples
+--- Authors: Daniel Marshall, Dominic Orchard
+--- License: BSD3
+--- Copyright: (c) Authors 2022
+--- Issue-tracking: https://github.com/dorchard/granule/issues
+--- Repository: https://github.com/dorchard/granule
+------
+
+module Coffee hiding (Coffee, Awake) where
+
+data Coffee = Coffee
+data Awake  = Awake
+
+drink : Coffee -> Awake
+drink Coffee = Awake
+
+keep : Coffee -> Coffee
+keep x = x
+
+sip : *Coffee → (Coffee, Awake)
+sip fresh = let !coffee = share fresh in (keep coffee, drink coffee)

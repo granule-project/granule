@@ -8,7 +8,7 @@ module Language.Granule.Utils where
 
 import Control.Applicative ((<|>))
 import Control.Exception (SomeException, catch, throwIO, try)
-import Control.Monad (when, forM)
+import Control.Monad (when, forM, foldM)
 import Control.Monad.State.Class
 import Data.List ((\\), nub, sortBy)
 import Data.List.NonEmpty (NonEmpty(..))
@@ -32,6 +32,7 @@ import Language.Granule.Syntax.Span
 -- | Flags that change Granule's behaviour
 data Globals = Globals
   { globalsDebugging           :: Maybe Bool
+  , globalsInteractiveDebugging :: Maybe Bool
   , globalsNoColors            :: Maybe Bool
   , globalsAlternativeColors   :: Maybe Bool
   , globalsNoEval              :: Maybe Bool
@@ -51,11 +52,12 @@ data Globals = Globals
   , globalsBenchmarkRaw        :: Maybe Bool
   , globalsSubtractiveSynthesis   :: Maybe Bool
   , globalsAlternateSynthesisMode :: Maybe Bool
-  , globalsAltSynthStructuring :: Maybe Bool
-  , globalsGradeOnRule         :: Maybe Bool
-  , globalsSynthTimeoutMillis  :: Maybe Integer
-  , globalsSynthIndex          :: Maybe Integer
-  , globalsExtensions          :: [Extension]
+  , globalsHaskellSynth            :: Maybe Bool
+  , globalsSynthHtml        :: Maybe Bool
+  , globalsExampleLimit         :: Maybe Int
+  , globalsCartesianSynth         :: Maybe Int
+  , globalsExtensions           :: [Extension]
+  , globalsDocMode             :: Maybe Bool
   } deriving (Read, Show)
 
 -- | Allowed extensions
@@ -87,9 +89,10 @@ parseExtensions xs =
     _           -> Nothing
 
 -- | Accessors for global flags with default values
-debugging, noColors, alternativeColors, noEval, suppressInfos, suppressErrors,
-  timestamp, testing, ignoreHoles, benchmarking, benchmarkingRawData, subtractiveSynthesisMode, alternateSynthesisMode, altSynthStructuring, gradeOnRule :: (?globals :: Globals) => Bool
+debugging, interactiveDebugging, noColors, alternativeColors, noEval, suppressInfos, suppressErrors,
+  timestamp, testing, ignoreHoles, benchmarking, benchmarkingRawData, subtractiveSynthesisMode, alternateSynthesisMode, haskellSynth, synthHtml, docMode :: (?globals :: Globals) => Bool
 debugging         = fromMaybe False $ globalsDebugging ?globals
+interactiveDebugging         = fromMaybe False $ globalsInteractiveDebugging ?globals
 noColors          = fromMaybe False $ globalsNoColors ?globals
 alternativeColors = fromMaybe False $ globalsAlternativeColors ?globals
 noEval            = fromMaybe False $ globalsNoEval ?globals
@@ -102,21 +105,20 @@ benchmarking      = fromMaybe False $ globalsBenchmark ?globals
 benchmarkingRawData = fromMaybe False $ globalsBenchmarkRaw ?globals
 subtractiveSynthesisMode = fromMaybe False $ globalsSubtractiveSynthesis ?globals
 alternateSynthesisMode = fromMaybe False $ globalsAlternateSynthesisMode ?globals
-altSynthStructuring = fromMaybe False $ globalsAltSynthStructuring ?globals
-gradeOnRule = fromMaybe False $ globalsGradeOnRule ?globals
-
+haskellSynth = fromMaybe False $ globalsHaskellSynth ?globals
+synthHtml = fromMaybe False $ globalsSynthHtml ?globals
+docMode = fromMaybe False $ globalsDocMode ?globals
 
 -- | Accessor for the solver timeout with a default value
 solverTimeoutMillis :: (?globals :: Globals) => Integer
 solverTimeoutMillis = fromMaybe 10000 $ globalsSolverTimeoutMillis ?globals
 
--- | Accessor for the synthesis timeout with a default value
-synthTimeoutMillis :: (?globals :: Globals) => Integer
-synthTimeoutMillis = fromMaybe 10000 $ globalsSynthTimeoutMillis ?globals
+-- | Limit to how many times we run the examples before giving up
+exampleLimit :: (?globals :: Globals) => Int
+exampleLimit = fromMaybe 25 $ globalsExampleLimit ?globals
 
--- | Accessor for the synthesis index with a default value
-synthIndex :: (?globals :: Globals) => Integer
-synthIndex = fromMaybe 1 $ globalsSynthIndex ?globals
+cartSynth :: (?globals :: Globals) => Int
+cartSynth = fromMaybe 0 $ globalsCartesianSynth ?globals
 
 -- | Accessors for global file paths with default values
 includePath, sourceFilePath :: (?globals :: Globals) => FilePath
@@ -131,6 +133,7 @@ entryPoint = fromMaybe "main" $ globalsEntryPoint ?globals
 instance Semigroup Globals where
   g1 <> g2 = Globals
       { globalsDebugging           = globalsDebugging           g1 <|> globalsDebugging           g2
+      , globalsInteractiveDebugging = globalsInteractiveDebugging g1 <|> globalsInteractiveDebugging g2
       , globalsNoColors            = globalsNoColors            g1 <|> globalsNoColors            g2
       , globalsAlternativeColors   = globalsAlternativeColors   g1 <|> globalsAlternativeColors   g2
       , globalsNoEval              = globalsNoEval              g1 <|> globalsNoEval              g2
@@ -150,16 +153,18 @@ instance Semigroup Globals where
       , globalsBenchmarkRaw        = globalsBenchmarkRaw        g1 <|> globalsBenchmarkRaw        g2
       , globalsSubtractiveSynthesis   = globalsSubtractiveSynthesis   g1 <|> globalsSubtractiveSynthesis   g2
       , globalsAlternateSynthesisMode = globalsAlternateSynthesisMode g1 <|> globalsAlternateSynthesisMode g2
-      , globalsAltSynthStructuring = globalsAltSynthStructuring g1 <|> globalsAltSynthStructuring g2
-      , globalsGradeOnRule = globalsGradeOnRule g1 <|> globalsGradeOnRule g2
-      , globalsSynthIndex = globalsSynthIndex g1 <|> globalsSynthIndex g2
-      , globalsSynthTimeoutMillis = globalsSynthTimeoutMillis g1 <|> globalsSynthTimeoutMillis g2
+      , globalsHaskellSynth = globalsHaskellSynth g1 <|> globalsHaskellSynth g2
+      , globalsCartesianSynth = globalsCartesianSynth g1 <|> globalsCartesianSynth g2
+      , globalsSynthHtml = globalsSynthHtml g1 <|> globalsSynthHtml g2
+      , globalsExampleLimit = globalsExampleLimit g1 <|> globalsExampleLimit g2
       , globalsExtensions = nub (globalsExtensions g1 <> globalsExtensions g2)
+      , globalsDocMode = globalsDocMode g1 <|> globalsDocMode g2
       }
 
 instance Monoid Globals where
   mempty = Globals
     { globalsDebugging           = Nothing
+    , globalsInteractiveDebugging = Nothing
     , globalsNoColors            = Nothing
     , globalsAlternativeColors   = Nothing
     , globalsNoEval              = Nothing
@@ -179,11 +184,12 @@ instance Monoid Globals where
     , globalsBenchmarkRaw        = Nothing
     , globalsSubtractiveSynthesis   = Nothing
     , globalsAlternateSynthesisMode = Nothing
-        , globalsAltSynthStructuring = Nothing
-    , globalsGradeOnRule = Nothing
-    , globalsSynthTimeoutMillis  = Nothing
-    , globalsSynthIndex  = Nothing
+    , globalsHaskellSynth = Nothing
+    , globalsCartesianSynth = Nothing
+    , globalsSynthHtml = Nothing
+    , globalsExampleLimit = Nothing
     , globalsExtensions = [Base]
+    , globalsDocMode = Nothing
     }
 
 -- | A class for messages that are shown to the user. TODO: make more general
@@ -346,6 +352,7 @@ lookupMany _ []                     = []
 lookupMany a' ((a, b):xs) | a == a' = b : lookupMany a' xs
 lookupMany a' (_:xs)                = lookupMany a' xs
 
+
 -- | Get set of duplicates in a list.
 -- >>> duplicates [1,2,2,3,3,3]
 -- [2,3]
@@ -405,7 +412,7 @@ ifM condM f g = do
 whenM :: Monad m => m Bool -> m () -> m ()
 whenM condM f = ifM condM f (return ())
 
-mapMaybeM :: Monad m => (a -> m (Maybe b)) -> [a] -> m [b]
+mapMaybeM :: (Monad m) => (a -> m (Maybe b)) -> [a] -> m [b]
 mapMaybeM f [] = return []
 mapMaybeM f (x : xs) = do
   my <- f x
@@ -420,3 +427,21 @@ modifyM f = do
   s <- get
   s' <- f s
   put s'
+
+-- foldM but with parameters reversed for code readability
+-- when the inductive part is long
+forallM :: Monad m => [a] -> b -> (b -> a -> m b) -> m b
+forallM xs b h = foldM h b xs
+
+-- implies
+infixr 2 ==>
+(==>) :: Bool -> Bool -> Bool
+True  ==> True   = True
+True  ==> False = False
+False ==> _     = True
+
+(<.*>) :: Monad m => m a -> m b -> m (a, b)
+m <.*> n = do
+  x <- m
+  y <- n
+  return (x, y)

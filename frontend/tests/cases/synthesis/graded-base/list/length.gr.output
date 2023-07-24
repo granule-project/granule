@@ -1,0 +1,12 @@
+language GradedBase 
+
+data List a = Cons a (List a) | Nil 
+
+data N = S N | Z
+
+length : forall a . List a %0..∞ -> N 
+spec
+    length (Cons 1 (Cons 1 Nil)) = S (S Z);
+    length %0..∞
+length Nil = Z;
+length (Cons y z) = S (length z)

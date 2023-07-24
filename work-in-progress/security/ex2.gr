@@ -38,10 +38,10 @@ checkIfCommon [str] lst =
 strEq : String -> String -> Bool
 strEq xs ys =
   case (stringUncons xs, stringUncons ys) of
-    (None, None) -> True;
-    (None, Some xs) -> let ((), ()) = drop @(Char, String) xs in False;
-    (Some xs, None) -> let ((), ()) = drop @(Char, String) xs in False;
-    (Some (x', xs'), Some (y', ys')) ->
+    (Nothing, Nothing) -> True;
+    (Nothing, Just xs) -> let ((), ()) = drop @(Char, String) xs in False;
+    (Just xs, Nothing) -> let ((), ()) = drop @(Char, String) xs in False;
+    (Just (x', xs'), Just (y', ys')) ->
       and' (charToInt x' == charToInt y') (strEq xs' ys')
 
 or'' : forall { l : Level } . Bool [l] -> Bool [l] -> Bool [l]

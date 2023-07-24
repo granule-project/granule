@@ -1,0 +1,3 @@
+--- gr -no-eval
+id : forall {a : Type} . a [1 /\ 1] -> a
+id [x] = x

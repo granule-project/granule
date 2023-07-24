@@ -1,0 +1,8 @@
+language GradedBase 
+
+data N = S N | Z
+
+pred : N %1 -> N 
+spec 
+    pred (S (S Z)) = (S Z);
+pred = ?

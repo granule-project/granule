@@ -1,3 +1,4 @@
+{-# LANGUAGE ViewPatterns #-}
 module Language.Granule.Doc where
 
 -- grdoc - Documentation generator
@@ -6,17 +7,21 @@ import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Parser (parseDefs)
--- import Language.Granule.Syntax.Type
+import Language.Granule.Syntax.Type
+import Language.Granule.Syntax.Identifiers
 import qualified Language.Granule.Checker.Primitives as Primitives
 import Language.Granule.Utils
 
 import System.Directory
 import System.FilePath
 import Data.Text hiding
-   (map, concatMap, filter, lines, take, takeWhile, dropWhile, drop, break, isPrefixOf, reverse)
+   (map, concatMap, filter, lines, take, takeWhile, dropWhile
+   , drop, break, isPrefixOf, reverse, splitAt, all)
 import qualified Data.Text as Text
 
-import Data.List (isPrefixOf, sort)
+import Data.Char (isAlpha)
+import Data.Maybe (catMaybes, mapMaybe)
+import Data.List (isPrefixOf, sort, sortOn, partition)
 import Data.Version (showVersion)
 import Paths_granule_interpreter (version)
 
@@ -28,6 +33,7 @@ import Control.Monad (when)
 -- Doc top-level
 grDoc :: (?globals::Globals) => String -> AST () () -> IO ()
 grDoc input ast = do
+    createDirectoryIfMissing True "docs/modules"
     -- Run twice so that all the links are stable
     run True
     putStrLn "Rebuilding links."
@@ -41,6 +47,8 @@ grDoc input ast = do
       let modName = pretty $ moduleName ast
       when info $ putStrLn $ "Generate docs for " <> modName  <> "."
       moduleFile <- generateModulePage input ast
+      -- create docs directory if its not there
+
       writeFile ("docs/modules/" <> modName <> ".html") (unpack moduleFile)
       -- Generate the Primitives file
       when info $ putStrLn $ "Generating docs index file."
@@ -68,15 +76,48 @@ generateModulePage' modName title input ast =
     generateFromTemplate ModulePage modName title content
    where
     inputLines = lines input
-    content = (section "Meta-data" preamble)
-           <> (section "Data types" (Text.concat dataDefs))
-           <> (section "Definitions" (Text.concat defs))
+    content = (if Text.strip preamble == "" then "" else section "Meta-data" preamble)
+           <> (section "Contents" ((internalNav headings')
+           <> (if modName == "Primitives" then anchor "Built-in Types" else "")
+           <> Text.concat contentDefs))
     preamble = parsePreamble inputLines
-    dataDefs = map (codeDiv . pack . pretty) (dataTypes ast)
-    defs     = map prettyDef (definitions ast)
-    prettyDef d =
-         (codeDiv $ pack $ pretty (defId d) <> " : " <> pretty (defTypeScheme d))
-      <> (descDiv $ scrapeDoc inputLines (defSpan d))
+    (headings, contentDefs) = unzip (map prettyDef topLevelDefs)
+    headings' =
+      if modName == "Primitives"
+        then "Built-in Types" : catMaybes headings
+        else catMaybes headings
+
+
+    -- Combine the data type and function definitions together
+    topLevelDefs = sortOn startLine $ (map Left (dataTypes ast)) <> (map Right (definitions ast))
+    startLine = fst . startPos . defSpan'
+    defSpan' (Left dataDecl) = dataDeclSpan dataDecl
+    defSpan' (Right def)     = defSpan def
+
+    prettyDef (Left d) =
+      let (docs, heading) = scrapeDoc inputLines (dataDeclSpan d)
+      in  (heading,
+            (maybe "" anchor heading)
+         <> (codeDiv . pack . prettyDoc $ d)
+         <> (if strip docs == "" then miniBreak else descDiv docs))
+    prettyDef (Right d) =
+      let (docs, heading) = scrapeDoc inputLines (defSpan d)
+      in  (heading
+          , (maybe "" anchor heading)
+         <> (codeDiv $ pack $ prettyDoc (defId d) <> " : " <> prettyDoc (defTypeScheme d))
+         <> (if strip docs == "" then miniBreak else descDiv docs))
+
+    anchor :: Text -> Text
+    anchor x = tagWithAttributes "a"
+                 ("name = " <> toUrlName x)
+                   (tag "h3" ((tagWithAttributes "a" ("href='#' class='toplink'") "[top]") <> x))
+
+
+    internalNav [] = ""
+    internalNav xs = section "" $ navDiv
+                       $ ul (Text.concat (map makeLink xs))
+    makeLink x = li $ tagWithAttributes "a" ("href='#" <> toUrlName x <> "'") x
+
 
 -- Generates the text of the index
 generateIndexPage :: IO Text
@@ -86,13 +127,45 @@ generateIndexPage = do
     indexText = "See links on the side for various modules."
              <> " Compiled with Granule version v" <> pack (showVersion version) <> "."
 
+--
+
 -- Generates the text of the primitives module
 generatePrimitivesPage :: (?globals::Globals) => IO Text
 generatePrimitivesPage = do
-    generateModulePage' "Primitives" "Built-in primitives" (Primitives.builtinSrc) (fst . fromRight $ parseDefs "Primitives" Primitives.builtinSrc)
+    generateModulePage' "Primitives" "Built-in primitives" (Primitives.builtinSrc) (appendPrimitiveTys $ fst . fromRight $ parseDefs "Primitives" Primitives.builtinSrc)
   where
     fromRight (Right x) = x
     fromRight (Left x)  = error x
+
+    appendPrimitiveTys ast = ast { dataTypes = builtInTyConsAsDataDecls ++ dataTypes ast }
+
+    builtInTyConsAsDataDecls :: (?globals :: Globals) => [DataDecl]
+    builtInTyConsAsDataDecls = mapMaybe toDataTypeCons buildBuiltinTypesLookup
+      where
+        toDataTypeCons (name, (kind, [])) =
+          -- Ignore these ones, indicates a leaf that should already be globbed
+          Nothing
+        toDataTypeCons (name, (kind, cons)) =
+          Just $ DataDecl Primitives.nullSpanBuiltin name [] (Just kind) (map (toDataCons kind) cons)
+        toDataCons kind (id, ty) =
+          DataConstrIndexed Primitives.nullSpanBuiltin id (Forall Primitives.nullSpanBuiltin [] [] ty)
+
+
+    buildBuiltinTypesLookup :: (?globals :: Globals) => [(Id, (Type, [(Id, Type)]))]
+    buildBuiltinTypesLookup =
+        aux $ (mkId "Type", (Type 1, [] , [])) : Primitives.typeConstructors
+      where
+        aux [] = []
+        aux ((id, (k, _, _)):constrs) = (id, (k, map merge members)) : aux constrs
+          where (members, _constrs') = Data.List.partition (matches id) constrs
+
+        merge (name, (typ, _, _)) = (name, typ)
+
+        matches tyConName (id', (ty, _, _)) =
+          case (tyConName, resultType ty) of
+            (internalName -> "Type", Type 0) -> True
+            (a, b) -> (TyCon a) == b
+
 generateFromTemplate :: PageContext -> Text -> Text -> Text -> IO Text
 generateFromTemplate ctxt modName title content = do
   template <- readFile "docs/template.html"
@@ -126,14 +199,38 @@ generateNavigatorText ctxt = do
 -- Helpers for manipulating raw source
 
 -- Scape comments preceding a particular point if they start with ---
-scrapeDoc :: [String] -> Span -> Text
+scrapeDoc :: [String] -> Span -> (Text, Maybe Text)
 scrapeDoc inputLines span =
-    Text.concat (reverse relevantLinesFormatted)
+    (toMarkDown $ Text.concat (reverse relevantLinesFormatted), heading)
   where
     relevantLinesFormatted = map (pack . drop 3) relevantLines
-    relevantLines = takeWhile ("---" `isPrefixOf`) (dropWhile (== "") (reverse before))
+    relevantLines = takeWhile ("--- " `isPrefixOf`) (dropWhile (== "") (reverse before))
     (before, _) = Prelude.splitAt (line - 1) inputLines
     (line, _) = startPos span
+
+    --- See if we have any headings here.
+    lessRelevantLines = dropWhile ("--- " `isPrefixOf`) (dropWhile (== "") (reverse before))
+    lessRelevantLines' =
+       dropWhile (\x -> x == "" || all (== ' ') x || ("--" `isPrefixOf` x && not ("--- #" `isPrefixOf` x))) lessRelevantLines
+    heading =
+      case lessRelevantLines' of
+        (x:_) | "--- #" `isPrefixOf` x -> let (_, heading) = splitAt 5 x in Just $ pack heading
+        _                              -> Nothing
+
+toMarkDown :: Text -> Text
+toMarkDown xs =
+    case Data.Text.foldr aux (pack [], False) xs of
+      -- some failure so don't mark down
+      (_, True)   -> xs
+      (xs, False) -> xs
+  where
+    aux :: Char -> (Text, Bool) -> (Text, Bool)
+    aux x (rest, n) =
+      if x == '`' then
+          if n
+            then ("<span class='inline'>" <> rest, False)
+            else ("</span>" <> rest, True)
+        else (pack [x] <> rest, n)
 
 
 -- Parse the preamble from the front of a module file (if present)
@@ -141,7 +238,10 @@ parsePreamble :: [String] -> Text
 parsePreamble inputLines =
     ul $ Text.concat (map presentPrequelLine prequelLines)
   where
-    presentPrequelLine line = li $ (tag "b" (pack name)) <> pack info
+    presentPrequelLine line =
+        if name == "Module" -- drop duplicate module info
+          then ""
+          else li $ (tag "b" (pack name)) <> pack info
       where
        (name, info) = break (== ':') (drop 4 line)
     prequelLines =
@@ -154,17 +254,27 @@ parsePreamble inputLines =
 ---
 -- HTML generation helpers
 
+toUrlName :: Text -> Text
+toUrlName = (replace " " "-") . (Text.filter isAlpha) . Text.toLower
+
 section :: Text -> Text -> Text
+section "" contents   = tag "section" contents
 section name contents = tag "section" (tag "h2" name <> contents)
 
 codeDiv :: Text -> Text
-codeDiv = tagWithAttributes "div" ("class='code'")
+codeDiv = tagWithAttributes "div" ("class='code'") . tag "pre"
 
 descDiv :: Text -> Text
 descDiv = tagWithAttributes "div" ("class='desc'")
 
+navDiv :: Text -> Text
+navDiv = tagWithAttributes "div" ("class='mininav'")
+
 span :: Text -> Text -> Text
 span name = tagWithAttributes "span" ("class='" <> name <> "'")
+
+miniBreak :: Text
+miniBreak = "<br />"
 
 ul :: Text -> Text
 ul = tag "ul"

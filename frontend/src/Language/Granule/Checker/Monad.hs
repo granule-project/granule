@@ -9,6 +9,7 @@
 {-# LANGUAGE ImplicitParams #-}
 
 {-# options_ghc -fno-warn-incomplete-uni-patterns #-}
+{-# options_ghc -fno-warn-orphans #-}
 
 -- | Defines the 'Checker' monad used in the type checker
 -- | and various interfaces for working within this monad
@@ -25,6 +26,7 @@ import Control.Monad.State.Strict
 import Control.Monad.Except
 import Control.Monad.Identity
 import System.FilePath (takeBaseName)
+import Data.Generics.Zipper
 
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.LaTeX
@@ -33,7 +35,7 @@ import qualified Language.Granule.Checker.Primitives as Primitives
 import Language.Granule.Context
 
 import Language.Granule.Syntax.Def
-import Language.Granule.Syntax.Expr (Operator, Expr)
+import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Helpers (FreshenerState(..), freshen, Term(..))
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
@@ -182,9 +184,8 @@ data CheckerState = CS
             -- Names from modules which are hidden
             , allHiddenNames :: M.Map Id Id
 
-            -- The type of the current equation.
-            , equationTy :: Maybe Type
-            , equationName :: Maybe Id
+            -- Used by the case splitter
+            , splittingTy :: Maybe Type
 
             -- Definitions that have been triggered during type checking
             -- by the auto deriver (so we know we need them in the interpreter)
@@ -192,12 +193,50 @@ data CheckerState = CS
             -- Warning accumulator
             -- , warnings :: [Warning]
 
+            , currentDef :: (Maybe Id, Maybe (Spec () ()))
             , wantedTypeConstraints :: [Type]
 
             -- flag to find out if constraints got added
             , addedConstraints :: Bool
+            , predicateContext :: PredContext
+            , partialSynthExpr  :: Zipper (Expr () ())
+            , synthesisPath :: [String] 
             }
-  deriving (Eq, Show) -- for debugging
+  deriving (Eq, Show)
+
+-- Show and Eq instance for zipper
+instance Eq a => Eq (Zipper a) where
+  x == y = fromZipper x == fromZipper y
+
+instance Show a => Show (Zipper a) where
+  show x = "Zipper for " ++ show (fromZipper x)
+
+registerFinalExpr :: Expr () () -> Checker ()
+registerFinalExpr e =
+  modify (\st ->
+    st { partialSynthExpr = setHole e (partialSynthExpr st) })
+
+registerPartialExpr :: Expr () () -> Checker ()
+registerPartialExpr e =
+  modify (\st ->
+    st { partialSynthExpr =
+            case down' (setHole e (partialSynthExpr st)) of
+              Just z -> z
+              Nothing -> error "Registered a non-recursive expression" })
+
+navigateUpPartialExpr :: Checker ()
+navigateUpPartialExpr =
+  modify (\st -> st { partialSynthExpr =
+                        case up (partialSynthExpr st) of
+                          Just z -> z
+                          Nothing -> partialSynthExpr st })
+
+navigateRightPartialExpr :: Checker ()
+navigateRightPartialExpr =
+  modify (\st -> st { partialSynthExpr =
+                        case right (partialSynthExpr st) of
+                          Just z -> z
+                          Nothing -> partialSynthExpr st })
 
 -- | Initial checker context state
 initState :: (?globals :: Globals) => CheckerState
@@ -214,11 +253,14 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , deriv = Nothing
                , derivStack = []
                , allHiddenNames = M.empty
-               , equationTy = Nothing
-               , equationName = Nothing
+               , splittingTy = Nothing
                , derivedDefinitions = []
+               , currentDef = (Nothing, Nothing)
                , wantedTypeConstraints = []
                , addedConstraints = False
+               , predicateContext = Top
+               , partialSynthExpr = toZipper (Hole nullSpan () False [] Nothing)
+               , synthesisPath = []
                }
 
 -- *** Various helpers for manipulating the context
@@ -506,7 +548,8 @@ data CheckerError
       -- Tracks whether a variable is split
       holeVars :: Ctxt Bool,
       -- Used for synthesising programs
-      cases       :: [([Pattern ()], Expr () Type)] }
+      synthCtxt   :: Maybe (CheckerState, Ctxt TypeScheme, (Maybe Id, Maybe (Spec () ())), Int, Maybe Hints, Ctxt (Ctxt (TypeScheme, Substitution))),
+      cases       :: [([Pattern ()], Expr () ())] }
   | TypeError
     { errLoc :: Span, tyExpected :: Type, tyActual :: Type }
   | TypeErrorConflictingExpected

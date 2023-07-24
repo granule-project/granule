@@ -296,12 +296,12 @@ substituteConstraintHelper substType ctxt (Neq s c1 c2 k) = do
   k <- substitute ctxt k
   return $ Neq s c1 c2 k
 
-substituteConstraintHelper substType ctxt (Lub s c1 c2 c3 k) = do
+substituteConstraintHelper substType ctxt (Lub s c1 c2 c3 k checkLeast) = do
   c1 <- substType ctxt c1
   c2 <- substType ctxt c2
   c3 <- substType ctxt c3
   k <- substitute ctxt k
-  return $ Lub s c1 c2 c3 k
+  return $ Lub s c1 c2 c3 k checkLeast
 
 substituteConstraintHelper substType ctxt (ApproximatedBy s c1 c2 k) = do
   c1 <- substType ctxt c1
@@ -399,10 +399,10 @@ substituteExpr ctxt (CaseF sp ty rf expr arms) =
     do  ty' <- substitute ctxt ty
         arms' <- mapM (mapFstM (substitute ctxt)) arms
         return $ Case sp ty' rf expr arms'
-substituteExpr ctxt (HoleF s a rf vs) = return $ Hole s a rf vs
 substituteExpr ctxt (UnpackF s a rf tyVar var e1 e2) = do
       (PVar _ _ _ var) <- substitute ctxt (PVar s a False var)
       return $ Unpack s a rf tyVar var e1 e2
+substituteExpr ctxt (HoleF s a rf vs hs) = return $ Hole s a rf vs hs
 
 mapFstM :: (Monad m) => (a -> m b) -> (a, c) -> m (b, c)
 mapFstM fn (f, r) = do

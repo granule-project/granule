@@ -76,12 +76,12 @@ drop'' [x] = ()
 copy'' : forall {a : Type}. a [2] -> (a, a)
 copy'' [x] = (x, x)
 
-data Maybe a = None | Some a
+data Maybe a = Nothing | Just a
 
 -- Interval grades
 fromMaybe : forall {a : Type} . a [0..1] -> Maybe a -> a
-fromMaybe [d] None     = d;
-fromMaybe [_] (Some x) = x
+fromMaybe [d] Nothing     = d;
+fromMaybe [_] (Just x) = x
 
 -- Indexed types
 data Vec (n : Nat) (a : Type) where

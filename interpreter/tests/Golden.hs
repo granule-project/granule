@@ -184,8 +184,8 @@ goldenTestsSynthesis config = do
         globalsSourceFilePath = Just fp,
         globalsSynthesise = Just True,
         globalsRewriteHoles = Just True,
-        globalsIncludePath = Just "StdLib",
-        globalsSynthTimeoutMillis = Just 3000 }
+        globalsIncludePath = Just "StdLib" }
+
 
     subtractiveGlobals :: FilePath -> Globals
     subtractiveGlobals fp = (mainGlobals fp) { globalsSubtractiveSynthesis = Just True }

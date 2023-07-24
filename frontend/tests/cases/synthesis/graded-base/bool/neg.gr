@@ -1,0 +1,9 @@
+language GradedBase
+
+data Bool = True | False
+
+neg : Bool %0..1 ->  Bool
+spec 
+    neg True = False;
+    neg False = True;
+neg = ?

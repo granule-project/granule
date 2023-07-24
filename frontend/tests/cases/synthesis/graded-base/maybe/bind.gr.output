@@ -1,0 +1,21 @@
+language GradedBase
+
+data Maybe a = Just a | Nothing
+
+data N = S N | Z
+
+data Bool = True | False; 
+
+isEven : N %1..∞ -> Maybe N  
+isEven Z = Nothing;
+isEven (S Z) = Just (S Z);
+isEven (S (S z)) = 
+    case isEven z of 
+        Nothing -> Nothing;
+        Just (S Z) -> Just (S Z)
+
+bind : forall {a : Type, b : Type} . Maybe a %1..1 -> (a %1..1 -> Maybe b) %0..1 -> Maybe b
+spec 
+    bind (Just (S Z)) isEven = Just (S Z)       !Cartesian;
+bind Nothing y = Nothing;
+bind (Just z) y = y z

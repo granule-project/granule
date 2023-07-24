@@ -12,6 +12,7 @@ module Language.Granule.Checker.Types where
 import Control.Monad.State.Strict
 import Data.List (sortBy, sort)
 
+import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Effects
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
@@ -186,10 +187,9 @@ equalTypesRelatedCoeffectsInner s rel fTy1@(FunTy _ grade t1 t2) fTy2@(FunTy _ g
   subst <-
     if (usingExtension GradedBase) then
       case (grade, grade') of
-        (Just r, Just r')  -> relGrades s r r' rel
-        (Nothing, Just r') -> relGrades s (TyGrade Nothing 1) r' rel
-        (Just r, Nothing)  -> relGrades s r (TyGrade Nothing 1) rel
         (Nothing, Nothing) -> return []
+        _                  -> relGrades s (getGradeFromArrow grade) (getGradeFromArrow grade') rel
+
       else return []
 
   unifiers <- combineManySubstitutions s [u1, u2, subst]

@@ -52,6 +52,7 @@ tokens :-
   then                          { \p s -> TokenThen p }
   else                          { \p s -> TokenElse p }
   case                          { \p s -> TokenCase p }
+  spec                          { \p s -> TokenSpec p }
   of                            { \p s -> TokenOf p }
   try                           { \p s -> TokenTry p }
   as                            { \p s -> TokenAs p }
@@ -107,9 +108,9 @@ tokens :-
   "^"                           { \p s -> TokenCaret p }
   ".."                          { \p s -> TokenDotDot p }
   "∨"                           { \p _ -> TokenJoin p }
-  "\\/"                         { \p _ -> TokenJoin p }
+  "\/"                          { \p _ -> TokenJoin p }
   "∧"                           { \p _ -> TokenMeet p }
-  "/\\"                         { \p _ -> TokenMeet p }
+  "/\"                          { \p _ -> TokenMeet p }
   "=>"                          { \p s -> TokenConstrain p }
   "⇒"                           { \p s -> TokenConstrain p }
   "∘"                           { \p _ -> TokenRing p }
@@ -122,6 +123,7 @@ tokens :-
   "⊸"                           { \p _ -> TokenArrow p }
   "*{"                          { \p _ -> TokenStar p }
   "%"                           { \p _ -> TokenPercent p }
+  "⨱"                           { \p _ -> TokenHsup p }
 
 {
 
@@ -137,6 +139,7 @@ data Token
   | TokenModule AlexPosn
   | TokenHiding AlexPosn
   | TokenCase   AlexPosn
+  | TokenSpec   AlexPosn
   | TokenOf     AlexPosn
   | TokenTry    AlexPosn
   | TokenAs     AlexPosn
@@ -203,6 +206,7 @@ data Token
   | TokenHash AlexPosn
   | TokenPercent AlexPosn
   | TokenStar AlexPosn
+  | TokenHsup AlexPosn
 
   deriving (Eq, Show, Generic)
 

@@ -1,0 +1,4 @@
+language GradedBase
+
+copy : forall a . a %2 -> (a, a)
+copy = ?
