@@ -178,8 +178,9 @@ testSynthesiser synthComputation = do
          ,DataDecl {dataDeclSpan = Span {startPos = (6,1), endPos = (6,21), filename = "simple.gr"}, dataDeclId = (Id "List" "List"), dataDeclTyVarCtxt = [((Id "a" "a"),Type 0)], dataDeclKindAnn = Nothing, dataDeclDataConstrs = [DataConstrNonIndexed {dataConstrSpan = Span {startPos = (6,15), endPos = (6,15), filename = "simple.gr"}, dataConstrId = (Id "Nil" "Nil"), dataConstrParams = []},DataConstrNonIndexed {dataConstrSpan = Span {startPos = (6,21), endPos = (6,21), filename = "simple.gr"}, dataConstrId = (Id "Cons" "Cons"), dataConstrParams = [TyVar (Id "a" "a"),TyApp (TyCon (Id "List" "List")) (TyVar (Id "a" "a"))]}]}]
     -- Load in the primitive data constructors first before running the computation synthComputation
     let synthComputation' =
-            -- (conv (runAll registerTypeConstructor (extras ++ Primitives.dataTypes)))
-            (conv (runAll registerDataConstructors (extras ++ Primitives.dataTypes)))
+             (conv (runAll registerTypeConstructor (extras ++ Primitives.dataTypes)))
+          >> (conv (runAll registerDataConstructors (extras ++ Primitives.dataTypes)))
+          >> conv (liftIO (putStrLn "ok"))
           >> synthComputation
     (outputs, dat) <- runStateT (runSynthesiser 1 synthComputation' initState) mempty
     mapM (convertError . fst) outputs

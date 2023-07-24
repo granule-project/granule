@@ -18,7 +18,7 @@ for the frontend:
 
 Or individual unit tests files, e.g., the following runs the unit tests in just `TypeSpec`:
 
-    stack test granule-frontend --ta "--match \"TypesSpec\""
+    stack test granule-frontend --ta "--match \"Types\""
 
 # Integration tests
 
