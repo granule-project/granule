@@ -1,3 +1,7 @@
+  # 0.9.4.0
+  - Advanced synthesis algorithm for `language GradeBase` mode.
+  - Better standard library documentation
+
   # 0.9.3.0
   - Existential types, e.g.,`exists {x : Type} . t`, see `examples/existential.gr` and `examples/listToVec.gr`
   - `language GradedBase` extension, see `examples/graded-base.gr`
