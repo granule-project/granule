@@ -126,7 +126,6 @@ addIncreasingConstraint k@(TyCon con) gradeIn gradeOut  =
 
     -- TBD
     "Level" -> return ()
-    "Borrowing" -> return ()
     "OOZ" -> return ()
 addIncreasingConstraint _ _ _ = return ()
 
@@ -540,7 +539,7 @@ runExamples eval ast@(AST decls defs imports hidden mod) examples defId = do
         res <- liftIO $ System.Timeout.timeout timeout $ eval astWithExampleMain
         case res of
           Just True -> return True;
-          _ -> do 
+          _ -> do
             return False;
   else return True
 
@@ -616,7 +615,7 @@ gSynthOuter
       -- Run the type checker if we used cartesian/"Any" mode
       -- Only accept programs which check with the original non-cartesian semiring type
       checked <- if cartSynth == 0 then return True else do
-        if cartSynth == 1 then do 
+        if cartSynth == 1 then do
           st <- getSynthState
           case gradedProgram st of
             Nothing -> return True
@@ -635,8 +634,8 @@ gSynthOuter
                 (Just (Def _ _ _ _ (EquationList _ _ _ eqs) _), Def _ _ _ _ (EquationList _ _ _ eqs') _) ->  do
                   return $ pretty eqs == pretty eqs'
                 _ -> return False
-        else do 
-          return True 
+        else do
+          return True
 
         -- st <- getSynthState
         -- liftIO $ do
@@ -645,7 +644,7 @@ gSynthOuter
         --   let ast' = holeRefactor holeCases ast
         --   let timeout = 100000
         --   res <- liftIO $ System.Timeout.timeout timeout $ Ex.try $ check ast'
-        --   case res of 
+        --   case res of
         --     Just (Left (e :: Ex.SomeException)) -> return False
         --     Just (Right (Left errs)) -> do
         --           let holeErrors = getHoleMessages errs
@@ -738,8 +737,8 @@ gSynthInner sParams inIntroPhase focusPhase gamma (Focused omega) goal = do
           `try`
           appRule sParams inIntroPhase LeftSync gamma (Focused omega) goal
           `try`
-          -- This stops us from synthesising things of the form 
-          -- Cons (case x of Cons _ _ -> ... ; Nil -> ...) 
+          -- This stops us from synthesising things of the form
+          -- Cons (case x of Cons _ _ -> ... ; Nil -> ...)
           if not inIntroPhase then
             gSynthInner sParams inIntroPhase LeftAsync gamma (Focused omega) goal
           else none
@@ -965,7 +964,7 @@ appRule sParams inIntroPhase focusPhase gamma (Focused [var@(x1, assumption)]) g
                 -- && not (isRecursiveType tyB (constructors st))
               -- if we are a recursive type then check whether we are below max depth
 
-          -- This is a temporary hack - allows us to track which app-generated assumptions belong to a multi-term recursive application 
+          -- This is a temporary hack - allows us to track which app-generated assumptions belong to a multi-term recursive application
           let sInfo' = if x1 `elem` currDef st then Just $ NonDecreasing 42 else Nothing
           let (gamma', omega') = bindToContext (x2, SVar (Discharged tyB grade_r) sInfo' 0) (gamma ++ [increaseDepth var]) [] bindToOmega
 

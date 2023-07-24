@@ -87,11 +87,6 @@ typeConstructors =
 
     -- Note that Private/Public can be members of Sec (and map to Hi/Lo) or if 'SecurityLevels' is
     -- turned on then they are part of the 'Level' semiring
-    -- Borrowing
-    , (mkId "Borrowing", (kcoeffect, [], []))
-    , (mkId "One",       (tyCon "Borrowing", [], []))
-    , (mkId "Beta",      (tyCon "Borrowing", [], []))
-    , (mkId "Omega",     (tyCon "Borrowing", [], []))
     -- Security levels
     , (mkId "Private",  (extensionDependent [(SecurityLevels, tyCon "Level")] (tyCon "Sec"), [], []))
     , (mkId "Public",   (extensionDependent [(SecurityLevels, tyCon "Level")] (tyCon "Sec"), [], []))
