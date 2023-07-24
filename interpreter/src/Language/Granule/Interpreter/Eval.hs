@@ -1132,7 +1132,7 @@ eval = evalAtEntryPoint (mkId entryPoint)
 
 evalAtEntryPoint :: (?globals :: Globals) => Id -> AST () () -> IO (Maybe RValue)
 evalAtEntryPoint entryPoint (AST dataDecls defs _ _ _) = do
-    bindings <- evalDefs builtIns (map toRuntimeRep defs) 
+    bindings <- evalDefs builtIns (map toRuntimeRep defs)
     case lookup entryPoint bindings of
       Nothing             -> return Nothing
       -- Evaluate inside a promotion of pure if its at the top-level
