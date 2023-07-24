@@ -57,6 +57,7 @@ data Globals = Globals
   , globalsExampleLimit         :: Maybe Int
   , globalsCartesianSynth         :: Maybe Int
   , globalsExtensions           :: [Extension]
+  , globalsDocMode             :: Maybe Bool
   } deriving (Read, Show)
 
 -- | Allowed extensions
@@ -89,7 +90,7 @@ parseExtensions xs =
 
 -- | Accessors for global flags with default values
 debugging, interactiveDebugging, noColors, alternativeColors, noEval, suppressInfos, suppressErrors,
-  timestamp, testing, ignoreHoles, benchmarking, benchmarkingRawData, subtractiveSynthesisMode, alternateSynthesisMode, haskellSynth, synthHtml :: (?globals :: Globals) => Bool
+  timestamp, testing, ignoreHoles, benchmarking, benchmarkingRawData, subtractiveSynthesisMode, alternateSynthesisMode, haskellSynth, synthHtml, docMode :: (?globals :: Globals) => Bool
 debugging         = fromMaybe False $ globalsDebugging ?globals
 interactiveDebugging         = fromMaybe False $ globalsInteractiveDebugging ?globals
 noColors          = fromMaybe False $ globalsNoColors ?globals
@@ -106,6 +107,7 @@ subtractiveSynthesisMode = fromMaybe False $ globalsSubtractiveSynthesis ?global
 alternateSynthesisMode = fromMaybe False $ globalsAlternateSynthesisMode ?globals
 haskellSynth = fromMaybe False $ globalsHaskellSynth ?globals
 synthHtml = fromMaybe False $ globalsSynthHtml ?globals
+docMode = fromMaybe False $ globalsDocMode ?globals
 
 -- | Accessor for the solver timeout with a default value
 solverTimeoutMillis :: (?globals :: Globals) => Integer
@@ -156,6 +158,7 @@ instance Semigroup Globals where
       , globalsSynthHtml = globalsSynthHtml g1 <|> globalsSynthHtml g2
       , globalsExampleLimit = globalsExampleLimit g1 <|> globalsExampleLimit g2
       , globalsExtensions = nub (globalsExtensions g1 <> globalsExtensions g2)
+      , globalsDocMode = globalsDocMode g1 <|> globalsDocMode g2
       }
 
 instance Monoid Globals where
@@ -186,6 +189,7 @@ instance Monoid Globals where
     , globalsSynthHtml = Nothing
     , globalsExampleLimit = Nothing
     , globalsExtensions = [Base]
+    , globalsDocMode = Nothing
     }
 
 -- | A class for messages that are shown to the user. TODO: make more general
@@ -347,6 +351,7 @@ lookupMany :: Eq a => a -> [(a, b)] -> [b]
 lookupMany _ []                     = []
 lookupMany a' ((a, b):xs) | a == a' = b : lookupMany a' xs
 lookupMany a' (_:xs)                = lookupMany a' xs
+
 
 -- | Get set of duplicates in a list.
 -- >>> duplicates [1,2,2,3,3,3]

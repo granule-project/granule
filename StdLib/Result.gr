@@ -22,10 +22,11 @@ fromResult [default] result =
       (Failed [_]) -> default;
       (Ok x) -> x
 
--- Monady interface for Result
+--- Monady interface for Result
 return_res : forall {a : Type} . a -> Result a
 return_res = Ok
 
+--- Monady interface for Result
 bind_res : forall {a : Type, b : Type}
          . Result a -> (a -> Result b) [0..1] -> Result b
 bind_res m [k] =

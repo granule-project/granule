@@ -2,6 +2,7 @@ module File where
 
 import Maybe
 
+--- Read a string of a specified length from a file
 readMany : Int → Handle R → (Handle R, String) <IO>
 readMany 0 h = pure (h, "");
 readMany n h =
@@ -18,6 +19,7 @@ auxiliaryReadFile h rest = let
      False -> let
       (h, c) <- readChar h in auxiliaryReadFile h (stringSnoc rest c)
 
+--- Given a filename, open the file, read it all in, and close it
 readFile : String -> String <{Open, Read, Close, IOExcept}>
 readFile fileName = let
   h <- openHandle ReadMode fileName;
@@ -33,6 +35,7 @@ auxiliaryWriteFile h rest =
       h <- writeChar h c
       in auxiliaryWriteFile h rest
 
+--- Given a filename, and a string, open the file, write the string, and close
 writeFile : String -> String -> () <{Open, Write, Close, IOExcept}>
 writeFile fileName fileData = let
   h <- openHandle WriteMode fileName;

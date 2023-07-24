@@ -173,7 +173,8 @@ instance Pretty (Neg Constraint) where
       "Trying to prove false statement: (" <> pretty c1 <> " ≥ " <> pretty c2 <> ")"
 
     pretty (Neg (Hsup _ c1 c2 t)) =
-      "Trying to prove false statement: (" <> pretty c1 <> " ⨱ " <> pretty c2 <> ")"
+      "Cannot split resource requirements into " <> pretty c1 <> " and " <> pretty c2 <>
+      " in a pattern match. \nTrying to prove false statement: (" <> pretty c1 <> " ⨱ " <> pretty c2 <> ")"
 
 instance Pretty [Constraint] where
     pretty constr =

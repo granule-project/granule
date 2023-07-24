@@ -148,16 +148,16 @@ replicate Z [c] = Nil;
 replicate (S n) [c] = Cons c (replicate n [c])
 
 --- Make a vector of length n with all integers from 0 to n-1
----     > range (S (S (S (S Z))))
----     Cons 0 (Cons 1 (Cons 2 (Cons 3 Nil)))
+---  e.g. `range (S (S (S (S Z))))` should yield
+---  `Cons 0 (Cons 1 (Cons 2 (Cons 3 Nil)))`
 range
   : forall {n : Nat}
   . N n -> Vec n Int
 range n = range' n [0]
 
 --- Make a vector of length n with all integers from `start` up until `n + i - 1`
----     > range' (S (S (S (S Z)))) [-6]
----     Cons -6 (Cons -5 (Cons -4 (Cons -3 Nil)))
+---  e.g. `range' (S (S (S (S Z)))) [-6]` should yield
+--- `Cons -6 (Cons -5 (Cons -4 (Cons -3 Nil)))`
 range'
   : forall {n : Nat}
   . N n -> Int [n] -> Vec n Int

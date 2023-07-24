@@ -57,7 +57,6 @@ typeConstructors =
     , (mkId "Predicate", (Type 2, [], []))
     , (mkId "->",     (funTy (Type 0) (funTy (Type 0) (Type 0)), [], []))
     , (mkId ",,",     (funTy kcoeffect (funTy kcoeffect kcoeffect), [mkId ",,"], []))
-    , (mkId "ExactSemiring", (funTy (tyCon "Semiring") (tyCon "Predicate"), [], []))
     , (mkId "Int",    (Type 0, [], []))
     , (mkId "Float",  (Type 0, [], []))
     , (mkId "DFloat",  (Type 0, [], [])) -- special floats that can be tracked for sensitivty
@@ -65,6 +64,7 @@ typeConstructors =
     , (mkId "String", (Type 0, [], []))
     , (mkId "Inverse", ((funTy (Type 0) (Type 0)), [], []))
     -- Session type related things
+    , (mkId "ExactSemiring", (funTy (tyCon "Semiring") (tyCon "Predicate"), [], []))
     , (mkId "Protocol", (Type 0, [], []))
     , (mkId "SingleAction", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], [0]))
     , (mkId "ReceivePrefix", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], [0]))
@@ -181,6 +181,7 @@ tyOps = \case
     TyOpInterval -> (tyVar "k", tyVar "k", tyVar "k")
     TyOpConverge -> (kNat, kNat, kNat)
     TyOpImpl    -> (kpredicate, kpredicate, kpredicate)
+    TyOpHsup    -> (tyVar "k", tyVar "k", kpredicate)
 
 dataTypes :: [DataDecl]
 dataTypes =
@@ -637,35 +638,39 @@ trustedBind
 trustedBind = BUILTIN
 
 --------------------------------------------------------------------------------
---- # Mutable and immutable array operations
+--- # Mutable array operations
 --------------------------------------------------------------------------------
 
 newFloatArray : Int -> *FloatArray
 newFloatArray = BUILTIN
 
-newFloatArrayI : Int -> FloatArray
-newFloatArrayI = BUILTIN
-
 readFloatArray : *FloatArray -> Int -> (Float, *FloatArray)
 readFloatArray = BUILTIN
-
-readFloatArrayI : FloatArray -> Int -> (Float, FloatArray)
-readFloatArrayI = BUILTIN
 
 writeFloatArray : *FloatArray -> Int -> Float -> *FloatArray
 writeFloatArray = BUILTIN
 
-writeFloatArrayI : FloatArray -> Int -> Float -> FloatArray
-writeFloatArrayI = BUILTIN
-
 lengthFloatArray : *FloatArray -> (Int, *FloatArray)
 lengthFloatArray = BUILTIN
 
-lengthFloatArrayI : FloatArray -> (Int, FloatArray)
-lengthFloatArrayI = BUILTIN
-
 deleteFloatArray : *FloatArray -> ()
 deleteFloatArray = BUILTIN
+
+--------------------------------------------------------------------------------
+--- # Imuutable array operations
+--------------------------------------------------------------------------------
+
+newFloatArrayI : Int -> FloatArray
+newFloatArrayI = BUILTIN
+
+readFloatArrayI : FloatArray -> Int -> (Float, FloatArray)
+readFloatArrayI = BUILTIN
+
+writeFloatArrayI : FloatArray -> Int -> Float -> FloatArray
+writeFloatArrayI = BUILTIN
+
+lengthFloatArrayI : FloatArray -> (Int, FloatArray)
+lengthFloatArrayI = BUILTIN
 
 --------------------------------------------------------------------------------
 --- # Benchmarking

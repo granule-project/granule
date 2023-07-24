@@ -33,6 +33,11 @@ prettyDebug x =
   let ?globals = ?globals { globalsDebugging = Just True }
   in pretty x
 
+prettyDoc :: (?globals :: Globals) => Pretty t => t -> String
+prettyDoc x =
+  let ?globals = ?globals { globalsDocMode = Just True }
+  in pretty x
+
 prettyNested :: (?globals :: Globals, Term a, Pretty a) => a -> String
 prettyNested e =
   if isLexicallyAtomic e then pretty e else "(" <> pretty e <> ")"
@@ -83,15 +88,15 @@ instance Pretty TypeScheme where
     pretty (Forall _ vs cs t) = kVars vs <> constraints cs <> pretty t
       where
         kVars [] = ""
-        kVars vs = "forall {" <> intercalate ", " (map prettyKindSignatures vs) <> "} . "
+        kVars vs = docSpan "keyword" "forall" <> " {" <> intercalate ", " (map prettyKindSignatures vs) <> "} . "
         prettyKindSignatures (var, kind) = pretty var <> " : " <> pretty kind
         constraints [] = ""
         constraints cs = "{" <> intercalate ", " (map pretty cs) <> "} =>\n    "
 
 instance Pretty Type where
     -- Atoms
-    pretty (TyCon s) | internalName s == "Infinity" = "∞"
-    pretty (TyCon s)      = pretty s
+    pretty (TyCon s) | internalName s == "Infinity" = docSpan "constName" "∞"
+    pretty (TyCon s)      = docSpan "constName" (pretty s)
     pretty (TyVar v)      = pretty v
     pretty (TyInt n)      = show n
     pretty (TyGrade Nothing n)  = show n
@@ -99,10 +104,10 @@ instance Pretty Type where
     pretty (TyRational n) = show n
 
     -- Non atoms
-    pretty (Type 0) = "Type"
+    pretty (Type 0) = docSpan "constName" "Type"
 
     pretty (Type l) =
-      "Type " <> pretty l
+      docSpan "constName" ("Type " <> pretty l)
 
     pretty (FunTy Nothing Nothing t1 t2)  =
       case t1 of
@@ -112,7 +117,7 @@ instance Pretty Type where
     pretty (FunTy Nothing (Just coeffect) t1 t2)  =
       case t1 of
         FunTy{} -> "(" <> pretty t1 <> ") -> " <> pretty t2
-        _ -> pretty t1 <> " % " <> pretty coeffect <>  " -> " <> pretty t2
+        _ -> pretty t1 <> " % " <> docSpan "coeff" (pretty coeffect) <>  " -> " <> pretty t2
 
     pretty (FunTy (Just id) Nothing t1 t2)  =
       let pt1 = case t1 of FunTy{} -> "(" <> pretty t1 <> ")"; _ -> pretty t1
@@ -120,20 +125,20 @@ instance Pretty Type where
 
     pretty (FunTy (Just id) (Just coeffect) t1 t2)  =
       let pt1 = case t1 of FunTy{} -> "(" <> pretty t1 <> ")"; _ -> pretty t1
-      in  "(" <> pretty id <> " : " <> pt1 <> ") % " <> pretty coeffect <> " -> " <> pretty t2
+      in  "(" <> pretty id <> " : " <> pt1 <> ") % " <> docSpan "coeff" (pretty coeffect) <> " -> " <> pretty t2
 
     pretty (Box c t) =
       case c of
-        (TyCon (Id "Many" "Many")) -> "!" <> prettyNested t
-        otherwise -> prettyNested t <> " [" <> pretty c <> "]"
+        (TyCon (Id "Many" "Many")) -> docSpan "coeff" ("!" <> prettyNested t)
+        otherwise -> prettyNested t <> " [" <> docSpan "coeff" (pretty c) <> "]"
 
     pretty (Diamond e t) =
-      prettyNested t <> " <" <> pretty e <> ">"
+      prettyNested t <> " <" <> docSpan "eff" (pretty e) <> ">"
 
     pretty (Star g t) =
       case g of
-        (TyCon (Id "Unique" "Unique")) -> "*" <> prettyNested t
-        otherwise -> prettyNested t <> " *" <> pretty g
+        (TyCon (Id "Unique" "Unique")) -> docSpan "uniq" ("*" <> prettyNested t)
+        otherwise -> prettyNested t <> " *" <> docSpan "uniq" (pretty g)
 
     pretty (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "," =
       "(" <> pretty t1 <> ", " <> pretty t2 <> ")"
@@ -169,7 +174,7 @@ instance Pretty Type where
                     <> " : " <> pretty t') ps) <> ")"
 
     pretty (TyExists var k t) =
-      "exists {" <> pretty var <> ":" <> pretty k <> "} . " <> pretty t
+      docSpan "keyword" "exists" <> " {" <> pretty var <> ":" <> pretty k <> "} . " <> pretty t
 
 instance Pretty TypeOperator where
   pretty = \case
@@ -190,6 +195,7 @@ instance Pretty TypeOperator where
    TyOpInterval        -> ".."
    TyOpConverge        -> "#"
    TyOpImpl            -> "=>"
+   TyOpHsup            -> "⨱"
 
 instance Pretty v => Pretty (AST v a) where
   pretty (AST dataDecls defs imprts hidden name) =
@@ -234,8 +240,15 @@ instance Pretty v => Pretty (Equation v a) where
 instance Pretty DataDecl where
     pretty (DataDecl _ tyCon tyVars kind dataConstrs) =
       let tvs = case tyVars of [] -> ""; _ -> (unwords . map pretty) tyVars <> " "
-          ki = case kind of Nothing -> ""; Just k -> pretty k <> " "
-      in "data " <> pretty tyCon <> " " <> tvs <> ki <> "where\n    " <> pretty dataConstrs
+          ki = case kind of Nothing -> ""; Just k -> ": " <> pretty k <> " "
+      in "data " <> pretty tyCon <> " " <> tvs <> ki <> "where\n    " <> prettyAlign dataConstrs
+      where
+        prettyAlign dataConstrs = intercalate "\n  ; " (map (pretty' indent) dataConstrs)
+          where indent = maximum (map (length . internalName . dataConstrId) dataConstrs)
+        pretty' col (DataConstrIndexed _ name typeScheme) =
+          pretty name <> (replicate (col - (length $ pretty name)) ' ') <> " : " <> pretty typeScheme
+        pretty' _   (DataConstrNonIndexed _ name params) = pretty name <> " " <> (intercalate " " $ map pretty params)
+
 
 instance Pretty [DataConstr] where
     pretty = intercalate ";\n    " . map pretty
@@ -359,11 +372,11 @@ instance Pretty Pos where
 
 instance Pretty Hints where
     pretty (Hints hSub hPrun hNoTime hLin hTime hIndex) = ""
-      --  \case 
+      --  \case
 
       -- HSubtractive      -> " -s"
       -- HPruning          -> " -p"
-      -- HNoMaxIntro       -> " -i" 
+      -- HNoMaxIntro       -> " -i"
       -- HMaxIntro x       -> " -i " <> show x
       -- HNoMaxElim        -> " -e"
       -- HMaxElim x        -> " -e " <> show x
@@ -374,4 +387,14 @@ instance Pretty Hints where
       -- HUseDefs ids      -> " -d " <> (unwords $ map pretty ids)
       -- HUseRec           -> " -r"
       -- HGradeOnRule      -> " -g"
+
+docSpan :: (?globals :: Globals) => String -> String -> String
+docSpan s x = if docMode then (spanP s x) else x
+
+spanP :: String -> String -> String
+spanP name = tagWithAttributesP "span" ("class='" <> name <> "'")
+
+tagWithAttributesP :: String -> String -> String -> String
+tagWithAttributesP name attributes content =
+  "<" <> name <> " " <> attributes <> ">" <> content <> "</" <> name <> ">"
 

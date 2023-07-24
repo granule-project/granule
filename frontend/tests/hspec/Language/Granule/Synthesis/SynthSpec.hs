@@ -41,11 +41,11 @@ mkPairTy tyVars tName params = foldr (FunTy Nothing Nothing) (returnTy (TyCon tN
 
 
 checkCasePatterns :: Test.Spec
-checkCasePatterns = let ?globals = mempty in do
+checkCasePatterns = let ?globals = (mempty :: Globals) {globalsExtensions = [GradedBase]} in do
 
   describe "Test for casing on a pair" $ do
       it "Case on (a, b)" $ do
-        (results, synthData) <- let ?globals = mempty :: Globals in do
+        (results, synthData) <- let ?globals = (mempty :: Globals) {globalsExtensions = [GradedBase]} in do
             testSynthesiser $ do
 
                 tyVarA <- conv $ freshTyVarInContextWithBinding (mkId "a") (Type 0) ForallQ
@@ -77,7 +77,7 @@ checkCasePatterns = let ?globals = mempty in do
       it "Branch on (True : Bool)" $ do
         let true = Forall ns [] [] (TyCon $ mkId "Bool")
         let nat = TyCon $ mkId "Nat"
-        (results, synthData) <- let ?globals = mempty :: Globals in do
+        (results, synthData) <- let ?globals = (mempty :: Globals) {globalsExtensions = [GradedBase]} in do
             testSynthesiser $ do
                 tyVarA <- conv $ freshTyVarInContextWithBinding (mkId "a") (Type 0) ForallQ
                 tyVarR <- conv $ freshTyVarInContextWithBinding (mkId "r") nat ForallQ
@@ -117,7 +117,7 @@ checkCasePatterns = let ?globals = mempty in do
                             (FunTy Nothing Nothing (TyVar (Id "b.3" "b.3")) (TyApp (TyApp (TyCon (Id "Either" "Either")) (TyVar (Id "t.11" "t.11"))) (TyVar (Id "t.10" "t.10"))))
       let nat = TyCon $ mkId "Nat"
       let coerce = [((Id "t.10" "t.10"),SubstT (TyVar (Id "b.3" "b.3"))),((Id "t.11" "t.11"),SubstT (TyVar (Id "a.3" "a.3")))]
-      (results, synthData) <- let ?globals = mempty :: Globals in do
+      (results, synthData) <- let ?globals = (mempty :: Globals) {globalsExtensions = [GradedBase]} in do
           testSynthesiser $ do
               tyVarA <- conv $ freshTyVarInContextWithBinding (mkId "a") (Type 0) ForallQ
               tyVarB <- conv $ freshTyVarInContextWithBinding (mkId "b") (Type 0) ForallQ
@@ -155,11 +155,12 @@ checkCasePatterns = let ?globals = mempty in do
           let tyVarR = TyVar tyVarRId
           let expectedApprox1 = Con $ ApproximatedBy ns (TyGrade (Just nat) 1) (TyInfix TyOpTimes (TyVar $ mkId "y") tyVarR) nat
           let expectedApprox2 = Con $ ApproximatedBy ns (TyInfix TyOpTimes (TyVar $ mkId "y") tyVarR) (TyInfix TyOpTimes tyVarR tyVarR) nat
-          -- ((T ∧ T) -> T ∧ ∃ y : Nat . T ∧ ((1 : Nat) = y * r0) ∧ (y * r0 = r0 * r0))
+          let lub = Lub ns (TyVar $ mkId "y") (TyVar $ mkId "y") (TyVar $ mkId "ub0") (TyCon $ mkId "Nat") True
+          -- ((T ∧ T) -> T ∧ ∃ y : Nat . ((1 : Nat) = y * r0) ∧ (y * r0 = r0 * r0))
           pretty predicate
             `shouldBe` pretty [Impl [] (Conj [Conj [],Conj []])
-                              (Conj [Conj [],
-                                  Exists (mkId "y") nat (Conj [Conj [], expectedApprox1, expectedApprox2])])]
+                              (Conj [
+                                  Exists (mkId "y") nat (Conj [Conj [], Conj [], Con lub, expectedApprox1, expectedApprox2])])]
         _ -> fail "Not expected"
 
 -- Helper for running the synthesiser
@@ -195,7 +196,8 @@ testSynthesiser synthComputation = do
     -- Load in the primitive data constructors first before running the computation synthComputation
     let synthComputation' =
             --  (conv (runAll checkTyCon (extras ++ Primitives.dataTypes)))
-            (conv (runAll registerDataConstructors (extras ++ Primitives.dataTypes)))
+            (conv (runAll registerTypeConstructor (extras ++ Primitives.dataTypes)))
+          >> (conv (runAll registerDataConstructors (extras ++ Primitives.dataTypes)))
           >> synthComputation
     (outputs, dat) <- runStateT (runSynthesiser 1 synthComputation' initState) mempty
     succeedingOutput <- mapM (\(x, y) -> convertError x >>= (\x' -> return (x', y))) outputs

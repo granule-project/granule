@@ -25,7 +25,7 @@ import qualified Data.Generics.Zipper as Z
 --  stack test granule-frontend --test-arguments "-m "Common""
 
 spec :: Test.Spec
-spec = let ?globals = mempty :: Globals in do
+spec = let ?globals = (mempty :: Globals) {globalsExtensions = [GradedBase]} in do
   checkConstructorTests
   recursiveConstructorTests
   partialExpressionZipperTests
@@ -177,9 +177,10 @@ testSynthesiser synthComputation = do
          ,DataDecl {dataDeclSpan = Span {startPos = (3,1), endPos = (5,29), filename = "simple.gr"}, dataDeclId = (Id "Vec" "Vec"), dataDeclTyVarCtxt = [((Id "n" "n"),TyCon (Id "Nat" "Nat")),((Id "a" "a"),Type 0)], dataDeclKindAnn = Nothing, dataDeclDataConstrs = [DataConstrIndexed {dataConstrSpan = Span {startPos = (4,5), endPos = (0,0), filename = "simple.gr"}, dataConstrId = (Id "NilV" "NilV"), dataConstrTypeScheme = Forall (Span {startPos = (0,0), endPos = (0,0), filename = ""}) [] [] (TyApp (TyApp (TyCon (Id "Vec" "Vec")) (TyGrade Nothing 0)) (TyVar (Id "a" "a")))},DataConstrIndexed {dataConstrSpan = Span {startPos = (5,5), endPos = (5,29), filename = "simple.gr"}, dataConstrId = (Id "ConsV" "ConsV"), dataConstrTypeScheme = Forall (Span {startPos = (5,12), endPos = (5,29), filename = "simple.gr"}) [((Id "n" "n`0"),TyCon (Id "Nat" "Nat"))] [] (FunTy Nothing Nothing (TyVar (Id "a" "a")) (FunTy Nothing Nothing (TyApp (TyApp (TyCon (Id "Vec" "Vec")) (TyVar (Id "n" "n`0"))) (TyVar (Id "a" "a"))) (TyApp (TyApp (TyCon (Id "Vec" "Vec")) (TyInfix TyOpPlus (TyVar (Id "n" "n`0")) (TyGrade Nothing 1))) (TyVar (Id "a" "a")))))}]}
          ,DataDecl {dataDeclSpan = Span {startPos = (6,1), endPos = (6,21), filename = "simple.gr"}, dataDeclId = (Id "List" "List"), dataDeclTyVarCtxt = [((Id "a" "a"),Type 0)], dataDeclKindAnn = Nothing, dataDeclDataConstrs = [DataConstrNonIndexed {dataConstrSpan = Span {startPos = (6,15), endPos = (6,15), filename = "simple.gr"}, dataConstrId = (Id "Nil" "Nil"), dataConstrParams = []},DataConstrNonIndexed {dataConstrSpan = Span {startPos = (6,21), endPos = (6,21), filename = "simple.gr"}, dataConstrId = (Id "Cons" "Cons"), dataConstrParams = [TyVar (Id "a" "a"),TyApp (TyCon (Id "List" "List")) (TyVar (Id "a" "a"))]}]}]
     -- Load in the primitive data constructors first before running the computation synthComputation
-    let synthComputation' = 
-            -- (conv (runAll registerTypeConstructor (extras ++ Primitives.dataTypes)))
-            (conv (runAll registerDataConstructors (extras ++ Primitives.dataTypes)))
+    let synthComputation' =
+             (conv (runAll registerTypeConstructor (extras ++ Primitives.dataTypes)))
+          >> (conv (runAll registerDataConstructors (extras ++ Primitives.dataTypes)))
+          >> conv (liftIO (putStrLn "ok"))
           >> synthComputation
     (outputs, dat) <- runStateT (runSynthesiser 1 synthComputation' initState) mempty
     mapM (convertError . fst) outputs

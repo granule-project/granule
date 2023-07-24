@@ -119,6 +119,7 @@ import Language.Granule.Utils hiding (mkSpan)
     '&'   { TokenBorrow _ }
     '#'   { TokenHash _ }
     '*{'  { TokenStar _ }
+    '⨱'   { TokenHsup _ }
 
 %right '∘'
 %right in
@@ -195,14 +196,14 @@ Def :: { Def () () }
               span <- mkSpan (thd3 $1, endPos $ getSpan $ last (equations bindings))
               return $ Def span (mkId name) False spec bindings (snd3 $1)
       }
-  
+
 Spec :: { Maybe (Spec () ()) }
   : spec SpecList           { let (exs, auxs)  = $2 in
                                          Just $ Spec nullSpanNoFile False exs auxs }
 
 SpecList :: { ([Example () ()], [(Id, Maybe Type)]) }
   : Example ';' SpecList            { let (exs, auxs) = $3
-                                           in ($1 : exs, auxs) }  
+                                           in ($1 : exs, auxs) }
   | Components                          {   let auxs = $1
                                            in ([], auxs) }
   | {- empty -}                         { ([], []) }
@@ -370,10 +371,10 @@ Vars1 :: { [String] }
   | VAR Vars1                 { symString $1 : $2 }
 
 Hint :: { (String, Int) }
-  : '-' VAR                      { (symString $2, 0) } 
+  : '-' VAR                      { (symString $2, 0) }
   | '-' VAR INT                  { let TokenInt _ x  = $3 in (symString $2, x) }
 
-Hints :: { [(String, Int)] } 
+Hints :: { [(String, Int)] }
   : Hint                      { [$1] }
   | Hint Hints                { $1 : $2 }
 
@@ -442,7 +443,7 @@ Constraint :: { Type }
   | TyAtom '==' TyAtom        { TyInfix TyOpEq $1 $3 }
   | TyAtom '/=' TyAtom        { TyInfix TyOpNotEq $1 $3 }
   | TyAtom '=>' TyAtom        { TyInfix TyOpImpl $1 $3 }
-
+  | TyAtom '⨱' TyAtom         { TyInfix TyOpHsup $1 $3 }
 
 TyAtom :: { Type }
   : CONSTR                    { case constrString $1 of
@@ -728,7 +729,7 @@ parseDefs :: FilePath -> String -> Either String (AST () (), [Extension])
 parseDefs file input = runReaderT (runStateT (topLevel $ scanTokens input) []) file
 
 parseHints :: [(String, Int)] -> Hints
-parseHints hints = 
+parseHints hints =
   Hints {
     hSubtractive = ("s", 0) `elem` hints,
     hPruning     = ("p", 0) `elem` hints,

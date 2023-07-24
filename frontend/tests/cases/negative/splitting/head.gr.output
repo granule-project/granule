@@ -1,12 +1,4 @@
 Type checking failed: 
-Counter example: StdLib/Vec.gr:65:1:
-  The following constraint associated with `foldl` is false:
-	  (prom_[65:36]0 + (1 : Nat) = n1.0 + 1) ∧ (prom_[65:36]0 = n1.0)
-
-Counter-example:
-  n = 0 :: Integer
-
-
 Found a goal: frontend/tests/cases/negative/splitting/head.gr:5:12:
 
    Expected type is: `Maybe a`

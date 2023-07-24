@@ -2171,6 +2171,7 @@ checkGuardsForImpossibility s name refinementConstraints = do
     -- TODO: Remvoe commented code
     -- constraints' <- mapM (compileTypeConstraintToConstraint nullSpanNoFile) refinementConstraints
     let theorem = foldr (uncurry Exists) predicate ctxt
+    theorem <- handleHsupPoly tyVars theorem
 
     debugM "impossibility" $ "about to try (" <> pretty tyVars <> ") . " <> pretty theorem
     -- Try to prove the theorem
@@ -2216,6 +2217,40 @@ checkGuardsForImpossibility s name refinementConstraints = do
       SolverProofError msg -> error msg
 
 --
+-- For use in impossibility checking,
+-- make true a `Hsup r s` constraint
+-- where `r` and `s` are unification variables
+-- whose kind is also a unification variable, i.e., this is capturing
+-- a polymorphic constraint here.
+handleHsupPoly :: (?globals :: Globals) => Ctxt (Type, Quantifier) -> Pred -> Checker Pred
+-- match on `HSup r s` - handle the main cases here.
+handleHsupPoly localCtxt c@(Con (Hsup s (TyVar v1) (TyVar v2) (TyVar t))) = do
+  st <- get
+  let ctxt = localCtxt ++ tyVarContext st
+  case (lookup v1 ctxt, lookup v2 ctxt, lookup t ctxt) of
+    (Just (TyVar t1, InstanceQ), Just (TyVar t2, InstanceQ), Just (_, ForallQ)) ->
+        -- rewrite to True
+        return $ Conj []
+    _ -> return c
+
+handleHsupPoly localCtxt (Con con) = return (Con con)
+
+handleHsupPoly localCtxt (Conj ps) =
+  Conj <$> mapM (handleHsupPoly localCtxt) ps
+
+handleHsupPoly localCtxt (Disj ps) =
+  Disj <$> mapM (handleHsupPoly localCtxt) ps
+
+handleHsupPoly localCtxt (Impl ctxt p1 p2) =
+  (Impl ctxt) <$> (handleHsupPoly localCtxt p1) <*> (handleHsupPoly localCtxt p2)
+
+handleHsupPoly localCtxt (Exists v k p) =
+  (Exists v k) <$> (handleHsupPoly ((v, (k, InstanceQ)) : localCtxt) p)
+
+-- Don't go inside negation
+handleHsupPoly _ (NegPred p) =
+  return $ NegPred p
+
 freshenTySchemeForVar :: (?globals :: Globals) => Span -> Bool -> Id -> TypeScheme -> Checker (Type, Ctxt Assumption, Substitution, Expr () Type)
 freshenTySchemeForVar s rf id tyScheme = do
   (ty', _, constraints, []) <- freshPolymorphicInstance InstanceQ False tyScheme [] [] -- discard list of fresh type variables
