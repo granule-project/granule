@@ -108,9 +108,9 @@ tokens :-
   "^"                           { \p s -> TokenCaret p }
   ".."                          { \p s -> TokenDotDot p }
   "∨"                           { \p _ -> TokenJoin p }
-  "\\/"                         { \p _ -> TokenJoin p }
+  "\/"                          { \p _ -> TokenJoin p }
   "∧"                           { \p _ -> TokenMeet p }
-  "/\\"                         { \p _ -> TokenMeet p }
+  "/\"                          { \p _ -> TokenMeet p }
   "=>"                          { \p s -> TokenConstrain p }
   "⇒"                           { \p s -> TokenConstrain p }
   "∘"                           { \p _ -> TokenRing p }
