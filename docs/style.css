@@ -1,6 +1,6 @@
 .code {
   font-family: monospace;
-  background: rgb(250,250,250);
+  background: rgb(250, 250, 250);
   clear: both;
   padding: 10px;
   margin: 5px;
@@ -18,7 +18,7 @@
 
 .mininav {
   font-family: sans-serif;
-  background: rgb(255,250,240);
+  background: rgb(255, 250, 240);
   margin-left: 20px;
   border: solid 1px #ccc;
   width: 80%;
@@ -29,11 +29,13 @@
   color: rgb(16, 145, 59);
 }
 
-.coeff {
+.coeff,
+.coeff span {
   color: rgb(6, 74, 209);
 }
 
-.eff {
+.eff,
+.eff span {
   color: rgb(204, 102, 6);
 }
 
@@ -41,12 +43,17 @@
   color: rgb(110, 12, 5);
 }
 
+.uniq,
+.uniq span {
+  color: rgb(194, 2, 50);
+}
+
 #navigator {
   width: calc(25vw - 20px - 2 * 20px);
   margin: 0px;
   padding: 20px;
   margin-right: 20px;
-  background: rgb(230,230,230);
+  background: rgb(230, 230, 230);
   font-family: sans-serif;
   float: left;
 }
@@ -62,18 +69,20 @@
 #logo {
   float: right;
 }
+
 #logo img {
   width: 100px;
 }
 
-a, a:visited {
+a,
+a:visited {
   color: #404d5f;
 }
 
 a.toplink {
   margin: 0px;
-  float:left;
-  margin-left:-3em;
+  float: left;
+  margin-left: -3em;
   font-weight: 400;
   font-size: 10pt;
   margin-right: 2em;

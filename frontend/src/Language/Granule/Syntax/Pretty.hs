@@ -33,6 +33,11 @@ prettyDebug x =
   let ?globals = ?globals { globalsDebugging = Just True }
   in pretty x
 
+prettyDoc :: (?globals :: Globals) => Pretty t => t -> String
+prettyDoc x =
+  let ?globals = ?globals { globalsDocMode = Just True }
+  in pretty x
+
 prettyNested :: (?globals :: Globals, Term a, Pretty a) => a -> String
 prettyNested e =
   if isLexicallyAtomic e then pretty e else "(" <> pretty e <> ")"
@@ -83,15 +88,15 @@ instance Pretty TypeScheme where
     pretty (Forall _ vs cs t) = kVars vs <> constraints cs <> pretty t
       where
         kVars [] = ""
-        kVars vs = "forall {" <> intercalate ", " (map prettyKindSignatures vs) <> "} . "
+        kVars vs = (if docMode then spanP "keyword" "forall" else "forall") <> " {" <> intercalate ", " (map prettyKindSignatures vs) <> "} . "
         prettyKindSignatures (var, kind) = pretty var <> " : " <> pretty kind
         constraints [] = ""
         constraints cs = "{" <> intercalate ", " (map pretty cs) <> "} =>\n    "
 
 instance Pretty Type where
     -- Atoms
-    pretty (TyCon s) | internalName s == "Infinity" = "∞"
-    pretty (TyCon s)      = pretty s
+    pretty (TyCon s) | internalName s == "Infinity" = if docMode then spanP "constName" "∞" else "∞"
+    pretty (TyCon s)      = if docMode then spanP "constName" (pretty s) else pretty s
     pretty (TyVar v)      = pretty v
     pretty (TyInt n)      = show n
     pretty (TyGrade Nothing n)  = show n
@@ -124,16 +129,16 @@ instance Pretty Type where
 
     pretty (Box c t) =
       case c of
-        (TyCon (Id "Many" "Many")) -> "!" <> prettyNested t
-        otherwise -> prettyNested t <> " [" <> pretty c <> "]"
+        (TyCon (Id "Many" "Many")) -> if docMode then spanP "coeff" ("!" <> prettyNested t) else ("!" <> prettyNested t)
+        otherwise -> prettyNested t <> " [" <> (if docMode then spanP "coeff" (pretty c) else (pretty c)) <> "]"
 
     pretty (Diamond e t) =
-      prettyNested t <> " <" <> pretty e <> ">"
+      prettyNested t <> " <" <> (if docMode then spanP "eff" (pretty e) else pretty e) <> ">"
 
     pretty (Star g t) =
       case g of
-        (TyCon (Id "Unique" "Unique")) -> "*" <> prettyNested t
-        otherwise -> prettyNested t <> " *" <> pretty g
+        (TyCon (Id "Unique" "Unique")) -> if docMode then spanP "uniq" ("*" <> prettyNested t) else ("*" <> prettyNested t)
+        otherwise -> prettyNested t <> " *" <> (if docMode then spanP "uniq" (pretty g) else pretty g)
 
     pretty (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "," =
       "(" <> pretty t1 <> ", " <> pretty t2 <> ")"
@@ -169,7 +174,7 @@ instance Pretty Type where
                     <> " : " <> pretty t') ps) <> ")"
 
     pretty (TyExists var k t) =
-      "exists {" <> pretty var <> ":" <> pretty k <> "} . " <> pretty t
+      (if docMode then spanP "keyword" "exists" else "exists") <> " {" <> pretty var <> ":" <> pretty k <> "} . " <> pretty t
 
 instance Pretty TypeOperator where
   pretty = \case
@@ -374,4 +379,11 @@ instance Pretty Hints where
       -- HUseDefs ids      -> " -d " <> (unwords $ map pretty ids)
       -- HUseRec           -> " -r"
       -- HGradeOnRule      -> " -g"
+
+spanP :: String -> String -> String
+spanP name = tagWithAttributesP "span" ("class='" <> name <> "'")
+
+tagWithAttributesP :: String -> String -> String -> String
+tagWithAttributesP name attributes content =
+  "<" <> name <> " " <> attributes <> ">" <> content <> "</" <> name <> ">"
 
