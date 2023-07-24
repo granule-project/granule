@@ -104,10 +104,10 @@ instance Pretty Type where
     pretty (TyRational n) = show n
 
     -- Non atoms
-    pretty (Type 0) = "Type"
+    pretty (Type 0) = if docMode then spanP "constName" "Type" else "Type"
 
     pretty (Type l) =
-      "Type " <> pretty l
+      if docMode then spanP "constName" ("Type " <> pretty l) else ("Type " <> pretty l)
 
     pretty (FunTy Nothing Nothing t1 t2)  =
       case t1 of
@@ -117,7 +117,7 @@ instance Pretty Type where
     pretty (FunTy Nothing (Just coeffect) t1 t2)  =
       case t1 of
         FunTy{} -> "(" <> pretty t1 <> ") -> " <> pretty t2
-        _ -> pretty t1 <> " % " <> pretty coeffect <>  " -> " <> pretty t2
+        _ -> pretty t1 <> " % " <> (if docMode then spanP "coeff" (pretty coeffect) else pretty coeffect) <>  " -> " <> pretty t2
 
     pretty (FunTy (Just id) Nothing t1 t2)  =
       let pt1 = case t1 of FunTy{} -> "(" <> pretty t1 <> ")"; _ -> pretty t1
@@ -125,7 +125,7 @@ instance Pretty Type where
 
     pretty (FunTy (Just id) (Just coeffect) t1 t2)  =
       let pt1 = case t1 of FunTy{} -> "(" <> pretty t1 <> ")"; _ -> pretty t1
-      in  "(" <> pretty id <> " : " <> pt1 <> ") % " <> pretty coeffect <> " -> " <> pretty t2
+      in  "(" <> pretty id <> " : " <> pt1 <> ") % " <> (if docMode then spanP "coeff" (pretty coeffect) else pretty coeffect) <> " -> " <> pretty t2
 
     pretty (Box c t) =
       case c of
