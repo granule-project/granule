@@ -2,12 +2,12 @@ fill : *FloatArray -> !Int -> *FloatArray
 fill arr [0] = arr;
 fill arr [i] =
   let f = intToFloat i;
-      arr' = writeFloatArray arr (i - 1) f
+      arr' = writeFloatArray arr i f
   in fill arr' [i - 1]
 
 main : (Float, FloatArray)
 main =
   let x = fill (newFloatArray 10) [9] in
   let [y] = share x in
-  let [()] = clone [y] as y' in (let () = deleteFloatArray y' in [()])
-  in readFloatArrayI y 9
+  let [()] = clone [y] as y' in (let () = deleteFloatArray y' in [()]) in
+  readFloatArrayI y 9
