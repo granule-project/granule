@@ -252,8 +252,8 @@ uniquifyFloatArraySafe a =
   case a of
     PointerArray{} -> error "expected non-unique array"
     HaskellArray len arr -> do
-      arr' <- newFloatArraySafe (len+1)
-      forM_ [0..len] $ \i -> do
+      arr' <- newFloatArraySafe len
+      forM_ [0..(len-1)] $ \i -> do
         v <- MA.readArray arr i
         pokeElemOff (grPtr arr') i v
       return arr'
@@ -267,8 +267,8 @@ borrowFloatArraySafe a =
   case a of
     HaskellArray{} -> error "expected unique array"
     PointerArray len ptr -> do
-      arr' <- newFloatArrayISafe (len+1)
-      forM_ [0..len] $ \i -> do
+      arr' <- newFloatArrayISafe len
+      forM_ [0..(len-1)] $ \i -> do
         v <- peekElemOff ptr i
         MA.writeArray (grArr arr') i v
       return arr'
