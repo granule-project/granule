@@ -181,6 +181,7 @@ tyOps = \case
     TyOpInterval -> (tyVar "k", tyVar "k", tyVar "k")
     TyOpConverge -> (kNat, kNat, kNat)
     TyOpImpl    -> (kpredicate, kpredicate, kpredicate)
+    TyOpHsup    -> (tyVar "k", tyVar "k", kpredicate)
 
 dataTypes :: [DataDecl]
 dataTypes =

@@ -59,6 +59,7 @@ compileAtType s op c1 c2 coeffTy = do
     TyOpGreaterEq -> return $ Con (ApproximatedBy s c2 c1 coeffTy)
     TyOpLesserEqNat -> return $ Con (LtEq s c1 c2)
     TyOpGreaterEqNat -> return $ Con (GtEq s c1 c2)
+    TyOpHsup         -> return $ Con (Hsup s c1 c2 coeffTy)
     TyOpImpl         -> do
       p1 <- compileTypeConstraintToConstraint s c1
       p2 <- compileTypeConstraintToConstraint s c2

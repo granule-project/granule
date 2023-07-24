@@ -195,6 +195,7 @@ instance Pretty TypeOperator where
    TyOpInterval        -> ".."
    TyOpConverge        -> "#"
    TyOpImpl            -> "=>"
+   TyOpHsup            -> "⨱"
 
 instance Pretty v => Pretty (AST v a) where
   pretty (AST dataDecls defs imprts hidden name) =
@@ -364,11 +365,11 @@ instance Pretty Pos where
 
 instance Pretty Hints where
     pretty (Hints hSub hPrun hNoTime hLin hTime hIndex) = ""
-      --  \case 
+      --  \case
 
       -- HSubtractive      -> " -s"
       -- HPruning          -> " -p"
-      -- HNoMaxIntro       -> " -i" 
+      -- HNoMaxIntro       -> " -i"
       -- HMaxIntro x       -> " -i " <> show x
       -- HNoMaxElim        -> " -e"
       -- HMaxElim x        -> " -e " <> show x

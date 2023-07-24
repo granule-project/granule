@@ -123,6 +123,7 @@ tokens :-
   "⊸"                           { \p _ -> TokenArrow p }
   "*{"                          { \p _ -> TokenStar p }
   "%"                           { \p _ -> TokenPercent p }
+  "⨱"                           { \p _ -> TokenHsup p }
 
 {
 
@@ -205,6 +206,7 @@ data Token
   | TokenHash AlexPosn
   | TokenPercent AlexPosn
   | TokenStar AlexPosn
+  | TokenHsup AlexPosn
 
   deriving (Eq, Show, Generic)
 

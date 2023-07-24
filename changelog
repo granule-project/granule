@@ -1,6 +1,7 @@
   # 0.9.4.0
   - Advanced synthesis algorithm for `language GradeBase` mode.
   - Better standard library documentation
+  - Ability to expose the 'hsup' constraint (see `push`)
 
   # 0.9.3.0
   - Existential types, e.g.,`exists {x : Type} . t`, see `examples/existential.gr` and `examples/listToVec.gr`
@@ -13,7 +14,7 @@
   # 0.9.2.0
    - New `Cartesian` semiring, with just one element `Any : Cartesian` for completely erasing grading (trivial solving)
    - (Internal)
-     - Restructuring to tests
+    - Restructuring to tests
 
   # 0.9.1.0
    - Public and Private are now usable as synonyms for Lo and Hi unless the SecurityLevels extension is turned on.
