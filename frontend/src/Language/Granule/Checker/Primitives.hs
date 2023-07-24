@@ -57,7 +57,6 @@ typeConstructors =
     , (mkId "Predicate", (Type 2, [], []))
     , (mkId "->",     (funTy (Type 0) (funTy (Type 0) (Type 0)), [], []))
     , (mkId ",,",     (funTy kcoeffect (funTy kcoeffect kcoeffect), [mkId ",,"], []))
-    , (mkId "ExactSemiring", (funTy (tyCon "Semiring") (tyCon "Predicate"), [], []))
     , (mkId "Int",    (Type 0, [], []))
     , (mkId "Float",  (Type 0, [], []))
     , (mkId "DFloat",  (Type 0, [], [])) -- special floats that can be tracked for sensitivty
@@ -65,6 +64,7 @@ typeConstructors =
     , (mkId "String", (Type 0, [], []))
     , (mkId "Inverse", ((funTy (Type 0) (Type 0)), [], []))
     -- Session type related things
+    , (mkId "ExactSemiring", (funTy (tyCon "Semiring") (tyCon "Predicate"), [], []))
     , (mkId "Protocol", (Type 0, [], []))
     , (mkId "SingleAction", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], [0]))
     , (mkId "ReceivePrefix", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], [0]))

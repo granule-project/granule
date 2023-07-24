@@ -352,6 +352,7 @@ lookupMany _ []                     = []
 lookupMany a' ((a, b):xs) | a == a' = b : lookupMany a' xs
 lookupMany a' (_:xs)                = lookupMany a' xs
 
+
 -- | Get set of duplicates in a list.
 -- >>> duplicates [1,2,2,3,3,3]
 -- [2,3]

@@ -1,3 +1,4 @@
+{-# LANGUAGE ViewPatterns #-}
 module Language.Granule.Doc where
 
 -- grdoc - Documentation generator
@@ -6,7 +7,8 @@ import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Parser (parseDefs)
--- import Language.Granule.Syntax.Type
+import Language.Granule.Syntax.Type
+import Language.Granule.Syntax.Identifiers
 import qualified Language.Granule.Checker.Primitives as Primitives
 import Language.Granule.Utils
 
@@ -18,8 +20,8 @@ import Data.Text hiding
 import qualified Data.Text as Text
 
 import Data.Char (isAlpha)
-import Data.Maybe (catMaybes)
-import Data.List (isPrefixOf, sort, sortOn)
+import Data.Maybe (catMaybes, mapMaybe)
+import Data.List (isPrefixOf, sort, sortOn, partition)
 import Data.Version (showVersion)
 import Paths_granule_interpreter (version)
 
@@ -75,10 +77,15 @@ generateModulePage' modName title input ast =
    where
     inputLines = lines input
     content = (if Text.strip preamble == "" then "" else section "Meta-data" preamble)
-           <> (section "Contents" ((internalNav headings') <> Text.concat contentDefs))
+           <> (section "Contents" ((internalNav headings')
+           <> (if modName == "Primitives" then anchor "Built-in Types" else "")
+           <> Text.concat contentDefs))
     preamble = parsePreamble inputLines
     (headings, contentDefs) = unzip (map prettyDef topLevelDefs)
-    headings' = catMaybes headings
+    headings' =
+      if modName == "Primitives"
+        then "Built-in Types" : catMaybes headings
+        else catMaybes headings
 
 
     -- Combine the data type and function definitions together
@@ -120,13 +127,45 @@ generateIndexPage = do
     indexText = "See links on the side for various modules."
              <> " Compiled with Granule version v" <> pack (showVersion version) <> "."
 
+--
+
 -- Generates the text of the primitives module
 generatePrimitivesPage :: (?globals::Globals) => IO Text
 generatePrimitivesPage = do
-    generateModulePage' "Primitives" "Built-in primitives" (Primitives.builtinSrc) (fst . fromRight $ parseDefs "Primitives" Primitives.builtinSrc)
+    generateModulePage' "Primitives" "Built-in primitives" (Primitives.builtinSrc) (appendPrimitiveTys $ fst . fromRight $ parseDefs "Primitives" Primitives.builtinSrc)
   where
     fromRight (Right x) = x
     fromRight (Left x)  = error x
+
+    appendPrimitiveTys ast = ast { dataTypes = builtInTyConsAsDataDecls ++ dataTypes ast }
+
+    builtInTyConsAsDataDecls :: (?globals :: Globals) => [DataDecl]
+    builtInTyConsAsDataDecls = mapMaybe toDataTypeCons buildBuiltinTypesLookup
+      where
+        toDataTypeCons (name, (kind, [])) =
+          -- Ignore these ones, indicates a leaf that should already be globbed
+          Nothing
+        toDataTypeCons (name, (kind, cons)) =
+          Just $ DataDecl Primitives.nullSpanBuiltin name [] (Just kind) (map (toDataCons kind) cons)
+        toDataCons kind (id, ty) =
+          DataConstrIndexed Primitives.nullSpanBuiltin id (Forall Primitives.nullSpanBuiltin [] [] ty)
+
+
+    buildBuiltinTypesLookup :: (?globals :: Globals) => [(Id, (Type, [(Id, Type)]))]
+    buildBuiltinTypesLookup =
+        aux $ (mkId "Type", (Type 1, [] , [])) : Primitives.typeConstructors
+      where
+        aux [] = []
+        aux ((id, (k, _, _)):constrs) = (id, (k, map merge members)) : aux constrs
+          where (members, _constrs') = Data.List.partition (matches id) constrs
+
+        merge (name, (typ, _, _)) = (name, typ)
+
+        matches tyConName (id', (ty, _, _)) =
+          case (tyConName, resultType ty) of
+            (internalName -> "Type", Type 0) -> True
+            (a, b) -> (TyCon a) == b
+
 generateFromTemplate :: PageContext -> Text -> Text -> Text -> IO Text
 generateFromTemplate ctxt modName title content = do
   template <- readFile "docs/template.html"

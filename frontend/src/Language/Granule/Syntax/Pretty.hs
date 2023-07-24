@@ -240,7 +240,7 @@ instance Pretty v => Pretty (Equation v a) where
 instance Pretty DataDecl where
     pretty (DataDecl _ tyCon tyVars kind dataConstrs) =
       let tvs = case tyVars of [] -> ""; _ -> (unwords . map pretty) tyVars <> " "
-          ki = case kind of Nothing -> ""; Just k -> pretty k <> " "
+          ki = case kind of Nothing -> ""; Just k -> ": " <> pretty k <> " "
       in "data " <> pretty tyCon <> " " <> tvs <> ki <> "where\n    " <> pretty dataConstrs
 
 instance Pretty [DataConstr] where
