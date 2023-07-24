@@ -91,13 +91,13 @@ generateModulePage' modName title input ast =
       let (docs, heading) = scrapeDoc inputLines (dataDeclSpan d)
       in  (heading,
             (maybe "" anchor heading)
-         <> (codeDiv . pack . pretty $ d)
+         <> (codeDiv . pack . prettyDoc $ d)
          <> (if strip docs == "" then miniBreak else descDiv docs))
     prettyDef (Right d) =
       let (docs, heading) = scrapeDoc inputLines (defSpan d)
       in  (heading
           , (maybe "" anchor heading)
-         <> (codeDiv $ pack $ pretty (defId d) <> " : " <> pretty (defTypeScheme d))
+         <> (codeDiv $ pack $ prettyDoc (defId d) <> " : " <> prettyDoc (defTypeScheme d))
          <> (if strip docs == "" then miniBreak else descDiv docs))
 
     anchor :: Text -> Text

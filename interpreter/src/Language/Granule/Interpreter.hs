@@ -623,6 +623,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsSynthHtml
               , globalsExampleLimit
               , globalsExtensions = []
+              , globalsDocMode = Nothing
               }
             }
           )
