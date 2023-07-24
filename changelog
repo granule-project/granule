@@ -2,6 +2,7 @@
   - Advanced synthesis algorithm for `language GradeBase` mode.
   - Better standard library documentation
   - Ability to expose the 'hsup' constraint (see `push`)
+  - Some bug fixes (see https://github.com/granule-project/granule/milestone/2?closed=1)
 
   # 0.9.3.0
   - Existential types, e.g.,`exists {x : Type} . t`, see `examples/existential.gr` and `examples/listToVec.gr`
