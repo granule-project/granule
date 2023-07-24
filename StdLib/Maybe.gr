@@ -18,16 +18,17 @@ data Maybe a = Nothing | Just a
 --- The maybe function takes a default value, a function, and a Maybe value.
 --- If the Maybe value is Nothing, the function returns the default value.
 --- Otherwise, it applies the function to the value inside the Just and
--- returns the result.
+--- returns the result.
 maybe : forall {a : Type, b : Type}
       . b [0..1] -> (a -> b) [0..1] -> Maybe a -> b
 maybe [d] [_] Nothing = d;
 maybe [_] [f] (Just x) = f x
 
--- Monady interface for Maybe
+--- Monad interface for Maybe
 returnMb : forall {a : Type} . a -> Maybe a
 returnMb = Just
 
+--- Monad interface for Maybe
 bindMb : forall {a : Type, b : Type}
      . Maybe a -> (a -> Maybe b) [0..1] -> Maybe b
 bindMb Nothing [_] = Nothing;

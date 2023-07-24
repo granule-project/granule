@@ -638,35 +638,39 @@ trustedBind
 trustedBind = BUILTIN
 
 --------------------------------------------------------------------------------
---- # Mutable and immutable array operations
+--- # Mutable array operations
 --------------------------------------------------------------------------------
 
 newFloatArray : Int -> *FloatArray
 newFloatArray = BUILTIN
 
-newFloatArrayI : Int -> FloatArray
-newFloatArrayI = BUILTIN
-
 readFloatArray : *FloatArray -> Int -> (Float, *FloatArray)
 readFloatArray = BUILTIN
-
-readFloatArrayI : FloatArray -> Int -> (Float, FloatArray)
-readFloatArrayI = BUILTIN
 
 writeFloatArray : *FloatArray -> Int -> Float -> *FloatArray
 writeFloatArray = BUILTIN
 
-writeFloatArrayI : FloatArray -> Int -> Float -> FloatArray
-writeFloatArrayI = BUILTIN
-
 lengthFloatArray : *FloatArray -> (Int, *FloatArray)
 lengthFloatArray = BUILTIN
 
-lengthFloatArrayI : FloatArray -> (Int, FloatArray)
-lengthFloatArrayI = BUILTIN
-
 deleteFloatArray : *FloatArray -> ()
 deleteFloatArray = BUILTIN
+
+--------------------------------------------------------------------------------
+--- # Imuutable array operations
+--------------------------------------------------------------------------------
+
+newFloatArrayI : Int -> FloatArray
+newFloatArrayI = BUILTIN
+
+readFloatArrayI : FloatArray -> Int -> (Float, FloatArray)
+readFloatArrayI = BUILTIN
+
+writeFloatArrayI : FloatArray -> Int -> Float -> FloatArray
+writeFloatArrayI = BUILTIN
+
+lengthFloatArrayI : FloatArray -> (Int, FloatArray)
+lengthFloatArrayI = BUILTIN
 
 --------------------------------------------------------------------------------
 --- # Benchmarking

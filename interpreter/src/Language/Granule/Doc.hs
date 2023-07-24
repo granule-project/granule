@@ -201,7 +201,7 @@ generateNavigatorText ctxt = do
 -- Scape comments preceding a particular point if they start with ---
 scrapeDoc :: [String] -> Span -> (Text, Maybe Text)
 scrapeDoc inputLines span =
-    (Text.concat (reverse relevantLinesFormatted), heading)
+    (toMarkDown $ Text.concat (reverse relevantLinesFormatted), heading)
   where
     relevantLinesFormatted = map (pack . drop 3) relevantLines
     relevantLines = takeWhile ("--- " `isPrefixOf`) (dropWhile (== "") (reverse before))
@@ -216,6 +216,21 @@ scrapeDoc inputLines span =
       case lessRelevantLines' of
         (x:_) | "--- #" `isPrefixOf` x -> let (_, heading) = splitAt 5 x in Just $ pack heading
         _                              -> Nothing
+
+toMarkDown :: Text -> Text
+toMarkDown xs =
+    case Data.Text.foldr aux (pack [], False) xs of
+      -- some failure so don't mark down
+      (_, True)   -> xs
+      (xs, False) -> xs
+  where
+    aux :: Char -> (Text, Bool) -> (Text, Bool)
+    aux x (rest, n) =
+      if x == '`' then
+          if n
+            then ("<span class='inline'>" <> rest, False)
+            else ("</span>" <> rest, True)
+        else (pack [x] <> rest, n)
 
 
 -- Parse the preamble from the front of a module file (if present)

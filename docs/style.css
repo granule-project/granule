@@ -7,6 +7,11 @@
   border-bottom: solid 3px #ccc;
 }
 
+.inline {
+  font-family: monospace;
+  background: rgb(250, 250, 250);
+}
+
 .desc {
   font-family: sans-serif;
   padding: 10px;
