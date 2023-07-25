@@ -56,8 +56,8 @@ Temporary Items
 # Backups
 *.bak
 
-# Cabal files, because we are using hpack
-*.cabal
+# 2023-07-20 raehik: committing Cabal files is handy and suggested by Stack
+# author: https://www.fpcomplete.com/blog/storing-generated-cabal-files/
 
 # Compiler Examples
 compiler-examples/

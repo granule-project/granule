@@ -1,0 +1,48 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.35.2.
+--
+-- see: https://github.com/sol/hpack
+
+name:           granule-runtime
+version:        0.1.0.0
+author:         Michael Vollmer
+maintainer:     Michael Vollmer
+build-type:     Simple
+
+library
+  exposed-modules:
+      Language.Granule.Runtime
+  other-modules:
+      Paths_granule_runtime
+  hs-source-dirs:
+      src
+  default-extensions:
+      LambdaCase
+      RecordWildCards
+      ImplicitParams
+      ScopedTypeVariables
+      OverloadedStrings
+      FlexibleContexts
+      ConstraintKinds
+  ghc-options: -Wall -Werror -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -Wno-unused-matches -Wno-name-shadowing -Wno-type-defaults
+  build-depends:
+      Glob
+    , array
+    , base >=4.10 && <5
+    , clock
+    , containers
+    , criterion
+    , directory
+    , extra
+    , filepath
+    , gitrev
+    , granule-frontend
+    , haskell-src-exts
+    , logict >=0.7.1.0
+    , mtl >=2.2.1
+    , optparse-applicative
+    , silently
+    , text
+    , time
+  default-language: Haskell2010
