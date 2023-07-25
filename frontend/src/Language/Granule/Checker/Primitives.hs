@@ -378,7 +378,7 @@ offer : forall {p1 p2 : Protocol, a : Type}
 offer = BUILTIN
 
 --------------------------------------------------------------------------------
---- # Non-linear communicaiton and concurrency patterns
+--- # Non-linear communication and concurrency patterns
 --------------------------------------------------------------------------------
 
 forkNonLinear : forall {p : Protocol, s : Semiring, r : s}
