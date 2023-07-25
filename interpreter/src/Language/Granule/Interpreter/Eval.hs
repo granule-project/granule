@@ -738,7 +738,6 @@ builtIns =
              if b then Constr () (mkId "True") [] else Constr () (mkId "False") []
         return . Val nullSpan () False $ Constr () (mkId ",") [Ext () $ Handle h, boolflag])
   , (mkId "forkLinear", Ext () $ PrimitiveClosure forkLinear)
-  , (mkId "forkLinear'", Ext () $ PrimitiveClosure forkLinear')
   , (mkId "forkNonLinear", Ext () $ PrimitiveClosure forkNonLinear)
   , (mkId "forkReplicate", Ext () $ PrimitiveClosure forkReplicate)
   , (mkId "forkReplicateExactly", Ext () $ PrimitiveClosure forkReplicateExactly)
@@ -783,15 +782,6 @@ builtIns =
       Abs{} -> do c <- newChan
                   _ <- C.forkIO $ void $ evalIn ctxt (App nullSpan () False (valExpr e)
                                                        (valExpr $ Ext () $ Chan c))
-                  return $ Ext () $ Chan (dualEndpoint c)
-      _oth -> error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
-
-    forkLinear' :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
-    forkLinear' ctxt e = case e of
-      Abs{} -> do c <- newChan
-                  _ <- C.forkIO $ void $ evalIn ctxt (App nullSpan () False
-                                                      (valExpr e)
-                                                      (valExpr $ Promote () $ valExpr $ Ext () $ Chan c))
                   return $ Ext () $ Chan (dualEndpoint c)
       _oth -> error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 

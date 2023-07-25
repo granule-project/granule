@@ -720,5 +720,5 @@ builtins :: [(Id, TypeScheme)]
 
 -- List of primitives that can't be promoted in CBV
 unpromotables :: [String]
-unpromotables = ["newFloatArray", "forkLinear", "forkLinear'", "forkMulticast", "forkReplicate", "forkReplicateExactly"]
+unpromotables = ["newFloatArray", "forkLinear", "forkMulticast", "forkReplicate", "forkReplicateExactly"]
 
