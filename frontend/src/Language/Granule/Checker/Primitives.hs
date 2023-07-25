@@ -352,11 +352,6 @@ forkLinear
   . (LChan s -> ()) -> LChan (Dual s)
 forkLinear = BUILTIN
 
-forkLinear'
-  : forall {p : Protocol, s : Semiring}
-  . ((LChan p) [1 : s] -> ()) -> LChan (Dual p)
-forkLinear' = BUILTIN
-
 send
   : forall {a : Type, s : Protocol}
   . LChan (Send a s) -> a -> LChan s
@@ -382,8 +377,9 @@ offer : forall {p1 p2 : Protocol, a : Type}
       . (LChan p1 -> a) -> (LChan p2 -> a) -> LChan (Offer p1 p2) -> a
 offer = BUILTIN
 
--- trace : String -> () <>
--- trace = BUILTIN
+--------------------------------------------------------------------------------
+--- # Non-linear communicaiton and concurrency patterns
+--------------------------------------------------------------------------------
 
 forkNonLinear : forall {p : Protocol, s : Semiring, r : s}
               . {SingleAction p, ExactSemiring s} => ((LChan p) [r] -> ()) -> (LChan (Dual p)) [r]
@@ -422,8 +418,6 @@ grecv = BUILTIN
 
 gclose : Chan End -> () <Session>
 gclose = BUILTIN
-
-
 
 --------------------------------------------------------------------------------
 --- # File Handles
@@ -705,6 +699,9 @@ cap = BUILTIN
 
 -- projR : forall {a b : Type} . a & b -> b
 -- projR = BUILTIN
+
+-- trace : String -> () <>
+-- trace = BUILTIN
 
 |]
 

@@ -105,3 +105,7 @@ a.toplink {
   margin-right: 2em;
   color: #c9c9c9;
 }
+
+strong {
+  color: rgb(194, 20, 200);
+}

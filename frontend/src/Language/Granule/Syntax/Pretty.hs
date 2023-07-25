@@ -247,7 +247,7 @@ instance Pretty DataDecl where
           where indent = maximum (map (length . internalName . dataConstrId) dataConstrs)
         pretty' col (DataConstrIndexed _ name typeScheme) =
           pretty name <> (replicate (col - (length $ pretty name)) ' ') <> " : " <> pretty typeScheme
-        pretty' _   (DataConstrNonIndexed _ name params) = pretty name <> " " <> (intercalate " " $ map pretty params)
+        pretty' _   (DataConstrNonIndexed _ name params) = pretty name <> " " <> (intercalate " " $ map prettyNested params)
 
 
 instance Pretty [DataConstr] where
