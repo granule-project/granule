@@ -346,10 +346,6 @@ readInt = BUILTIN
 --- # Concurrency and Session Types
 --------------------------------------------------------------------------------
 
-fork
-  : forall {s : Protocol, k : Coeffect, c : k}
-  . {SingleAction s, ExactSemiring k} => ((Chan s) [c] -> () <Session>) -> ((Chan (Dual s)) [c]) <Session>
-fork = BUILTIN
 
 forkLinear
   : forall {s : Protocol}
@@ -408,6 +404,11 @@ forkReplicateExactly = BUILTIN
 ---------------------------------
 --- # Concurrency primitives using side effects
 ----------------------------------
+
+fork
+  : forall {s : Protocol, k : Coeffect, c : k}
+  . {SingleAction s, ExactSemiring k} => ((Chan s) [c] -> () <Session>) -> ((Chan (Dual s)) [c]) <Session>
+fork = BUILTIN
 
 gsend
   : forall {a : Type, s : Protocol}
