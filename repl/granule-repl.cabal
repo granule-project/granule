@@ -1,0 +1,47 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.35.2.
+--
+-- see: https://github.com/sol/hpack
+
+name:           granule-repl
+version:        0.9.4.0
+synopsis:       The Granule interactive interpreter (grepl)
+homepage:       https://github.com/dorchard/granule#readme
+bug-reports:    https://github.com/dorchard/granule/issues
+author:         Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Preston Keel
+maintainer:     Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Preston Keel
+copyright:      2019 authors
+license:        BSD3
+build-type:     Simple
+
+source-repository head
+  type: git
+  location: https://github.com/dorchard/granule
+
+executable grepl
+  main-is: Language/Granule/Main.hs
+  other-modules:
+      Language.Granule.Queue
+      Language.Granule.ReplError
+      Language.Granule.ReplParser
+      Paths_granule_repl
+  hs-source-dirs:
+      app
+  ghc-options: -O3 -W -Werror -Wno-unused-matches
+  build-depends:
+      Glob
+    , base >=4.10 && <5
+    , clock >=0.8
+    , containers
+    , directory
+    , filemanip
+    , filepath
+    , granule-frontend
+    , granule-interpreter
+    , haskeline
+    , mtl >=2.2.1
+    , parsec
+    , text
+    , transformers >=0.5
+  default-language: Haskell2010
