@@ -87,6 +87,8 @@ typeConstructors =
     , (mkId "Q",        (kcoeffect, [], [])) -- Rationals
     , (mkId "OOZ",      (kcoeffect, [], [])) -- 1 + 1 = 0
     , (mkId "LNL",      (kcoeffect, [], [])) -- Linear vs Non-linear semiring
+    , (mkId "Set",      (funTy (Type 0) kcoeffect, [], [0]))
+    , (mkId "SetOp",    (funTy (Type 0) kcoeffect, [], [0]))
     -- LNL members
     , (mkId "Zero",     (tyCon "LNL", [], []))
     , (mkId "One",      (tyCon "LNL", [], []))
