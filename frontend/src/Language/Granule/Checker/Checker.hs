@@ -1674,8 +1674,10 @@ solveConstraints predicate s name = do
   debugM "context into the solver" (pretty $ coeffectVars)
   debugM "Solver predicate" $ pretty predicate -- <> "\n" <> show predicate
 
+  predicate <- removeNonGradedBinders s predicate
+
   constructors <- allDataConstructorNames
-  (_, result) <- liftIO $ provePredicate predicate coeffectVars constructors
+  (_, result) <- liftIO $ provePredicate predicate (reverse coeffectVars) constructors
   case result of
     QED -> do
       debugM "Solver result" "QED."
@@ -1709,6 +1711,32 @@ solveConstraints predicate s name = do
       msg' <- rewriteMessage msg
       throw SolverError{ errLoc = s, errMsg = msg', errPred = simplPred }
     SolverProofError msg -> error msg
+
+removeNonGradedBinders :: Span -> Pred -> Checker Pred
+removeNonGradedBinders s (Conj ps) = do
+  ps'  <- mapM (removeNonGradedBinders s) ps
+  return $ Conj ps'
+removeNonGradedBinders s (Disj ps) = do
+  ps'  <- mapM (removeNonGradedBinders s) ps
+  return $ Disj ps'
+removeNonGradedBinders s (Impl ctxt p1 p2) = do
+  -- Shouldn't have any non graded binders here anyway
+  p1' <- removeNonGradedBinders s p1
+  p2' <- removeNonGradedBinders s p2
+  return $ Impl ctxt p1' p2'
+removeNonGradedBinders s (Con con) = return $ Con con
+removeNonGradedBinders s (NegPred p) = do
+  p' <- removeNonGradedBinders s p
+  return $ NegPred p'
+removeNonGradedBinders s (Exists v k p) = do
+  p' <- removeNonGradedBinders s p
+  st <- get
+  case lookup v (tyVarContext st) of
+    -- Shouldn't happen but ignore
+    Nothing -> return $ Exists v k p'
+    Just k  ->
+      eq <- requiresSolver s k
+      return $ if eq then Exists v k p' else p'
 
 -- Rewrite an error message coming from the solver
 rewriteMessage :: (?globals :: Globals) => String -> Checker String

@@ -39,8 +39,7 @@ data SolverResult
   | SolverProofError String
   | OtherSolverError String
 
-provePredicate
-  :: (?globals :: Globals)
+provePredicate :: (?globals :: Globals)
   => Pred                        -- Predicate
   -> Ctxt (Type, Quantifier) -- Free variable quantifiers
   -> Ctxt [Id]
@@ -106,7 +105,7 @@ compileToSBV :: (?globals :: Globals)
   -> Ctxt [Id]
   -> (Symbolic SBool, Symbolic SBool, [Constraint])
 compileToSBV predicate tyVarContext constructors =
-  (buildTheoremNew (reverse tyVarContext) []
+  (buildTheoremNew tyVarContext []
   , undefined -- buildTheorem sNot (compileQuant . flipQuant)
   , trivialUnsatisfiableConstraints predicate')
 
