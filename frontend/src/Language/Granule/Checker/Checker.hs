@@ -123,8 +123,15 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
 
         -- Otherwise, do synth
         _ -> do
+          modify' $ \st -> st
+            { predicateStack = []
+            , guardPredicates = [[]]
+            , tyVarContext = []
+            , futureFrame = []
+            , uniqueVarIdCounterMap = mempty
+            , wantedTypeConstraints = []
+            }
           (ty, _, subst, _) <- synthExpr defCtxt [] Positive expr
-          --
           -- Solve the generated constraints
           checkerState <- get
           tyVarContext' <- substitute subst (tyVarContext checkerState)
