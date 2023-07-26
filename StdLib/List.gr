@@ -63,7 +63,7 @@ foldr_list [f] z xs =
 
 --- Push a graded modality inside a list (defined as `push @List`)
 pushList : forall {s : Semiring, r : s, a : Type}
-         . {(1 : s) <= r} => (List a) [r] -> List (a [r])
+         . {(1 : s) <= r, Pushable r} => (List a) [r] -> List (a [r])
 pushList = push @List
 
 --- Pull a graded modality out of a list (defined as `pull @List`)

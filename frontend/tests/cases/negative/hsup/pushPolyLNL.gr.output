@@ -1,3 +1,7 @@
 Type checking failed: 
-Impossible pattern match: frontend/tests/cases/negative/hsup/pushPolyLNL.gr:2:1:
-Pattern match in an equation of `bad` is impossible as it implies the unsatisfiable condition (n ⨱ n)
+Counter example: frontend/tests/cases/negative/hsup/pushPolyLNL.gr:2:1:
+  The following constraint associated with `bad` is false:
+	  (prom_[2:22]0 ≤ n) ∧ (prom_[2:17]0 ≤ n) ∧ (n ≤ prom_[2:22]0) ∧ (n ≤ prom_[2:17]0) ∧ (n ⨱ n)
+
+Counter-example:
+  n = 0 :: Integer

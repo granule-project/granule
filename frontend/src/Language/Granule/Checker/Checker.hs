@@ -123,12 +123,25 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
 
         -- Otherwise, do synth
         _ -> do
+          modify' $ \st -> st
+            { predicateStack = []
+            , guardPredicates = [[]]
+            , tyVarContext = []
+            , futureFrame = []
+            , uniqueVarIdCounterMap = mempty
+            , wantedTypeConstraints = []
+            }
           (ty, _, subst, _) <- synthExpr defCtxt [] Positive expr
-          --
           -- Solve the generated constraints
           checkerState <- get
           tyVarContext' <- substitute subst (tyVarContext checkerState)
           put $ checkerState { tyVarContext = tyVarContext' }
+
+          -- Deal with additional constraints (due to session mostly)
+          let wantedTcs = wantedTypeConstraints checkerState
+          wantedTcs <- mapM (substitute subst) wantedTcs
+          dischargedTypeConstraints (getSpan expr) [] wantedTcs
+
           let predicate = Conj $ predicateStack checkerState
           predicate <- substitute subst predicate
           solveConstraints predicate (getSpan expr) (mkId "grepl")
@@ -138,7 +151,8 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
 
           -- Apply the outcoming substitution
           ty' <- substitute subst ty
-          return $ Left (Forall nullSpanNoFile [] [] ty', derivedDefs)
+          binders <- tyVarContextToTypeSchemeVars (freeVars ty')
+          return $ Left (Forall nullSpanNoFile binders [] ty', derivedDefs)
 
 
 checkDef :: (?globals :: Globals)
@@ -1582,7 +1596,7 @@ synthExpr defs gam pol e@(AppTy s _ rf e1 ty) = do
               debugM "derived drop:" (pretty def)
               modify (\st -> st { derivedDefinitions = ((mkId "drop", ty), (typScheme, def)) : derivedDefinitions st })
 
-          debugM "derived drop tys:" (show typScheme)
+          debugM "derived drop tys:" (pretty typScheme)
           -- return this variable expression in place here
           freshenTySchemeForVar s rf name typScheme
     _ -> throw NeedTypeSignature{ errLoc = getSpan e, errExpr = e }

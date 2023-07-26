@@ -112,6 +112,12 @@ trivialScheme = Forall nullSpanNoFile [] []
 unforall :: TypeScheme -> Type
 unforall (Forall _ _ _ t) = t
 
+isMultiArity :: TypeScheme -> Bool
+isMultiArity (Forall _ _ _ t) = isMultiArity' t
+  where
+    isMultiArity' (FunTy _ _ x (FunTy _ _ y t)) = True
+    isMultiArity' _ = False
+
 ----------------------------------------------------------------------
 -- # Smart constructors
 

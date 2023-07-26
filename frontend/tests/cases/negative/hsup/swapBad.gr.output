@@ -1,3 +1,4 @@
 Type checking failed: 
-Impossible pattern match: frontend/tests/cases/negative/hsup/swapBad.gr:2:1:
-Pattern match in an equation of `swapBad` is impossible as it implies the unsatisfiable condition (Many ⨱ Many)
+Falsifiable theorem: frontend/tests/cases/negative/hsup/swapBad.gr:2:1:
+  The following constraint associated with `swapBad` is false:
+	  (Many ≤ Many) ∧ (Many ⨱ Many)

@@ -110,8 +110,8 @@ extract [x] = x
 --- defined: the operation {c ⨱ c} is partial and is only defined if the semiring
 --- `k` permits this behaviour at `c`. (An example of a semiring where this is not true
 --- is for `k = LNL` and `c = 1`).
-pushPair : forall {a : Type, b : Type, k : Coeffect, c : k} . {c ⨱ c} => (a × b) [c] -> a [c] × b [c]
-pushPair [(x, y)] = ([x], [y])
+pushPair : forall {a : Type, b : Type, k : Coeffect, c : k} . {Pushable c} => (a × b) [c] -> a [c] × b [c]
+pushPair = push @(,)
 
 --- Pull coeffects of pair elements outside of the pair
 pullPair : ∀ {a : Type, b : Type, k : Coeffect, n : k} . (a [n], b [n]) → (a, b) [n]

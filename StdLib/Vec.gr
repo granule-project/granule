@@ -170,7 +170,7 @@ pullVec : forall {a : Type, s : Semiring, k : s, n : Nat}
 pullVec = pull @Vec
 
 --- pushVec pushes in non linearity of vector into the elements
-pushVec : ∀ {a : Type, s : Semiring, k : s, n : Nat} . {(1 : s) <= k}
+pushVec : ∀ {a : Type, s : Semiring, k : s, n : Nat} . {(1 : s) <= k, Pushable k}
       => (Vec n a) [k] → Vec n (a [k])
 pushVec = push @Vec
 

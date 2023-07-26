@@ -27,9 +27,15 @@ typeAliases :: [(Id, ([Id], Type))]
 typeAliases =
     -- IO = {p | p in IOElem}
     [(mkId "IO", ([], TySet Normal (map tyCon ioElems)))
-    ,(mkId "Inverse", ([mkId "a"], FunTy Nothing Nothing (TyVar $ mkId "a") (TyCon $ mkId "()")))]
+    ,(mkId "Inverse", ([mkId "a"], FunTy Nothing Nothing (TyVar $ mkId "a") (TyCon $ mkId "()")))
+    ,(mkId "Pushable", ([mkId "a"], TyInfix TyOpHsup (tyVar "a") (tyVar "a")))
+    ]
   where
     ioElems = ["Stdout", "Stdin", "Stderr", "Open", "Read", "Write", "IOExcept", "Close"]
+
+-- List of those things which are 'physical' resource (i.e., not dropable)
+nonDropable :: [Id]
+nonDropable = [mkId "Handle", mkId "LChan", mkId "Chan"]
 
 capabilities :: [(Id, Type)]
 capabilities =
@@ -37,7 +43,8 @@ capabilities =
   , (mkId "TimeDate", funTy (tyCon "()") (tyCon "String"))]
 
 overlapsAllowed :: [Id]
-overlapsAllowed = [mkId "One", mkId "Private", mkId "Public", mkId "Unused"]
+overlapsAllowed =
+  [mkId "One", mkId "Private", mkId "Public", mkId "Unused", mkId "Set", mkId "SetOp"]
 
 -- Associates type constuctors names to their:
 --    * kind
@@ -63,6 +70,10 @@ typeConstructors =
     , (mkId "Char",   (Type 0, [], []))
     , (mkId "String", (Type 0, [], []))
     , (mkId "Inverse", ((funTy (Type 0) (Type 0)), [], []))
+    -- Predicates on deriving operations:x
+    , (mkId "Dropable", (funTy (Type 0) kpredicate, [], [0]))
+    -- TODO: add deriving for this
+    -- , (mkId "Moveable", (funTy (Type 0) kpredicate, [], [0]))
     -- Session type related things
     , (mkId "ExactSemiring", (funTy (tyCon "Semiring") (tyCon "Predicate"), [], []))
     , (mkId "Protocol", (Type 0, [], []))
@@ -76,6 +87,8 @@ typeConstructors =
     , (mkId "Q",        (kcoeffect, [], [])) -- Rationals
     , (mkId "OOZ",      (kcoeffect, [], [])) -- 1 + 1 = 0
     , (mkId "LNL",      (kcoeffect, [], [])) -- Linear vs Non-linear semiring
+    , (mkId "Set",      (funTy (Type 0) kcoeffect, [], [0]))
+    , (mkId "SetOp",    (funTy (Type 0) kcoeffect, [], [0]))
     -- LNL members
     , (mkId "Zero",     (tyCon "LNL", [], []))
     , (mkId "One",      (tyCon "LNL", [], []))
@@ -378,7 +391,7 @@ offer : forall {p1 p2 : Protocol, a : Type}
 offer = BUILTIN
 
 --------------------------------------------------------------------------------
---- # Non-linear communicaiton and concurrency patterns
+--- # Non-linear communication and concurrency patterns
 --------------------------------------------------------------------------------
 
 forkNonLinear : forall {p : Protocol, s : Semiring, r : s}

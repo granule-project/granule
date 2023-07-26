@@ -58,6 +58,7 @@ data ReplState =
     , currentADTs :: ADT
     , files :: [FilePath]
     , defns  :: M.Map String (Def () (), [String])
+    , derivedDefs :: [Def () ()]
     , ignoreHolesMode :: Bool
     , furtherExtensions :: [Extension]
     }
@@ -69,7 +70,7 @@ ignoreHolesREPL :: REPLStateIO ()
 ignoreHolesREPL = modify (\state -> state {ignoreHolesMode = True})
 
 initialState :: ReplState
-initialState = ReplState 0 [] [] M.empty True []
+initialState = ReplState 0 [] [] M.empty [] True []
 
 type REPLStateIO a = StateT ReplState (Ex.ExceptT ReplError IO) a
 
@@ -233,7 +234,7 @@ handleCMD s =
 
     handleLine (Eval exprString) = do
       expr <- parseExpression exprString
-      
+
       -- Build surrounding AST of dependencies
       let fv = freeVars expr
       st <- get
@@ -243,14 +244,14 @@ handleCMD s =
 
       case ty of
         -- Well-typed, with `tyScheme`
-        Left (tyScheme, derivedDefs) -> do
+        Left (tyScheme, derivedDefinitions) -> do
           st <- get
           let ndef = buildDef (freeVarCounter st) tyScheme expr
           -- Update the free var counter
           modify (\st -> st { freeVarCounter = freeVarCounter st + 1 })
 
           let astNew = AST (currentADTs st) (defs <> [ndef]) mempty mempty Nothing
-          result <- liftIO' $ try $ replEval (freeVarCounter st) (extendASTWith derivedDefs astNew)
+          result <- liftIO' $ try $ replEval (freeVarCounter st) (extendASTWith (nub $ derivedDefs st <> derivedDefinitions) astNew)
           case result of
               Left e -> Ex.throwError (EvalError e)
               Right Nothing -> liftIO $ print "if here fix"
@@ -300,12 +301,12 @@ readToQueue path = let ?globals = ?globals{ globalsSourceFilePath = Just path } 
             debugM "Pretty-printed AST:" $ pretty ast
             checked <- liftIO' $ check ast
             case checked of
-                Right _ -> do
+                Right (_, derivedDefinitions) -> do
                   let (AST dd def _ _ _) = ast
                   forM_ def $ \idef -> loadInQueue idef
                   modify (\st -> st { currentADTs = dd <> currentADTs st })
                   liftIO $ printInfo $ green $ path <> ", checked."
-                  modify (\st -> st { furtherExtensions = extensions })
+                  modify (\st -> st { furtherExtensions = extensions, derivedDefs = (derivedDefs st) <> derivedDefinitions })
 
                 Left errs -> do
                   st <- get

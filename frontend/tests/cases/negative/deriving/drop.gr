@@ -1,0 +1,2 @@
+nope : forall {s : Protocol} . LChan s -> ()
+nope = drop @(LChan s)
