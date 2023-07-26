@@ -27,7 +27,9 @@ typeAliases :: [(Id, ([Id], Type))]
 typeAliases =
     -- IO = {p | p in IOElem}
     [(mkId "IO", ([], TySet Normal (map tyCon ioElems)))
-    ,(mkId "Inverse", ([mkId "a"], FunTy Nothing Nothing (TyVar $ mkId "a") (TyCon $ mkId "()")))]
+    ,(mkId "Inverse", ([mkId "a"], FunTy Nothing Nothing (TyVar $ mkId "a") (TyCon $ mkId "()")))
+    ,(mkId "Pushable", ([mkId "a"], TyInfix TyOpHsup (tyVar "a") (tyVar "a")))
+    ]
   where
     ioElems = ["Stdout", "Stdin", "Stderr", "Open", "Read", "Write", "IOExcept", "Close"]
 
@@ -37,7 +39,8 @@ capabilities =
   , (mkId "TimeDate", funTy (tyCon "()") (tyCon "String"))]
 
 overlapsAllowed :: [Id]
-overlapsAllowed = [mkId "One", mkId "Private", mkId "Public", mkId "Unused"]
+overlapsAllowed =
+  [mkId "One", mkId "Private", mkId "Public", mkId "Unused", mkId "Set", mkId "SetOp"]
 
 -- Associates type constuctors names to their:
 --    * kind
