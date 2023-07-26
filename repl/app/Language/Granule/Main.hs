@@ -251,7 +251,7 @@ handleCMD s =
           modify (\st -> st { freeVarCounter = freeVarCounter st + 1 })
 
           let astNew = AST (currentADTs st) (defs <> [ndef]) mempty mempty Nothing
-          result <- liftIO' $ try $ replEval (freeVarCounter st) (extendASTWith (derivedDefs st <> derivedDefinitions) astNew)
+          result <- liftIO' $ try $ replEval (freeVarCounter st) (extendASTWith (nub $ derivedDefs st <> derivedDefinitions) astNew)
           case result of
               Left e -> Ex.throwError (EvalError e)
               Right Nothing -> liftIO $ print "if here fix"
