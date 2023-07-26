@@ -33,6 +33,10 @@ typeAliases =
   where
     ioElems = ["Stdout", "Stdin", "Stderr", "Open", "Read", "Write", "IOExcept", "Close"]
 
+-- List of those things which are 'physical' resource (i.e., not dropable)
+nonDropable :: [Id]
+nonDropable = [mkId "Handle", mkId "LChan", mkId "Chan"]
+
 capabilities :: [(Id, Type)]
 capabilities =
    [(mkId "Console", funTy (tyCon "String") (tyCon "()"))
@@ -66,6 +70,10 @@ typeConstructors =
     , (mkId "Char",   (Type 0, [], []))
     , (mkId "String", (Type 0, [], []))
     , (mkId "Inverse", ((funTy (Type 0) (Type 0)), [], []))
+    -- Predicates on deriving operations:x
+    , (mkId "Dropable", (funTy (Type 0) kpredicate, [], [0]))
+    -- TODO: add deriving for this
+    -- , (mkId "Moveable", (funTy (Type 0) kpredicate, [], [0]))
     -- Session type related things
     , (mkId "ExactSemiring", (funTy (tyCon "Semiring") (tyCon "Predicate"), [], []))
     , (mkId "Protocol", (Type 0, [], []))

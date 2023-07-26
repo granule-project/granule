@@ -10,6 +10,7 @@ module Language.Granule.Checker.Constraints.Compile
   , dischargedTypeConstraints) where
 
 import Control.Monad.State.Strict
+import Control.Monad.Identity
 
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
@@ -19,6 +20,8 @@ import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Identifiers
+
+import Language.Granule.Checker.Primitives (nonDropable)
 
 import Language.Granule.Utils
 
@@ -113,6 +116,9 @@ isDefinedConstraint s (TyApp (TyCon (internalName -> "Sends")) protocol)
 isDefinedConstraint s (TyApp (TyCon (internalName -> "ExactSemiring")) semiring)
   = return (exactSemiring semiring)
 
+isDefinedConstraint s (TyApp (TyCon (internalName -> "Dropable")) typ)
+  = return (dropable typ)
+
 isDefinedConstraint _ _
   = return False
 
@@ -161,3 +167,23 @@ exactSemiring (TyApp
                  s1)
                  s2) = exactSemiring s1 && exactSemiring s2
 exactSemiring _ = False
+
+dropable :: Type -> Bool
+dropable =
+    runIdentity . typeFoldM (TypeFold
+      { tfTy = \_ -> return $ True
+      , tfFunTy = \_ c x y -> return y
+      , tfTyCon = \id -> return $ not (id `elem` nonDropable)
+      , tfBox = \x y -> return (x && y)
+      , tfDiamond = \x y -> return $ (x && y)
+      , tfStar = \x y -> return $ (x && y)
+      , tfTyVar = \_ -> return False
+      , tfTyApp = \x y -> return x
+      , tfTyInt = \_ -> return True
+      , tfTyRational = \_ -> return True
+      , tfTyGrade = \_ _ -> return True
+      , tfTyInfix = \_ x y -> return (x && y)
+      , tfSet = \_ _ -> return  True
+      , tfTyCase = \_ _ -> return False
+      , tfTySig = \t _ _ -> return t
+      , tfTyExists = \_ _ x -> return x})

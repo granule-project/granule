@@ -138,7 +138,8 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
 
           -- Apply the outcoming substitution
           ty' <- substitute subst ty
-          return $ Left (Forall nullSpanNoFile [] [] ty', derivedDefs)
+          binders <- tyVarContextToTypeSchemeVars (freeVars ty')
+          return $ Left (Forall nullSpanNoFile binders [] ty', derivedDefs)
 
 
 checkDef :: (?globals :: Globals)
@@ -1582,7 +1583,7 @@ synthExpr defs gam pol e@(AppTy s _ rf e1 ty) = do
               debugM "derived drop:" (pretty def)
               modify (\st -> st { derivedDefinitions = ((mkId "drop", ty), (typScheme, def)) : derivedDefinitions st })
 
-          debugM "derived drop tys:" (show typScheme)
+          debugM "derived drop tys:" (pretty typScheme)
           -- return this variable expression in place here
           freshenTySchemeForVar s rf name typScheme
     _ -> throw NeedTypeSignature{ errLoc = getSpan e, errExpr = e }

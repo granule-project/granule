@@ -26,6 +26,8 @@ import Language.Granule.Utils
 import Control.Monad.State.Strict (modify, get)
 import Control.Monad (zipWithM, forM)
 
+import Data.List (nub)
+
   {-
   Module for automatically deriving graded linear logical
   operations based on types.
@@ -751,10 +753,10 @@ deriveDrop s ty = do
                     tyVarContext = tyVarContext st ++ localTyVarContext })
 
   z <- freshIdentifierBase "z" >>= (return . mkId)
-  (returnTy, bodyExpr, primitive) <- deriveDrop' s True tyVars baseTy (makeVarUntyped z)
+  (returnTy, bodyExpr, primitive, constraints) <- deriveDrop' s True tyVars baseTy (makeVarUntyped z)
   let tyS = Forall s
               tyVars
-              []
+              (nub constraints)
               (FunTy Nothing Nothing baseTy returnTy)
   let expr = Val s () True $ Abs () (PVar s () True z) Nothing bodyExpr
   let name = mkId $ "drop@" ++ pretty ty
@@ -767,6 +769,8 @@ deriveDrop s ty = do
     then return (tyS, Nothing)
     else return (tyS, Just def)
 
+dropableConstr :: Type -> Type
+dropableConstr t = TyApp (TyCon $ mkId "Dropable") t
 
 deriveDrop' :: (?globals :: Globals)
   => Span
@@ -774,39 +778,39 @@ deriveDrop' :: (?globals :: Globals)
   -> Ctxt Kind
   -> Type
   -> Expr () ()
-  -> Checker (Type, Expr () (), Bool)
+  -> Checker (Type, Expr () (), Bool, [Type])
 deriveDrop' _ _ _ argTy@(leftmostOfApplication -> TyCon (Id "()" "()")) arg = do
-  return (TyCon $ mkId "()", makeUnitIntroUntyped, False)
+  return (TyCon $ mkId "()", makeUnitIntroUntyped, False, [])
 
 deriveDrop' _ _ _ argTy@(leftmostOfApplication -> TyCon (Id "Int" "Int")) arg = do
-  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@Int")) arg), True)
+  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@Int")) arg), True, [])
 
 deriveDrop' _ _ _ argTy@(leftmostOfApplication -> TyCon (Id "Char" "Char")) arg = do
-  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@Char")) arg), True)
+  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@Char")) arg), True, [])
 
 deriveDrop' _ _ _ argTy@(leftmostOfApplication -> TyCon (Id "Float" "Float")) arg = do
-  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@Float")) arg), True)
+  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@Float")) arg), True, [])
 
 deriveDrop' _ _ _ argTy@(leftmostOfApplication -> TyCon (Id "FloatArray" "FloatArray")) arg = do
-  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@FloatArray")) arg), True)
+  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@FloatArray")) arg), True, [])
 
 deriveDrop' _ _ _ argTy@(leftmostOfApplication -> TyCon (Id "String" "String")) arg = do
-  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@String")) arg), True)
+  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@String")) arg), True, [])
 
 deriveDrop' _ _ _ argTy@(TyVar name) arg = do
-  return (TyCon $ mkId "()", makeUnitIntroUntyped, False)
+  return (TyCon $ mkId "()", makeUnitIntroUntyped, False, [dropableConstr argTy])
 
 deriveDrop' s topLevel gamma argTy@(ProdTy t1 t2) arg = do
   x <- freshIdentifierBase "x" >>= (return . mkId)
   y <- freshIdentifierBase "y" >>= (return . mkId)
 
-  (lTy, lExpr, _) <- deriveDrop' s topLevel gamma t1 (makeVarUntyped x)
-  (rTy, rExpr, _) <- deriveDrop' s topLevel gamma t2 (makeVarUntyped y)
+  (lTy, lExpr, _, lConstraints) <- deriveDrop' s topLevel gamma t1 (makeVarUntyped x)
+  (rTy, rExpr, _, rConstraints) <- deriveDrop' s topLevel gamma t2 (makeVarUntyped y)
 
   let expr = makePairElimPUntyped id arg x y (makeUnitElimPUntyped id lExpr (makeUnitElimPUntyped id rExpr makeUnitIntroUntyped))
   debugM "expr: " (pretty expr)
 
-  return (TyCon $ mkId "()", expr, False)
+  return (TyCon $ mkId "()", expr, False, lConstraints <> rConstraints)
 
 
 deriveDrop' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = do
@@ -834,7 +838,7 @@ deriveDrop' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
               _ -> return Nothing
           Nothing -> return Nothing
   case alreadyDefined of
-    Just (dropTy, dropExpr) -> return (dropTy, dropExpr, False)
+    Just (dropTy, dropExpr) -> return (dropTy, dropExpr, False, [])
     Nothing ->
       -- Not already defined...
       -- Get the kind of this type constructor
@@ -849,13 +853,12 @@ deriveDrop' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
             Just constructors -> do
 
               -- For each constructor, build a pattern match and an introduction:
-              exprs <- forM constructors (\(dataConsName, (tySch@(Forall _ _ _ dataConsType), coercions, _)) -> do
+              exprsAndConstraints <- forM constructors (\(dataConsName, (tySch@(Forall _ _ _ dataConsType), coercions, _)) -> do
 
                 -- Instantiate the data constructor
                 (dataConstructorTypeFresh, _, _constraint, coercions') <-
                       freshPolymorphicInstance InstanceQ True tySch coercions []
                 -- [Note: this does not register the constraints associated with the data constrcutor]
-                dataConstructorTypeFresh <- substitute (flipSubstitution coercions') dataConstructorTypeFresh
                 debugM "deriveDrop dataConstructorTypeFresh: " (show dataConstructorTypeFresh)
                 -- Perform an equality between the result type of the data constructor and the argument type here
                 areEq <- equalTypesRelatedCoeffectsAndUnify s Eq PatternCtxt  argTy (resultType dataConstructorTypeFresh)
@@ -884,9 +887,11 @@ deriveDrop' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
                             deriveDrop' s False gamma ty (makeVarUntyped var))
                               consParamsTypes consParamsVars
                     x <- freshIdentifierBase "x" >>= (return . mkId)
-                    return (consPattern, makeUnitIntroUntyped))
+                    let (_, _, _, constraints) = unzip4 retTysAndExprs
+                    return ((consPattern, makeUnitIntroUntyped), concat constraints))
 
               -- Got all the branches to make the following case now
-              return (TyCon $ mkId "()", Case s () True arg exprs, False)
+              let (exprs, constraints) = unzip exprsAndConstraints
+              return (TyCon $ mkId "()", Case s () True arg exprs, False, dropableConstr argTy : concat constraints)
 
 deriveDrop' s topLevel gamma argTy arg = error (show argTy <> "not implemented yet")
