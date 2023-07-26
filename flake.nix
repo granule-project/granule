@@ -91,10 +91,13 @@
           # only exists on clean working tree, else set to "dev"
           tag = self.rev or "dev";
           config = {
-            #Entrypoint = [ "${pkgs.lib.getExe self'.packages.granule-repl}" ];
             Entrypoint = [ "${self'.packages.granule-repl-with-stdlib}/bin/grepl" ];
+
+            # Granule syntax is UTF-8
+            # C.UTF-8 is builtin. to use en_US.UTF-8 etc, add glibcLocales into
+            # contents and point LOCALE_ARCHIVE to it
+            Env = [ "LANG=C.UTF-8" ];
           };
-          #contents = [ self'.packages.granule-repl ];
           maxLayers = 100; # less than Docker max layers to allow extending
         };
 
