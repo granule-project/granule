@@ -273,6 +273,13 @@ isADTorGADT (TyCon id) = Just id
 isADTorGADT (TyApp e1 e2) = isADTorGADT e1
 isADTorGADT _ = Nothing
 
+hasDataConstructors :: Id -> Ctxt (Ctxt (TypeScheme, Substitution), Bool) -> Bool
+hasDataConstructors datatypeName cons = 
+  let (recCons, nonRecCons) = relevantConstructors datatypeName cons in
+  length (recCons ++ nonRecCons) > 0
+  
+
+
 -- Compare the arity of two type schemes for data constructors
 compareArity :: (Id, (TypeScheme, Substitution))
              -> (Id, (TypeScheme, Substitution))

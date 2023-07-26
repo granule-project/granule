@@ -895,6 +895,8 @@ absRule sParams inIntroPhase focusPhase gamma (Focused omega) goal@(FunTy name g
   let bindToOmega =
       -- argument type must be left async type
           (isLAsync tyA)
+
+        && (case isADTorGADT tyA of Just id -> hasDataConstructors id (constructors st) ; _ -> True)
           -- && matchMax sParams > 0
       -- if we are a recursive type then check whether we are below max depth
         && ((isRecursiveType tyA (constructors st)) ==> ((matchCurrent sParams) + (recVarCount omega (constructors st)) ) + 1  <= matchMax sParams)
@@ -1419,43 +1421,47 @@ caseRule sParams inIntroPhase focusPhase gamma (Focused left) (Focused (var@(x, 
 
           (kind, _,_ ) <- conv $ synthKind ns grade_r
           -- join contexts
-          delta <- foldM (ctxtMerge (computeJoin (Just kind))) (head deltas) (tail deltas)
+          case (deltas, grade_rs, grade_ss) of 
+            (_:_, _:_, _:_) -> do
+              delta <- foldM (ctxtMerge (computeJoin (Just kind))) (head deltas) (tail deltas)
 
-          -- join grades
-          grade_r_out <- foldM (computeJoin (Just kind))  (head grade_rs) (tail grade_rs)
-          grade_s_out <- foldM (computeJoin' (Just kind)) (head grade_ss) (tail grade_ss)
+              -- join grades
+              grade_r_out <- foldM (computeJoin (Just kind))  (head grade_rs) (tail grade_rs)
+              grade_s_out <- foldM (computeJoin' (Just kind)) (head grade_ss) (tail grade_ss)
 
 
 
-          -- join substitutions
-          subst <- conv $ combineManySubstitutions ns substs
+              -- join substitutions
+              subst <- conv $ combineManySubstitutions ns substs
 
-          grade_final <- case grade_s_out of
+
+              grade_final <- case grade_s_out of
                   -- Add the usages of each branch to the usages of x inside each branch
                   Just grade_s_out' -> return $ grade_r_out `gPlus` grade_s_out'
                   -- Not sure when this case should arise, since nullary constrguctors get a 1 grade
                   Nothing -> return grade_r_out
           -- Focussed variable output assumption
-          let var_x_out = (x, SVar (Discharged ty grade_final) sInfo 0)
+              let var_x_out = (x, SVar (Discharged ty grade_final) sInfo 0)
 
-          debugM "synth candidate" (pretty $ makeCaseUntyped x patExprs)
-          solved <-
-            ifM (conv $ polyShaped ty)
-              (do
-                (kind, _, _) <- conv $ synthKind ns grade_r
-                debugM ("polyShaped for " ++ pretty goal) (pretty grade_r)
-                modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (TyGrade (Just kind) 1) (getGradeFromArrow grade_s_out) kind)
-                res <- solve
-                debugM "solver result" (show res)
-                return res)
-              solve
+              debugM "synth candidate" (pretty $ makeCaseUntyped x patExprs)
+              solved <-
+                ifM (conv $ polyShaped ty)
+                  (do
+                    (kind, _, _) <- conv $ synthKind ns grade_r
+                    debugM ("polyShaped for " ++ pretty goal) (pretty grade_r)
+                    modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (TyGrade (Just kind) 1) (getGradeFromArrow grade_s_out) kind)
+                    res <- solve
+                    debugM "solver result" (show res)
+                    return res)
+                  solve
 
-          if solved && not (null patExprs)
-            then do
+              if solved && not (null patExprs)
+                then do
 
-              let rInfo = CaseRule focusPhase var goal gamma omega (makeCaseUntyped x patExprs) branchInfos (var_x_out:delta)
-              return (makeCaseUntyped x patExprs, var_x_out:delta, subst, False, Just x, rInfo)
-            else none
+                  let rInfo = CaseRule focusPhase var goal gamma omega (makeCaseUntyped x patExprs) branchInfos (var_x_out:delta)
+                  return (makeCaseUntyped x patExprs, var_x_out:delta, subst, False, Just x, rInfo)
+                else none
+            _ -> none
       (False, TyCon _) -> none
       _ -> none
   `try`
