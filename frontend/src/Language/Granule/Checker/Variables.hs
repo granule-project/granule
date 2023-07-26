@@ -53,13 +53,6 @@ registerTyVarInContext :: Id -> Type -> Quantifier -> Checker ()
 registerTyVarInContext v t q = do
     modify (\st -> st { tyVarContext = (v, (t, q)) : tyVarContext st })
 
-    case q of
-      -- Localise the existential here in the theorem
-      InstanceQ -> existential v t
-      _         -> return ()
-
-
-
 -- | Helper for registering a new coeffect variable in the checker only
 --   within the scope of a particular computation
 registerTyVarInContextWith :: (MonadTrans m, Monad (m Checker))

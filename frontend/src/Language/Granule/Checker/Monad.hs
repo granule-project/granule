@@ -200,7 +200,7 @@ data CheckerState = CS
             , addedConstraints :: Bool
             , predicateContext :: PredContext
             , partialSynthExpr  :: Zipper (Expr () ())
-            , synthesisPath :: [String]
+            , synthesisPath :: [String] 
             }
   deriving (Eq, Show)
 
