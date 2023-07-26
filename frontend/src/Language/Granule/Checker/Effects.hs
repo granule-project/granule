@@ -60,10 +60,9 @@ handledNormalise s effTy efs =
     case efs of
         TyApp (TyCon (internalName -> "Handled")) (TyCon (internalName -> "MayFail")) -> TyCon (mkId "Pure")
         TyApp (TyCon (internalName -> "Handled")) (TyCon (internalName -> "Success")) -> TyCon (mkId "Pure")
+        TyApp (TyCon (internalName -> "Handled")) (TySet p efs') -> TySet p (efs' \\ [TyCon (mkId "IOExcept")])
         TyApp (TyCon (internalName -> "Handled")) ef -> handledNormalise s effTy ef
         TyCon (internalName -> "Success") -> TyCon (mkId "Pure")
-        TySet p efs' ->
-            TySet p (efs' \\ [TyCon (mkId "IOExcept")])
         _ -> efs
 
 -- `effApproximates s effTy eff1 eff2` checks whether `eff1 <= eff2` for the `effTy`
