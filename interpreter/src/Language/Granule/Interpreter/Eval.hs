@@ -688,6 +688,7 @@ builtIns =
   , (mkId "pure",       Ext () $ Primitive $ \v -> return $ Pure () (Val nullSpan () False v))
   , (mkId "fromPure",   Ext () $ Primitive $ \(Pure () (Val nullSpan () False v)) -> return v)
   , (mkId "tick",       Pure () (Val nullSpan () False (Constr () (mkId "()") [])))
+  , (mkId "throw",      Ext () $ PureWrapper (do error "Granule `throw` exception raised, and not caught. Bye!"))
   , (mkId "intToFloat", Ext () $ Primitive $ \(NumInt n) -> return $ NumFloat $ RT.intToFloat n)
   , (mkId "showInt",    Ext () $ Primitive $ \case
                               NumInt n -> return $ StringLiteral . RT.showInt $ n
