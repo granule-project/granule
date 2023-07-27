@@ -28,6 +28,7 @@ asciiUnicodeTableReplacements transformer =
 asciiUnicodeTable :: [(String,String)]
 asciiUnicodeTable =
     [ ("forall" , "∀")
+    , ("exists" , "∃")
     , ("Inf" , "∞")
     , ("->" , "→")
     , ("=>" , "⇒")
