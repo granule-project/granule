@@ -111,7 +111,7 @@ generateModulePage' modName title input ast =
          <> (if strip docs == "" then miniBreak else descDiv docs))
 
     breakLine id xs =
-      if Text.length xs >= 65 then
+      if Text.length xs >= 65 && (Text.isInfixOf "forall" xs || Text.isInfixOf "exists" xs) then
         case Text.break (== '.') xs of
           (before, after) ->
             before <> "\n" <> (Data.Text.replicate (length id + 1) " ") <> after
