@@ -19,6 +19,25 @@
 
       perSystem = { self', pkgs, config, ... }: {
         packages.default = self'.packages.granule-repl;
+
+        # TODO shame I have to create a full derivation for this, I'd like to
+        # just copy files with a name. alas
+        packages.granule-stdlib = pkgs.stdenv.mkDerivation {
+          name = "granule-stdlib";
+          src = ./StdLib;
+          phases = [ "unpackPhase" "installPhase" ];
+          installPhase = ''
+            mkdir -p $out
+            cp $src/* $out
+          '';
+        };
+
+        packages.granule-repl-with-stdlib = pkgs.writeShellScriptBin "grepl" ''
+          ${self'.packages.granule-repl}/bin/grepl \
+            --include-path ${self'.packages.granule-stdlib} \
+            $@
+        '';
+
         #haskellProjects.ghc96 = import ./haskell-flake-ghc96.nix pkgs;
         haskellProjects.default = {
           #basePackages = config.haskellProjects.ghc96.outputs.finalPackages;
@@ -66,15 +85,19 @@
         # for podman, `nix build .#image && ./result | podman load`
         # for some reason, I don't need justStaticExecutables to get a small
         # image here. not sure why but sure!
-        packages.image-repl = pkgs.dockerTools.streamLayeredImage {
+        packages.image-granule-repl = pkgs.dockerTools.streamLayeredImage {
           name = "granule-repl";
           # equivalent to `git rev-parse HEAD`
           # only exists on clean working tree, else set to "dev"
           tag = self.rev or "dev";
           config = {
-            Entrypoint = [ "${pkgs.lib.getExe self'.packages.granule-repl}" ];
+            Entrypoint = [ "${self'.packages.granule-repl-with-stdlib}/bin/grepl" ];
+
+            # Granule syntax is UTF-8
+            # C.UTF-8 is builtin. to use en_US.UTF-8 etc, add glibcLocales into
+            # contents and point LOCALE_ARCHIVE to it
+            Env = [ "LANG=C.UTF-8" ];
           };
-          #contents = [ self'.packages.granule-repl ];
           maxLayers = 100; # less than Docker max layers to allow extending
         };
 
