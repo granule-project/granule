@@ -1,0 +1,13 @@
+
+data State = Get | Put
+
+data StateOps (s : Type) (r : Type) : State -> Type where
+ GetOp : () -> (s -> r)  -> StateOps s r Get;
+ PutOp : s  -> (() -> r) -> StateOps s r Put
+
+foo : Int <Eff State (StateOps Int) {Get, Put}>
+foo = let
+  y   <- call GetOp ();
+  [z] <- pure (moveInt y);
+  ()  <- call PutOp (z + 1) in
+  pure z

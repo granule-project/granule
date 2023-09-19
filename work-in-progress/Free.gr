@@ -1,28 +1,36 @@
 -- Requires Rank N quantification (work in progress)
 
--- Free monad data type (in multiplicative style)
-data Free (f : Type → Type) a where
-  Pure   : a → Free f a;
-  Impure : f (Free f a) → Free f a
+-- FreeM monad data type (in multiplicative style)
+data FreeM (f : Type → Type) a where
+  Pure   : a → FreeM f a;
+  Impure : f (FreeM f a) → FreeM f a
 
-return : ∀ (a : Type, f : Type → Type) . a → Free f a
+return : forall {a : Type, f : Type -> Type} . a -> FreeM f a
 return x = Pure x
 
--- Wrapping for a morphism mapping on `f`
-data Functor (f : Type → Type) where
-  Fmap : (∀ {a : Type, b : Type} .
-         ((a → b) → f a → f b)) → Functor f
+bind : ∀ {a : Type, b : Type, f : Type → Type} .
+       ((FreeM f a → FreeM f b) → f (FreeM f a) → f (FreeM f b)) [Any] → FreeM f a → (a → FreeM f b) → FreeM f b
+bind [fmap] y k =
+  case y of
+    (Pure x)   -> k x;
+    (Impure d) -> Impure (fmap (λ(x : FreeM f a) → bind [fmap] x k) d)
 
-bind : ∀ (a : Type, b : Type, f : Type → Type) .
-       (Functor f) [∞] → Free f a → (a → Free f b) → Free f b
-bind [functor] f k =
-  case f of
-    (Pure x)   → k x;
-    (Impure d) →
-      case functor of
-        (Fmap fmap) → Impure (fmap (λ(x : Free f a) → bind [functor] x k) d)
+-- -------------------------------------
 
--------------------------------------
+data State = Get | Put
+
+data StateOps (s : Type) (r : Type) : State -> Type where
+ GetOp : () -> (s -> r)  -> StateOps s r Get;
+ PutOp : s  -> (() -> r) -> StateOps s r Put
+
+foo : Int <Eff State (StateOps Int) {Get, Put}>
+foo = let
+  y   <- call GetOp ();
+  [z] <- pure (moveInt y);
+  ()  <- call PutOp (z + 1) in
+  pure z
+
+-- handle : (sig s r e -> m b) -> (a <Code sig efs>) -> m a
 
 data Incr t where
    Incr : Int → t → Incr t
@@ -51,7 +59,7 @@ algRecall x =
    case x of
     (Recall f) → λ[x] → f (unMem x) [Mem (unMem x)]
 
-algSum : ∀ (a : Type, b : Type, f : Type → Type, g : Type → Type)
+algSum : ∀ {a : Type, b : Type, f : Type → Type, g : Type → Type}
        .  (f a → a) [0..1]
        → (g a → a) [0..1]
        → Sum f g a → a
