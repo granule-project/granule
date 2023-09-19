@@ -83,6 +83,7 @@ checkKind s t k | t == k = do
 -- KChk_funk
 checkKind s (FunTy name t1 t2) k = do
   (subst1, t1') <- checkKind s t1 k
+  case name of Just name -> registerTyVarInContext name t1 ForallQ; Nothing -> return ()
   (subst2, t2') <- checkKind s t2 k
   substFinal <- combineSubstitutions s subst1 subst2
   return (substFinal, FunTy name t1 t2)
@@ -245,7 +246,8 @@ synthKindWithConfiguration s config t@(TyVar x) = do
   st <- get
   case lookup x (tyVarContext st) of
     Just (k, _) -> return (k, [], t)
-    Nothing     -> throw UnboundTypeVariable { errLoc = s, errId = x }
+    Nothing     ->  do
+      throw UnboundTypeVariable { errLoc = s, errId = x }
 
 -- -- KChkS_fun
 --
@@ -255,6 +257,7 @@ synthKindWithConfiguration s config t@(TyVar x) = do
 
 synthKindWithConfiguration s config (FunTy name t1 t2) = do
   (k, subst1, t1') <- synthKindWithConfiguration s config t1
+  case name of Just name -> registerTyVarInContext name t1 ForallQ; Nothing -> return ()
   (subst2   , t2') <- checkKind s t2 k
   subst <- combineSubstitutions s subst1 subst2
   return (k, subst, FunTy name t1' t2')
@@ -279,15 +282,19 @@ synthKindWithConfiguration s config (TyApp (TyCon (internalName -> "Set")) t) = 
 --
 --      t1 => k1 -> k2    t2 <= k1
 --   ------------------------------ Fun
---        t1 t2 => k
+--        t1 t2 => k2
 --
-synthKindWithConfiguration s config (TyApp t1 t2) = do
+synthKindWithConfiguration s config t@(TyApp t1 t2) = do
   (funK, subst1, t1') <- synthKindWithConfiguration s config t1
   case funK of
-    (FunTy _ k1 k2) -> do
+    (FunTy name k1 k2) -> do
       (subst2, t2') <- checkKind s t2 k1
       subst <- combineSubstitutions s subst1 subst2
-      return (k2, subst, TyApp t1' t2')
+      -- pi-type substitution
+      k2' <- case name of
+              Nothing -> return k2
+              Just name -> substitute [(name, SubstT t2)] k2
+      return (k2', subst, TyApp t1' t2')
     _ -> throw KindError { errLoc = s, errTy = t1, errKL = funK }
 
 -- KChkS_interval
