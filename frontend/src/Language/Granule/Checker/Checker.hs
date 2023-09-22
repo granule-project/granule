@@ -70,7 +70,7 @@ check :: (?globals :: Globals)
 check ast@(AST _ _ _ hidden _) = do
   evalChecker (initState { allHiddenNames = hidden }) $ (do
       ast@(AST dataDecls defs imports hidden name) <- return $ replaceTypeAliases ast
-      _    <- checkNameClashes Primitives.typeConstructors Primitives.dataTypes ast
+      _    <- checkNameClashes Primitives.typeConstructors Primitives.dataTypes ast Primitives.builtinsParsed
       debugHeadingM "Register type constructors"
       _    <- runAll registerTypeConstructor  (Primitives.dataTypes <> dataDecls)
       debugHeadingM "Register data constructors"
@@ -90,7 +90,7 @@ synthExprInIsolation :: (?globals :: Globals)
   -> IO (Either (NonEmpty CheckerError) (Either (TypeScheme , [Def () ()]) Type))
 synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
   evalChecker (initState { allHiddenNames = hidden }) $ do
-      _    <- checkNameClashes Primitives.typeConstructors Primitives.dataTypes ast
+      _    <- checkNameClashes Primitives.typeConstructors Primitives.dataTypes ast Primitives.builtinsParsed
       _    <- runAll registerTypeConstructor (Primitives.dataTypes ++ dataDecls)
       _    <- runAll registerDataConstructors (Primitives.dataTypes ++ dataDecls)
       defs <- runAll kindCheckDef defs

@@ -719,14 +719,17 @@ cap = BUILTIN
 |]
 
 
+builtinsParsed :: AST () ()
+builtinsParsed = case parseDefs "builtins" builtinSrc of
+        Right (ast, _) -> ast
+        Left err -> error err
+
 builtinDataTypesParsed :: [DataDecl]
 builtins :: [(Id, TypeScheme)]
 (builtinDataTypesParsed, builtins) =
   (types, map unDef defs)
     where
-      AST types defs _ _ _ = case parseDefs "builtins" builtinSrc of
-        Right (ast, _) -> ast
-        Left err -> error err
+      AST types defs _ _ _ = builtinsParsed
 
       unDef :: Def () () -> (Id, TypeScheme)
       unDef (Def _ name _ _ _ (Forall _ bs cs t)) = (name, Forall nullSpanBuiltin bs cs t)
