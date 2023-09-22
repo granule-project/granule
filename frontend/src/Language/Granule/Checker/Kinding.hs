@@ -476,9 +476,16 @@ synthKindWithConfiguration s config (Type i) = do
 
 -- Existentials
 synthKindWithConfiguration s config t@(TyExists x k ty) = do
+  -- TODO: check if this should be InstanceQ instead?
   registerTyVarInContextWith' x k ForallQ $ do
        (kind, subst, elabTy) <- synthKindWithConfiguration s config ty
        return (kind, subst, TyExists x k elabTy)
+
+-- RankN quantifiers
+synthKindWithConfiguration s config t@(TyForall x k ty) = do
+  registerTyVarInContextWith' x k ForallQ $ do
+       (kind, subst, elabTy) <- synthKindWithConfiguration s config ty
+       return (kind, subst, TyForall x k elabTy)
 
 synthKindWithConfiguration s _ t =
   throw ImpossibleKindSynthesis { errLoc = s, errTy = t }
