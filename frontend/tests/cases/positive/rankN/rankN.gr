@@ -1,0 +1,5 @@
+foo : (forall {b : Type} . b -> (Int, b)) -> ((Int, Char), (Int, ()))
+foo k = ((k @ Char) 'a', (k @ ()) ())
+
+use : ((Int, Char), (Int, ()))
+use = foo (/\(t : Type) -> \(x : t) -> x)
