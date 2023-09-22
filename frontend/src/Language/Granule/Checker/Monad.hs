@@ -200,7 +200,7 @@ data CheckerState = CS
             , addedConstraints :: Bool
             , predicateContext :: PredContext
             , partialSynthExpr  :: Zipper (Expr () ())
-            , synthesisPath :: [String] 
+            , synthesisPath :: [String]
             }
   deriving (Eq, Show)
 
@@ -640,6 +640,8 @@ data CheckerError
     { errLoc :: Span, errTy :: Type }
   | LhsOfUnpackNotAnExistential
     { errLoc :: Span, errTy :: Type }
+  | LhsOfTyApplicationNotForall
+    { errLoc :: Span, errTy :: Type }
   | FailedOperatorResolution
     { errLoc :: Span, errOp :: Operator, errTy :: Type }
   | NeedTypeSignature
@@ -741,6 +743,7 @@ instance UserMsg CheckerError where
   title ExpectedOptionalEffectType{} = "Type error"
   title LhsOfApplicationNotAFunction{} = "Type error"
   title LhsOfUnpackNotAnExistential{} = "Type error"
+  title LhsOfTyApplicationNotForall{} = "Type error"
   title FailedOperatorResolution{} = "Operator resolution failed"
   title NeedTypeSignature{} = "Type signature needed"
   title SolverErrorCounterExample{} = "Counter example"
@@ -1004,6 +1007,10 @@ instance UserMsg CheckerError where
 
   msg LhsOfUnpackNotAnExistential{..}
     = "Expcted an existential type on the left-hand side of unpack, but got `"
+    <> pretty errTy <> "`"
+
+  msg LhsOfTyApplicationNotForall{..}
+    = "Expected a (rank-N quantified) forall type on the left-hand side of a type application, but got `"
     <> pretty errTy <> "`"
 
   msg FailedOperatorResolution{..}

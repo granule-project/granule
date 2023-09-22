@@ -303,6 +303,19 @@ equalTypesRelatedCoeffectsInner s rel a@(TyExists x1 k1 t1) b@(TyExists x2 k2 t2
       substFinal <- combineSubstitutions s subst1 subst2
       return (eqK && eqT, substFinal)
 
+-- Equality on rank-N forall types
+equalTypesRelatedCoeffectsInner s rel a@(TyForall x1 k1 t1) b@(TyForall x2 k2 t2) ind sp mode = do
+  debugM "Compare foralls for equality" (pretty a <> " = " <> pretty b)
+  -- check kinds
+  (eqK, subst1) <- equalTypesRelatedCoeffectsInner s rel k1 k2 ind sp mode
+  -- replace x2 with x1 in t2, i.e. do renaming
+  t2' <- substitute [(x2, SubstT $ TyVar x1)] t2
+  registerTyVarInContextWith' x1 k1 ForallQ $ do
+      (eqT, subst2) <- equalTypesRelatedCoeffectsInner s rel t1 t2' ind sp mode
+      substFinal <- combineSubstitutions s subst1 subst2
+      return (eqK && eqT, substFinal)
+
+
 -- Equality on type application
 equalTypesRelatedCoeffectsInner s rel (TyApp t1 t2) (TyApp t1' t2') _ sp mode = do
   debugM "equalTypesRelatedCoeffectsInner (tyAp leftp)" (pretty t1 <> " = " <> pretty t1')

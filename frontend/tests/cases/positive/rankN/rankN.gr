@@ -1,5 +1,5 @@
-foo : (forall {b : Type} . b -> (Int, b)) -> ((Int, Char), (Int, ()))
-foo k = ((k @ Char) 'a', (k @ ()) ())
+foo : (forall {b : Type} . b -> (Int, b)) [2] -> ((Int, Char), (Int, ()))
+foo [k] = ((k @ Char) 'a', (k @ ()) ())
 
 use : ((Int, Char), (Int, ()))
-use = foo (/\(t : Type) -> \(x : t) -> x)
+use = foo [(/\(t : Type) -> \(x : t) -> (42, x))]

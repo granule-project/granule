@@ -1630,10 +1630,11 @@ synthExpr defs gam pol (Val s0 _ rf p@(Pack sp a ty e x k ty')) = do
 
 synthExpr defs gam pol (Val s0 _ rf val@(TyAbs a v k e)) = do
   debugM "synthExpr [forall]" (pretty val)
-  (ty, gam, subst, elabE) <- synthExpr defs gam pol e
-  let retTy = TyForall v k ty
-  let elab = Val s0 retTy rf (TyAbs retTy v k elabE)
-  return (TyForall v k ty, gam, subst, elab)
+  registerTyVarInContextWith' v k ForallQ $ do
+    (ty, gam, subst, elabE) <- synthExpr defs gam pol e
+    let retTy = TyForall v k ty
+    let elab = Val s0 retTy rf (TyAbs retTy v k elabE)
+    return (TyForall v k ty, gam, subst, elab)
 
 --
 -- G |- e1 : exists {y : k} . A
