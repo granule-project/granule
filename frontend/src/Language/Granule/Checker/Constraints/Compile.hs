@@ -186,4 +186,5 @@ dropable =
       , tfSet = \_ _ -> return  True
       , tfTyCase = \_ _ -> return False
       , tfTySig = \t _ _ -> return t
-      , tfTyExists = \_ _ x -> return x})
+      , tfTyExists = \_ _ x -> return x
+      , tfTyForall = \_ _ x -> return x })

@@ -88,7 +88,7 @@ cgTypeScheme :: Compiler m => TypeScheme -> m (Hs.Type ())
 cgTypeScheme (Forall _ binders constraints typ) = do
   typ' <- cgType typ
   let tyVars = map (UnkindedVar () . mkName . fst) binders
-  return $ TyForall () (Just tyVars) Nothing typ'
+  return $ Hs.TyForall () (Just tyVars) Nothing typ'
 
 cgPats :: Compiler m => [CPat] -> m [Pat ()]
 cgPats = mapM cgPat
@@ -142,6 +142,7 @@ cgType (GrType.TySet p l_t) = return mkUnit
 cgType (GrType.TyCase t l_p_tt) = unsupported "cgType: tycase not implemented"
 cgType (GrType.TySig t t2) = unsupported "cgType: tysig not implemented"
 cgType (GrType.TyExists _ _ _) = unsupported "cgType: tyexists not implemented"
+cgType (GrType.TyForall _ _ _) = unsupported "cgType: tyexists not implemented"
 
 isTupleType :: GrType.Type -> Bool
 isTupleType (GrType.TyApp (GrType.TyCon id) _) = id == Id "," ","
@@ -220,6 +221,7 @@ cgVal (Abs _ p _ ex) = do
   return $ lamE [p'] ex'
 cgVal Pack{} = error "Existentials unsupported in code gen"
 cgVal Ext{} = unexpected "cgVal: unexpected Ext"
+cgVal TyAbs{} = error "Rank-N quantifiaction unsupported in code gen"
 
 
 cgBinop :: Compiler m => Operator -> Exp () -> Exp () -> m (Exp ())

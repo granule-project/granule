@@ -456,6 +456,7 @@ TyAtom :: { Type }
   | FLOAT                     { let TokenFloat _ x = $1 in TyRational $ myReadFloat x }
   -- | '.' INT                   { let TokenInt _ x = $2 in TyInt x }
   | '(' Type ')'              { $2 }
+  | '(' forall '{' VAR ':' Type '}' '.' Type ')' { TyForall (mkId $ symString $4) $6 $9 }
   | '(' Type ',' Type ')'     { TyApp (TyApp (TyCon $ mkId ",") $2) $4 }
   | TyAtom ':' Kind           { TySig $1 $3 }
   | '{' CoeffSet '}'              { TySet Normal $2 }
@@ -524,6 +525,10 @@ Expr :: { Expr () () }
            \sp -> return $ App sp () False
                    (Val (getSpan $3) () False (Abs () pat mt $3)) expr
       }
+
+  | "/\\" '(' VAR ':' Type ')' '->' Expr
+      {% (mkSpan (getPos $1, getEnd $8)) >>=
+             \sp -> return $ Val sp () False (TyAbs () (mkId $ symString $3) $5 $8) }
 
   | '\\' '(' PAtom ':' Type ')' '->' Expr
       {% (mkSpan (getPos $1, getEnd $8)) >>=

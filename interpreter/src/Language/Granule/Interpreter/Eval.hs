@@ -1117,6 +1117,7 @@ instance RuntimeRep Value where
   toRuntimeRep (NumInt x) = NumInt x
   toRuntimeRep (NumFloat x) = NumFloat x
   toRuntimeRep (Pack s a ty e var k ty') = Pack s a ty (toRuntimeRep e) var k ty'
+  toRuntimeRep (TyAbs a v t e) = TyAbs a v t (toRuntimeRep e)
 
 eval :: (?globals :: Globals) => AST () () -> IO (Maybe RValue)
 eval = evalAtEntryPoint (mkId entryPoint)

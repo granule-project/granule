@@ -174,7 +174,10 @@ instance Pretty Type where
                     <> " : " <> pretty t') ps) <> ")"
 
     pretty (TyExists var k t) =
-      docSpan "keyword" "exists" <> " {" <> pretty var <> ":" <> pretty k <> "} . " <> pretty t
+      docSpan "keyword" "exists" <> " {" <> pretty var <> " : " <> pretty k <> "} . " <> pretty t
+
+    pretty (TyForall var k t) =
+      docSpan "keyword" "forall" <> " {" <> pretty var <> " : " <> pretty k <> "} . " <> pretty t
 
 instance Pretty TypeOperator where
   pretty = \case
@@ -294,6 +297,8 @@ instance Pretty v => Pretty (Value v a) where
     pretty (Pack s a ty e1 var k ty') =
       "pack <" <> pretty ty <> ", " <> pretty e1 <> "> "
       <> "as exists {" <> pretty var <> " : " <> pretty k <> "} . " <> pretty ty'
+    pretty (TyAbs _ v k e) =
+      "/\\(" <> pretty v <> " : " <> pretty k <> ") -> " <> pretty e
 
 instance Pretty Id where
   pretty
