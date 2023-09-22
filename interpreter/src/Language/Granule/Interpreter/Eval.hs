@@ -261,16 +261,20 @@ evalInWHNF ctxt (App s a b e1 e2) = do
       (Val _ _ _ (Constr _ c vs)) -> do
         return $ App s a b v1 e2
 
-      _ -> error $ "LHS of an application is not a function value " ++ pretty v1
+      _ -> error $ "LHS of an application is not a function value " <> pretty v1
       -- _ -> error "Cannot apply value"
 
 -- Deriving applications get resolved to their names
 evalInWHNF ctxt (AppTy _ _ _ (Val s a rf (Var a' n)) t) | internalName n `elem` ["push", "pull", "copyShape", "drop"] =
   evalInWHNF ctxt (Val s a rf (Var a' (mkId $ pretty n <> "@" <> pretty t)))
 
--- Other type applications have no run time component (currently)
-evalInWHNF ctxt (AppTy s _ _ e t) =
-  evalInWHNF ctxt e
+-- General type applications
+evalInWHNF ctxt (AppTy s _ _ e t) = do
+  v <- evalInWHNF ctxt e
+  case v of
+    -- Note, doesn't bother substituting he types
+    (Val _ _ _ (TyAbs _ var t expr)) -> evalInWHNF ctxt expr
+    _ -> error $ "Bug: LHS of a type application is not a type abstraction: " <> pretty v
 
 evalInWHNF ctxt (Binop s a b op e1 e2) = do
      v1 <- evalIn ctxt e1
@@ -376,9 +380,12 @@ evalInCBV ctxt (App s _ _ e1 e2) = do
 evalInCBV ctxt (AppTy _ _ _ (Val s a rf (Var a' n)) t) | internalName n `elem` ["push", "pull", "copyShape", "drop"] =
   evalInCBV ctxt (Val s a rf (Var a' (mkId $ pretty n <> "@" <> pretty t)))
 
--- Other type applications have no run time component (currently)
-evalInCBV ctxt (AppTy s _ _ e t) =
-  evalInCBV ctxt e
+-- General type applications
+evalInCBV ctxt (AppTy s _ _ e t) = do
+  v <- evalInCBV ctxt e
+  case v of
+    (TyAbs _ var t expr) -> evalInCBV ctxt expr
+    _ -> error $ "Bug: LHS of a type application is not a type abstraction: " <> pretty v
 
 evalInCBV ctxt (Binop _ _ _ op e1 e2) = do
      v1 <- evalInCBV ctxt e1
