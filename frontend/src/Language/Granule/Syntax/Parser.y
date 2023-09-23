@@ -656,6 +656,7 @@ Form :: { Expr () () }
   | Form '/=' Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () False OpNotEq $1 $3 }
   | Form '∘'  Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ App sp () False (App sp () False (Val sp () False (Var () (mkId "compose"))) $1) $3 }
   | Form '.'  Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ App sp () False (App sp () False (Val sp () False (Var () (mkId "compose"))) $1) $3 }
+
   | Juxt           { $1 }
 
 Juxt :: { Expr () () }
@@ -663,6 +664,11 @@ Juxt :: { Expr () () }
   | Juxt Atom                 {% (mkSpan (getStart $1, getEnd $2)) >>= \sp -> return $ App sp () False $1 $2 }
   | Atom                      { $1 }
   | Juxt '@' TyAtom           {% (mkSpan (getStart $1, getEnd $1)) >>= \sp -> return $ AppTy sp () False $1 $3 } -- TODO: span is not very accurate here
+  | Juxt ':' TyAtom
+      {% (mkSpan (getStart $1, getPos $2)) >>=
+           \sp -> return $ App sp () False (Val sp () False (Abs () (PVar sp () False $ mkId "x") (Just $3)
+                                               (Val sp () False (Var () (mkId "x"))))) $1 }
+
 
 Hole :: { Expr () () }
   : '{!' Vars1 '!}'           {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $3)) >>= \sp -> return $ Hole sp () False (map mkId $2) Nothing }
