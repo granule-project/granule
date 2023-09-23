@@ -11,3 +11,4 @@ foo = let
   [z] <- pure (moveInt y);
   ()  <- call PutOp (z + 1) in
   pure z
+

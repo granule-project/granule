@@ -318,9 +318,11 @@ fromPure
 fromPure = BUILTIN
 
 -- Generic effect
-call : forall {i : Type, o : Type, labels : Type, sigs : Type -> labels -> Type, e : labels}
-   . (forall {r : Type} . i -> (o -> r) -> sigs r e) -> i -> o <Eff labels sigs {e}>
+call : forall {i : Type, o : Type, r : Type, labels : Type, sigs : Type -> labels -> Type, e : labels}
+   . (i -> (o -> r) -> sigs r e) -> i -> o <Eff labels sigs {e}>
 call = BUILTIN
+
+--handle : (sigs r e -> m b) -> a <Eff labels sigs {e}> -> m a
 
 --------------------------------------------------------------------------------
 --- # I/O
