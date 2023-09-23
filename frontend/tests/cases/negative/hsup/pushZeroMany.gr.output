@@ -1,3 +1,4 @@
 Type checking failed: 
-Impossible pattern match: frontend/tests/cases/negative/hsup/pushZeroMany.gr:2:1:
-Pattern match in an equation of `pushZeroMany` is impossible as it implies the unsatisfiable condition (Zero ⨱ Zero)
+Falsifiable theorem: frontend/tests/cases/negative/hsup/pushZeroMany.gr:2:1:
+  The following constraint associated with `pushZeroMany` is false:
+	  (prom_[2:31]0 ≤ Zero) ∧ (prom_[2:26]0 ≤ Zero) ∧ (Zero ≤ prom_[2:31]0) ∧ (Many ≤ prom_[2:26]0) ∧ (Zero ⨱ Zero)

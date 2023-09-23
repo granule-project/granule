@@ -1,3 +1,3 @@
 Type checking failed: 
 Impossible pattern match: frontend/tests/cases/negative/security/level_neg2.gr:11:9:
-Pattern match in an equation of `case` is impossible as it implies the unsatisfiable condition ((1 : Level) ≤ Private) ∧ (Public * (1 : Level) ≤ Private) ∧ (Public * (1 : Level) ≤ Dunno) ∧ ((1 : Level) ≤ Private)
+Pattern match in an equation of `case` is impossible as it implies the unsatisfiable condition (Public * (1 : Level) ≤ Private) ∧ (Public * (1 : Level) ≤ Dunno) ∧ ((1 : Level) ≤ Private)

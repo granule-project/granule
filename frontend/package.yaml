@@ -1,5 +1,5 @@
 name: granule-frontend
-version: '0.9.2.0'
+version: '0.9.4.1'
 synopsis: The Granule abstract-syntax-tree, parser and type checker libraries
 author: Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Jack Hughes, Preston Keel, Daniel Marshall, Michael Vollmer
 copyright: 2018-22 authors
@@ -45,6 +45,7 @@ library:
   - Language.Granule.Checker.Coeffects
   - Language.Granule.Checker.Constraints
   - Language.Granule.Checker.Constraints.SNatX
+  - Language.Granule.Checker.DataTypes
   - Language.Granule.Checker.Flatten
   - Language.Granule.Checker.Ghost
   - Language.Granule.Checker.LaTeX
@@ -57,6 +58,7 @@ library:
   - Language.Granule.Checker.SubstitutionContexts
   - Language.Granule.Checker.TypeAliases
   - Language.Granule.Checker.Types
+  - Language.Granule.Checker.Variables
   - Language.Granule.Syntax.Def
   - Language.Granule.Syntax.Expr
   - Language.Granule.Syntax.Helpers
@@ -73,13 +75,22 @@ library:
   - Language.Granule.Syntax.Preprocessor.Markdown
   - Language.Granule.Syntax.Span
   - Language.Granule.Syntax.Type
+  - Language.Granule.Synthesis.Builders
+  - Language.Granule.Synthesis.Contexts
+  - Language.Granule.Synthesis.DebugTree
+  - Language.Granule.Synthesis.LinearHaskell
+  - Language.Granule.Synthesis.Monad
   - Language.Granule.Synthesis.Splitting
+  - Language.Granule.Synthesis.Common
+  - Language.Granule.Synthesis.SynthLinearBase
+  - Language.Granule.Synthesis.Synth
   - Language.Granule.Synthesis.RewriteHoles
   - Language.Granule.Context
   - Language.Granule.Utils
   dependencies:
   - array
   - containers
+  - control-monad-omega
   - mtl >=2.2.1
   - sbv >=8.5
   - transformers >=0.5
@@ -88,6 +99,7 @@ library:
   - Glob
   - filepath
   - bifunctors
+  - haskell-src-exts
   - raw-strings-qq
   - text-replace
   - directory
@@ -97,6 +109,9 @@ library:
   - split
   - logict >= 0.7.1.0
   - clock
+  - blaze-html
+  - monad-memo
+  - data-ordlist
 
 tests:
   frontend-spec:
@@ -113,6 +128,7 @@ tests:
     - containers
     - transformers >=0.5
     - bifunctors
+    - syz
 
 #  zfrontend-doctest: # the "z" is to make them run after hspec
 #    main: doctest.hs

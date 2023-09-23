@@ -1,0 +1,15 @@
+Type checking failed: 
+Counter example: frontend/tests/cases/negative/hsup/pushPair.gr:2:1:
+  The following constraint associated with `pushPair` is false:
+	  (c ≤ r00) ∧ (r00 ≤ c) ∧ (r00 ⨱ r00)
+
+Counter-example:
+  c = 0 :: k
+
+
+Counter example: frontend/tests/cases/negative/hsup/pushPair.gr:5:1:
+  The following constraint associated with `pushPair'` is false:
+	  (prom_[5:28]0 ≤ c) ∧ (prom_[5:23]0 ≤ c) ∧ (c ≤ prom_[5:28]0) ∧ (c ≤ prom_[5:23]0) ∧ (c ⨱ c)
+
+Counter-example:
+  c = 0 :: k

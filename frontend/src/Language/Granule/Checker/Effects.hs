@@ -60,10 +60,9 @@ handledNormalise s effTy efs =
     case efs of
         TyApp (TyCon (internalName -> "Handled")) (TyCon (internalName -> "MayFail")) -> TyCon (mkId "Pure")
         TyApp (TyCon (internalName -> "Handled")) (TyCon (internalName -> "Success")) -> TyCon (mkId "Pure")
+        TyApp (TyCon (internalName -> "Handled")) (TySet p efs') -> TySet p (efs' \\ [TyCon (mkId "IOExcept")])
         TyApp (TyCon (internalName -> "Handled")) ef -> handledNormalise s effTy ef
         TyCon (internalName -> "Success") -> TyCon (mkId "Pure")
-        TySet p efs' ->
-            TySet p (efs' \\ [TyCon (mkId "IOExcept")])
         _ -> efs
 
 -- `effApproximates s effTy eff1 eff2` checks whether `eff1 <= eff2` for the `effTy`
@@ -180,7 +179,7 @@ effectUpperBound :: Span -> Type -> Type -> Type -> Checker Type
 effectUpperBound s _ t1 t2 | t1 == t2 = return $ t1
 
 effectUpperBound s t@(TyCon (internalName -> "Nat")) t1 t2 = do
-    nvar <- freshTyVarInContextWithBinding (mkId "n") t BoundQ
+    nvar <- freshTyVarInContextWithBinding (mkId "n") t InstanceQ
     -- Unify the two variables into one
     addConstraint (ApproximatedBy s t1 (TyVar nvar) t)
     addConstraint (ApproximatedBy s t2 (TyVar nvar) t)

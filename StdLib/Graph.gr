@@ -8,6 +8,8 @@
 --- Repository: https://github.com/granule-project/granule
 ------
 
+module Graph where
+
 import List
 import Prelude
 

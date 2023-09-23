@@ -8,39 +8,52 @@
 --- Repository: https://github.com/dorchard/granule
 ------
 
+module List where
+
 import Result
 import Maybe
 import Bool
 
 data List a where Empty; Next a (List a)
 
--- Length function must ignore the elements
+--- Append two lists
+append_list : forall {a : Type} . List a -> List a -> List a
+append_list xs ys = case xs of
+  Empty -> ys;
+  Next x xs -> Next x (append_list xs ys)
+
+--- Make a singleton list
+singleton_list : forall {a : Type} . a -> List a
+singleton_list x = Next x Empty
+
+--- Length function must ignore the elements
 length_list : forall {a : Type} . List (a [0]) -> Int
 length_list xs =
   case xs of
     Empty         -> 0;
     (Next [_] xs) -> 1 + length_list xs
 
--- Map function for lists
+--- Map function for lists
 lmap : forall {a : Type, b : Type}
     . (a -> b) [0..∞] -> List a -> List b
 lmap [f] Empty = Empty;
 lmap [f] (Next x xs) = Next (f x) (lmap [f] xs)
 
--- Lookup function
+--- Lookup function
 lookupBy : forall {a : Type, b : Type}
          . (a -> a -> Bool) [0..∞] -> a [0..∞] -> (List (a, b)) [0..1] -> Maybe b
-lookupBy [p] [k] [Empty] = None;
+lookupBy [p] [k] [Empty] = Nothing;
 lookupBy [p] [k] [Next (k', v) xs] =
-  if p k k' then Some v else lookupBy [p] [k] [xs]
+  if p k k' then Just v else lookupBy [p] [k] [xs]
 
--- Safe head function
+--- Safe head function
 head_list : forall {a : Type} . (List a) [0..1] -> Result a
 head_list xs =
   case xs of
     [Empty]      -> Failed ["Empty list!"];
     [(Next x _)] -> Ok x
 
+--- Foldr on lists
 foldr_list : forall {a : Type, b : Type}
       . (a -> b -> b) [0..∞] -> b -> List a -> b
 foldr_list [f] z xs =
@@ -48,18 +61,12 @@ foldr_list [f] z xs =
     Empty -> z;
     Next x xs -> f x (foldr_list [f] z xs)
 
+--- Push a graded modality inside a list (defined as `push @List`)
 pushList : forall {s : Semiring, r : s, a : Type}
-         . {(1 : s) <= r} => (List a) [r] -> List (a [r])
+         . {(1 : s) <= r, Pushable r} => (List a) [r] -> List (a [r])
 pushList = push @List
 
+--- Pull a graded modality out of a list (defined as `pull @List`)
 pullList : forall {s : Semiring, r : s, a : Type}
          . List (a [r]) -> (List a) [r]
 pullList = pull @List
-
-append_list : forall {a : Type} . List a -> List a -> List a
-append_list xs ys = case xs of
-  Empty -> ys;
-  Next x xs -> Next x (append_list xs ys)
-
-singleton_list : forall {a : Type} . a -> List a
-singleton_list x = Next x Empty

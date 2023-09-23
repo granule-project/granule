@@ -1,3 +1,4 @@
 Type checking failed: 
 Falsifiable theorem: frontend/tests/cases/negative/graded/gex0.gr:4:1:
-  When checking `main`, expected 1 uses, but instead there are (2 : Nat) actual uses.
+  The following constraint associated with `main` is false:
+	  ((2 : Nat) = 1) ∧ (1 = prom_[4:30]0)

@@ -1,6 +1,5 @@
 -- gr --no-eval
-
-import Bool
+data Bool = True | False
 
 data X a b where
   X : a → b → X a b

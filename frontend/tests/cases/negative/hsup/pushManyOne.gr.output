@@ -1,3 +1,4 @@
 Type checking failed: 
-Impossible pattern match: frontend/tests/cases/negative/hsup/pushManyOne.gr:2:1:
-Pattern match in an equation of `pushManyOne` is impossible as it implies the unsatisfiable condition (Many ⨱ Many)
+Falsifiable theorem: frontend/tests/cases/negative/hsup/pushManyOne.gr:2:1:
+  The following constraint associated with `pushManyOne` is false:
+	  (prom_[2:30]0 ≤ Many) ∧ (prom_[2:25]0 ≤ Many) ∧ (One ≤ prom_[2:30]0) ∧ (Many ≤ prom_[2:25]0) ∧ (Many ⨱ Many)

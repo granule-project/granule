@@ -10,7 +10,7 @@
 
 module Language.Granule.Syntax.Def where
 
-import Data.List ((\\), delete)
+import Data.List ((\\), delete, nub)
 import Data.Set (Set)
 import qualified Data.Map as M
 import GHC.Generics (Generic)
@@ -53,6 +53,7 @@ data Def v a = Def
   { defSpan :: Span
   , defId :: Id
   , defRefactored :: Bool
+  , defSpec :: Maybe (Spec v a)
   , defEquations :: EquationList v a
   , defTypeScheme :: TypeScheme
   }
@@ -116,6 +117,42 @@ definitionType :: Def v a -> Type
 definitionType Def { defTypeScheme = ts } =
     ty where (Forall _ _ _ ty) = ts
 
+
+data Spec v a = 
+  Spec { 
+    specSpan          :: Span,
+    specRefactored    :: Bool,
+    specExamples      :: [Example v a],
+    specComponents    :: [(Id, Maybe Type)]
+  }
+  deriving (Generic)
+
+data Example v a = 
+  Example {
+    input  :: Expr v a,
+    output :: Expr v a,
+    cartesianOnly :: Bool
+  }
+  deriving (Generic)
+
+instance Rp.Refactorable (Spec v a) where
+  isRefactored spec =  if specRefactored spec then Just Rp.Replace else Nothing
+
+  getSpan = convSpan . specSpan
+
+
+deriving instance (Eq v, Eq a) => Eq (Spec v a)
+deriving instance (Show v, Show a) => Show (Spec v a)
+deriving instance (Data (ExprFix2 ValueF ExprF v a), Data v, Data a) => Data (Spec v a)
+
+deriving instance (Eq v, Eq a) => Eq (Example v a)
+deriving instance (Show v, Show a) => Show (Example v a)
+deriving instance (Data (ExprFix2 ValueF ExprF v a), Data v, Data a) => Data (Example v a)
+
+instance FirstParameter (Spec v a) Span
+instance FirstParameter (Example v a) Span
+
+
 -- | Data type declarations
 data DataDecl = DataDecl
   { dataDeclSpan :: Span
@@ -138,21 +175,36 @@ data DataConstr
 
 -- | Is the data type an indexed data type, or just a plain ADT?
 isIndexedDataType :: DataDecl -> Bool
-isIndexedDataType (DataDecl _ id tyVars _ constrs) =
-    all nonIndexedConstructors constrs
-  where
-    nonIndexedConstructors DataConstrNonIndexed{} = False
-    nonIndexedConstructors (DataConstrIndexed _ _ (Forall _ tyVars' _ ty)) =
-      noMatchOnEndType (reverse tyVars) ty
+isIndexedDataType d = not ((concatMap snd (typeIndices d)) == [])
 
-    noMatchOnEndType ((v, _):tyVars) (TyApp t1 t2) =
+-- | This returns a list of which parameters are actually indices
+-- | If this is not an indexed type this list will be empty.
+typeIndicesPositions :: DataDecl -> [Int]
+typeIndicesPositions d = nub (concatMap snd (typeIndices d))
+
+-- | Given a data decleration, return the type parameters which are type indicies
+typeIndices :: DataDecl -> [(Id, [Int])]
+typeIndices (DataDecl _ _ tyVars kind constrs) =
+    map constructorIndices constrs
+  where
+    constructorIndices :: DataConstr -> (Id, [Int])
+    constructorIndices dataConstr@(DataConstrNonIndexed _ id _) = (id, [])
+    constructorIndices dataConstr@(DataConstrIndexed _ id (Forall _ _ _ ty)) =
+      (id, findIndices (reverse tyVars <> processKind kind) (resultType ty))
+
+    processKind Nothing   = []
+    processKind (Just ty) = parameterTypesWithNames ty
+
+    findIndices :: Ctxt Kind -> Type -> [Int]
+    findIndices ((v, _):tyVars') (TyApp t1 t2) =
       case t2 of
-        TyVar v' | v == v' -> noMatchOnEndType tyVars t1
-        _                  -> True
-    noMatchOnEndType tyVars (FunTy _ _ t) = noMatchOnEndType tyVars t
-    noMatchOnEndType [] (TyCon _) = False
-    -- Defaults to `true` (acutally an ill-formed case for data types)
-    noMatchOnEndType _ _ = True
+        TyVar v' | v == v' -> findIndices tyVars' t1
+        -- This is an index, and we can see its position by how many things we have left
+        _                  -> (length tyVars') : findIndices tyVars' t1
+    findIndices tyVars (FunTy _ _ _ t) = findIndices tyVars t
+    findIndices [] (TyCon _) = []
+    -- Defaults to `empty` (acutally an ill-formed case for data types)
+    findIndices _ _ = []
 
 
 nonIndexedToIndexedDataConstr :: Id -> [(Id, Kind)] -> DataConstr -> DataConstr
@@ -161,7 +213,7 @@ nonIndexedToIndexedDataConstr tName tyVars (DataConstrNonIndexed sp dName params
     -- Don't push the parameters into the type scheme yet
     = DataConstrIndexed sp dName (Forall sp [] [] ty)
   where
-    ty = foldr (FunTy Nothing) (returnTy (TyCon tName) tyVars) params
+    ty = foldr (FunTy Nothing Nothing) (returnTy (TyCon tName) tyVars) params
     returnTy t [] = t
     returnTy t (v:vs) = returnTy (TyApp t ((TyVar . fst) v)) vs
 
@@ -201,11 +253,11 @@ instance Monad m => Freshenable m (EquationList v a) where
 
 -- | Alpha-convert all bound variables of a definition to unique names.
 instance Monad m => Freshenable m (Def v a) where
-  freshen (Def s var rf eqs t) = do
+  freshen (Def s var rf sp eqs t) = do
     t  <- freshen t
     equations' <- mapM freshen (equations eqs)
     let eqs' = eqs { equations = equations' }
-    return (Def s var rf eqs' t)
+    return (Def s var rf sp eqs' t)
 
 instance Term (EquationList v a) where
   freeVars (EquationList _ name _ eqs) =
@@ -216,5 +268,5 @@ instance Term (Equation v a) where
       freeVars body \\ concatMap boundVars binders
 
 instance Term (Def v a) where
-  freeVars (Def _ name _ equations _) =
+  freeVars (Def _ name _ _ equations _) =
     delete name (freeVars equations)

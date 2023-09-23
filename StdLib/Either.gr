@@ -8,14 +8,18 @@
 --- Repository: https://github.com/dorchard/granule
 ------
 
+module Either where
+
 data Either a b where Left a | Right b
 
+--- Distribute a graded modality inside Either
 -- TODO: latest version can generalise this to `c : k, k : Semiring`
 pushEither : forall {a : Type, b : Type, c : Nat} . {c <= 1} =>
              (Either a b) [c] -> Either (a [c]) (b [c])
 pushEither [Left x]  = Left [x];
 pushEither [Right y] = Right [y]
 
+--- Distrbute a graded modality outside Either
 pullEither : forall {a : Type, b : Type, c : Nat}
         . Either (a [c]) (b [c]) -> (Either a b) [c]
 pullEither (Left [y])  = [Left y];

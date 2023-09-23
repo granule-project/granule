@@ -29,8 +29,8 @@ import Control.Monad.State.Strict
    binding. -}
 desugar :: Def v () -> Def v ()
 -- desugar adt@ADT{} = adt
-desugar (Def s var rf eqs tys@(Forall _ _ _ ty)) =
-  Def s var rf (EquationList s var rf [typeDirectedDesugarEquation (mkSingleEquation var (equations eqs))]) tys
+desugar (Def s var rf spec eqs tys@(Forall _ _ _ ty)) =
+  Def s var rf spec (EquationList s var rf [typeDirectedDesugarEquation (mkSingleEquation var (equations eqs))]) tys
   where
     typeDirectedDesugarEquation (Equation s name a rf ps body) =
       Equation s name a rf []
@@ -40,9 +40,9 @@ desugar (Def s var rf eqs tys@(Forall _ _ _ ty)) =
     typeDirectedDesugar (Equation _ _ _ _ [] e) _ = return e
 
     typeDirectedDesugar (Equation s name a rf (p : ps) e) (TyApp (TyCon (internalName -> "Inverse")) t) = do
-       typeDirectedDesugar (Equation s name a rf (p : ps) e) (FunTy Nothing t (TyCon $ mkId "()"))
+       typeDirectedDesugar (Equation s name a rf (p : ps) e) (FunTy Nothing Nothing t (TyCon $ mkId "()"))
 
-    typeDirectedDesugar (Equation s name a rf (p : ps) e) (FunTy _ t1 t2) = do
+    typeDirectedDesugar (Equation s name a rf (p : ps) e) (FunTy _ _ t1 t2) = do
       e' <- typeDirectedDesugar (Equation s name a rf ps e) t2
       return $ Val nullSpanNoFile () False $ Abs () p (Just t1) e'
     -- Error cases

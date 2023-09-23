@@ -8,11 +8,13 @@
 --- Repository: https://github.com/dorchard/granule
 ------
 
+module Prelude where
+
 import Bool
 
 --- # Standard functional components
 
---- Identitiy function
+--- Identity function
 id : forall {a : Type} . a -> a
 id x = x
 
@@ -49,10 +51,10 @@ if0 g [x] [y] =
 
 --- # Numeric functions and constants
 
--- Given some n, return
--- + 1 iff n is positive
--- + -1 iff n is negative
--- + 0 otherwise
+--- Given some n, return
+--- + 1 iff n is positive
+--- + -1 iff n is negative
+--- + 0 otherwise
 sign : Int [1..2] -> Int
 sign [x] = if x > 0 then 1 else if x < 0 then -1 else 0
 
@@ -60,7 +62,7 @@ sign [x] = if x > 0 then 1 else if x < 0 then -1 else 0
 pi : Float
 pi = 3.141592653589793
 
--- An approximation of Euler's number
+--- An approximation of Euler's number
 e : Float
 e = 2.718281828459045
 
@@ -84,33 +86,38 @@ uncurry : forall {a : Type, b : Type, c : Type} .
           (a -> b -> c) -> (a × b -> c)
 uncurry f (x, y) = f x y
 
---- # Coeffect-polymorphic combinators
+--- # Semiring-polymorphic combinators
 
 --- Coeffectful composition
 comp : forall {k : Coeffect, n : k, m : k, a : Type, b : Type, c : Type} .
        (b [n] -> c) -> (a [m] -> b) [n] -> a [n * m] -> c
 comp g [f] = \[x] -> g [f [x]]
 
+--- Graded necessity is an applicative functor
 boxmap : forall {a b : Type, s : Semiring, r : s} . (a -> b) [r] -> a [r] -> b [r]
 boxmap [f] [x] = [f x]
 
-unbox : forall {a : Type, k : Semiring} . a [1 : k] -> a
-unbox [x] = x
-
+--- 'Comultiplication' operation showing that graded necessity is a graded comonad
 disject : forall {a : Type, k : Semiring, n : k, m : k} . a [m * n] -> (a [n]) [m]
 disject [x] = [[x]]
 
+--- 'Counit' operation showing that graded necessity is a graded comonad
 extract : forall {a : Type, s : Semiring, r : s} . {(1 : s) <= r} => a [r] -> a
 extract [x] = x
 
---- Push coeffects on a pair into the left and right elements
--- pushPair : forall {a : Type, b : Type, k : Coeffect, c : k} . {(Hsup c c) == c} => (a × b) [c] -> a [c] × b [c]
--- pushPair [(x, y)] = ([x], [y])
+--- Push coeffects on a pair into the left and right elements. A distributive
+--- law of graded necessity over products. Note however that this is not always
+--- defined: the operation {c ⨱ c} is partial and is only defined if the semiring
+--- `k` permits this behaviour at `c`. (An example of a semiring where this is not true
+--- is for `k = LNL` and `c = 1`).
+pushPair : forall {a : Type, b : Type, k : Coeffect, c : k} . {Pushable c} => (a × b) [c] -> a [c] × b [c]
+pushPair = push @(,)
 
---- Pull coeffects of pair elements up to the pair
-pullPair : ∀ {a : Type, b : Type, k : Coeffect, n : k, m : k} . (a [n], b [m]) → (a, b) [n ∧ m]
+--- Pull coeffects of pair elements outside of the pair
+pullPair : ∀ {a : Type, b : Type, k : Coeffect, n : k} . (a [n], b [n]) → (a, b) [n]
 pullPair = pull @(,)
 
+--- Generic copying of a value into a pair
 copy : forall {a : Type, s : Semiring} . a [(1 + 1):s] -> (a, a)
 copy [x] = (x, x)
 

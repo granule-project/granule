@@ -1,0 +1,15 @@
+dropable : forall {a : Type} . {Dropable a} => a -> ()
+dropable = drop @a
+
+dropInt : Int -> ()
+dropInt = drop @Int
+
+data Store a b =
+  One a | Two a b
+
+dropStore : forall {b : Type} . {Dropable b} => Store Int b -> ()
+dropStore = drop @Store
+
+main : ((), ())
+main = let x : (Store Int Int) = (One 42)
+       in (dropStore x, dropStore (Two 100 "Hi"))

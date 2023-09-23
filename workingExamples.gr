@@ -1,0 +1,829 @@
+
+data Stream a where SNext a (Stream a) 
+
+data Bool = True | False
+
+data Maybe a = Just a | Nothing
+
+data List a where Next a (List a) ; Empty
+
+data Tree a where Node a (Tree a, Tree a) ; Leaf
+
+data N (n : Nat) where
+  Z : N 0;
+  S : N n -> N (n+1)
+
+data Vec (n : Nat) t where
+  Nil  : Vec 0 t;
+  Cons : t -> Vec n t -> Vec (n+1) t
+
+data Test1 c where First1 c 
+
+data Test2 c d where First2 c d | Second2 c d
+
+data Test3 c where First3 c | Second3 c 
+
+data Test4 c d where First4 c d
+
+
+-------------------- Non recursive ADTs -----------------
+
+
+f1 : forall { a : Type } . (Test1 (a [2])) -> (a, a)
+f1 (First1 y) = let [z] = y in (z, z)
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+f2 : forall { a : Type } . (Test1 a) [2] -> a [2]
+f2 [First1 z] = [z]
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+f3 : forall { a : Type } . (Test1 a) [1..2] -> (a, a)
+f3 [First1 z] = (z, z)
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+f4 : forall { a b : Type } . (Test2 a b) [] -> ((a, b), (a, b))
+f4 [Second2 v w] = ((v, w), (v, w));
+f4 [First2 z u] = ((z, u), (z, u))
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+f5 : forall { a b : Type } . (Test2 a b) [1..2] -> ((a, b), (a, b))
+f5 [Second2 v w] = ((v, w), (v, w));
+f5 [First2 z u] = ((z, u), (z, u))
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+f6 : forall { a b : Type } . (Test2 a b) -> (a, b)
+f6 (Second2 u v) = (u, v);
+f6 (First2 y z) = (y, z)
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+f7 : forall { a : Type } . (Test3 a) -> a
+f7 (Second3 z) = z;
+f7 (First3 y) = y
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+f8 : forall { a b : Type } . (Test4 a b) [1..2] -> ((a, b), (a, b))
+f8 [First4 z u] = ((z, u), (z, u))
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+f9 : forall { a b : Type } . (Test4 a b) -> (a, b)
+f9 (First4 y z) = (y, z)
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+f10 : forall { a : Type } . (Test1 (Test1 (a [3]))) -> (a, (a, a))
+f10 (First1 (First1 z)) = let [u] = z in (u, (u, u))
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+f11 : forall { a : Type } . (Test3 (Test3 a)) [1..2] -> (a, a)
+f11 [Second3 (Second3 q)] = (q, q);
+f11 [Second3 (First3 p)] = (p, p);
+f11 [First3 (Second3 v)] = (v, v);
+f11 [First3 (First3 u)] = (u, u)
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+f12 : forall { a : Type } . (Test3 (Test3 (a [0..3]))) [0..2] -> ((a, (a, a)), (a, (a, a)))
+f12 [Second3 (Second3 [q])] = ((q, (q, q)), (q, (q, q)));
+f12 [Second3 (First3 [p])] = ((p, (p, p)), (p, (p, p)));
+f12 [First3 (Second3 [v])] = ((v, (v, v)), (v, (v, v)));
+f12 [First3 (First3 [u])] = ((u, (u, u)), (u, (u, u)))
+-- ✓ Additive {! -t -e !}              
+-- ✓ Additive Pruning {! -t -p -e !}
+-- ✓ Subtractive {! -t -s -e !}
+-- ✓ Additive (GOR) {! -t -g -e !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g -e !}
+-- ✓ Subtractive (GOR) {! -t -s -g -e !}
+
+f13 : forall { a : Type } . (Test1 (Test1 a)) -> a
+f13 (First1 (First1 z)) = z
+-- ✓ Additive {! -t -e !}              
+-- ✓ Additive Pruning {! -t -p -e !}
+-- ✓ Subtractive {! -t -s -e !}
+-- ✓ Additive (GOR) {! -t -g -e !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g -e !}
+-- ✓ Subtractive (GOR) {! -t -s -g -e !}
+
+f14 : forall { a : Type } . (Test3 (Test3 a)) -> a
+f14 (Second3 (Second3 p)) = p;
+f14 (Second3 (First3 w)) = w;
+f14 (First3 (Second3 u)) = u;
+f14 (First3 (First3 z)) = z
+-- ✓ Additive {! -t -e !}              
+-- ✓ Additive Pruning {! -t -p -e !}
+-- ✓ Subtractive {! -t -s -e !}
+-- ✓ Additive (GOR) {! -t -g -e !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g -e !}
+-- ✓ Subtractive (GOR) {! -t -s -g -e !}
+
+f15 : forall { a b : Type } . (Test2 (Test2 a b) (Test2 a b)) -> ((a, b), (a, b))
+f15 (Second2 (Second2 x27 x28) (Second2 x23 x24)) = ((x23, x24), (x27, x28));
+f15 (Second2 (First2 x25 x26) (Second2 x23 x24)) = ((x23, x24), (x25, x26));
+f15 (Second2 (Second2 x21 x22) (First2 x17 x18)) = ((x17, x18), (x21, x22));
+f15 (Second2 (First2 x19 x20) (First2 x17 x18)) = ((x17, x18), (x19, x20));
+f15 (First2 (Second2 x13 x14) (Second2 x9 x10)) = ((x9, x10), (x13, x14));
+f15 (First2 (First2 x11 x12) (Second2 x9 x10)) = ((x9, x10), (x11, x12));
+f15 (First2 (Second2 q x8) (First2 u v)) = ((u, v), (q, x8));
+f15 (First2 (First2 w p) (First2 u v)) = ((u, v), (w, p))
+-- ✓ Additive {! -t -e !}              
+-- ✓ Additive Pruning {! -t -p -e !}
+-- ✓ Subtractive {! -t -s -e !}
+-- ✓ Additive (GOR) {! -t -g -e !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g -e !}
+-- ✓ Subtractive (GOR) {! -t -s -g -e !}
+
+f16 : forall {a b c d : Type} . ((a , b), (c, d)) [1..2] -> (((a, c), (a, d)), ((b, c), (b, d)))
+f16 [((p, q), (v, w))] = (((p, v), (p, w)), ((q, v), (q, w))) 
+-- ✓ Additive {! -t -e !}              
+-- ✓ Additive Pruning {! -t -p -e !}
+-- ✓ Subtractive {! -t -s -e !}
+-- ✓ Additive (GOR) {! -t -g -e !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g -e !}
+-- ✓ Subtractive (GOR) {! -t -s -g -e !}
+
+f17 : forall {a b c d : Type} . a -> c -> c -> (a, (c, c))
+f17 x y z = (x, (y, z))
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+f18 : forall {a b c d : Type} . c -> c -> a -> (a, (c, c))
+f18 x y z = (z, (x, y))
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+
+
+
+
+--------------------- Streams ---------------------------
+
+s1 : forall {a b : Type } . a [0..1] -> (Stream a) [0..1] -> a
+s1 [u] [z] = u
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+s2 : forall {a b : Type } . (Stream a) [0..1] -> (Stream a) [0] -> a 
+s2 [SNext w p] [z] = w
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+s3 : forall { a b c : Type } . (Stream b) [0..3] -> (Stream b, Stream b)
+s3 [y] = (y, y)
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+s4 : forall {a b : Type } . (Stream a) [0..1] -> (a -> b) [0..1] -> b
+s4 [SNext w p] [z] = z w
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+s5 : forall { a b c : Type } . (Stream b) [0..1] -> b
+s5 [SNext z u] = z
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+s6 : forall { a b c : Type } . (Stream a) [0..1] -> (Stream a -> Stream b) -> Stream b
+s6 x y = y (let [u] = x in u)
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+s7 : forall { a b c : Type } . (Stream a) [] -> (a -> b) -> (b -> c) -> c
+s7 [SNext v w] y z = z (y v)
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+s8 : forall { a b c : Type, n : Nat } . (Stream a) [] -> (Stream a -> Stream b) -> (Stream a, Stream b)
+s8 [z] y = (z, y z)
+-- ✓ Additive {! -t !}
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+s9 : forall { a b c : Type} . (Stream a) [0..1] -> (a -> b) [1..1] -> b 
+s9 [SNext v w] [z] = z v
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+s10 : forall { a b c : Type, n : Nat } . (Stream a) -> (((a, a), a), (Stream a))
+s10 (SNext y (SNext u (SNext w p))) = (((u, y), w), p)
+-- ✓ Additive {! -t -e !}              slow
+-- ✓ Additive Pruning {! -t -p -e !}
+-- ✓ Subtractive {! -t -s -e !}
+-- ✓ Additive (GOR) {! -t -g -e !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g -e !}
+-- ✓ Subtractive (GOR) {! -t -s -g -e !}
+
+
+s11 : forall { a b c : Type, n : Nat } . (Stream a) -> (a -> b) [3] -> ((b, (b, b)), Stream a)
+s11 (SNext z (SNext v (SNext p q))) y = let [x8] = y in ((x8 v, (x8 p, x8 z)), q)
+-- ✓ Additive {! -t -e -i !}              
+-- ✓ Additive Pruning {! -t -p -i -e !}
+-- ✓ Subtractive {! -t -s -e -i !}
+-- ✓ Additive (GOR) {! -t -g -e -i !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g -e -i !}
+-- ✓ Subtractive (GOR) {! -t -s -g -e -i !}
+
+s12 : forall { a b c : Type, n : Nat } . (Stream a) [] -> (a, a)
+s12 [SNext z u] = (z, z)
+-- ✓ Additive {! -t -e !}              
+-- ✓ Additive Pruning {! -t -p -e !}
+-- ✓ Subtractive {! -t -s -e !}
+-- ✓ Additive (GOR) {! -t -g -e !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g -e !}
+-- ✓ Subtractive (GOR) {! -t -s -g -e !}
+
+--------------------- Lists ---------------------------
+
+l1 : forall {a b : Type } . a -> List a 
+l1 x = (Next x) Empty
+-- ✓ Additive {! -t -i !}              
+-- ✓ Additive Pruning {! -t -p -i !}
+-- ✓ Subtractive {! -t -s -i !}
+-- ✓ Additive (GOR) {! -t -g -i !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g -i !}
+-- ✓ Subtractive (GOR) {! -t -s -g -i !}
+
+l2 : forall { a b c : Type } . b -> b -> b -> List b 
+l2 x y z = (Next y) ((Next x) ((Next z) Empty))
+-- ✓ Additive {! -t -i !}              
+-- ✓ Additive Pruning {! -t -p -i !}
+-- ✓ Subtractive {! -t -s -i !}
+-- ✓ Additive (GOR) {! -t -g -i !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g -i !}
+-- ✓ Subtractive (GOR) {! -t -s -g -i !}
+
+l3 : forall { a b c : Type } . ((), (a, a)) -> List a 
+l3 ((), (u, v)) = (Next u) ((Next v) Empty)
+-- ✓ Additive {! -t -i -e !}              
+-- ✓ Additive Pruning {! -t -p -i -e !}
+-- ✓ Subtractive {! -t -s -i -e !}
+-- ✓ Additive (GOR) {! -t -g -i -e !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g -i -e !}
+-- ✓ Subtractive (GOR) {! -t -s -g -i -e !}
+
+l4 : forall { a b c : Type } . ((a, a), a) -> List a
+l4 ((u, v), z) = (Next u) ((Next z) ((Next v) Empty))
+-- ✓ Additive {! -t -i -e !}              
+-- ✓ Additive Pruning {! -t -p -i -e !}
+-- ✓ Subtractive {! -t -s -i -e !}
+-- ✓ Additive (GOR) {! -t -g -i -e !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g -i -e !}
+-- ✓ Subtractive (GOR) {! -t -s -g -i -e !}
+
+l5 : forall { a b c : Type } . a [2] -> List a 
+l5 [y] = (Next y) ((Next y) Empty)
+-- ✓ Additive {! -t -i !}              
+-- ✓ Additive Pruning {! -t -p -i !}
+-- ✓ Subtractive {! -t -s -i !}
+-- ✓ Additive (GOR) {! -t -g -i !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g -i !}
+-- ✓ Subtractive (GOR) {! -t -s -g -i !}
+
+l6 : forall { a b c : Type } . (List a) [] ->  (b -> c) [] -> (a -> b) [] -> List c
+l6 [u] [w] [v] = Empty
+-- ✓ Additive {! -t -e !}              
+-- ✓ Additive Pruning {! -t -p -e !}
+-- ✓ Subtractive {! -t -s -e !}
+-- ✓ Additive (GOR) {! -t -g -e !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g -e !}
+-- ✓ Subtractive (GOR) {! -t -s -g -e !}
+
+
+l7 : forall { a b c : Type} . a [3] -> List a
+l7 [y] = (Next y) ((Next y) ((Next y) Empty))
+-- ✓ Additive {! -t -i !}              
+-- ✓ Additive Pruning {! -t -p -i !}
+-- ✓ Subtractive {! -t -s -i !}
+-- ✓ Additive (GOR) {! -t -g -i !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g -i !}
+-- ✓ Subtractive (GOR) {! -t -s -g -i !}
+
+
+
+
+
+----------------- Maybe.gr library functions -----------------
+
+isSome : forall {a : Type} . Maybe (a [0]) -> Bool
+isSome (Just y) = let [z] = y in True;
+isSome Nothing = True
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p  !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+
+isNone : forall {a : Type} . Maybe (a [0]) -> Bool
+isNone (Just y) = let [z] = y in True;
+isNone Nothing = True
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p  !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+bindMb : forall {a : Type, b : Type} . Maybe a -> (a -> Maybe b) [0..1] -> Maybe b
+bindMb (Just u) y = let [v] = y in v u;
+bindMb Nothing y = let [z] = y in Nothing
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p  !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+returnMb : forall {a : Type} . a -> Maybe a
+returnMb x = Just x
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p  !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+
+maybe : forall {a : Type, b : Type} . b [0..1] -> (a -> b) [0..1] -> Maybe a -> b
+maybe x [u] (Just w) = let [p] = x in u w;
+maybe x [u] Nothing = let [v] = x in v
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p  !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+fromMaybe : forall {a : Type} . a [0..1] -> Maybe a -> a
+fromMaybe x (Just u) = let [v] = x in u;
+fromMaybe x Nothing = let [z] = x in z
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p  !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+
+
+
+
+
+
+------------------- Misc -----------------------
+
+f : forall { a b c : Type } . a [] -> (a -> b) [1] -> (b -> c) [1] -> c
+f [v] [w] [u] = u (w v)
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+flip : forall {a : Type, b : Type, c : Type} . (a -> b -> c) -> b -> a -> c
+flip x y z = (x z) y
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+const : forall {a : Type, b : Type, s : Semiring} . a -> b [0 : s] -> a
+const x [z] = x
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+lcompose : forall {a : Type, b : Type, c : Type} . (b -> c) -> (a -> b) -> (a -> c)
+lcompose x y z = x (y z)
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+fst : forall {a : Type, b : Type, s : Semiring} . a × b [0 : s] -> a
+fst (y, z) = let [u] = z in y
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+snd : forall {a : Type, b : Type, s : Semiring} . a [0 : s] × b -> b
+snd (y, z) = let [u] = y in z
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+pullPair : ∀ {a : Type, b : Type, k : Coeffect, n : k, m : k} . (a [n], b [m]) → (a, b) [n ∧ m]
+pullPair (y, z) = let [u] = z in let [v] = y in [(v, u)]
+-- ✓ Additive {! -t !}              
+-- χ Additive Pruning {! -t -p !}
+-- χ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- χ Additive Pruning (GOR) {! -t -p -g !}
+-- χ Subtractive (GOR) {! -t -s -g !}
+
+copy : forall {a : Type, s : Semiring} . a [(1 + 1):s] -> (a, a)
+copy [y] = (y, y)
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- χ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- χ Subtractive (GOR) {! -t -s -g !}
+
+boxmap : forall {a b : Type, s : Semiring, r : s} . (a -> b) [r] -> a [r] -> b [r]
+boxmap [u] [z] = [u z]
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- χ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- χ Subtractive (GOR) {! -t -s -g !}
+
+comp : forall {k : Coeffect, n : k, m : k, a : Type, b : Type, c : Type} . (b [n] -> c) -> (a [m] -> b) [n] -> a [n * m] -> c
+comp x [v] [u] = x [v [u]]
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- χ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- χ Subtractive (GOR) {! -t -s -g !}
+
+unbox : forall {a : Type, k : Semiring} . a [1 : k] -> a
+unbox [y] = y
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- χ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- χ Subtractive (GOR) {! -t -s -g !}
+
+curry : forall {a : Type, b : Type, c : Type} . ((a × b) -> c) -> a -> b -> c
+curry x y z = x ((y, z))
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+apply : forall {a : Type, b : Type, c : Type} . a -> (a -> b) -> b --(b -> c) -> c
+apply x y = y x
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+disject : forall {a : Type, k : Semiring, n : k, m : k} . a [m * n] -> (a [n]) [m]
+disject [y] = [[y]]
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- χ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- χ Subtractive (GOR) {! -t -s -g !}
+
+unflatten : forall {a : Type, n : Nat, m : Nat} . a [n*m] -> (a [n]) [m]
+unflatten [y] = [[y]]
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- χ Subtractive (GOR) {! -t -s -g !}
+
+
+
+
+compose : forall {a b c d e : Type} . a [] -> (a -> b) -> (b -> c) [] -> (c -> d) [] -> (d -> e) -> e 
+compose [p] y [q] [w] v = v (w (q (y p)))
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+ 
+
+
+
+-------------- Recursion with Lists ------------ 
+
+pushList : ∀ {k : Nat, n : Nat, a : Type} .  {1 <= n} => (List a) [n] -> (List (a [n]))
+pushList [Next z u] = (Next [z]) (pushList [u]);
+pushList [Empty] = Empty
+-- ✓ Additive {! -t -r !}              
+-- ✓ Additive Pruning {! -t -p -r !}
+-- χ Subtractive {! -t -s -r !}
+-- ✓ Additive (GOR) {! -t -g -r !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g -r !}
+-- χ Subtractive (GOR) {! -t -s -g -r !}
+ 
+
+pullList : forall {a : Type, n : Nat} .  List (a [n]) -> (List a) [n]
+pullList (Next y z) = let [u] = y in pullList z;
+pullList Empty = [Empty]
+-- χ Additive {! -t -r !}              
+-- χ Additive Pruning {! -t -p -r !}
+-- χ Subtractive {! -t -s -r !}
+-- χ Additive (GOR) {! -t -g -r !}
+-- χ Additive Pruning (GOR) {! -t -p -g -r !}
+-- χ Subtractive (GOR) {! -t -s -g -r !}
+
+append_list : forall {a : Type} . (List a) -> (List a) -> List a
+append_list x (Next z u) = (Next z) ((append_list x) u);
+append_list x Empty = x
+-- ✓ Additive {! -t -r !}              
+-- ✓ Additive Pruning {! -t -p -r !}
+-- χ Subtractive {! -t -s -r !}
+-- ✓ Additive (GOR) {! -t -g -r !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g -r !}
+-- χ Subtractive (GOR) {! -t -s -g -r !}
+
+-- foldr_list : forall { a b : Type } . ((a, b) -> b) [] -> b -> List a -> b
+-- χ Additive {! -t -r !}              
+-- χ Additive Pruning {! -t -p -r !}
+-- χ Subtractive {! -t -s -r !}
+-- χ Additive (GOR) {! -t -g -r !}
+-- χ Additive Pruning (GOR) {! -t -p -g -r !}
+-- χ Subtractive (GOR) {! -t -s -g -r !}
+
+
+map_list : ∀ {k : Nat, n : Nat, a b : Type} .  (List a) -> (a -> b) [] -> List b
+map_list (Next u v) [z] = (Next (z u)) ((map_list v) [z]);
+map_list Empty [z] = Empty
+-- map_list (Next u v) y = let [w] = y in (Next (w u)) ((map_list v) [w]);
+-- map_list Empty y = let [z] = y in Empty
+-- ✓ Additive {! -t -r !}              
+-- ✓ Additive Pruning {! -t -p -r !}
+-- χ Subtractive {! -t -s -r !}
+-- ✓ Additive (GOR) {! -t -g -r !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g -r !}
+-- χ Subtractive (GOR) {! -t -s -g -r !}
+
+map_list' : ∀ {k : Nat, n : Nat, a b c : Type} . (List a) -> (List b -> List c) -> (a -> b) [] -> List c
+map_list' x y z = y ((map_list x) z)
+-- ✓ Additive {! -t -d map_list !}              
+-- ✓ Additive Pruning {! -t -p -d map_list !}
+-- ✓ Subtractive {! -t -s -d map_list !}
+-- ✓ Additive (GOR) {! -t -g -d map_list !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g -d map_list !}
+-- ✓ Subtractive (GOR) {! -t -s -g -d map_list !}
+
+
+
+stutter_list : ∀ {k : Nat, n : Nat, a b : Type} .  (List (a [2])) -> List a
+stutter_list (Next y z) = let [u] = y in (Next u) ((Next u) (stutter_list z));
+stutter_list Empty = Empty
+
+
+
+
+    
+
+-------------- Recursion with Vec ------------ 
+
+uncons : forall {a : Type, n : Nat} . Vec (n + 1) a -> (a, Vec n a)
+uncons (Cons y z) = (y, z)
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+con : forall {a : Type, n : Nat} . a ->  Vec 1 a
+con x = (Cons x) Nil
+-- ✓ Additive {! -t -i !}              
+-- ✓ Additive Pruning {! -t -p -i !}
+-- ✓ Subtractive {! -t -s -i !}
+-- ✓ Additive (GOR) {! -t -g -i !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g -i !}
+-- ✓ Subtractive (GOR) {! -t -s -g -i !}
+
+con2 : forall {a : Type, n : Nat} . a -> a -> Vec 2 a
+con2 x y = (Cons x) ((Cons y) Nil)
+-- ✓ Additive {! -t -i !}              
+-- ✓ Additive Pruning {! -t -p -i !}
+-- ✓ Subtractive {! -t -s -i !}
+-- ✓ Additive (GOR) {! -t -g -i !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g -i !}
+-- ✓ Subtractive (GOR) {! -t -s -g -i !}
+
+con3 : forall {a : Type, n : Nat} . a -> a -> a -> Vec 3 a
+con3 x y z = (Cons y) ((Cons x) ((Cons z) Nil))
+-- ✓ Additive {! -t -i !}              
+-- ✓ Additive Pruning {! -t -p -i !}
+-- ✓ Subtractive {! -t -s -i !}
+-- ✓ Additive (GOR) {! -t -g -i !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g -i !}
+-- ✓ Subtractive (GOR) {! -t -s -g -i !}
+
+con4 : forall {a : Type, n : Nat} . a -> a -> a -> a -> Vec 4 a
+con4 x y z u = (Cons z) ((Cons y) ((Cons x) ((Cons u) Nil)))
+-- ✓ Additive {! -t -i !}              
+-- ✓ Additive Pruning {! -t -p -i !}
+-- ✓ Subtractive {! -t -s -i !}
+-- ✓ Additive (GOR) {! -t -g -i !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g -i !}
+-- ✓ Subtractive (GOR) {! -t -s -g -i !}
+
+map_vec : forall {a b : Type, n : Nat} . (a -> b) [n] -> Vec n a -> Vec n b
+map_vec x (Cons u v) = let [w] = x in (Cons (w u)) ((map_vec [w]) v);
+map_vec x Nil = let [z] = x in Nil
+-- ✓ Additive {! -t -r !}              
+-- ✓ Additive Pruning {! -t -p -r !}
+-- χ Subtractive {! -t -s -r !}
+-- ✓ Additive (GOR) {! -t -g -r !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g -r !}
+-- χ Subtractive (GOR) {! -t -s -g -r !}
+
+-- append_vec  : forall {a : Type, m n : Nat} . Vec n a -> Vec m a -> Vec (n + m) a
+-- append_vec = {! -t -r -s !}
+-- ✓ Additive {! -t -r !}              
+-- ✓ Additive Pruning {! -t -p -r !}
+-- χ Subtractive {! -t -s -r !}
+-- ✓ Additive (GOR) {! -t -g -r !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g -r !}
+-- χ Subtractive (GOR) {! -t -s -g -r !}
+-- Slooooooow
+
+replicate : forall {a : Type, n : Nat} . N n -> a [n] -> Vec n a
+replicate (S u) y = let [v] = y in (Cons v) ((replicate u) [v]);
+replicate Z y = let [z] = y in Nil
+-- ✓ Additive {! -t -r !}              
+-- ✓ Additive Pruning {! -t -p -r !}
+-- χ Subtractive {! -t -s -r !}
+-- ✓ Additive (GOR) {! -t -g -r !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g -r !}
+-- χ Subtractive (GOR) {! -t -s -g -r !}
+
+length : forall {a : Type, n : Nat} . Vec n (a [0]) -> N n
+length (Cons y z) = S (let [u] = y in length z);
+length Nil = Z
+-- ✓ Additive {! -t -r !}              
+-- ✓ Additive Pruning {! -t -p -r !}
+-- χ Subtractive {! -t -s -r !}
+-- ✓ Additive (GOR) {! -t -g -r !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g -r !}
+-- χ Subtractive (GOR) {! -t -s -g -r !}
+
+
+-- index : forall {a : Type, n m : Nat} . {m > n} => N n -> (Vec (m) a) [0..1] -> a
+-- index = {! -t -r -e !}
+-- χ Additive {! -t -r -e !}              
+-- χ Additive Pruning {! -t -p -r -e !}
+-- χ Subtractive {! -t -s -r -e !}
+-- χ Additive (GOR) {! -t -g -r -e !}
+-- χ Additive Pruning (GOR) {! -t -p -g -r -e !}
+-- χ Subtractive (GOR) {! -t -s -g -r -e !}
+
+push_vec : ∀ {k : Nat, n,m : Nat, a : Type} .  {1 <= m} => (Vec (n) a) [m] → Vec (n) (a [m])
+push_vec [Cons z u] = (Cons [z]) (push_vec [u]);
+push_vec [Nil] = Nil
+-- ✓ Additive {! -t -r !}              
+-- ✓ Additive Pruning {! -t -p -r !}
+-- χ Subtractive {! -t -s -r !}
+-- ✓ Additive (GOR) {! -t -g -r !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g -r !}
+-- χ Subtractive (GOR) {! -t -s -g -r !}
+
+-------------- Nat operations ------------ 
+
+addOne : forall {m n : Nat} . N n -> N (n + 1)
+addOne x = S x
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+minusOne : forall {m n : Nat} . N (n + 1) -> N n
+minusOne (S y) = y
+-- ✓ Additive {! -t !}              
+-- ✓ Additive Pruning {! -t -p !}
+-- ✓ Subtractive {! -t -s !}
+-- ✓ Additive (GOR) {! -t -g !}
+-- ✓ Additive Pruning (GOR) {! -t -p -g !}
+-- ✓ Subtractive (GOR) {! -t -s -g !}
+
+-- add : forall {m n : Nat} . N n -> N m -> N (n + m)
+-- add = {! -t -r -s !}
+-- χ Additive {! -t -r !}              
+-- χ Additive Pruning {! -t -p -r !}
+-- χ Subtractive {! -t -s -r !}
+-- χ Additive (GOR) {! -t -g -r !}
+-- χ Additive Pruning (GOR) {! -t -p -g -r !}
+-- χ Subtractive (GOR) {! -t -s -g -r !}
+

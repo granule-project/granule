@@ -6,6 +6,7 @@ import Data.List (intercalate)
 
 import Language.Granule.Syntax.Preprocessor.Latex
 import Language.Granule.Syntax.Preprocessor.Markdown
+-- import Language.Granule.Syntax.Preprocessor.Spec
 
 import Language.Granule.Utils
 
@@ -19,8 +20,16 @@ preprocess mbRewriter keepOldFile file env
           Just rewriter -> do
             let processedSrc = preprocessOnlyGranule rewriter src
             written <- writeSrcFile file keepOldFile processedSrc
+
+            -- Rewrite specs
+            -- let specProcessedSrc = processSpec written
+
             return $ stripNonGranule written
-          Nothing -> return $ stripNonGranule src
+          Nothing -> do 
+            -- Rewrite specs
+            -- let specProcessedSrc = processSpec src
+
+            return $ stripNonGranule src 
       Nothing -> error
         $ "Unrecognised file extension: "
         <> extension
@@ -32,8 +41,9 @@ preprocess mbRewriter keepOldFile file env
 
     -- (file extension, (stripNonGranule, destructive preprocessor))
     acceptedFormats =
-      [ ("gr",    (id,             id))
-      , ("md",    (unMarkdown env, processGranuleMarkdown id env))
-      , ("tex",   (unLatex env,    processGranuleLatex id env))
-      , ("latex", (unLatex env,    processGranuleLatex id env))
+      [ ("gr",     (id,             id))
+      , ("output", (id,             id))
+      , ("md",     (unMarkdown env, processGranuleMarkdown id env))
+      , ("tex",    (unLatex env,    processGranuleLatex id env))
+      , ("latex",  (unLatex env,    processGranuleLatex id env))
       ]

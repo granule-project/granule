@@ -15,7 +15,6 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Types (equalTypesRelatedCoeffectsAndUnify, SpecIndicator(..))
-import Language.Granule.Checker.Flatten
 import Language.Granule.Checker.Ghost
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
@@ -45,10 +44,11 @@ definiteUnification :: (?globals :: Globals)
 definiteUnification _ _ Nothing _ = return ()
 definiteUnification s pos (Just (coeff, coeffTy)) ty = do
   isPoly <- polyShaped ty
+  -- TODO: simplify
   when isPoly $ -- Used to be: addConstraintToPreviousFrame, but paper showed this was not a good idea
     case pos of
-      InCase ->  addConstraintToPreviousFrame $ ApproximatedBy s (TyGrade (Just coeffTy) 1) coeff coeffTy
-      InFunctionEquation -> addConstraint $ ApproximatedBy s (TyGrade (Just coeffTy) 1) coeff coeffTy
+      InCase             -> addConstraintToNextFrame $ ApproximatedBy s (TyGrade (Just coeffTy) 1) coeff coeffTy
+      InFunctionEquation -> addConstraintToNextFrame $ ApproximatedBy s (TyGrade (Just coeffTy) 1) coeff coeffTy
 
 -- | Predicate on whether a type has more than 1 shape (constructor)
 polyShaped :: (?globals :: Globals) => Type -> Checker Bool
@@ -113,7 +113,7 @@ ctxtFromTypedPattern' outerCoeff _ pos t (PWild s _ rf) cons =
 
     --case cons of
       -- Full consumption is allowed here
-    --  Full -> do
+  --  Full -> do
 
         -- If the wildcard appears under one or more [ ] pattern then we must
         -- add a constraint that 0 approaximates the effect of the enclosing
@@ -129,8 +129,8 @@ ctxtFromTypedPattern' outerCoeff _ pos t (PWild s _ rf) cons =
           Just (coeff, coeffTy) -> do
               -- Must approximate zero
               case pos of
-                InFunctionEquation -> addConstraint $ ApproximatedBy s (TyGrade (Just coeffTy) 0) coeff coeffTy
-                InCase -> addConstraintToPreviousFrame $ ApproximatedBy s (TyGrade (Just coeffTy) 0) coeff coeffTy
+                InFunctionEquation -> addConstraintToNextFrame $ ApproximatedBy s (TyGrade (Just coeffTy) 0) coeff coeffTy
+                InCase             -> addConstraintToNextFrame $ ApproximatedBy s (TyGrade (Just coeffTy) 0) coeff coeffTy
 
               return ([], [], [], PWild s t rf, NotFull)
 
@@ -163,20 +163,10 @@ ctxtFromTypedPattern' outerCoeff s pos ty@(TyCon c) (PFloat s' _ rf n) _
     return ([], [], [], elabP, Full)
 
 -- Pattern match on a modal box
-ctxtFromTypedPattern' outerBoxTy s pos t@(Box coeff ty) (PBox sp _ rf p) _ = do
-    (innerBoxTy, subst0, _) <- synthKind s coeff
-    (coeff, subst1, coeffTy) <- case outerBoxTy of
-        -- Case: no enclosing [ ] pattern
-        Nothing -> return (coeff, [], innerBoxTy)
-        -- Case: there is an enclosing [ ] pattern of type outerBoxTy
-        Just (outerCoeff, outerBoxTy) -> do
-          -- Therefore try and flatten at this point
-          flatM <- flattenable outerBoxTy innerBoxTy
-          case flatM of
-            Just (flattenOp, subst, ty) -> return (flattenOp outerCoeff coeff, subst, ty)
-            Nothing -> throw DisallowedCoeffectNesting
-              { errLoc = s, errTyOuter = outerBoxTy, errTyInner = innerBoxTy }
-
+ctxtFromTypedPattern' outerCoeffAndTy s pos t@(Box coeff ty) (PBox sp _ rf p) _ = do
+    (innerCoeffTy, subst0, _) <- synthKind s coeff
+    -- Flatten with outter coeffect, if there is one
+    (Just (coeff, coeffTy), subst1) <- flattenCoeffects s outerCoeffAndTy (Just (coeff, innerCoeffTy))
 
     (ctxt, eVars, subst, elabPinner, consumption) <- ctxtFromTypedPattern' (Just (coeff, coeffTy)) s pos ty p Full
 
@@ -187,70 +177,133 @@ ctxtFromTypedPattern' outerBoxTy s pos t@(Box coeff ty) (PBox sp _ rf p) _ = do
 ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
   debugM "Patterns.ctxtFromTypedPattern" $ "ty: " <> show ty <> "\t" <> pretty ty <> "\nPConstr: " <> pretty dataC
 
+  reportM $ "Typing pattern " <> prettyNested p <> " at type " <> prettyNested ty
+  reportMsep
+
   st <- get
   mConstructor <- lookupDataConstructor s dataC
   case mConstructor of
     Nothing -> throw UnboundDataConstructor{ errLoc = s, errId = dataC }
-    Just (tySch, coercions) -> do
+    Just (tySch, coercions, indices) -> do
 
       case outerBoxTy of
         -- Hsup if you only have more than one premise (and have an enclosing grade)
         Just (coeff, coeffTy) | length ps > 1 ->
-          addConstraint (Hsup s coeff coeff coeffTy)
+          addConstraintToNextFrame (Hsup s coeff coeff coeffTy)
         _ -> return ()
 
-      (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, constraints, coercions') <-
-          freshPolymorphicInstance BoundQ True tySch coercions
+      -- get fresh instance of the data constructors type
+      (dataConstructorTypeFresh, freshTyVarsCtxt, constraints, coercions') <-
+          freshPolymorphicInstance InstanceQ True tySch coercions indices
 
+      -- register any constraints of the data constructor into the solver
       otherTypeConstraints <- enforceConstraints s constraints
       registerWantedTypeConstraints otherTypeConstraints
 
-      -- Debugging
-      debugM "ctxt" $ "### DATA CONSTRUCTOR (" <> pretty dataC <> ")"
-                         <> "\n###\t tySch = " <> pretty tySch
-                         <> "\n###\t coercions =  " <> show coercions
-                         <> "\n###\n"
-      debugM "ctxt" $ "\n### FRESH POLY ###\n####\t dConTyFresh = "
-                      <> show dataConstructorTypeFresh
-                      <> "\n###\t ctxt = " <> show freshTyVarsCtxt
-                      <> "\n###\t freshTyVarSubst = " <> show freshTyVarSubst
-                      <> "\n###\t coercions' =  " <> show coercions'
+      -- Running example:
+      -- tySch      = S : forall {n.0 : Nat, t.10 : Nat, t.11 : Type} . N a.3 n.0 -> N t.11 t.10
+      -- coercions = t.10 ~ n.0 + 1, t.11 ~ a.3
+      -- 1 is an index position
 
-      dataConstructorTypeFresh <- substitute (flipSubstitution coercions') dataConstructorTypeFresh
+      -- <REPORT>
+      reportM $ "Matching on constructor " <> pretty dataC <> "\n"
+      reportM $ "Type scheme  = " <> pretty tySch
+      reportM $ "Coercions    = " <> pretty coercions
+      reportM $ "Type indices = " <> pretty indices
+      reportMsep
+      reportM $ "Freshe freshTyVarsCtxt = " <> pretty freshTyVarsCtxt
+
+      reportM $ "Freshened type scheme = " <> pretty dataConstructorTypeFresh
+      reportM $ "Freshened coercions   = " <> pretty coercions'
+      -- </REPORT>
+
+      -- dataConstructorTypeFresh = N a.3.0 n.0.0 -> N t.11.0 t.10.0
+      -- freshTyVarSubst = a.3 ~> a.3.0, n.0 ~> n.0.0, t.10 ~> t.10.0, t.11 ~ t.11.0 [TODO: WRONG WAY ROUND!?]
+      -- coercions' = t.9.0 ~ n.0.0 + 1, t.11.0 ~ a.3.0
+
+      -- TODO: Maybe remove
+--      dataConstructorTypeFresh <- substitute (flipSubstitution coercions') dataConstructorTypeFresh
+
+      -- dataConstructorTypeFresh = N t.11.0 n.0.0 -> N t.11.0 t.10.0
 
       st <- get
-      debugM "ctxt" $ "### tyVarContext = " <> show (tyVarContext st)
-      debugM "ctxt" $ "\t### eqL (res dCfresh) = " <> show (resultType dataConstructorTypeFresh) <> "\n"
-      debugM "ctxt" $ "\t### eqR (ty) = " <> show ty <> "\n"
+      reportMsep
+      reportM $ "Computing equality " <> prettyNested (resultType dataConstructorTypeFresh) <> " == " <> prettyNested ty
+      reportM $ " (under type variable context = " <> pretty (tyVarContext st) <> ")"
 
-      debugM "Patterns.ctxtFromTypedPattern" $ pretty dataConstructorTypeFresh <> "\n" <> pretty ty
+      -- Equality between N t.11.0 t.10.0 ~ N a`2 n`1
+      -- where a`2 and n`1 are \forall quantified
+
       areEq <- equalTypesRelatedCoeffectsAndUnify s Eq PatternCtxt (resultType dataConstructorTypeFresh) ty
+      debugM "Patterns.ctxtFromTypedPattern areEq" $ show areEq
       case areEq of
-        (True, _, unifiers) -> do
+        (True, ty, unifiers) -> do
 
+          reportM $ "EQUAL with unifiers " <> pretty unifiers
+          -- Predicate now says:
+          --    t.10.0 ~ n.0.0 + 1
+          --    t.11.0 ~ a.3.0
           -- Register coercions as equalities
-          mapM_ (\(var, SubstT ty) ->
-                        equalTypesRelatedCoeffectsAndUnify s Eq PatternCtxt (TyVar var) ty) coercions'
+          --mapM_ (\(var, SubstT t) ->
+          --             equalTypesRelatedCoeffectsAndUnify s Eq PatternCtxt (TyVar var) t) coercions'
+
+          -- unifiers:   t.10.0 ~ n`1
+          --             t.11.0 ~ a`2
+          st <- get
+          reportM $ "Predicate stack" <> (pretty $ predicateStack st)
 
           dataConstructorIndexRewritten <- substitute unifiers dataConstructorTypeFresh
+
+          -- dataConstructorFresh          = N t.11.0 n.0.0 -> N t.11.0 t.10.0
+          -- dataConstructorIndexRewritten = N a`2 n.0.0 -> N a`2 n`1
+
           dataConstructorIndexRewrittenAndSpecialised <- substitute coercions' dataConstructorIndexRewritten
+          reportM $ "Remaining type for the pattern constructor after equality unifiers and freshened coercions are applied: " <> pretty dataConstructorIndexRewrittenAndSpecialised
+
+          -- dataConstructorIndexRewrittenAndSpecialised = N a`2 n.0.0 -> N a`2 n`1
 
           -- Debugging
-          debugM "ctxt" $ "\n\t### unifiers = " <> show unifiers <> "\n"
-          debugM "ctxt" $ "### dfresh = " <> show dataConstructorTypeFresh
-          debugM "ctxt" $ "### drewrit = " <> show dataConstructorIndexRewritten
-          debugM "ctxt" $ "### drewritAndSpec = " <> show dataConstructorIndexRewrittenAndSpecialised <> "\n"
+          debugM "ctxt" $ "\n\t### unifiers = " <> pretty unifiers <> "\n"
+                        <> "\n\t### drewrit = " <> pretty dataConstructorIndexRewritten
+                        <> "\n\t### drewritAndSpec = " <> pretty dataConstructorIndexRewrittenAndSpecialised <> "\n"
 
+          reportM $ "Rescursive checking of pattern typing on patterns (" <> pretty ps <> ") at (to be decomposed) types " <> prettyNested dataConstructorIndexRewrittenAndSpecialised
+
+          -- Recursively apply pattern matching on the internal patterns to the constructor pattern
           (bindingContexts, _, bs, us, elabPs, consumptionsOut) <-
             ctxtFromTypedPatterns' outerBoxTy s pos dataConstructorIndexRewrittenAndSpecialised ps (replicate (length ps) cons)
           let consumptionOut = foldr meetConsumption Full consumptionsOut
 
-          -- Combine the substitutions
-          subst <- combineSubstitutions s (flipSubstitution unifiers) us
-          subst <- combineSubstitutions s coercions' subst
-          debugM "ctxt" $ "\n\t### outSubst = " <> show subst <> "\n"
+          reportMsep
+          reportM $ "Recursive check of patterns resulted in unification: " <> pretty us
 
-          ty <- substitute subst ty
+          -- TODO: GO BACK TO THIS
+          -- Apply the coercions to the type
+          -- (`ty` used for working out definition unification)
+          debugM "### pattern" (pretty ty)
+          ty <- substitute coercions' ty
+          debugM "### pattern" (pretty ty)
+
+          -- Unifiers are only those things that include index variables
+
+          -- unifiers:   t.10.0 ~ n`1
+
+
+          -- let unifiers' = filter (\(id, subst) -> case lookup id (tyVarContext st) of Just (_, BoundQ) -> True; _ -> False) unifiers
+          --debugM "ctxt" $ "unifiers': " <> show unifiers'
+
+          -- Combine the substitutions
+          --     n`1 ~ t.10.0
+          -- subst <- combineSubstitutions s (flipSubstitution unifiers') us
+          subst <- combineSubstitutions s unifiers us
+          subst <- combineSubstitutions s coercions' subst
+          debugM "ctxt" $ "\n\t### outSubst = " <> pretty subst <> "\n"
+          reportM $ "Output substitution = " <> pretty subst
+
+          -- ### outSubst = n`1 ~ n.0.0 + 1
+          --                t.11.0 ~ a.3.0
+          --                t.10.0 ~ n.0.0 + 1
+
           definiteUnification s pos outerBoxTy ty
           -- (ctxtSubbed, ctxtUnsubbed) <- substCtxt subst as
 
@@ -298,6 +351,40 @@ ctxtFromTypedPattern' _ s _ t p _ = do
     (Star _ t') -> throw $ UniquenessError { errLoc = s, uniquenessMismatch = UniquePromotion t'}
     otherwise -> throw $ PatternTypingError { errLoc = s, errPat = p, tyExpected = t }
 
+flattenCoeffects :: (?globals :: Globals) => Span -> Maybe (Coeffect, Type) -> Maybe (Coeffect, Type) -> Checker (Maybe (Coeffect, Type), Substitution)
+flattenCoeffects s Nothing Nothing | usingExtension GradedBase = do
+  one <- generatePolymorphicGrade1 s
+  return (Just one, [])
+
+flattenCoeffects _ Nothing r = return (r, [])
+flattenCoeffects _ r Nothing = return (r, [])
+flattenCoeffects s (Just (outerCoeff, outerCoeffTy)) (Just (innerCoeff, innerCoeffTy)) = do
+  flatM <- flattenable outerCoeffTy innerCoeffTy
+  case flatM of
+    Just (flattenOp, subst, ty) -> return (Just (flattenOp outerCoeff innerCoeff, ty), subst)
+    Nothing -> throw DisallowedCoeffectNesting
+      { errLoc = s, errTyOuter = outerCoeffTy, errTyInner = innerCoeffTy }
+
+
+
+{-
+
+  `ctxtFromTypedPatterns pp ty ps consumption`
+  Parameters
+    - pp = the position in which the pattern is occuring
+    - ty = the types of the inputs and the output (e.g. in the form of a FunTy)
+    - ps = a list of patterns
+    - consumption = consumption information (DEPRECATED)
+
+  Returns a tuples of a:
+    - binding context
+    - type for the body (with any specialisations applied)
+    - any type variables which have been bound
+    - an outgoing substitution [TODO: is this needed for the predicate in case we need to update any info?]
+    - the type-elaborated patterns
+    - consumption information (DEPRECATED)
+
+-}
 ctxtFromTypedPatterns :: (?globals :: Globals)
   => Span
   -> PatternPosition
@@ -318,12 +405,20 @@ ctxtFromTypedPatterns' :: (?globals :: Globals)
 ctxtFromTypedPatterns' _ sp _ ty [] _ =
   return ([], ty, [], [], [], [])
 
-ctxtFromTypedPatterns' outerCoeff s pos (FunTy _ t1 t2) (pat:pats) (cons:consumptionsIn) = do
+ctxtFromTypedPatterns' outerCoeff s pos (FunTy _ grade t1 t2) (pat:pats) (cons:consumptionsIn) = do
 
   -- Match a pattern
-  (localGam, eVars, subst, elabP, consumption) <- ctxtFromTypedPattern' outerCoeff s pos t1 pat cons
+  -- Flatten outerCoeff (if there is one) with the grade here
+  (gradeWithTy, subst0a) <- case grade of
+                              Nothing -> return (Nothing, [])
+                              Just r  -> do
+                                (gradeTy, substGradeTy, _) <- synthKind s r
+                                return (Just (r, gradeTy), substGradeTy)
+  (innerCoeff, subst0b) <- flattenCoeffects s outerCoeff gradeWithTy
 
-  -- Apply substitutions
+  (localGam, eVars, subst, elabP, consumption) <- ctxtFromTypedPattern' innerCoeff s pos t1 pat cons
+
+  -- Apply substitution to the outgoing type
   t2' <- substitute subst t2
 
   -- Match the rest
@@ -331,7 +426,7 @@ ctxtFromTypedPatterns' outerCoeff s pos (FunTy _ t1 t2) (pat:pats) (cons:consump
       ctxtFromTypedPatterns' outerCoeff s pos (normaliseType t2') pats consumptionsIn
 
   -- Combine the results
-  substs' <- combineSubstitutions s subst substs
+  substs' <- combineManySubstitutions s [subst0a, subst0b, subst, substs]
   -- TODO: probably you can make the first part of this component be calculated more efficiently
   newLocalGam <- ghostVariableContextMeet $ localGam <> localGam'
   return (newLocalGam, ty, eVars ++ eVars', substs', elabP : elabPs, consumption : consumptions)
@@ -344,7 +439,7 @@ ctxtFromTypedPatterns' _ s _ ty (p:ps) _ = do
   -- if this was well typed, i.e., if we have two patterns left we get
   -- p0 -> p1 -> ?
   psTyVars <- mapM (\_ -> freshIdentifierBase "?" Data.Functor.<&> (TyVar . mkId)) ps
-  let spuriousType = foldr (FunTy Nothing) (TyVar $ mkId "?") psTyVars
+  let spuriousType = foldr (FunTy Nothing Nothing) (TyVar $ mkId "?") psTyVars
   throw TooManyPatternsError
     { errLoc = s, errPats = p :| ps, tyExpected = ty, tyActual = spuriousType }
 

@@ -1,3 +1,3 @@
 Type checking failed: 
-Type error: frontend/tests/cases/negative/polymorphism/badPoly.gr:2:14:
-Expected `a -> a -> (a, b)` but got `a0.0 -> b0.0 -> (a0.0, b0.0)`
+Unification failed: frontend/tests/cases/negative/polymorphism/badPoly.gr:2:14:
+Cannot unify universally quantified type variable `a` of kind `Type` with `b`

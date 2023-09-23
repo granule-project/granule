@@ -1,0 +1,6 @@
+language GradedBase
+
+data Choose a = None | One a | Two a a
+
+flibble : forall {r : Nat, a : Type} . {r == 2} => a % r -> Choose a
+flibble x = (Two x) x

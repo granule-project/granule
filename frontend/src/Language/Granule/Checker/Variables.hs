@@ -4,9 +4,11 @@
 -- | Helpers for working with type variables in the type checker
 module Language.Granule.Checker.Variables where
 
+import Control.Monad.Trans.Identity
 import Control.Monad.State.Strict
 
 import qualified Data.Map as M
+import Data.Maybe (mapMaybe)
 
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
@@ -50,3 +52,35 @@ freshTyVarInContextWithBinding var k q = do
 registerTyVarInContext :: Id -> Type -> Quantifier -> Checker ()
 registerTyVarInContext v t q = do
     modify (\st -> st { tyVarContext = (v, (t, q)) : tyVarContext st })
+
+-- | Helper for registering a new coeffect variable in the checker only
+--   within the scope of a particular computation
+registerTyVarInContextWith :: (MonadTrans m, Monad (m Checker))
+    => Id -> Type -> Quantifier -> m Checker a -> m Checker a
+registerTyVarInContextWith v t q cont = do
+  -- save ty var context
+  st <- lift $ get
+  let tyvc = tyVarContext st
+  -- register variable, type, and quantifier
+  lift $ registerTyVarInContext v t q
+  -- run continuation
+  res <- cont
+  -- reinstate original type variable context
+  lift $ modify $ \st -> st { tyVarContext = tyvc }
+  return res
+
+registerTyVarInContextWith' ::
+  Id -> Type -> Quantifier -> Checker a -> Checker a
+registerTyVarInContextWith' v t q m =
+  runIdentityT $ registerTyVarInContextWith v t q (IdentityT m)
+
+tyVarContextToTypeSchemeVars :: [Id] -> Checker [(Id, Kind)]
+tyVarContextToTypeSchemeVars relevantVars = do
+  st <- get
+  return $ flip mapMaybe (tyVarContext st)
+    (\(id, (kind, quant)) ->
+      case quant of
+        ForallQ   | id `elem` relevantVars -> Just (id, kind)
+        BoundQ    | id `elem` relevantVars -> Just (id, kind)
+        InstanceQ -> Nothing
+        _ -> Nothing)

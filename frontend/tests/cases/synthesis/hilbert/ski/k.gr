@@ -1,2 +1,2 @@
-k : forall {a : Type, b : Type} . a -> b [0..1] -> a
+k : forall {a : Type, b : Type} . a -> b [0] -> a
 k = ?

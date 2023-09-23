@@ -1,0 +1,31 @@
+language GradedBase
+
+data List a = Nil | Cons a (List a) 
+
+data N = S N | Z
+
+data Bool = True | False; 
+
+append : forall {a : Type} . (List a) %1..∞ -> (List a) %1..∞ ->  List a
+append Nil y = y;
+append (Cons z u) y = (Cons z) ((append u) y)
+
+concat : forall a . (List (List a)) %1..∞ -> (List a)
+concat Nil = Nil;
+concat (Cons u v) = (append u) (concat v)
+
+map : forall a b . (a %1..∞ -> b) %0..∞ -> List a % 1..∞ -> List b
+map x Nil = Nil;
+map x (Cons z u) = (Cons (x z)) ((map x) u)
+
+isEven : N %1..∞ -> List N  
+isEven Z = Nil;
+isEven (S Z) = Cons (S Z) Nil;
+isEven (S (S z)) = concat (Cons (isEven z) Nil)
+
+bind : forall a b . List a %1..∞ -> (a %1..∞ -> List b) %0..∞ -> List b
+spec 
+    bind (Cons Z Nil) isEven = Nil                      !Cartesian;
+    bind (Cons (S Z) Nil) isEven = (Cons (S Z) Nil)     !Cartesian;
+    map %1..∞, concat %1..∞
+bind = ?

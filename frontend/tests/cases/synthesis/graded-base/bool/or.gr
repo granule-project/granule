@@ -1,0 +1,11 @@
+language GradedBase
+
+data Bool = True | False
+
+or : Bool %1 -> Bool %1 -> Bool
+spec
+    or True True = True;
+    or False True = True;
+    or True False = True;
+    or False False = False;
+or = ?

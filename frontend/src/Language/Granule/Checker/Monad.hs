@@ -9,6 +9,7 @@
 {-# LANGUAGE ImplicitParams #-}
 
 {-# options_ghc -fno-warn-incomplete-uni-patterns #-}
+{-# options_ghc -fno-warn-orphans #-}
 
 -- | Defines the 'Checker' monad used in the type checker
 -- | and various interfaces for working within this monad
@@ -25,6 +26,7 @@ import Control.Monad.State.Strict
 import Control.Monad.Except
 import Control.Monad.Identity
 import System.FilePath (takeBaseName)
+import Data.Generics.Zipper
 
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.LaTeX
@@ -33,7 +35,7 @@ import qualified Language.Granule.Checker.Primitives as Primitives
 import Language.Granule.Context
 
 import Language.Granule.Syntax.Def
-import Language.Granule.Syntax.Expr (Operator, Expr)
+import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Helpers (FreshenerState(..), freshen, Term(..))
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
@@ -148,6 +150,7 @@ data CheckerState = CS
             , uniqueVarIdCounter     :: Int
             -- Local stack of constraints (can be used to build implications)
             , predicateStack :: [Pred]
+            , futureFrame :: [Pred]
 
             -- Stack of a list of additional knowledge from failed patterns/guards
             -- (i.e. from preceding cases) stored as a list of lists ("frames")
@@ -169,10 +172,10 @@ data CheckerState = CS
 
             -- Data type information
             --  map of type constructor names to their the kind,
-            --  data constructors, and whether indexed (True = Indexed, False = Not-indexed)
-            , typeConstructors :: Ctxt (Type, [Id], Bool)
+            --  data constructors, and which (if any) parameters are actually indices
+            , typeConstructors :: Ctxt (Type, [Id], [Int])
             -- map of data constructors and their types and substitutions
-            , dataConstructors :: Ctxt (TypeScheme, Substitution)
+            , dataConstructors :: Ctxt (TypeScheme, Substitution, [Int])
 
             -- LaTeX derivation
             , deriv      :: Maybe Derivation
@@ -181,9 +184,8 @@ data CheckerState = CS
             -- Names from modules which are hidden
             , allHiddenNames :: M.Map Id Id
 
-            -- The type of the current equation.
-            , equationTy :: Maybe Type
-            , equationName :: Maybe Id
+            -- Used by the case splitter
+            , splittingTy :: Maybe Type
 
             -- Definitions that have been triggered during type checking
             -- by the auto deriver (so we know we need them in the interpreter)
@@ -191,18 +193,57 @@ data CheckerState = CS
             -- Warning accumulator
             -- , warnings :: [Warning]
 
+            , currentDef :: (Maybe Id, Maybe (Spec () ()))
             , wantedTypeConstraints :: [Type]
 
             -- flag to find out if constraints got added
             , addedConstraints :: Bool
+            , predicateContext :: PredContext
+            , partialSynthExpr  :: Zipper (Expr () ())
+            , synthesisPath :: [String]
             }
-  deriving (Eq, Show) -- for debugging
+  deriving (Eq, Show)
+
+-- Show and Eq instance for zipper
+instance Eq a => Eq (Zipper a) where
+  x == y = fromZipper x == fromZipper y
+
+instance Show a => Show (Zipper a) where
+  show x = "Zipper for " ++ show (fromZipper x)
+
+registerFinalExpr :: Expr () () -> Checker ()
+registerFinalExpr e =
+  modify (\st ->
+    st { partialSynthExpr = setHole e (partialSynthExpr st) })
+
+registerPartialExpr :: Expr () () -> Checker ()
+registerPartialExpr e =
+  modify (\st ->
+    st { partialSynthExpr =
+            case down' (setHole e (partialSynthExpr st)) of
+              Just z -> z
+              Nothing -> error "Registered a non-recursive expression" })
+
+navigateUpPartialExpr :: Checker ()
+navigateUpPartialExpr =
+  modify (\st -> st { partialSynthExpr =
+                        case up (partialSynthExpr st) of
+                          Just z -> z
+                          Nothing -> partialSynthExpr st })
+
+navigateRightPartialExpr :: Checker ()
+navigateRightPartialExpr =
+  modify (\st -> st { partialSynthExpr =
+                        case right (partialSynthExpr st) of
+                          Just z -> z
+                          Nothing -> partialSynthExpr st })
 
 -- | Initial checker context state
 initState :: (?globals :: Globals) => CheckerState
 initState = CS { uniqueVarIdCounterMap = M.empty
                , uniqueVarIdCounter = 0
                , predicateStack = []
+               , futureFrame = []
                , guardPredicates = [[]]
                , tyVarContext = []
                , guardContexts = []
@@ -212,18 +253,21 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , deriv = Nothing
                , derivStack = []
                , allHiddenNames = M.empty
-               , equationTy = Nothing
-               , equationName = Nothing
+               , splittingTy = Nothing
                , derivedDefinitions = []
+               , currentDef = (Nothing, Nothing)
                , wantedTypeConstraints = []
                , addedConstraints = False
+               , predicateContext = Top
+               , partialSynthExpr = toZipper (Hole nullSpan () False [] Nothing)
+               , synthesisPath = []
                }
 
 -- *** Various helpers for manipulating the context
 
 -- Look up a data constructor, taking into account the possibility that it
 -- may be hidden to the current module
-lookupDataConstructor :: Span -> Id -> Checker (Maybe (TypeScheme, Substitution))
+lookupDataConstructor :: Span -> Id -> Checker (Maybe (TypeScheme, Substitution, [Int]))
 lookupDataConstructor sp constrName = do
   st <- get
   case M.lookup constrName (allHiddenNames st) of
@@ -252,7 +296,7 @@ allDataConstructorNamesForType ty = do
     st <- get
     return $ mapMaybe go (typeConstructors st)
   where
-    go :: (Id, (Type, a, Bool)) -> Maybe Id
+    go :: (Id, (Type, a, [Int])) -> Maybe Id
     go (con, (k, _, _)) = if k == ty then Just con else Nothing
 
 {- | Given a computation in the checker monad, peek the result without
@@ -327,6 +371,8 @@ popCaseFrame =
 concludeImplication :: Span -> Ctxt Kind -> Checker ()
 concludeImplication s localCtxt = do
   checkerState <- get
+  -- Filter out any type parameters that have snuck in
+  localCtxt <- return $ filter (\(id, k) -> case k of Type _ -> False; _ -> True) localCtxt
   case predicateStack checkerState of
     (p' : p : stack) -> do
 
@@ -336,10 +382,11 @@ concludeImplication s localCtxt = do
 
         -- No previous guards in the current frame to provide additional information
         [] : knowledgeStack -> do
-          let impl = Impl localCtxt p p'
+          let impl = Impl localCtxt p (Conj $ p' : futureFrame checkerState)
 
           -- Add the implication to the predicate stack
           modify (\st -> st { predicateStack = pushPred impl stack
+                            , futureFrame = []
           -- And add this case to the knowledge stack
                             , guardPredicates = [((localCtxt, p), s)] : knowledgeStack })
 
@@ -356,9 +403,9 @@ concludeImplication s localCtxt = do
            let impl@(Impl implCtxt implAntecedent _) =
                 -- TODO: turned off this feature for now by putting True in the guard here
                 if True -- isTrivial freshPrevGuardPred
-                  then (Impl localCtxt p p')
+                  then (Impl localCtxt p (Conj $ p' : futureFrame checkerState))
                   else (Impl (localCtxt <> freshPrevGuardCxt)
-                                 (Conj [p, freshPrevGuardPred]) p')
+                                 (Conj [p, freshPrevGuardPred]) (Conj $ p' : futureFrame checkerState))
 
            -- Build the guard theorem to also include all of the 'context' of things
            -- which also need to hold (held in `stack`)
@@ -368,6 +415,7 @@ concludeImplication s localCtxt = do
            -- Store `p` (impliciation antecedent) to use in later cases
            -- on the top of the guardPredicates stack
            modify (\st -> st { predicateStack = pushPred impl stack
+                             , futureFrame = []
            -- And add this case to the knowledge stack
                              , guardPredicates = knowledge : knowledgeStack })
 
@@ -426,6 +474,32 @@ addConstraint c = do
 resetAddedConstraintsFlag :: Checker ()
 resetAddedConstraintsFlag = modify (\st -> st { addedConstraints = False })
 
+{- addConstraintToNextFame
+
+When type checking an example with constraint generated by pattern matching, e.g.,
+
+  weak : forall {a : Type, n : Nat} . a [n] -> Integer
+  weak [_] = 42
+
+The type checker constructs a new predicateStack frame (newConjunct) when checking the pattern
+The pattern here generates the requirement that 0 == n, but we do not want to add it to this
+current frame, as this will ultimately lead to the predicate:
+
+   forall n . (0 == n) -> T
+
+Instead, what we want is:
+
+  forall n . True -> (0 == n)
+
+addConstraintToNextFrame adds constraints to futureFrame, which is used to record any other
+constraints about the body of the function that will get pulled into the current predicateStack
+frame once we have concluded an implication. see concludeImplication.
+
+-}
+addConstraintToNextFrame :: Constraint -> Checker ()
+addConstraintToNextFrame c = do
+  modify (\st -> st { futureFrame = Con c : futureFrame st })
+
 -- | A helper for adding a constraint to the previous frame (i.e.)
 -- | if I am in a local context, push it to the global
 addConstraintToPreviousFrame :: Constraint -> Checker ()
@@ -441,8 +515,8 @@ addConstraintToPreviousFrame c = do
 
 -- Given a coeffect type variable and a coeffect kind,
 -- replace any occurence of that variable in a context
-updateCoeffectType :: Id -> Type -> Checker ()
-updateCoeffectType tyVar k = do
+substIntoTyVarContext :: Id -> Type -> Checker ()
+substIntoTyVarContext tyVar k = do
    modify (\checkerState ->
     checkerState
      { tyVarContext = rewriteCtxt (tyVarContext checkerState) })
@@ -474,9 +548,12 @@ data CheckerError
       -- Tracks whether a variable is split
       holeVars :: Ctxt Bool,
       -- Used for synthesising programs
-      cases       :: [([Pattern ()], Expr () Type)] }
+      synthCtxt   :: Maybe (CheckerState, Ctxt TypeScheme, (Maybe Id, Maybe (Spec () ())), Int, Maybe Hints, Ctxt (Ctxt (TypeScheme, Substitution))),
+      cases       :: [([Pattern ()], Expr () ())] }
   | TypeError
     { errLoc :: Span, tyExpected :: Type, tyActual :: Type }
+  | TypeErrorConflictingExpected
+    { errLoc :: Span, tyExpected :: Type, tyExpected' :: Type }
   | TypeErrorAtLevel
     { errLoc :: Span, tyExpectedL :: Type , tyActualL :: Type }
   | GradingError
@@ -552,7 +629,7 @@ data CheckerError
   | TooManyPatternsError
     { errLoc :: Span, errPats :: NonEmpty (Pattern ()), tyExpected :: Type, tyActual :: Type }
   | DataConstructorReturnTypeError
-    { errLoc :: Span, idExpected :: Id, idActual :: Id }
+    { errLoc :: Span, idExpected :: Id, tyActual :: Type }
   | MalformedDataConstructorType
     { errLoc :: Span, errTy :: Type }
   | ExpectedEffectType
@@ -560,6 +637,10 @@ data CheckerError
   | ExpectedOptionalEffectType
     { errLoc :: Span, errTy :: Type }
   | LhsOfApplicationNotAFunction
+    { errLoc :: Span, errTy :: Type }
+  | LhsOfUnpackNotAnExistential
+    { errLoc :: Span, errTy :: Type }
+  | LhsOfTyApplicationNotForall
     { errLoc :: Span, errTy :: Type }
   | FailedOperatorResolution
     { errLoc :: Span, errOp :: Operator, errTy :: Type }
@@ -607,6 +688,10 @@ data CheckerError
     { errLoc :: Span, errTy :: Type }
   | TypeConstraintNotSatisfied
     { errLoc :: Span, errTy :: Type }
+  | EscapingExisentialVar
+    { errLoc :: Span, var :: Id, errTy :: Type }
+  | VariablesNotInResultType
+    { errLoc :: Span, var :: Id, varsNotInResult :: [Id] }
   deriving (Show)
 
 instance UserMsg CheckerError where
@@ -614,6 +699,7 @@ instance UserMsg CheckerError where
 
   title HoleMessage{} = "Found a goal"
   title TypeError{} = "Type error"
+  title TypeErrorConflictingExpected{} = "Type error"
   title TypeErrorAtLevel{} = "Type error"
   title GradingError{} = "Grading error"
   title KindMismatch{} = "Kind mismatch"
@@ -656,6 +742,8 @@ instance UserMsg CheckerError where
   title ExpectedEffectType{} = "Type error"
   title ExpectedOptionalEffectType{} = "Type error"
   title LhsOfApplicationNotAFunction{} = "Type error"
+  title LhsOfUnpackNotAnExistential{} = "Type error"
+  title LhsOfTyApplicationNotForall{} = "Type error"
   title FailedOperatorResolution{} = "Operator resolution failed"
   title NeedTypeSignature{} = "Type signature needed"
   title SolverErrorCounterExample{} = "Counter example"
@@ -679,6 +767,8 @@ instance UserMsg CheckerError where
   title NaturalNumberAtWrongKind{} = "Kind error"
   title InvalidPromotionError{} = "Type error"
   title TypeConstraintNotSatisfied{} = "Type constraint error"
+  title EscapingExisentialVar{} = "Type error"
+  title VariablesNotInResultType{} = "Data type definition error"
 
   msg HoleMessage{..} =
     "\n   Expected type is: `" <> pretty holeTy <> "`"
@@ -723,6 +813,9 @@ instance UserMsg CheckerError where
     then "Expected `" <> pretty tyExpected <> "` but got `" <> pretty tyActual <> "` coming from a different binding"
     else "Expected `" <> pretty tyExpected <> "` but got `" <> pretty tyActual <> "`"
 
+  msg TypeErrorConflictingExpected{..} =
+    "Two conflicting signatures: expected `" <> pretty tyExpected <> "` and `" <> pretty tyExpected' <> "`."
+
   msg TypeErrorAtLevel{..} = if pretty tyExpectedL == pretty tyActualL
     then "Expected `" <> pretty tyExpectedL <> "` but got `" <> pretty tyActualL <> "` coming from a different binding"
     else "Expected `" <> pretty tyExpectedL <> "` but got `" <> pretty tyActualL <> "`"
@@ -748,7 +841,7 @@ instance UserMsg CheckerError where
     = "Types of kind `" <> pretty errK <> "` cannot be used in a type-level set."
 
   msg KindsNotEqual{..}
-    = "Kind `" <> pretty errK1 <> "` is not equal to `" <> pretty errK2 <> "`"
+    = "Kind `" <> pretty errK1 <> "` is not equal or compatible with `" <> pretty errK2 <> "`"
 
   msg IntervalGradeKindError{..}
    = "Interval grade mismatch `" <> pretty errTy1 <> "` and `" <> pretty errTy2 <> "`"
@@ -894,8 +987,8 @@ instance UserMsg CheckerError where
     <> (intercalate "\n\t" . map (ticks . pretty) . toList) errPats
 
   msg DataConstructorReturnTypeError{..}
-    = "Expected type constructor `" <> pretty idExpected
-    <> "`, but got `" <> pretty idActual <> "`"
+    = "Expected return result to be of type constructor `" <> pretty idExpected
+    <> "`, but got type `" <> pretty tyActual <> "`"
 
   msg MalformedDataConstructorType{..}
     = "`" <> pretty errTy <> "` not valid in a data constructor definition"
@@ -910,6 +1003,14 @@ instance UserMsg CheckerError where
 
   msg LhsOfApplicationNotAFunction{..}
     = "Expected a function type on the left-hand side of an application, but got `"
+    <> pretty errTy <> "`"
+
+  msg LhsOfUnpackNotAnExistential{..}
+    = "Expcted an existential type on the left-hand side of unpack, but got `"
+    <> pretty errTy <> "`"
+
+  msg LhsOfTyApplicationNotForall{..}
+    = "Expected a (rank-N quantified) forall type on the left-hand side of a type application, but got `"
     <> pretty errTy <> "`"
 
   msg FailedOperatorResolution{..}
@@ -996,6 +1097,15 @@ instance UserMsg CheckerError where
   msg TypeConstraintNotSatisfied{ errTy }
     = "Constraint `" <> pretty errTy <> "` does not hold or is not provided by the type constraint assumptions here."
 
+  msg EscapingExisentialVar{ var, errTy }
+    = "Existentially quantified variable " <> pretty var <> " escapes its scope in " <> pretty errTy
+
+  msg VariablesNotInResultType{ var, varsNotInResult }
+    = "Type-variable binding(s) "
+    <> intercalate "," (map (\x -> "`" <> pretty x <> "`") varsNotInResult) <> " do not appear in the result type for "
+    <> "`" <> pretty var <> "`"
+    <> "\n\tPerhaps you want to use an existential type instead (e.g., exists {x : k} . T)?"
+
   color HoleMessage{} = Blue
   color _ = Red
 
@@ -1025,7 +1135,7 @@ freshenPred pred = do
     return pred'
 
 -- help to get a map from type constructor names to a map from data constructor names to their types and subst
-getDataConstructors :: Id -> Checker (Maybe (Ctxt (TypeScheme, Substitution)))
+getDataConstructors :: Id -> Checker (Maybe (Ctxt (TypeScheme, Substitution, [Int])))
 getDataConstructors tyCon = do
   st <- get
   let tyCons   = typeConstructors st

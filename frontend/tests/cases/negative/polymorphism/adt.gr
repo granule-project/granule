@@ -1,6 +1,6 @@
 data Maybe a where
-  None : Maybe a;
-  Some : a → Maybe a
+  Nothing : Maybe a;
+  Just : a → Maybe a
 
 data Bad where
   Yuck : Maybe → Bad

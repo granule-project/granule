@@ -46,7 +46,7 @@ data Polarity = Normal | Opposite
 -- | Type syntax (includes effect, coeffect, and predicate terms)
 data Type where
     Type    :: Int -> Type                          -- ^ Universe construction
-    FunTy   :: Maybe Id -> Type -> Type -> Type     -- ^ Function type
+    FunTy   :: Maybe Id -> Maybe Coeffect -> Type -> Type -> Type     -- ^ Function type
 
     TyCon   :: Id -> Type                           -- ^ Type constructor
     Box     :: Coeffect -> Type -> Type             -- ^ Graded modal necessity
@@ -63,6 +63,8 @@ data Type where
     TyCase  :: Type -> [(Type, Type)] -> Type -- ^ Type-level case
 
     TySig   :: Type -> Kind -> Type           -- ^ Kind signature
+    TyExists :: Id -> Kind -> Type -> Type    -- ^ Exists
+    TyForall :: Id -> Kind -> Type -> Type    -- ^ RankNForall
 
 deriving instance Show Type
 deriving instance Eq Type
@@ -88,6 +90,8 @@ data TypeOperator
   | TyOpJoin
   | TyOpInterval
   | TyOpConverge
+  | TyOpImpl
+  | TyOpHsup
   deriving (Eq, Ord, Show, Data)
 
 -- ## Type schemes
@@ -109,15 +113,21 @@ trivialScheme = Forall nullSpanNoFile [] []
 unforall :: TypeScheme -> Type
 unforall (Forall _ _ _ t) = t
 
+isMultiArity :: TypeScheme -> Bool
+isMultiArity (Forall _ _ _ t) = isMultiArity' t
+  where
+    isMultiArity' (FunTy _ _ x (FunTy _ _ y t)) = True
+    isMultiArity' _ = False
+
 ----------------------------------------------------------------------
 -- # Smart constructors
 
--- | Smart constructors for function types
+-- | Smart constructors for function types (with no grade)
 funTy :: Type -> Type -> Type
-funTy = FunTy Nothing
+funTy = FunTy Nothing Nothing
 
 (.->) :: Type -> Type -> Type
-s .-> t = FunTy Nothing s t
+s .-> t = FunTy Nothing Nothing s t
 infixr 1 .->
 
 -- | Smart constructor for constructors and variable
@@ -210,7 +220,7 @@ containsTypeSig :: Type -> Bool
 containsTypeSig =
   runIdentity . typeFoldM (TypeFold
       { tfTy = \_ -> return $ False
-      , tfFunTy = \_ x y -> return (x || y)
+      , tfFunTy = \_ c x y -> return (x || y)
       , tfTyCon = \_ -> return False
       , tfBox = \x y -> return (x || y)
       , tfDiamond = \x y -> return $ (x || y)
@@ -223,22 +233,34 @@ containsTypeSig =
       , tfTyInfix = \_ x y -> return (x || y)
       , tfSet = \_ _ -> return  False
       , tfTyCase = \_ _ -> return False
-      , tfTySig = \_ _ _ -> return True })
+      , tfTySig = \_ _ _ -> return True
+      , tfTyExists = \_ _ x -> return x
+      , tfTyForall = \_ _ x -> return x})
 
 -- | Compute the arity of a function type
 arity :: Type -> Int
-arity (FunTy _ _ t) = 1 + arity t
-arity _           = 0
+arity (FunTy _ _ _ t) = 1 + arity t
+arity _               = 0
 
 -- | Get the result type after the last Arrow, e.g. for @a -> b -> Pair a b@
 -- the result type is @Pair a b@
 resultType :: Type -> Type
-resultType (FunTy _ _ t) = resultType t
+resultType (FunTy _ _ _ t) = resultType t
 resultType t = t
 
+-- Given a function type, return a list of the parameter tpes
 parameterTypes :: Type -> [Type]
-parameterTypes (FunTy _ t1 t2) = t1 : parameterTypes t2
-parameterTypes t               = []
+parameterTypes (FunTy _ _ t1 t2) = t1 : parameterTypes t2
+parameterTypes t                 = []
+
+-- Given a function type, return a list of named parameter types
+-- generating some fresh names if no names are given
+parameterTypesWithNames :: Type -> [(Id, Type)]
+parameterTypesWithNames = aux 0
+  where
+    aux seed (FunTy (Just n) _ t1 t2) = (n, t1) : aux seed t2
+    aux seed (FunTy Nothing  _ t1 t2) = (mkId ("a" <> show seed), t1) : aux (seed + 1) t2
+    aux _ _                         = []
 
 -- | Get the leftmost type of an application
 -- >>> leftmostOfApplication $ TyCon (mkId ",") .@ TyCon (mkId "Bool") .@ TyCon (mkId "Bool")
@@ -246,6 +268,10 @@ parameterTypes t               = []
 leftmostOfApplication :: Type -> Type
 leftmostOfApplication (TyApp t _) = leftmostOfApplication t
 leftmostOfApplication t = t
+
+typeArguments :: Type -> [Type]
+typeArguments (TyApp t1 t2) = typeArguments t1 ++ [t2]
+typeArguments _            = []
 
 freeAtomsVars :: Type -> [Id]
 freeAtomsVars (TyVar v) = [v]
@@ -260,8 +286,8 @@ freeAtomsVars t = []
 -- Trivially effectful monadic constructors
 mTy :: Monad m => Int -> m Type
 mTy          = return . Type
-mFunTy :: Monad m => Maybe Id -> Type -> Type -> m Type
-mFunTy v x y   = return (FunTy v x y)
+mFunTy :: Monad m => Maybe Id -> Maybe Coeffect -> Type -> Type -> m Type
+mFunTy v mg x y   = return (FunTy v mg x y)
 mTyCon :: Monad m => Id -> m Type
 mTyCon       = return . TyCon
 mBox :: Monad m => Coeffect -> Type -> m Type
@@ -288,11 +314,15 @@ mTyCase :: Monad m => Type -> [(Type, Type)] -> m Type
 mTyCase x cs = return (TyCase x cs)
 mTySig   :: Monad m => Type -> Type -> Type -> m Type
 mTySig t _ k      = return (TySig t k)
+mTyExists :: Monad m => Id -> Kind -> Type -> m Type
+mTyExists v k t   = return (TyExists v k t)
+mTyForall :: Monad m => Id -> Kind -> Type -> m Type
+mTyForall v k t   = return (TyForall v k t)
 
 -- Monadic algebra for types
 data TypeFold m a = TypeFold
   { tfTy      :: Int                -> m a
-  , tfFunTy   :: Maybe Id -> a -> a -> m a
+  , tfFunTy   :: Maybe Id -> Maybe a -> a -> a -> m a
   , tfTyCon   :: Id                 -> m a
   , tfBox     :: a -> a             -> m a
   , tfDiamond :: a -> a             -> m a
@@ -306,12 +336,14 @@ data TypeFold m a = TypeFold
   , tfSet     :: Polarity -> [a]    -> m a
   , tfTyCase  :: a -> [(a, a)]      -> m a
   , tfTySig   :: a -> Type -> (a -> m a)
+  , tfTyExists :: Id -> a -> a      -> m a
+  , tfTyForall :: Id -> a -> a      -> m a
   }
 
 -- Base monadic algebra
 baseTypeFold :: Monad m => TypeFold m Type --Type
 baseTypeFold =
-  TypeFold mTy mFunTy mTyCon mBox mDiamond mStar mTyVar mTyApp mTyInt mTyRational mTyGrade mTyInfix mTySet mTyCase mTySig
+  TypeFold mTy mFunTy mTyCon mBox mDiamond mStar mTyVar mTyApp mTyInt mTyRational mTyGrade mTyInfix mTySet mTyCase mTySig mTyExists mTyForall
 
 -- | Monadic fold on a `Type` value
 typeFoldM :: forall m a . Monad m => TypeFold m a -> Type -> m a
@@ -319,10 +351,11 @@ typeFoldM algebra = go
   where
    go :: Type -> m a
    go (Type l) = (tfTy algebra) l
-   go (FunTy v t1 t2) = do
+   go (FunTy v coeff t1 t2) = do
      t1' <- go t1
      t2' <- go t2
-     (tfFunTy algebra) v t1' t2'
+     coeff' <- maybe (return Nothing) (\coeff -> Just <$> go coeff) coeff
+     (tfFunTy algebra) v coeff' t1' t2'
    go (TyCon s) = (tfTyCon algebra) s
    go (Box c t) = do
      c' <- go c
@@ -369,6 +402,14 @@ typeFoldM algebra = go
       a' <- a
       b' <- b
       return (a', b')
+   go (TyExists var k t) = do
+    k' <- go k
+    t' <- go t
+    (tfTyExists algebra) var k' t'
+   go (TyForall var k t) = do
+    k' <- go k
+    t' <- go t
+    (tfTyForall algebra) var k' t'
 
 ----------------------------------------------------------------------
 -- # Types are terms
@@ -376,7 +417,7 @@ typeFoldM algebra = go
 instance Term Type where
     freeVars = getConst . runIdentity . typeFoldM TypeFold
       { tfTy      = \_ -> return (Const [])
-      , tfFunTy   = \_ (Const x) (Const y) -> return $ Const (x <> y)
+      , tfFunTy   = \_ _ (Const x) (Const y) -> return $ Const (x <> y)
       , tfTyCon   = \_ -> return (Const []) -- or: const (return [])
       , tfBox     = \(Const c) (Const t) -> return $ Const (c <> t)
       , tfDiamond = \(Const e) (Const t) -> return $ Const (e <> t)
@@ -390,6 +431,8 @@ instance Term Type where
       , tfSet     = \_ -> return . Const . concat . map getConst
       , tfTyCase  = \(Const t) cs -> return . Const $ t <> (concat . concat) [[a,b] | (Const a, Const b) <- cs]
       , tfTySig   = \(Const t) _ (Const k) -> return $ Const (t <> k)
+      , tfTyExists = \v _ (Const fvs) -> return $ Const [v' | v' <- fvs, v /= v']
+      , tfTyForall = \v _ (Const fvs) -> return $ Const [v' | v' <- fvs, v /= v']
       }
 
     isLexicallyAtomic TyInt{} = True
@@ -425,13 +468,20 @@ instance Freshenable m Type where
   freshen =
     typeFoldM (baseTypeFold { tfTyVar = freshenTyVar,
                               tfBox = freshenTyBox,
-                              tfTySig = freshenTySig })
+                              tfTySig = freshenTySig,
+                              tfTyForall = freshenTyForall })
     where
 
       freshenTyBox c t = do
         c' <- freshen c
         t' <- freshen t
         return $ Box c' t'
+
+      freshenTyForall v k t =
+        freshIdentifierBaseInScope TypeL v (\v' -> do
+            k' <- freshen k
+            t' <- freshen t
+            return $ TyForall v' k' t')
 
       freshenTySig t' _ k = do
         k' <- freshen k

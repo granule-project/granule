@@ -1,5 +1,0 @@
--- last checked 2019-01-07 by @buggymcbugfix
-
--- @buggymcbugfix thinks this should be disallowed
-dub : ∀ a : Type . a [Private] → (a, a)
-dub [x] = (x,x)

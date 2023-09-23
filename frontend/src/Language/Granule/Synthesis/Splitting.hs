@@ -31,7 +31,7 @@ import Language.Granule.Utils
 -- the context, but only splits those in the toSplit list.
 generateCases :: (?globals :: Globals)
   => Span
-  -> Ctxt (Ctxt (TypeScheme, Substitution))
+  -> Ctxt (Ctxt (TypeScheme, Substitution, [Int]))
   -> Ctxt Assumption
   -> [Id]
   -> Checker ([Id], [([Pattern ()], Ctxt Assumption)])
@@ -56,20 +56,20 @@ generateCases span constructors ctxt toSplit = do
   let cases = combineCases orderedPatterns
 
   -- The Nothing case should be unreachable, as this function is only ever
-  -- called after checkEquation, where equationTy is set.
+  -- called after checkEquation, where splittingTy is set.
   st <- get
-  case equationTy st of
+  case splittingTy st of
     Nothing -> return ([], [])
-    Just eqTy -> do
+    Just ty -> do
       -- Filter the patterns if they are impossible.
-      patternsAndMaybeBinders <- mapM (caseFilter span eqTy) (snd cases)
+      patternsAndMaybeBinders <- mapM (caseFilter span ty) (snd cases)
       let validPatterns = catMaybes patternsAndMaybeBinders
       return (fst cases, validPatterns)
 
 -- Splits all variables in a given context into a list of patterns.
 splitAll ::
      Span
-  -> Ctxt (Ctxt (TypeScheme, Substitution))
+  -> Ctxt (Ctxt (TypeScheme, Substitution, [Int]))
   -> Ctxt Assumption
   -> Checker (Ctxt [Pattern ()])
 splitAll span constructors ctxt = do
@@ -94,7 +94,7 @@ splitAll span constructors ctxt = do
 -- a tuple of patterns and unsplittable variable IDs.
 splitNotBoxed ::
      Span
-  -> Ctxt (Ctxt (TypeScheme, Substitution))
+  -> Ctxt (Ctxt (TypeScheme, Substitution, [Int]))
   -> Ctxt Assumption
   -> Checker (Ctxt [Pattern ()], [Id])
 splitNotBoxed _ _ [] = pure ([], [])
@@ -121,7 +121,7 @@ splitNotBoxed span constructors ctxt = do
 -- split that once.
 splitBoxed ::
      Span
-  -> Ctxt (Ctxt (TypeScheme, Substitution))
+  -> Ctxt (Ctxt (TypeScheme, Substitution, [Int]))
   -> Ctxt Assumption
   -> Checker (Ctxt [Pattern ()])
 splitBoxed _ _ [] = pure []
@@ -191,7 +191,7 @@ validateCase span ty pats = do
 -- their data constructors. The list of potential IDs is drawn from name
 -- annotations on types in data definitions.
 relevantDataConstrs ::
-     Ctxt (Ctxt (TypeScheme, Substitution))
+     Ctxt (Ctxt (TypeScheme, Substitution, [Int]))
   -> Ctxt Id
   -> Ctxt (Ctxt [Maybe Id])
 relevantDataConstrs constructors types =
@@ -203,7 +203,8 @@ relevantDataConstrs constructors types =
     getConstructorInfo dataId = do
         dataIdsConstrs <- lookup dataId constructors
         let consNames = map fst dataIdsConstrs
-        let consTyNames = map (tsTypeNames . fst . snd) dataIdsConstrs
+        let fst3 (a, b, c) = a
+        let consTyNames = map (tsTypeNames . fst3 . snd) dataIdsConstrs
         return (zip consNames consTyNames)
     -- A list of all identifiers in context, e.g. x, xs.
     varIdentifiers :: [Id]
@@ -223,7 +224,7 @@ getAssumConstr a =
   where
     getTypeConstr :: Type -> Maybe Id
     getTypeConstr (Type _) = Nothing
-    getTypeConstr (FunTy _ t1 _) = Nothing
+    getTypeConstr (FunTy _ _ t1 _) = Nothing
     getTypeConstr (TyCon id) = Just id
     getTypeConstr (Box _ t) = getTypeConstr t
     getTypeConstr (Diamond t1 _) = getTypeConstr t1
@@ -236,6 +237,8 @@ getAssumConstr a =
     getTypeConstr (TyGrade _ _) = Nothing
     getTypeConstr (TyInfix _ _ _) = Nothing
     getTypeConstr (TySet _ _) = Nothing
+    getTypeConstr (TyExists _ _ t) = getTypeConstr t
+    getTypeConstr (TyForall _ _ t) = getTypeConstr t
     getTypeConstr (TyCase _ cases) =
       if allSame (map snd cases)
         then getTypeConstr . snd . head $ cases
@@ -253,7 +256,7 @@ getAssumConstr a =
 -- as a new lower bound. This is because when case splitting, we generate a
 -- single usage from the pattern match.
 expandGrades :: Type -> Type
-expandGrades (FunTy id t1 t2) = FunTy id (expandGrades t1) (expandGrades t2)
+expandGrades (FunTy id mCoeff t1 t2) = FunTy id mCoeff (expandGrades t1) (expandGrades t2)
 expandGrades (Box (TyInfix TyOpInterval (TyGrade k lower) (TyGrade k' upper)) t) | lower > 1 =
   Box (TyInfix TyOpInterval (TyGrade k 1) (TyGrade k' upper)) t
 expandGrades (Box (TyInfix TyOpInterval (TyInt lower) (TyInt upper)) t) | lower > 1 =
@@ -302,7 +305,7 @@ tsTypeNames :: TypeScheme -> [Maybe Id]
 tsTypeNames (Forall _ _ _ t) = typeNames t
    where
      typeNames :: Type -> [Maybe Id]
-     typeNames (FunTy id _ t2) = id : typeNames t2
+     typeNames (FunTy id _ _ t2) = id : typeNames t2
      typeNames _ = []
 
 -- Given a context of patterns, couples the IDs with the Cartesian product of

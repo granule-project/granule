@@ -1,0 +1,16 @@
+language GradedBase
+
+data List a = Nil | Cons a (List a) 
+
+data Bool = True | False; 
+
+neg : Bool %1..∞ -> Bool 
+neg True = False;
+neg False = True 
+
+map : forall a b . (a % 1..∞ -> b) % 0..∞ -> List a % 1..∞ -> List b
+spec 
+    map neg (Cons True Nil) = Cons False Nil        !Cartesian;
+    map % 0..∞
+map x Nil = Nil;
+map x (Cons z u) = (Cons (x z)) ((map x) u)

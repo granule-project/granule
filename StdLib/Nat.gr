@@ -8,6 +8,8 @@
 --- Repository: https://github.com/dorchard/granule
 ------
 
+module Nat where
+
 data N (n : Nat) where
   Z : N 0;
   S : N n -> N (n+1)
@@ -42,7 +44,7 @@ monus (S m') (S n') = monus m' n'
 
 sub
   : forall {m n : Nat}
-  . {n ≥ m} => N n -> N m -> N (n - m)
+  . {n .≥ m} => N n -> N m -> N (n - m)
 sub m Z = m;
 sub (S m') (S n') = sub m' n'
 

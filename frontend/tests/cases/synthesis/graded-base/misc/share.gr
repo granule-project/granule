@@ -1,0 +1,4 @@
+language GradedBase
+
+f : forall { a : Type } . (a -> a -> a) %0..2 -> a %10..10 -> (a [2..2], a [6..6])
+f = ?

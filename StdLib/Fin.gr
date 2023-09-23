@@ -8,22 +8,25 @@
 --- Repository: https://github.com/dorchard/granule
 ------
 
+module Fin where
+
 import Nat
 
+--- Representation of a number bounded above by `n`
 data Fin : Nat -> Type where
   FZ : forall {k : Nat} . Fin (k + 1);
   FS : forall {k : Nat} . Fin k -> Fin (k + 1)
 
--- If m < n then (x in Fin m) -> (x in Fin n)
-upcast : forall {n : Nat, m : Nat} . {m <= n} => Fin m -> Fin n
+--- If m < n then (x in Fin m) -> (x in Fin n)
+upcast : forall {n : Nat, m : Nat} . {m .<= n} => Fin m -> Fin n
 upcast FZ = FZ;
 upcast (FS n) = FS (upcast n)
 
--- Map from a natural number into the finite set one bigger than it
+--- Map from a natural number into the finite set one bigger than it
 fromN : forall {n : Nat, m : Nat} . N n -> Fin (n + 1)
 fromN Z = FZ;
 fromN (S n) = FS (fromN n)
 
--- Map from a natural number into a finite set that is arbitrarily bigger than it
+--- Map from a natural number into a finite set that is arbitrarily bigger than it
 fromNInto : forall {n : Nat, m : Nat} . {m >= 1} => N n -> Fin (n + m)
 fromNInto n = upcast (fromN n)

@@ -52,12 +52,18 @@ tokens :-
   then                          { \p s -> TokenThen p }
   else                          { \p s -> TokenElse p }
   case                          { \p s -> TokenCase p }
+  spec                          { \p s -> TokenSpec p }
   of                            { \p s -> TokenOf p }
   try                           { \p s -> TokenTry p }
   as                            { \p s -> TokenAs p }
   catch                         { \p s -> TokenCatch p }
+  share                         { \p _ -> TokenShare p}
   clone                         { \p s -> TokenCopy p }
   endorse                       { \p s -> TokenEndorse p }
+  pack                          { \p s -> TokenPack p }
+  unpack                        { \p s -> TokenUnpack p }
+  exists                        { \p s -> TokenExists p }
+  "∃"                           { \p s -> TokenExists p }
   ∞                             { \p s -> TokenInfinity p }
   @float                        { \p s -> TokenFloat p s }
   @int                          { \p s -> TokenInt p $ read s }
@@ -103,9 +109,9 @@ tokens :-
   "^"                           { \p s -> TokenCaret p }
   ".."                          { \p s -> TokenDotDot p }
   "∨"                           { \p _ -> TokenJoin p }
-  "\\/"                         { \p _ -> TokenJoin p }
+  "\/"                          { \p _ -> TokenJoin p }
   "∧"                           { \p _ -> TokenMeet p }
-  "/\\"                         { \p _ -> TokenMeet p }
+  "/\"                          { \p _ -> TokenMeet p }
   "=>"                          { \p s -> TokenConstrain p }
   "⇒"                           { \p s -> TokenConstrain p }
   "∘"                           { \p _ -> TokenRing p }
@@ -113,10 +119,12 @@ tokens :-
   "{!"                          { \p _ -> TokenHoleStart p }
   "!}"                          { \p _ -> TokenHoleEnd p}
   "!"                           { \p _ -> TokenBang p}
-  "&"                           { \p _ -> TokenBorrow p}
+  "&"                           { \p _ -> TokenBorrow p }
   "#"                           { \p _ -> TokenHash p }
   "⊸"                           { \p _ -> TokenArrow p }
   "*{"                          { \p _ -> TokenStar p }
+  "%"                           { \p _ -> TokenPercent p }
+  "⨱"                           { \p _ -> TokenHsup p }
 
 {
 
@@ -132,6 +140,7 @@ data Token
   | TokenModule AlexPosn
   | TokenHiding AlexPosn
   | TokenCase   AlexPosn
+  | TokenSpec   AlexPosn
   | TokenOf     AlexPosn
   | TokenTry    AlexPosn
   | TokenAs     AlexPosn
@@ -189,10 +198,16 @@ data Token
   | TokenAt AlexPosn
   | TokenBang AlexPosn
   | TokenBorrow AlexPosn
+  | TokenShare AlexPosn
   | TokenCopy AlexPosn
   | TokenEndorse AlexPosn
+  | TokenPack AlexPosn
+  | TokenUnpack AlexPosn
+  | TokenExists AlexPosn
   | TokenHash AlexPosn
+  | TokenPercent AlexPosn
   | TokenStar AlexPosn
+  | TokenHsup AlexPosn
 
   deriving (Eq, Show, Generic)
 

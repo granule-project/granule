@@ -1,0 +1,10 @@
+language GradedBase
+
+data Maybe a = Nothing | Just a
+
+fromMaybe : forall {a : Type} . Maybe a % (1..1) -> a % (0..1) -> a
+spec
+    fromMaybe  Nothing 1 = 1    !Cartesian;
+    fromMaybe (Just 1) 2 = 1    !Cartesian;
+fromMaybe Nothing y = y;
+fromMaybe (Just z) y = z

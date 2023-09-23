@@ -19,7 +19,7 @@ import Language.Granule.Syntax.Annotated
 import Language.Granule.Utils
 
 
-spec :: Spec
+spec :: Test.Hspec.Spec
 spec = let ?globals = mempty in do
     let tyVarK = TyVar $ mkId "k"
     let varA = mkId "a"
@@ -34,7 +34,7 @@ spec = let ?globals = mempty in do
        c `shouldBe` [(varA, Discharged tyVarK (TyVar (mkId "a.0")))]
        tyVars `shouldBe` [(mkId "a.0", natInterval)]
        pred `shouldBe`
-        [Conj [Con (Lub nullSpan (cNatOrdered 5) (cNatOrdered 10) (TyVar (mkId "a.0")) natInterval)]]
+          [Conj [Con (Lub nullSpan (cNatOrdered 5) (cNatOrdered 10) (TyVar (mkId "a.0")) natInterval True)]]
          --[Conj [Con (ApproximatedBy nullSpan (cNatOrdered 10) (TyVar (mkId "a.0")) natInterval)
          --     , Con (ApproximatedBy nullSpan (cNatOrdered 5) (TyVar (mkId "a.0")) natInterval)]]
 
@@ -45,10 +45,10 @@ spec = let ?globals = mempty in do
        c `shouldBe` [(varA, Discharged (tyVarK) (TyVar (mkId "a.0")))]
        pred `shouldBe`
          [Conj [Con (Lub (Span {startPos = (0,0), endPos = (0,0), filename = ""})
-            (TySig (TyInt 5) 
+            (TySig (TyInt 5)
               (TyApp (TyCon (Id "Interval" "Interval")) (TyCon (Id "Nat" "Nat"))))
               (TyGrade (Just (TyApp (TyCon (Id "Interval" "Interval")) (TyCon (Id "Nat" "Nat")))) 0)
-              (TyVar (Id "a.0" "a.0")) (TyApp (TyCon (Id "Interval" "Interval")) (TyCon (Id "Nat" "Nat"))))]]
+              (TyVar (Id "a.0" "a.0")) (TyApp (TyCon (Id "Interval" "Interval")) (TyCon (Id "Nat" "Nat"))) True)]]
          -- [Conj [Con (ApproximatedBy nullSpan (CZero natInterval) (TyVar (mkId "a.0")) natInterval)
          --      ,Con (ApproximatedBy nullSpan (cNatOrdered 5) (TyVar (mkId "a.0")) natInterval)]]
 
@@ -92,7 +92,7 @@ spec = let ?globals = mempty in do
         annotation (extractMainExpr defElab) `shouldBe` ((TyCon $ mkId "Int") :: Type)
 
 extractMainExpr :: Def v a -> Expr v a
-extractMainExpr (Def _ _ _ (EquationList _ _ _ [Equation _ _ _ _ _ e]) _) = e
+extractMainExpr (Def _ _ _ _ (EquationList _ _ _ [Equation _ _ _ _ _ e]) _) = e
 extractMainExpr _ = undefined
 
 runCtxts

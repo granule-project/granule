@@ -1,0 +1,16 @@
+-- gr --no-eval
+data Dyn where
+  Dyn : (exists {x : Type} . x) → Dyn
+
+-- Wrapping and rewrapping an existential is okay
+idE : Dyn → Dyn
+idE (Dyn e) =
+  Dyn (unpack <t , xs> = e in (pack <t , xs> as exists {xa : Type} . xa))
+
+-- -- Also works with other kinds
+data Dyn2 a where
+  Dyn2 : (exists {n : Nat} . a [n]) → Dyn2 a
+
+-- idF : forall {a : Type} . Dyn2 a → Dyn2 a
+-- idF (Dyn2 e) =
+--  Dyn2 (unpack <n , x> = e in (pack <n , x> as exists {n : Nat} . a [n]))

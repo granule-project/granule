@@ -1,0 +1,16 @@
+language GradedBase 
+language CBN 
+
+data Stream a = Next a (Stream a) 
+data Bool = True | False
+
+ones : () %1..1 -> Stream Int
+ones () = Next 1 (ones ())
+
+head : forall {a : Type} . (Stream a) %0..1 -> a
+head (Next x _) = x
+
+elim2Stream : forall { a : Type } . Stream a %0..1 -> (a, a)
+spec 
+    elim2Stream (Next 2 (ones ())) = (2, 1)     !Cartesian;
+elim2Stream (Next y (Next u v)) = (u, y)

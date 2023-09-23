@@ -1,0 +1,3 @@
+Type checking failed: 
+Falsifiable theorem: frontend/tests/cases/negative/security/security-and-linearity.gr:5:1:
+  When checking `dub`, (1 : Sec) + (1 : Sec) is not approximatable by Private for type Sec

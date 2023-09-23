@@ -1,0 +1,8 @@
+language GradedBase 
+
+data N = S N | Z
+
+succ : N %1 -> N 
+spec 
+    succ Z = (S Z);
+succ = ?

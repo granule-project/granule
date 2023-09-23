@@ -1,8 +1,22 @@
-  # 0.9.2.0 (dev)
+  # 0.9.4.0
+  - Advanced synthesis algorithm for `language GradeBase` mode.
+  - Better standard library documentation
+  - Ability to expose the 'hsup' constraint (see `push`)
+  - Some bug fixes (see https://github.com/granule-project/granule/milestone/2?closed=1)
+
+  # 0.9.3.0
+  - Existential types, e.g.,`exists {x : Type} . t`, see `examples/existential.gr` and `examples/listToVec.gr`
+  - `language GradedBase` extension, see `examples/graded-base.gr`
+  - Various internal refactorings
+  - Bug fixes related to indexed types
+  - Uniqueness features renamed (see `examples/uniqueness.gr`)
+  - Granule docs's feature `gr --grdoc file.gr` will generate documentation in `docs/index.html`
+
+  # 0.9.2.0
    - New `Cartesian` semiring, with just one element `Any : Cartesian` for completely erasing grading (trivial solving)
    - (Internal)
-     - Restructuring to tests
-  
+    - Restructuring to tests
+
   # 0.9.1.0
    - Public and Private are now usable as synonyms for Lo and Hi unless the SecurityLevels extension is turned on.
    - 'Level' semiring only in scope when SecurityLevels extension is on.
@@ -15,17 +29,17 @@
 
   # 0.9.0.0
   - Major features:
-      - Uniqueness modality and mutable arrays 
+      - Uniqueness modality and mutable arrays
         - https://granule-project.github.io/papers/esop22-paper.pdf
       - Session types with non-linear behaviours
         - https://arxiv.org/abs/2203.12875
       - Granule -> Haskell compiler (grc)
       - language-server protocol
-  
+
   - New graded modalities / improvements
     - LNL semiring (Zero, One, Many) recovers linear logic via new `hsup` operation
        to control 'push' behaviour on tensors. See: https://granule-project.github.io/papers/tlla_2021_paper11.pdf
-  
+
     - Any semiring can now be lifted to a top-completed semiring with Ext (previously only allowed for Nat)
 
   - Language extensions and pragmas: See: https://github.com/granule-project/granule/wiki/Language-Extensions

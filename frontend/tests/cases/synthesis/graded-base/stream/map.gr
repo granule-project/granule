@@ -1,0 +1,22 @@
+language GradedBase 
+language CBN
+
+data Stream a = Next a (Stream a) 
+
+data Bool = True | False
+
+trues : () %1..∞ -> Stream Bool
+trues () = Next True (trues ())
+
+neg : Bool %1..∞ -> Bool
+neg True = False; 
+neg False = True
+
+head : forall a . Stream a %0..∞ -> a 
+head (Next x xs) = x
+
+map_stream : forall a b . Stream a %1..∞ -> (a %1..∞ -> b) %1..∞ -> Stream b
+spec 
+    head (map_stream (trues ()) neg) = False    !Cartesian;
+    map_stream % 1..∞
+map_stream = ?

@@ -1,0 +1,15 @@
+language CBN 
+language GradedBase
+
+data Stream a = Next a (Stream a) 
+
+ones : () %1..1 -> Stream Int
+ones () = Next 1 (ones ())
+
+head : forall a . Stream a %0..1 -> a 
+head (Next x xs) = x
+
+mkStream : forall a . a %1..1 -> (Stream a) %1..1 -> Stream a
+spec 
+    head (mkStream 2 (ones ())) = 2     !Cartesian;
+mkStream = ?

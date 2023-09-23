@@ -1,0 +1,2 @@
+foo : exists {a : Type} . a
+foo = pack < Int , 42 > as exists {a : Type} . a

@@ -1,0 +1,20 @@
+language GradedBase
+
+data N = S N | Z
+data Tree a = Leaf | Node (Tree a) a (Tree a)
+
+add : N %1..∞ -> N %1..∞ -> N
+add Z y = y;
+add (S z) y = S ((add z) y)
+
+fold : Tree N %0..∞ -> (N % 1..∞ -> N % 1..∞ -> N) %0..∞ -> N %0..∞ -> N 
+fold Leaf f acc = acc;
+fold (Node l x r) f acc = fold l f (f x (fold r f acc))
+
+sum : forall a . Tree N % 0..∞ -> N
+spec 
+    sum Leaf = Z;
+    sum (Node Leaf (S (S Z)) Leaf) = (S (S Z));
+    sum (Node (Node Leaf (S Z) (Node Leaf (S Z) Leaf)) (S (S Z)) Leaf) = (S (S (S (S Z))));
+    fold % 1..∞, add %1..∞
+sum = ?

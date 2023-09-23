@@ -3,5 +3,5 @@ Counter example: frontend/tests/cases/negative/flatten/flattenNat.gr:2:1:
   When checking `flattenNat`, expected n * m uses, but instead there are m + n actual uses.
 
 Counter-example:
-  n = 14 :: Integer
-  m = 14 :: Integer
+  n = 15 :: Integer
+  m =  3 :: Integer

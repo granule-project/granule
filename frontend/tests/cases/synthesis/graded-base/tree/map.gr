@@ -1,0 +1,16 @@
+language GradedBase
+
+data Tree a = Leaf | Node (Tree a) a (Tree a)
+
+data Bool = True | False
+
+neg : Bool %1..∞ -> Bool
+neg True = False; 
+neg False = True
+
+
+map : forall a b . Tree a % 1..∞ -> (a %1..∞ -> b) %0..∞ -> Tree b
+spec
+    map (Node Leaf True Leaf) neg = (Node Leaf False Leaf)  !Cartesian;
+    map %0..∞
+map = ?

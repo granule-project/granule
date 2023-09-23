@@ -1,4 +1,4 @@
 Type checking failed: 
 Falsifiable theorem: frontend/tests/cases/negative/security/level_neg4.gr:8:1:
   The following constraint associated with `leak` is false:
-	  (((1 : Level) ∨ (prom_[10:18]0 * (1 : Level))) ∨ (prom_[9:17]0 * (1 : Level)) ≤ Dunno) ∧ (strue0 ≤ prom_[9:17]0) ∧ (sfalse0 ≤ prom_[10:18]0) ∧ (Public * (1 : Level) ⊔ (0 : Level) = strue0) ∧ ((0 : Level) ⊔ Public * (1 : Level) = sfalse0) ∧ (Public * (1 : Level) ≤ Private) ∧ (Public * (1 : Level) ≤ Dunno) ∧ ((1 : Level) ≤ Private) ∧ ((1 : Level) ≤ Private)
+	  (((1 : Level) ∨ (prom_[10:18]0 * (1 : Level))) ∨ (prom_[9:17]0 * (1 : Level)) ≤ Dunno) ∧ (strue0 ≤ prom_[9:17]0) ∧ (sfalse0 ≤ prom_[10:18]0) ∧ (Public * (1 : Level) ⊔ (0 : Level) = strue0) ∧ ((0 : Level) ⊔ Public * (1 : Level) = sfalse0) ∧ (Public * (1 : Level) ≤ Private) ∧ (Public * (1 : Level) ≤ Dunno) ∧ ((1 : Level) ≤ Private) ∧ (Public * (1 : Level) ≤ Private) ∧ (Public * (1 : Level) ≤ Dunno) ∧ ((1 : Level) ≤ Private)

@@ -1,0 +1,11 @@
+language GradedBase
+
+data Maybe a = Nothing | Just a
+data List a = Nil | Cons a (List a)
+
+safeHead : forall {a : Type} . List a % (0..1) -> Maybe a
+spec 
+    safeHead Nil = Nothing;
+    safeHead (Cons 1 Nil) = Just 1;
+safeHead Nil = Nothing;
+safeHead (Cons y z) = Just y

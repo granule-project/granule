@@ -27,6 +27,7 @@ import Language.Granule.Syntax.Lexer
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Pattern
+import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Preprocessor.Markdown
 import Language.Granule.Syntax.Preprocessor.Latex
 import Language.Granule.Syntax.Span
@@ -54,14 +55,19 @@ import Language.Granule.Utils hiding (mkSpan)
     then  { TokenThen _ }
     else  { TokenElse _ }
     case  { TokenCase _ }
+    spec  { TokenSpec _ }
     of    { TokenOf _ }
     try    { TokenTry _ }
     as    { TokenAs _ }
     catch    { TokenCatch _ }
     import { TokenImport _ _ }
     language { TokenPragma _ _ }
+    share { TokenShare _ }
     clone { TokenCopy _ }
     endorse { TokenEndorse _ }
+    pack    { TokenPack _ }
+    unpack  { TokenUnpack _ }
+    exists  { TokenExists _ }
     INT   { TokenInt _ _ }
     FLOAT  { TokenFloat _ _}
     VAR    { TokenSym _ _ }
@@ -100,6 +106,7 @@ import Language.Granule.Utils hiding (mkSpan)
     '.'   { TokenPeriod _ }
     '`'   { TokenBackTick _ }
     '^'   { TokenCaret _ }
+    '%'   { TokenPercent _ }
     '..'  { TokenDotDot _ }
     "\\/" { TokenJoin _ }
     "/\\" { TokenMeet _ }
@@ -112,6 +119,7 @@ import Language.Granule.Utils hiding (mkSpan)
     '&'   { TokenBorrow _ }
     '#'   { TokenHash _ }
     '*{'  { TokenStar _ }
+    '⨱'   { TokenHsup _ }
 
 %right '∘'
 %right in
@@ -140,7 +148,7 @@ TopLevel :: { AST () () }
                                                        -- modify (\st -> st { globalsExtensions = ext : globalsExtensions st })
                                                        modify (\st -> ext : st)
                                                        return $4
-                                                    Nothing -> error ("Unknown language extension " ++ symString $2)
+                                                    Nothing -> error ("Unknown language extension " ++ constrString $2)
                                                 }
 
   | Defs                                        { $1 }
@@ -168,15 +176,50 @@ Import :: { Import }
 
 Def :: { Def () () }
   : Sig NL Bindings
-    {% let name = fst3 $1
-       in case $3 of
-          (nameB, _) | not (nameB == name) ->
-            error $ "Name for equation `" <> nameB <> "` does not match the signature head `" <> name <> "`"
+      {%  let name = fst3 $1 in
+          case $3 of
+            (nameB, _) | not (nameB == name) ->
+              error $ "Name for equation `" <> nameB <> "` does not match the signature head `" <> name <> "`"
 
-          (_, bindings) -> do
-            span <- mkSpan (thd3 $1, endPos $ getSpan $ last (equations bindings))
-            return $ Def span (mkId name) False bindings (snd3 $1)
-    }
+            (_, bindings) -> do
+              span <- mkSpan (thd3 $1, endPos $ getSpan $ last (equations bindings))
+              return $ Def span (mkId name) False Nothing bindings (snd3 $1)
+      }
+  | Sig NL Spec NL Bindings
+      {%  let name = fst3 $1 in
+          let spec = $3 in
+          case $5 of
+            (nameB, _) | not (nameB == name) ->
+              error $ "Name for equation `" <> nameB <> "` does not match the signature head `" <> name <> "`"
+
+            (_, bindings) -> do
+              span <- mkSpan (thd3 $1, endPos $ getSpan $ last (equations bindings))
+              return $ Def span (mkId name) False spec bindings (snd3 $1)
+      }
+
+Spec :: { Maybe (Spec () ()) }
+  : spec SpecList           { let (exs, auxs)  = $2 in
+                                         Just $ Spec nullSpanNoFile False exs auxs }
+
+SpecList :: { ([Example () ()], [(Id, Maybe Type)]) }
+  : Example ';' SpecList            { let (exs, auxs) = $3
+                                           in ($1 : exs, auxs) }
+  | Components                          {   let auxs = $1
+                                           in ([], auxs) }
+  | {- empty -}                         { ([], []) }
+
+Example :: { Example () () }
+  : Expr '=' Expr '!' CONSTR               { Example $1 $3 True }
+  | Expr '=' Expr                          { Example $1 $3 False }
+
+Components :: { [(Id, Maybe Type)] }
+  : VAR                                   {% return [(mkId $ symString $1, Nothing)] }
+  | VAR '%' Coeffect                   {% return [(mkId $ symString $1, Just $3)] }
+  -- : VAR '[' Coeffect ']'                 {% return [(mkId $ symString $1, Just $3)] }
+  | VAR ',' Components                   { (mkId $ symString $1, Nothing) : $3 }
+  | VAR '%' Coeffect ',' Components  { (mkId $ symString $1, Just $3) : $5 }
+  -- | VAR '[' Coeffect ']' ',' Components  { (mkId $ symString $1, Just $3) : $6 }
+  | {- empty -}                           {% return [] }
 
 DataDecl :: { DataDecl }
   : data CONSTR TyVars KindAnn where DataConstrs
@@ -327,15 +370,25 @@ Vars1 :: { [String] }
   : VAR                       { [symString $1] }
   | VAR Vars1                 { symString $1 : $2 }
 
+Hint :: { (String, Int) }
+  : '-' VAR                      { (symString $2, 0) }
+  | '-' VAR INT                  { let TokenInt _ x  = $3 in (symString $2, x) }
+
+Hints :: { [(String, Int)] }
+  : Hint                      { [$1] }
+  | Hint Hints                { $1 : $2 }
+
 Kind :: { Kind }
   : Type                           { $1 }
 
 Type :: { Type }
-  : '(' VAR ':' Type ')' '->' Type { FunTy (Just . mkId . symString $ $2) $4 $7 }
+  : '(' VAR ':' Type ')' '->' Type { FunTy (Just . mkId . symString $ $2) Nothing $4 $7 }
+  | '(' VAR ':' Type ')' '%' Coeffect '->' Type { FunTy (Just . mkId . symString $ $2) (Just $7) $4 $9 }
   | TyJuxt                         { $1 }
   | '!' TyAtom                     { Box (TyCon $ mkId "Many") $2 }
   | '*' TyAtom                     { Star (TyCon $ mkId "Unique") $2 }
-  | Type '->' Type                 { FunTy Nothing $1 $3 }
+  | Type '->' Type                 { FunTy Nothing Nothing $1 $3 }
+  | Type '%' Coeffect '->' Type    { FunTy Nothing (Just $3) $1 $5 }
   | Type '×' Type                  { TyApp (TyApp (TyCon $ mkId ",") $1) $3 }
   | Type '&' Type                  { TyApp (TyApp (TyCon $ mkId "&") $1) $3 }
   | TyAtom '[' Coeffect ']'        { Box $3 $1 }
@@ -343,6 +396,7 @@ Type :: { Type }
   | TyAtom '[' ']'                 { Box (TyInfix TyOpInterval (TyGrade (Just extendedNat) 0) infinity) $1 }
   | TyAtom '<' Effect '>'          { Diamond $3 $1 }
   | case Type of TyCases { TyCase $2 $4 }
+  | exists '{' VAR ':' Type '}' '.' Type { TyExists (mkId . symString $ $3) $5 $8 }
 
 TyApp :: { Type }
  : TyJuxt TyAtom              { TyApp $1 $2 }
@@ -358,6 +412,15 @@ TyJuxt :: { Type }
   | TyAtom '^' TyAtom         { TyInfix TyOpExpon $1 $3 }
   | TyAtom "/\\" TyAtom       { TyInfix TyOpMeet $1 $3 }
   | TyAtom "\\/" TyAtom       { TyInfix TyOpJoin $1 $3 }
+  | TyAtom '<=' TyAtom        { TyInfix TyOpLesserEq $1 $3 }
+  | TyAtom '.' '<=' TyAtom    { TyInfix TyOpLesserEqNat $1 $4 }
+  | TyAtom '>=' TyAtom        { TyInfix TyOpGreaterEq $1 $3 }
+  | TyAtom '.' '>=' TyAtom    { TyInfix TyOpGreaterEqNat $1 $4 }
+  | TyAtom '==' TyAtom        { TyInfix TyOpEq $1 $3 }
+  | TyAtom '/=' TyAtom        { TyInfix TyOpNotEq $1 $3 }
+  | TyAtom '=>' TyAtom        { TyInfix TyOpImpl $1 $3 }
+
+
 
 TyCases :: { [(Type, Type)] }
  : TyCase TyCasesNext             { $1 : $2 }
@@ -379,6 +442,8 @@ Constraint :: { Type }
   | TyAtom '.' '>=' TyAtom    { TyInfix TyOpGreaterEqNat $1 $4 }
   | TyAtom '==' TyAtom        { TyInfix TyOpEq $1 $3 }
   | TyAtom '/=' TyAtom        { TyInfix TyOpNotEq $1 $3 }
+  | TyAtom '=>' TyAtom        { TyInfix TyOpImpl $1 $3 }
+  | TyAtom '⨱' TyAtom         { TyInfix TyOpHsup $1 $3 }
 
 TyAtom :: { Type }
   : CONSTR                    { case constrString $1 of
@@ -391,6 +456,7 @@ TyAtom :: { Type }
   | FLOAT                     { let TokenFloat _ x = $1 in TyRational $ myReadFloat x }
   -- | '.' INT                   { let TokenInt _ x = $2 in TyInt x }
   | '(' Type ')'              { $2 }
+  | '(' forall '{' VAR ':' Type '}' '.' Type ')' { TyForall (mkId $ symString $4) $6 $9 }
   | '(' Type ',' Type ')'     { TyApp (TyApp (TyCon $ mkId ",") $2) $4 }
   | TyAtom ':' Kind           { TySig $1 $3 }
   | '{' CoeffSet '}'              { TySet Normal $2 }
@@ -460,6 +526,10 @@ Expr :: { Expr () () }
                    (Val (getSpan $3) () False (Abs () pat mt $3)) expr
       }
 
+  | "/\\" '(' VAR ':' Type ')' '->' Expr
+      {% (mkSpan (getPos $1, getEnd $8)) >>=
+             \sp -> return $ Val sp () False (TyAbs () (mkId $ symString $3) $5 $8) }
+
   | '\\' '(' PAtom ':' Type ')' '->' Expr
       {% (mkSpan (getPos $1, getEnd $8)) >>=
              \sp -> return $ Val sp () False (Abs () $3 (Just $5) $8) }
@@ -496,18 +566,28 @@ Expr :: { Expr () () }
                      (PConstr span3 () False (mkId "False") [], $6)] }
 
   | clone Expr as CopyBind in Expr
-    {% let t1 = $2; (_, pat, mt) = $4; t2 = $6 
+    {% let t1 = $2; (_, pat, mt) = $4; t2 = $6
       in (mkSpan (getPos $1, getEnd $6)) >>=
-        \sp -> return $ App sp () False (App sp () False 
-          (Val sp () False (Var () (mkId "uniqueBind"))) 
+        \sp -> return $ App sp () False (App sp () False
+          (Val sp () False (Var () (mkId "uniqueBind")))
           (Val sp () False (Abs () pat mt t2))) t1 }
 
   | endorse Expr as CopyBind in Expr
-    {% let t1 = $2; (_, pat, mt) = $4; t2 = $6 
+    {% let t1 = $2; (_, pat, mt) = $4; t2 = $6
       in (mkSpan (getPos $1, getEnd $6)) >>=
-        \sp -> return $ App sp () False (App sp () False 
-          (Val sp () False (Var () (mkId "trustedBind"))) 
+        \sp -> return $ App sp () False (App sp () False
+          (Val sp () False (Var () (mkId "trustedBind")))
           (Val sp () False (Abs () pat mt t2))) t1 }
+
+  | pack '<' Type ',' Atom '>' as exists '{' VAR ':' Type '}' '.' Type
+     {% do
+         sp <- mkSpan (getPos $1, getPos $14)
+         return $ Val sp () False $ Pack sp () $3 $5 (mkId . symString $ $10) $12 $15 }
+
+  | unpack '<' VAR ',' VAR '>' '=' Expr in Expr
+     {% do
+         sp <- mkSpan (getPos $1, getEnd $10)
+         return $ Unpack sp () False (mkId . symString $ $3) (mkId . symString $ $5) $8 $10 }
 
   | Form
     { $1 }
@@ -576,6 +656,7 @@ Form :: { Expr () () }
   | Form '/=' Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () False OpNotEq $1 $3 }
   | Form '∘'  Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ App sp () False (App sp () False (Val sp () False (Var () (mkId "compose"))) $1) $3 }
   | Form '.'  Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ App sp () False (App sp () False (Val sp () False (Var () (mkId "compose"))) $1) $3 }
+
   | Juxt           { $1 }
 
 Juxt :: { Expr () () }
@@ -583,11 +664,19 @@ Juxt :: { Expr () () }
   | Juxt Atom                 {% (mkSpan (getStart $1, getEnd $2)) >>= \sp -> return $ App sp () False $1 $2 }
   | Atom                      { $1 }
   | Juxt '@' TyAtom           {% (mkSpan (getStart $1, getEnd $1)) >>= \sp -> return $ AppTy sp () False $1 $3 } -- TODO: span is not very accurate here
+  | Juxt ':' TyAtom
+      {% (mkSpan (getStart $1, getPos $2)) >>=
+           \sp -> return $ App sp () False (Val sp () False (Abs () (PVar sp () False $ mkId "x") (Just $3)
+                                               (Val sp () False (Var () (mkId "x"))))) $1 }
+
 
 Hole :: { Expr () () }
-  : '{!' Vars1 '!}'           {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $3)) >>= \sp -> return $ Hole sp () False (map mkId $2) }
-  | '{!' '!}'                 {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $2)) >>= \sp -> return $ Hole sp () False [] }
-  | '?'                       {% (mkSpan (fst . getPosToSpan $ $1, second (+1) . snd . getPosToSpan $ $1)) >>= \sp -> return $ Hole sp () False [] }
+  : '{!' Vars1 '!}'           {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $3)) >>= \sp -> return $ Hole sp () False (map mkId $2) Nothing }
+  | '{!' Hints '!}'           {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $3)) >>= \sp -> return $ Hole sp () False [] (Just $ parseHints $2) }
+  | '{!' Hints Vars1 '!}'     {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $4)) >>= \sp -> return $ Hole sp () False (map mkId $3) (Just $ parseHints $2) }
+  | '{!' Vars1 Hints '!}'     {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $4)) >>= \sp -> return $ Hole sp () False (map mkId $2) (Just $ parseHints $3) }
+  | '{!' '!}'                 {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $2)) >>= \sp -> return $ Hole sp () False [] Nothing }
+  | '?'                       {% (mkSpan (fst . getPosToSpan $ $1, second (+1) . snd . getPosToSpan $ $1)) >>= \sp -> return $ Hole sp () False [] Nothing }
 
 Atom :: { Expr () () }
   : '(' Expr ')'              { $2 }
@@ -607,7 +696,7 @@ Atom :: { Expr () () }
                                     >>= \sp -> return $ Val sp () False $ Nec () (Val sp () False $ NumInt x) }
   | '#' FLOAT                 {% let (TokenFloat _ x) = $2
                                  in (mkSpan $ getPosToSpan $1)
-                                    >>= \sp -> return $ Val sp () False $ Nec () (Val sp () False $ NumFloat $ read x) }                                                                                           
+                                    >>= \sp -> return $ Val sp () False $ Nec () (Val sp () False $ NumFloat $ read x) }
   | CONSTR                    {% (mkSpan $ getPosToSpan $1)  >>= \sp -> return $ Val sp () False $ Constr () (mkId $ constrString $1) [] }
   | '#' CONSTR                {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Val sp () False $ Nec () (Val sp () False $ Constr () (mkId $ constrString $2) [])}
   | '(' Expr ',' Expr ')'     {% do
@@ -629,9 +718,9 @@ Atom :: { Expr () () }
                                      case $2 of (TokenCharLiteral _ c) -> Nec () (Val sp () False $ CharLiteral c) }
   | '#' STRING                {% (mkSpan $ getPosToSpan $1) >>= \sp ->
                                   return $ Val sp () False $
-                                     case $2 of (TokenStringLiteral _ c) -> Nec () (Val sp () False $ StringLiteral c) }                              
+                                     case $2 of (TokenStringLiteral _ c) -> Nec () (Val sp () False $ StringLiteral c) }
   | Hole                      { $1 }
-  | '&' Expr                  {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ App sp () False (Val sp () False (Var () (mkId "uniqueReturn"))) $2 }
+  | share Expr              {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ App sp () False (Val sp () False (Var () (mkId "uniqueReturn"))) $2 }
 
 {
 
@@ -649,6 +738,17 @@ parseError t = do
 
 parseDefs :: FilePath -> String -> Either String (AST () (), [Extension])
 parseDefs file input = runReaderT (runStateT (topLevel $ scanTokens input) []) file
+
+parseHints :: [(String, Int)] -> Hints
+parseHints hints =
+  Hints {
+    hSubtractive = ("s", 0) `elem` hints,
+    hPruning     = ("p", 0) `elem` hints,
+    hNoTimeout   = ("nt", 0) `elem` hints,
+    hTimeout     = lookup "t" hints,
+    hIndex       = lookup "i" hints,
+    hLinHaskell  = Nothing
+  }
 
 parseAndDoImportsAndFreshenDefs :: (?globals :: Globals) => String -> IO (AST () (), [Extension])
 parseAndDoImportsAndFreshenDefs input = do
