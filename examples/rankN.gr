@@ -1,0 +1,4 @@
+unpacker : forall {f : Type → Type, a : Type} .
+            (exists {a : Type} . f a) → (forall {t : Type} . f t → a) → a
+unpacker e f =
+  unpack < b , e' > = e in (f @ b) e'
