@@ -468,13 +468,20 @@ instance Freshenable m Type where
   freshen =
     typeFoldM (baseTypeFold { tfTyVar = freshenTyVar,
                               tfBox = freshenTyBox,
-                              tfTySig = freshenTySig })
+                              tfTySig = freshenTySig,
+                              tfTyForall = freshenTyForall })
     where
 
       freshenTyBox c t = do
         c' <- freshen c
         t' <- freshen t
         return $ Box c' t'
+
+      freshenTyForall v k t =
+        freshIdentifierBaseInScope TypeL v (\v' -> do
+            k' <- freshen k
+            t' <- freshen t
+            return $ TyForall v' k' t')
 
       freshenTySig t' _ k = do
         k' <- freshen k
