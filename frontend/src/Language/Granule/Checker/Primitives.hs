@@ -138,12 +138,12 @@ typeConstructors =
     , (mkId "MayFail", (tyCon "Exception", [], []))
 
      -- Free : (e : Type) -> Effect
-    , (mkId "Free", (FunTy (Just $ mkId "eff") (Type 0)
-                       (FunTy Nothing (funTy (Type 0) (funTy (tyVar "eff") (Type 0))) keffect), [], True))
-    , (mkId "Eff", 
-         (FunTy (Just $ mkId "eff") (Type 0)
-            (FunTy (Just $ mkId "sig") (funTy (Type 0) (funTy (tyVar "eff") (Type 0)))
-              (funTy (TyApp (tyCon "Set") (tyVar "eff")) (TyApp (TyApp (tyCon "Free") (tyVar "eff")) (tyVar "sig")))), [], True))
+    , (mkId "FreeEff", (FunTy (Just $ mkId "eff") Nothing (Type 0)
+                       (FunTy Nothing Nothing (funTy (Type 0) (funTy (tyVar "eff") (Type 0))) keffect), [], [0]))
+    , (mkId "Eff",
+         (FunTy (Just $ mkId "eff") Nothing (Type 0)
+            (FunTy (Just $ mkId "sig") Nothing (funTy (Type 0) (funTy (tyVar "eff") (Type 0)))
+              (funTy (TyApp (tyCon "Set") (tyVar "eff")) (TyApp (TyApp (tyCon "FreeEff") (tyVar "eff")) (tyVar "sig")))), [], [0,1]))
 
     -- Arrays
     , (mkId "FloatArray", (Type 0, [], []))
@@ -318,8 +318,8 @@ fromPure
 fromPure = BUILTIN
 
 -- Generic effect
-call : forall {i : Type, o : Type, r : Type, labels : Type, sigs : Type -> labels -> Type, e : labels} 
-   . (i -> (o -> r) -> sigs r e) -> i -> o <Eff labels sigs {e}>
+call : forall {i : Type, o : Type, labels : Type, sigs : Type -> labels -> Type, e : labels}
+   . (forall {r : Type} . i -> (o -> r) -> sigs r e) -> i -> o <Eff labels sigs {e}>
 call = BUILTIN
 
 --------------------------------------------------------------------------------
