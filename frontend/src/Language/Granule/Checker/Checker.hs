@@ -849,27 +849,6 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
   let elaborated = Case s tau rf elaboratedGuard elaboratedCases
   return (g, subst, elaborated)
 
--- checking variables that are rank-N polymorphic
--- we can lift top-level definitions with type schemes into rank-N polymorphic
--- -- variants
--- checkExpr defs gam pol topLevel ty@(TyForall v k ty') (Val sp a rf (Var a' id))
---  | lookup id gam == Nothing = do
---   debugM "checkExpr[Var]" (pretty sp)
---   case lookup id (defs <> Primitives.builtins) of
---     Just tyScheme@(Forall _ _ _ tyInner)  ->
---       case typeSchemeToRankN tyScheme of
---         Just ty' -> do
---           (tyEq, _, subst) <- equalTypesWithPolarity sp SndIsSpec ty ty'
---           if tyEq
---           then do
---             let elaboratedE = Val sp ty rf (Var ty id)
---             return (gam, subst, elaboratedE)
---           else
---             throw TypeError{ errLoc = sp, tyExpected = ty , tyActual = ty' }
---         Nothing ->  throw TypeError{ errLoc = sp, tyExpected = ty , tyActual = tyInner }
---     -- Couldn't find it
---     Nothing -> throw UnboundVariableError{ errLoc = sp, errId = id }
-
 -- All other expressions must be checked using synthesis
 checkExpr defs gam pol topLevel tau e = do
   debugM "checkExpr[*]" ("Term `" <> pretty e <> "` @ " <> pretty (getSpan e) <> " : " <> pretty tau)
