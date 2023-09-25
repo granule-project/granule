@@ -152,6 +152,8 @@ instance Show (Runtime a) where
   show (Handle _) = "Some handle"
   show (PureWrapper _) = "<suspended IO>"
   show (Runtime _) = "<array>"
+  show (FreeMonadPure r) = "Return(" <> show r <> ")"
+  show (FreeMonadImpure r) = "Impure(" <> show r <> ")"
 
 instance Pretty (Runtime a) where
   pretty = show
@@ -277,7 +279,7 @@ evalInWHNF ctxt (AppTy s _ _ e t) = do
   v <- evalInWHNF ctxt e
   case v of
     -- Note, doesn't bother substituting he types
-    (Val _ _ _ (TyAbs _ var t expr)) -> evalInWHNF ctxt expr
+    (Val _ _ _ (TyAbs _ (Left (var, t)) expr)) -> evalInWHNF ctxt expr
     _ -> error $ "Bug: LHS of a type application is not a type abstraction: " <> pretty v
 
 evalInWHNF ctxt (Binop s a b op e1 e2) = do
@@ -302,7 +304,7 @@ evalInWHNF ctxt (LetDiamond s _ _ p _ e1 e2) = do
               evalInWHNF ctxt e2'
           Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in let at " <> pretty s
 
-    other -> fail $ "Runtime exception: Expecting a diamonad value but got: "
+    other -> fail $ "Runtime exception: Expecting a diamond value but got: "
                       <> prettyDebug other
 
 evalInWHNF ctxt (Val s a b (Var _ x)) =
@@ -388,7 +390,7 @@ evalInCBV ctxt (AppTy _ _ _ (Val s a rf (Var a' n)) t) | internalName n `elem` [
 evalInCBV ctxt (AppTy s _ _ e t) = do
   v <- evalInCBV ctxt e
   case v of
-    (TyAbs _ var t expr) -> evalInCBV ctxt expr
+    (TyAbs _ (Left (var, t)) expr) -> evalInCBV ctxt expr
     _ -> error $ "Bug: LHS of a type application is not a type abstraction: " <> pretty v
 
 evalInCBV ctxt (Binop _ _ _ op e1 e2) = do
@@ -412,6 +414,15 @@ evalInCBV ctxt (LetDiamond s _ _ p _ e1 e2) = do
               evalInCBV ctxt e2'
           Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in let at " <> pretty s
 
+    -- Free monad impure case
+    (Ext _ (FreeMonadImpure eInner)) -> do
+        -- Do the inner
+        v1' <- evalInCBV ctxt eInner
+        --
+        return $ Ext () $ FreeMonadImpure $ valExpr v1'
+
+
+
     other -> fail $ "Runtime exception: Expecting a diamonad value but got: "
                       <> prettyDebug other
 
@@ -429,6 +440,7 @@ evalInCBV ctxt (TryCatch s _ _ e1 p _ e2 e3) = do
       )
        -- (cf. TRY_BETA_2)
       (\(e :: IOException) -> evalInCBV ctxt e3)
+
     other -> fail $ "Runtime exception: Expecting a diamond value but got: " <> prettyDebug other
 
 evalInCBV ctxt (Unpack s a rf tyVar var e1 e2) = do
@@ -457,7 +469,7 @@ evalInCBV ctxt (Val _ _ _ (Var _ x)) =
     case lookup x ctxt of
       Just val@(Ext _ (PrimitiveClosure f)) -> return $ Ext () $ Primitive (f ctxt)
       Just val -> return val
-      Nothing  -> fail $ "Variable '" <> sourceName x <> "' is undefined in context. Context is " <> show ctxt
+      Nothing  -> fail $ "Variable '" <> sourceName x <> "' is undefined in context."
 
 evalInCBV ctxt (Val s _ _ (Promote _ e)) =
   if CBN `elem` globalsExtensions ?globals
@@ -787,6 +799,16 @@ builtIns =
   , (mkId "with", Ext () $ Primitive $ \v -> return $ Ext () $ Primitive $ \w -> return $ Constr () (mkId "&") [v, w])
   , (mkId "projL", Ext () $ Primitive $ \(Constr () (Id "&" "&") [v, w]) -> return $ v)
   , (mkId "projR", Ext () $ Primitive $ \(Constr () (Id "&" "&") [v, w]) -> return $ w)
+  -- free graded monad
+  -- call op x = Impure (op x (\o -> Pure o))
+  , (mkId "call", Ext () $ Primitive $ \op ->
+                            return $ Ext () $ Primitive $ \inp ->
+                              return $ Ext () $ FreeMonadImpure $
+                                  App nullSpan () False
+                                    (App nullSpan () False (valExpr op) (valExpr inp))
+                                    (valExpr $
+                                      Abs () (PVar nullSpan () False $ (mkId "o")) Nothing
+                                        (valExpr $ Ext () $ FreeMonadPure $ (valExpr $ (Var () $ mkId "o")))))
   ]
   where
     forkLinear :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue

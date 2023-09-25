@@ -138,12 +138,12 @@ typeConstructors =
     , (mkId "MayFail", (tyCon "Exception", [], []))
 
      -- Free : (e : Type) -> Effect
-    , (mkId "FreeEff", (FunTy (Just $ mkId "eff") Nothing (Type 0)
-                       (FunTy Nothing Nothing (funTy (Type 0) (funTy (tyVar "eff") (Type 0))) keffect), [], [0]))
+    , (mkId "GradedFree", (FunTy (Just $ mkId "labels") Nothing (Type 0)
+                       (FunTy Nothing Nothing (funTy (Type 0) (funTy (tyVar "labels") (Type 0))) keffect), [], [0]))
     , (mkId "Eff",
-         (FunTy (Just $ mkId "eff") Nothing (Type 0)
-            (FunTy (Just $ mkId "sig") Nothing (funTy (Type 0) (funTy (tyVar "eff") (Type 0)))
-              (funTy (TyApp (tyCon "Set") (tyVar "eff")) (TyApp (TyApp (tyCon "FreeEff") (tyVar "eff")) (tyVar "sig")))), [], [0,1]))
+         (FunTy (Just $ mkId "labels") Nothing (Type 0)
+            (FunTy (Just $ mkId "sig") Nothing (funTy (Type 0) (funTy (tyVar "labels") (Type 0)))
+              (funTy (TyApp (tyCon "Set") (tyVar "labels")) (TyApp (TyApp (tyCon "GradedFree") (tyVar "labels")) (tyVar "sig")))), [], [0,1]))
 
     -- Arrays
     , (mkId "FloatArray", (Type 0, [], []))
@@ -317,12 +317,24 @@ fromPure
   . a <Pure> -> a
 fromPure = BUILTIN
 
--- Generic effect
+
+-------------------------------------
+--- # Algebraic effects and handlers
+--------------------------------------
+
+--- Generic effect
 call : forall {i : Type, o : Type, r : Type, labels : Type, sigs : Type -> labels -> Type, e : labels}
    . (i -> (o -> r) -> sigs r e) -> i -> o <Eff labels sigs {e}>
 call = BUILTIN
 
---handle : (sigs r e -> m b) -> a <Eff labels sigs {e}> -> m a
+-- Effect handler
+handle : forall {labels : Type, sig : Type -> labels -> Type, a b : Type, e : Set labels}
+       . (fmap : (forall {a : Type} . (forall {b : Type} . (forall {l : labels} . (a -> b) [0..Inf] -> sig a l -> sig b l))))
+       -> (forall {l : labels} . sig b l -> b)
+       -> (a -> b)
+       -> a <Eff labels sig e>
+       -> b
+handle = BUILTIN
 
 --------------------------------------------------------------------------------
 --- # I/O
@@ -736,7 +748,7 @@ cap = BUILTIN
 
 builtinsParsed :: AST () ()
 builtinsParsed = case parseDefs "builtins" builtinSrc of
-        Right (ast, _) -> ast
+        Right (ast, _) -> freshenAST ast
         Left err -> error err
 
 builtinDataTypesParsed :: [DataDecl]

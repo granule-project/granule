@@ -1223,7 +1223,12 @@ requiresSolver s ty = do
   case result of
     -- Checking as coeffect or effect caused an error so ignore
     Left _  -> return False
-    Right _ -> putChecker >> return True
+    Right _ ->
+      -- avoid putting sets into the solver as the solver is weak on this
+      -- TODO: consider something better here
+      case isSet ty of
+        Just _ -> putChecker >> return False
+        Nothing -> putChecker >> return True
 
 instance Unifiable Substitutors where
     unify' (SubstT t) (SubstT t') = unify' t t'

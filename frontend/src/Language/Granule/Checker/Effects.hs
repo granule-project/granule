@@ -19,6 +19,34 @@ import Language.Granule.Utils
 
 import Data.List (nub, (\\), intersect)
 
+-- Predicate/deconstructor on a type to see if it is
+-- application of the free monad construct
+isFreeEffectType :: Type -> Maybe (Type, Type)
+isFreeEffectType (TyApp (TyApp (TyCon con) labelType) opsType)
+ | internalName con == "GradedFree" = Just (labelType, opsType)
+isFreeEffectType _ = Nothing
+
+isFreeEffectMember :: Type -> Maybe (Type, Type, Type)
+isFreeEffectMember
+ (TyApp (TyApp (TyApp (TyCon con) labelType) opsType) grade)
+ | internalName con == "Eff" = Just (labelType, opsType, grade)
+isFreeEffectMember _ = Nothing
+
+freeEffectMember :: Type -> Type -> [Type] -> Type
+freeEffectMember labelType opsType set =
+  TyApp (TyApp (TyApp (TyCon $ mkId "Eff") labelType) opsType)
+    (TySet Normal set)
+
+isFreeEffectMemberGrade :: Type -> Maybe Type
+isFreeEffectMemberGrade
+ (TyApp (TyApp (TyApp (TyCon con) _) _) grade)
+ | internalName con == "Eff" = Just grade
+isFreeEffectMemberGrade (TyCon (internalName -> "Pure")) =
+   Just (TySet Normal [])
+isFreeEffectMemberGrade _ = Nothing
+
+
+
 -- `isEffUnit sp effTy eff` checks whether `eff` of effect type `effTy`
 -- is equal to the unit element of the algebra.
 isEffUnit :: Span -> Type -> Type -> Checker Bool
@@ -90,6 +118,13 @@ effApproximates s effTy eff1 eff2 =
                     (TyCon (internalName -> "MayFail"),TyCon (internalName -> "MayFail")) ->
                         return True
                     _ -> return False
+            -- Free graded monad
+            (isFreeEffectType -> Just (labelType, opsType)) ->
+              case (isFreeEffectMemberGrade eff1, isFreeEffectMemberGrade eff2) of
+                (Just (TySet Normal efs1), Just (TySet Normal efs2)) -> return $ all (\ef1 -> ef1 `elem` efs2) efs1
+                -- TODO: make more powerful
+                _                    -> return False
+
             -- Any union-set effects, like IO
             (isSet -> Just (elemTy, _)) ->
                 case (eff1, eff2) of
@@ -141,6 +176,11 @@ effectMult sp effTy t1 t2 = do
                     return $ TyCon $ mkId "MayFail"
                 -- TODO: This type error is not very good. It actual points to a set when sets are not involved
                 _ -> throw $ TypeError { errLoc = sp, tyExpected = TySet Normal [TyVar $ mkId "?"], tyActual = t1 }
+
+        (isFreeEffectType -> Just (labelType, opsType)) ->
+          case (isFreeEffectMemberGrade t1, isFreeEffectMemberGrade t2) of
+            (Just (TySet Normal ef1), Just (TySet Normal ef2)) -> return $ freeEffectMember labelType opsType (nub $ ef1 ++ ef2)
+            _ -> return $ TyInfix TyOpTimes t1 t2
 
         -- Any union-set effects, like IO
         (isSet -> Just (elemTy, polarity)) ->
@@ -204,6 +244,13 @@ effectUpperBound s t@(TyCon (internalName -> "Exception")) t1 t2 = do
             return t2'
         _ -> throw NoUpperBoundError{ errLoc = s, errTy1 = t1', errTy2 = t2' }
 
+-- Free graded monad
+effectUpperBound s (isFreeEffectType -> Just (labelType, opsType)) t1 t2 =
+  case (isFreeEffectMemberGrade t1, isFreeEffectMemberGrade t2) of
+    (Just (TySet Normal ef1), Just (TySet Normal ef2)) ->
+      return $ TySet Normal (nub $ ef1 ++ ef2)
+    _ -> throw NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
+
 effectUpperBound s (isSet -> Just (elemTy, Normal)) t1 t2 =
     case t1 of
         TySet Normal efs1 ->
@@ -261,6 +308,10 @@ effectTop (isSet -> Just (elemTy, Normal)) = do
 
 effectTop (isSet -> Just (elemTy, Opposite)) =
     return (Just $ TySet Opposite [])
+
+effectTop (isFreeEffectType -> Just (labelType, opsType)) = do
+  allConstructorsMatchingForElemTy <- allDataConstructorNamesForType labelType
+  return (Just $ freeEffectMember labelType opsType (map TyCon allConstructorsMatchingForElemTy))
 
 effectTop _ = return Nothing
 

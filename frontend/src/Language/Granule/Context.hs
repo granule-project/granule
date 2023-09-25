@@ -80,11 +80,14 @@ relevantSubCtxt vars = filter relevant
   where relevant (var, _) = var `elem` vars
 
 lookupAndCutout :: Id -> Ctxt t -> Maybe (Ctxt t, t)
-lookupAndCutout _ [] = Nothing
-lookupAndCutout v ((v', t):ctxt) | v == v' =
-   Just (ctxt, t)
-lookupAndCutout v ((v', t'):ctxt) = do
-  (ctxt', t) <- lookupAndCutout v ctxt
+lookupAndCutout v = (fmap (\(a, (_, b)) -> (a, b))) . lookupAndCutoutBy id v
+
+lookupAndCutoutBy :: Eq a => (Id -> a) -> Id -> Ctxt t -> Maybe (Ctxt t, (Id, t))
+lookupAndCutoutBy _ _ [] = Nothing
+lookupAndCutoutBy f v ((v', t):ctxt) | f v == f v' =
+   Just (ctxt, (v', t))
+lookupAndCutoutBy f v ((v', t'):ctxt) = do
+  (ctxt', t) <- lookupAndCutoutBy f v ctxt
   Just ((v', t') : ctxt', t)
 
 getCtxtIds :: Ctxt t -> [Id]
