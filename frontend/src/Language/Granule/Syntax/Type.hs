@@ -110,14 +110,6 @@ instance FirstParameter TypeScheme Span
 trivialScheme :: Type -> TypeScheme
 trivialScheme = Forall nullSpanNoFile [] []
 
--- Convert a type scheme into a rankN type
-typeSchemeToRankN :: TypeScheme -> Maybe Type
-typeSchemeToRankN (Forall sp binders [] ty) =
-  Just $ foldl (\ty (var, k) -> TyForall var k ty) ty binders
--- Cannot handle constraint at the moment
-typeSchemeToRankN _ =
-  Nothing
-
 unforall :: TypeScheme -> Type
 unforall (Forall _ _ _ t) = t
 
