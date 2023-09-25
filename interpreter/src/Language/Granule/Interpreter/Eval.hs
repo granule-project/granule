@@ -272,7 +272,7 @@ evalInWHNF ctxt (AppTy _ _ _ (Val s a rf (Var a' n)) t) | internalName n `elem` 
 evalInWHNF ctxt (AppTy s _ _ e t) = do
   v <- evalInWHNF ctxt e
   case v of
-    -- Note, doesn't bother substituting he types
+    -- Note, doesn't bother substituting the types
     (Val _ _ _ (TyAbs _ var t expr)) -> evalInWHNF ctxt expr
     _ -> error $ "Bug: LHS of a type application is not a type abstraction: " <> pretty v
 
