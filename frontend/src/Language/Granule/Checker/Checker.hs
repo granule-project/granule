@@ -1651,13 +1651,43 @@ synthExpr defs gam pol (Val s0 _ rf p@(Pack sp a ty e x k ty')) = do
 -- ------------------------------------------
 -- G |- /\(x : t) . e : forall {x : t} . A
 
-synthExpr defs gam pol (Val s0 _ rf val@(TyAbs a v k e)) = do
+synthExpr defs gam pol (Val s0 _ rf val@(TyAbs a (Left (v, k)) e)) = do
   debugM "synthExpr [forall]" (pretty val)
   registerTyVarInContextWith' v k ForallQ $ do
     (ty, gam, subst, elabE) <- synthExpr defs gam pol e
     let retTy = TyForall v k ty
-    let elab = Val s0 retTy rf (TyAbs retTy v k elabE)
+    let elab = Val s0 retTy rf (TyAbs retTy (Left (v, k)) elabE)
     return (TyForall v k ty, gam, subst, elab)
+
+-- Implicit lifting of type scheme to rankN
+--- G |- var : forall {id : k} . A
+--- -------------------------------------
+-- G |- /\{id} . var : (forall {id : t} . A)
+
+synthExpr defs gam pol (Val s _ rf val@(TyAbs a (Right ids) e)) = do
+    case e of
+      Val _ _ _ (Var _ x) ->
+        case lookup x (defs <> Primitives.builtins) of
+          Just tyScheme@(Forall s0 bindings constraints tyInner)  -> do
+            let (tyRankN, bindings') = build ids bindings tyInner
+            let newTyScheme = Forall s0 bindings' constraints tyRankN
+            (ty', ctxt, subst, elab) <- freshenTySchemeForVar s rf x newTyScheme
+            return (ty', ctxt, subst, elab)
+
+          Nothing -> throw UnboundVariableError{ errLoc = s, errId = x }
+      _ ->
+        error "Can only do implicit lifting of type scheme to rankN types on a variable"
+
+
+  where
+    build [] bindings tyInner = (tyInner, bindings)
+    build (var:vars) bindings tyInner =
+      case lookupAndCutoutBy sourceName var bindings of
+        Nothing -> build vars bindings tyInner
+        Just (rest, (var', ty))  ->
+            let (tyInner', bindings') = build vars rest tyInner
+            in (TyForall var' ty tyInner', bindings')
+
 
 --
 -- G |- e1 : exists {y : k} . A

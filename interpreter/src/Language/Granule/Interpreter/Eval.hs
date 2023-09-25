@@ -62,6 +62,10 @@ data Runtime a =
   -- | Data managed by the runtime module (mutable arrays)
   | Runtime RuntimeData
 
+  -- | Free monad representation
+  | FreeMonadPure (Expr (Runtime a) ())
+  | FreeMonadImpure (Expr (Runtime a) ())
+
 -- Dual-ended channel
 data BinaryChannel a =
        BChan { fwd :: CC.Chan (Value (Runtime a) a)
@@ -1124,7 +1128,7 @@ instance RuntimeRep Value where
   toRuntimeRep (NumInt x) = NumInt x
   toRuntimeRep (NumFloat x) = NumFloat x
   toRuntimeRep (Pack s a ty e var k ty') = Pack s a ty (toRuntimeRep e) var k ty'
-  toRuntimeRep (TyAbs a v t e) = TyAbs a v t (toRuntimeRep e)
+  toRuntimeRep (TyAbs a vart e) = TyAbs a vart (toRuntimeRep e)
 
 eval :: (?globals :: Globals) => AST () () -> IO (Maybe RValue)
 eval = evalAtEntryPoint (mkId entryPoint)

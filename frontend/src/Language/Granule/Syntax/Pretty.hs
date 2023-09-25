@@ -297,8 +297,11 @@ instance Pretty v => Pretty (Value v a) where
     pretty (Pack s a ty e1 var k ty') =
       "pack <" <> pretty ty <> ", " <> pretty e1 <> "> "
       <> "as exists {" <> pretty var <> " : " <> pretty k <> "} . " <> pretty ty'
-    pretty (TyAbs _ v k e) =
+    pretty (TyAbs _ (Left (v, k)) e) =
       "/\\(" <> pretty v <> " : " <> pretty k <> ") -> " <> pretty e
+    pretty (TyAbs _ (Right ids) e) =
+      "/\\{" <> intercalate ", " (map pretty ids) <> "}"
+
 
 instance Pretty Id where
   pretty
