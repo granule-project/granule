@@ -323,12 +323,12 @@ fromPure = BUILTIN
 --- # Algebraic effects and handlers
 --------------------------------------
 
---- Generic effect
+--- Lift a CPS-style effect operation to direct-style, also called the "generic effect" operation
 call : forall {s : Semiring, grd : s, i : Type, o : Type, r : Type, labels : Type, sigs : Type -> labels -> Type, e : labels}
-   . (i -> (o -> r) [grd] -> sigs r e) -> i -> o <Eff labels sigs {e}>
+     . (i -> (o -> r) [grd] -> sigs r e) -> i -> o <Eff labels sigs {e}>
 call = BUILTIN
 
--- Effect handler
+--- Deploy an effect handler on a computation tree
 handle : forall {labels : Type, sig : Type -> labels -> Type, a b : Type, e : Set labels}
        . (fmap : (forall {a : Type} . (forall {b : Type} . (forall {l : labels} . (a -> b) [0..Inf] -> sig a l -> sig b l))))
        -> (forall {l : labels} . sig b l -> b) [0..Inf]
