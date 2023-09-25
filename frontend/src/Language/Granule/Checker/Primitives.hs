@@ -68,6 +68,7 @@ typeConstructors =
     , (mkId "Float",  (Type 0, [], []))
     , (mkId "DFloat",  (Type 0, [], [])) -- special floats that can be tracked for sensitivty
     , (mkId "Char",   (Type 0, [], []))
+    , (mkId "Void",   (Type 0, [], []))
     , (mkId "String", (Type 0, [], []))
     , (mkId "Inverse", ((funTy (Type 0) (Type 0)), [], []))
     -- Predicates on deriving operations:x
@@ -323,14 +324,14 @@ fromPure = BUILTIN
 --------------------------------------
 
 --- Generic effect
-call : forall {i : Type, o : Type, r : Type, labels : Type, sigs : Type -> labels -> Type, e : labels}
-   . (i -> (o -> r) -> sigs r e) -> i -> o <Eff labels sigs {e}>
+call : forall {s : Semiring, grd : s, i : Type, o : Type, r : Type, labels : Type, sigs : Type -> labels -> Type, e : labels}
+   . (i -> (o -> r) [grd] -> sigs r e) -> i -> o <Eff labels sigs {e}>
 call = BUILTIN
 
 -- Effect handler
 handle : forall {labels : Type, sig : Type -> labels -> Type, a b : Type, e : Set labels}
        . (fmap : (forall {a : Type} . (forall {b : Type} . (forall {l : labels} . (a -> b) [0..Inf] -> sig a l -> sig b l))))
-       -> (forall {l : labels} . sig b l -> b)
+       -> (forall {l : labels} . sig b l -> b) [0..Inf]
        -> (a -> b)
        -> a <Eff labels sig e>
        -> b

@@ -70,3 +70,15 @@ pushList = push @List
 pullList : forall {s : Semiring, r : s, a : Type}
          . List (a [r]) -> (List a) [r]
 pullList = pull @List
+
+--- # List monad
+
+return_list : forall {a : Type} . a -> List a
+return_list x = Next x Empty
+
+bind_list : forall {a b : Type} . (a -> List b) [] -> List a -> List b
+bind_list [f] Empty = Empty;
+bind_list [f] (Next x xs) = append_list (f x) (bind_list [f] xs)
+
+join_list : forall {a : Type} . List (List a) -> List a
+join_list = bind_list [\x -> x]

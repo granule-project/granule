@@ -63,8 +63,8 @@ data Runtime a =
   | Runtime RuntimeData
 
   -- | Free monad representation
-  | FreeMonadPure (Expr (Runtime a) ())
   | FreeMonadImpure (Expr (Runtime a) ())
+  | FreeMonadBind (Value (Runtime a) ()) (Pattern a) (Expr (Runtime a) ())
 
 -- Dual-ended channel
 data BinaryChannel a =
@@ -152,8 +152,8 @@ instance Show (Runtime a) where
   show (Handle _) = "Some handle"
   show (PureWrapper _) = "<suspended IO>"
   show (Runtime _) = "<array>"
-  show (FreeMonadPure r) = "Return(" <> show r <> ")"
   show (FreeMonadImpure r) = "Impure(" <> show r <> ")"
+  show (FreeMonadBind r p k) = "do {... <- " <> show r <> "; ...}"
 
 instance Pretty (Runtime a) where
   pretty = show
@@ -398,7 +398,7 @@ evalInCBV ctxt (Binop _ _ _ op e1 e2) = do
      v2 <- evalInCBV ctxt e2
      return $ evalBinOp op v1 v2
 
-evalInCBV ctxt (LetDiamond s _ _ p _ e1 e2) = do
+evalInCBV ctxt (LetDiamond s a rf p mt e1 e2) = do
   -- (cf. LET_1)
   v1 <- evalInCBV ctxt e1
   case v1 of
@@ -419,7 +419,7 @@ evalInCBV ctxt (LetDiamond s _ _ p _ e1 e2) = do
         -- Do the inner
         v1' <- evalInCBV ctxt eInner
         --
-        return $ Ext () $ FreeMonadImpure $ valExpr v1'
+        return $ Ext () $ FreeMonadBind v1' p e2
 
 
 
@@ -672,6 +672,19 @@ pmatchCBV ctxt (_:ps) v = pmatchCBV ctxt ps v
 valExpr :: ExprFix2 g ExprF ev () -> ExprFix2 ExprF g ev ()
 valExpr = Val nullSpanNoFile () False
 
+appExpr :: ExprFix2 ExprF g ev () -> ExprFix2 ExprF g ev () -> ExprFix2 ExprF g ev ()
+appExpr e1 e2 = App nullSpanNoFile () False e1 e2
+
+multiAppExpr :: ExprFix2 ExprF g ev () -> [ExprFix2 ExprF g ev ()] ->  ExprFix2 ExprF g ev ()
+multiAppExpr fun args =
+  foldl (\arg rest -> appExpr arg rest) fun args
+
+promoteExpr :: ExprFix2 ExprF ValueF ev () -> ExprFix2 ExprF ValueF ev ()
+promoteExpr e = valExpr $ Promote () e
+
+varExpr :: Prelude.String -> ExprFix2 ExprF ValueF ev ()
+varExpr var = valExpr $ Var () $ mkId var
+
 builtIns :: (?globals :: Globals) => Ctxt RValue
 {-# NOINLINE builtIns #-}
 builtIns =
@@ -806,11 +819,80 @@ builtIns =
                               return $ Ext () $ FreeMonadImpure $
                                   App nullSpan () False
                                     (App nullSpan () False (valExpr op) (valExpr inp))
-                                    (valExpr $
-                                      Abs () (PVar nullSpan () False $ (mkId "o")) Nothing
-                                        (valExpr $ Ext () $ FreeMonadPure $ (valExpr $ (Var () $ mkId "o")))))
+                                     (valExpr $ Promote () $ valExpr $ Ext () $
+                                       Primitive $ \o ->
+                                         return (Ext () $ PureWrapper $ return $ (valExpr o))))
+  , (mkId "handle", Ext () $ PrimitiveClosure handlePrim)
   ]
   where
+
+    -- Based on the catamorphism of a free monad
+    handlePrim :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
+    handlePrim ctxt fmap@(TyAbs _ _ fmap_inner) = do
+      -- evaluate the fmap expression down to an abstraction
+      fmap_fun <- evalIn ctxt fmap_inner
+      return $ Ext () $ Primitive $ \alg ->
+        return $ Ext () $ Primitive $ \ret_handler ->
+          return $ Ext () $ Primitive $ \computation ->
+            case computation of
+
+              -- handler alg f (Pure x) = f x
+              Ext _ (PureWrapper comp) -> do
+                -- run the IO in here (should be none)
+                comp' <- comp
+                -- force evaluation of the expression
+                val <- evalIn ctxt comp'
+                -- now apply the rethandler
+                evalIn ctxt (appExpr (valExpr ret_handler) (valExpr val))
+
+              Pure _ comp -> do
+                -- force evaluation of the expression
+                val <- evalIn ctxt comp
+                -- now apply the rethandler
+                evalIn ctxt (appExpr (valExpr ret_handler) (valExpr val))
+
+
+              -- handler alg f (Impure k) = alg (fmap (handler alg f) k)
+              Ext _ (FreeMonadImpure comp) -> do
+                -- evaluate the inner continatuon to a value (should be a function)
+                cont_val <- evalIn ctxt comp
+                -- unwrap algebra argument
+                case alg of
+                  (Promote _ alg_inner0) -> do
+                    alg_inner' <- evalIn ctxt alg_inner0
+                    case alg_inner' of
+                      (TyAbs _ _ alg_inner) -> do
+                        alg_fun <- evalIn ctxt alg_inner
+                        --
+                        evalIn ctxt
+                          (appExpr (valExpr alg_fun)
+                            (multiAppExpr (valExpr fmap_fun) [promoteExpr (multiAppExpr (varExpr "handle") [valExpr fmap, valExpr alg, valExpr ret_handler])
+                                              , valExpr cont_val ]))
+                      alg_expr -> error $ "Internal bug: handle expecting algebra argument to be a function, got " <> pretty alg_expr
+                  alg_inner0 -> error $ "Internal bug: handle expecting algebra argument in a box, got " <> pretty alg_inner0
+
+              -- Bind case
+              --   (Impure x) >>= k = Impure $ fmap (\freefa -> freefa >>= k) x
+
+              Ext _ (FreeMonadBind comp p rest) -> do
+
+                evalIn ctxt $
+                  multiAppExpr (varExpr "handle")
+                    [ valExpr fmap
+                    , valExpr alg
+                    , valExpr ret_handler
+                    , valExpr $ Ext () (FreeMonadImpure $
+                      multiAppExpr
+                          (valExpr fmap_fun)
+                          [promoteExpr $ valExpr $ Ext ()
+                              (Primitive (\freefa -> evalIn ctxt (LetDiamond nullSpanNoFile () False p Nothing (valExpr freefa) rest)))
+                          , valExpr $ comp])]
+
+              r -> error $ "Interal bug: handle expecting a free monad but got " <> pretty r
+
+
+    handlePrim ctxt t = error $ "Internal bug: expecting function as first input to 'handle', got " <> pretty t
+
     forkLinear :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
     forkLinear ctxt e = case e of
       Abs{} -> do c <- newChan
