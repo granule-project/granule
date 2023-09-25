@@ -1,3 +1,13 @@
+-- A function expecting a rank-1 polymorphic function which it reuses at
+-- two different types (`Char` and `()`)
+foo : (forall {b : Type} . b -> (Int, b)) [2] -> ((Int, Char), (Int, ()))
+foo [k] = ((k @ Char) 'a', (k @ ()) ())
+
+-- Application of `foo` with a reusable type abstraction function
+main : ((Int, Char), (Int, ()))
+main = foo [(/\(t : Type) -> \(x : t) -> (42, x))]
+
+-- Mixing existentials and rankN forall
 unpacker : forall {f : Type → Type, a : Type} .
             (exists {a : Type} . f a) → (forall {t : Type} . f t → a) → a
 unpacker e f =

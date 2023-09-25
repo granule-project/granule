@@ -1,3 +1,9 @@
+-- Example of using algebraic effects and handlers in Granule to capture
+-- state effects
+
+-- Uses the builtin `call` and `handle` operations.
+-- See https://granule-project.github.io/docs/modules/Primitives.html#algebraiceffectsandhandlers
+
 import State
 
 -- # State operations

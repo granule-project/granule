@@ -1,3 +1,7 @@
+  # 0.9.5.0
+  - Adds explicit rankN types in the style of System F (see examples/rankN.gr)
+  - Given the above, adds the (long awaited) algebraic effects and handlers implementation (see examples/effects_state.gr and examples/effects_nondet.gr) and see -- https://granule-project.github.io/docs/modules/Primitives.html#algebraiceffectsandhandlers
+
   # 0.9.4.0
   - Advanced synthesis algorithm for `language GradeBase` mode.
   - Better standard library documentation
