@@ -12,8 +12,8 @@ import Language.Granule.Utils
 import qualified Language.Granule.Checker.Primitives as Primitives
 
 checkNameClashes :: (?globals :: Globals)
-                 => [(Id, (Type, [Id], [Int]))] -> [DataDecl] -> AST () () -> Checker ()
-checkNameClashes typeConstructors builtinDataDecls (AST dataDecls defs _ _ _) =
+                 => [(Id, (Type, [Id], [Int]))] -> [DataDecl] -> AST () () -> AST () () -> Checker ()
+checkNameClashes typeConstructors builtinDataDecls (AST dataDecls defs _ _ _) builtinsAST =
     case concat [typeConstructorErrs, dataConstructorErrs, defErrs] of
       []     -> pure ()
       (d:ds) -> throwError (d:|ds)
@@ -59,7 +59,9 @@ checkNameClashes typeConstructors builtinDataDecls (AST dataDecls defs _ _ _) =
     defErrs
       = fmap mkDuplicateDefErr
       . duplicatesBy (sourceName . defId)
-      $ defs
+      $ (defs ++ definitions builtinsAST)
+
+
 
     mkDuplicateDefErr (x2, xs)
       = NameClashDefs

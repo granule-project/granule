@@ -1,0 +1,5 @@
+foo : (forall {b : Type} . b -> (Int, b)) [2] -> ((Int, Char), (Int, ()))
+foo [k] = ((k @ Char) 'a', (k @ ()) ())
+
+main : ((Int, Char), (Int, ()))
+main = foo [(/\(t : Type) -> \(x : t) -> (42, x))]

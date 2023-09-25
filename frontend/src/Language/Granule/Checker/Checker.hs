@@ -70,7 +70,7 @@ check :: (?globals :: Globals)
 check ast@(AST _ _ _ hidden _) = do
   evalChecker (initState { allHiddenNames = hidden }) $ (do
       ast@(AST dataDecls defs imports hidden name) <- return $ replaceTypeAliases ast
-      _    <- checkNameClashes Primitives.typeConstructors Primitives.dataTypes ast
+      _    <- checkNameClashes Primitives.typeConstructors Primitives.dataTypes ast Primitives.builtinsParsed
       debugHeadingM "Register type constructors"
       _    <- runAll registerTypeConstructor  (Primitives.dataTypes <> dataDecls)
       debugHeadingM "Register data constructors"
@@ -90,7 +90,7 @@ synthExprInIsolation :: (?globals :: Globals)
   -> IO (Either (NonEmpty CheckerError) (Either (TypeScheme , [Def () ()]) Type))
 synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
   evalChecker (initState { allHiddenNames = hidden }) $ do
-      _    <- checkNameClashes Primitives.typeConstructors Primitives.dataTypes ast
+      _    <- checkNameClashes Primitives.typeConstructors Primitives.dataTypes ast Primitives.builtinsParsed
       _    <- runAll registerTypeConstructor (Primitives.dataTypes ++ dataDecls)
       _    <- runAll registerDataConstructors (Primitives.dataTypes ++ dataDecls)
       defs <- runAll kindCheckDef defs
@@ -1599,8 +1599,18 @@ synthExpr defs gam pol e@(AppTy s _ rf e1 ty) = do
           debugM "derived drop tys:" (pretty typScheme)
           -- return this variable expression in place here
           freshenTySchemeForVar s rf name typScheme
-    _ -> throw NeedTypeSignature{ errLoc = getSpan e, errExpr = e }
 
+    expr -> do
+      -- Synth expr, expecting it to be a forall now
+      (retTy, gam', subst, elab) <- synthExpr defs gam pol expr
+      case retTy of
+        (TyForall var kind receiverTy) -> do
+          tyA   <- substitute [(var, SubstT ty)] receiverTy
+          elab' <- substitute [(var, SubstT ty)] elab
+          return (tyA, gam', subst, elab')
+
+        _ ->
+          throw LhsOfTyApplicationNotForall{ errLoc = getSpan e, errTy = retTy }
 
 --  G |- e : ty'[ty/x]
 -- ------------------------------------------------
@@ -1612,6 +1622,19 @@ synthExpr defs gam pol (Val s0 _ rf p@(Pack sp a ty e x k ty')) = do
   let retTy = TyExists x k ty'
   let elab = Val s0 retTy rf (Pack sp retTy ty elabE x k ty')
   return (retTy, gam, subst, elab)
+
+
+-- G |- e : A
+-- ------------------------------------------
+-- G |- /\(x : t) . e : forall {x : t} . A
+
+synthExpr defs gam pol (Val s0 _ rf val@(TyAbs a v k e)) = do
+  debugM "synthExpr [forall]" (pretty val)
+  registerTyVarInContextWith' v k ForallQ $ do
+    (ty, gam, subst, elabE) <- synthExpr defs gam pol e
+    let retTy = TyForall v k ty
+    let elab = Val s0 retTy rf (TyAbs retTy v k elabE)
+    return (TyForall v k ty, gam, subst, elab)
 
 --
 -- G |- e1 : exists {y : k} . A

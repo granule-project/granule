@@ -1,0 +1,29 @@
+-- Free monad data type (in multiplicative style)
+data Free (f : Type → Type) a where
+  Pure   : a → Free f a;
+  Impure : f (Free f a) → Free f a
+
+return : ∀ {a : Type, f : Type → Type} . a → Free f a
+return x = Pure x
+
+bind : ∀ {a : Type, b : Type, f : Type → Type} .
+       (forall {a : Type} . (forall {b : Type} .
+         (a -> b) [0..1] -> f a -> f b)) [0..∞] → Free f a → (a → Free f b) [0..1] → Free f b
+bind [fmap] f [k] =
+  case f of
+    (Pure x)   → k x;
+    (Impure d) →
+      Impure (((fmap @ (Free f a)) @ (Free f b)) [λ(x : Free f a) → bind [fmap] x [k]] d)
+
+data Maybe a = Nothing | Just a
+
+foo : Free Maybe Int
+foo = Impure (Just (Impure (Just (Pure 1))))
+
+maybeMap : forall {a : Type, b : Type} . (a -> b) [0..1] -> Maybe a -> Maybe b
+maybeMap [f] Nothing = Nothing;
+maybeMap [f] (Just x) = Just (f x)
+
+main : Free Maybe Char
+main = bind [/\(a : Type) -> /\(b : Type) -> maybeMap : ((a -> b)[0..1] -> Maybe a -> Maybe b)]
+       foo [\x -> Pure (charFromInt x)]
