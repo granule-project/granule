@@ -682,6 +682,7 @@ checkExpr defs gam pol topLevel tau (App s a rf e1 e2) | (usingExtension GradedB
 
   return (gam, subst, elab)
 
+-- Graded base application
 checkExpr defs gam pol topLevel tau (App s _ rf e1 e2) | not (usingExtension GradedBase) = do
     debugM "checkExpr[App]" (pretty s <> " : " <> pretty tau)
     (argTy, gam2, subst2, elaboratedR) <- synthExpr defs gam pol e2
@@ -732,6 +733,7 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
     let elaborated = Val s ty rf (Promote tau elaboratedE)
     return (gam'', substFinal, elaborated)
 
+-- Necessitation
 checkExpr defs gam pol _ ty@(Star demand tau) (Val s _ rf (Nec _ e)) = do
     debugM "checkExpr[Star]" (pretty s <> " : " <> pretty ty)
 
@@ -846,6 +848,27 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
 
   let elaborated = Case s tau rf elaboratedGuard elaboratedCases
   return (g, subst, elaborated)
+
+-- checking variables that are rank-N polymorphic
+-- we can lift top-level definitions with type schemes into rank-N polymorphic
+-- -- variants
+-- checkExpr defs gam pol topLevel ty@(TyForall v k ty') (Val sp a rf (Var a' id))
+--  | lookup id gam == Nothing = do
+--   debugM "checkExpr[Var]" (pretty sp)
+--   case lookup id (defs <> Primitives.builtins) of
+--     Just tyScheme@(Forall _ _ _ tyInner)  ->
+--       case typeSchemeToRankN tyScheme of
+--         Just ty' -> do
+--           (tyEq, _, subst) <- equalTypesWithPolarity sp SndIsSpec ty ty'
+--           if tyEq
+--           then do
+--             let elaboratedE = Val sp ty rf (Var ty id)
+--             return (gam, subst, elaboratedE)
+--           else
+--             throw TypeError{ errLoc = sp, tyExpected = ty , tyActual = ty' }
+--         Nothing ->  throw TypeError{ errLoc = sp, tyExpected = ty , tyActual = tyInner }
+--     -- Couldn't find it
+--     Nothing -> throw UnboundVariableError{ errLoc = sp, errId = id }
 
 -- All other expressions must be checked using synthesis
 checkExpr defs gam pol topLevel tau e = do
@@ -1126,7 +1149,7 @@ synthExpr defs gam pol (LetDiamond s _ rf p optionalTySig e1 e2) = do
   let elaborated = LetDiamond s t rf elaboratedP optionalTySig elaborated1 elaborated2
   return (t, gamNew, subst, elaborated)
 
-
+-- Try catch
 synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
   debugM "synthExpr[TryCatch]" (pretty s)
 
