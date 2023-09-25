@@ -227,6 +227,12 @@ symGradeLess (SExtNat n) (SExtNat n') = return $ n .< n'
 symGradeLess SPoint SPoint            = return sTrue
 symGradeLess (SUnknown s) (SUnknown t) = sLtTree s t
 
+symGradeLess (SExtNat n@(SNatX ni)) (SNat n') =
+  return $ ite (isInf n) sFalse (ni .< n')
+symGradeLess (SNat n) (SExtNat n'@(SNatX ni')) =
+  return $ ite (isInf n') sTrue (n .< ni')
+
+
 symGradeLess s t | isSProduct s || isSProduct t =
   either solverError id (applyToProducts symGradeLess (.&&) (const sTrue) s t)
 
@@ -263,6 +269,12 @@ symGradeEq (SNat n) (SNat n')     = return $ n .== n'
 symGradeEq (SFloat n) (SFloat n') = return $ n .== n'
 symGradeEq (SLevel n) (SLevel n') = return $ n .== n'
 symGradeEq (SSet p n) (SSet p' n') | p == p' = return $ n .== n'
+
+symGradeEq (SExtNat n@(SNatX ni)) (SNat n') =
+  return $ ite (isInf n) sFalse (ni .== n')
+symGradeEq (SNat n) (SExtNat n'@(SNatX ni')) =
+  return $ ite (isInf n') sFalse (n .== ni')
+
 symGradeEq (SExtNat n) (SExtNat n') = return $ n .== n'
 symGradeEq SPoint SPoint          = return sTrue
 symGradeEq (SOOZ s) (SOOZ r)      = pure $ s .== r

@@ -12,8 +12,8 @@ data Labels = Get | Put
 
 -- Operations
 data StateOps (s : Type) (r : Type) : Labels -> Type where
- GetOp : ()         -> (s -> r) [1 : Ext Nat]  -> StateOps s r Get;
- PutOp : s [0..Inf] -> (() -> r) [1 : Ext Nat] -> StateOps s r Put
+ GetOp : ()         -> (s  -> r) [1] -> StateOps s r Get;
+ PutOp : s [0..Inf] -> (() -> r) [1] -> StateOps s r Put
 
  -- Functoriality of operations
 fmap_stateops : forall {s a b : Type, l : Labels}

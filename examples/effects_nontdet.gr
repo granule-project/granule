@@ -12,8 +12,8 @@ data Labels = Toss | Drop
 
 -- Operations
 data GameOps (r : Type) : Labels -> Type where
-  FlipCoin : () -> (Bool -> r) [2 : Ext Nat] -> GameOps r Toss;
-  Fumble   : () -> (Void -> r) [0 : Ext Nat] -> GameOps r Drop
+  FlipCoin : () -> (Bool -> r) [2] -> GameOps r Toss;
+  Fumble   : () -> (Void -> r) [0] -> GameOps r Drop
 
 -- Functoriality of operations
 fmap_gameops : forall {a b : Type, l : Labels}
@@ -47,5 +47,5 @@ example2 = let
 go : forall {e : Set Labels, a : Type} . a <Eff Labels GameOps e> -> List a
 go = handle (/\{a,b,l}.fmap_gameops) [/\{l}.handler] (return_list)
 
-main : List (Int, Int)
+main : List (Bool, Bool)
 main = go example1
