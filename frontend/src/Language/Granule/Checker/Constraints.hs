@@ -122,14 +122,19 @@ compileToSBV predicate tyVarContext constructors =
       buildTheorem' solverVars predicate
 
     buildTheoremNew ((v, (t, q)) : ctxt) solverVars =
-      let ?constructors = constructors
-      in freshSolverVarScoped compileQuantScoped (internalName v) t q
-          (\(varPred, solverVar) -> do
-              pred <- buildTheoremNew ctxt ((v, solverVar) : solverVars)
-              case q of
-                ForallQ   -> return $ varPred .=> pred
-                BoundQ    -> return $ varPred .=> pred
-                InstanceQ -> return $ varPred .&& pred)
+      if v `elem` freeVars predicate
+        then
+
+          let ?constructors = constructors
+          in freshSolverVarScoped compileQuantScoped (internalName v) t q
+              (\(varPred, solverVar) -> do
+                  pred <- buildTheoremNew ctxt ((v, solverVar) : solverVars)
+                  case q of
+                    ForallQ   -> return $ varPred .=> pred
+                    BoundQ    -> return $ varPred .=> pred
+                    InstanceQ -> return $ varPred .&& pred)
+
+        else buildTheoremNew ctxt solverVars
 
     -- Build the theorem, doing local creation of universal variables
     -- when needed (see Impl case)

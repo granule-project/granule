@@ -388,7 +388,9 @@ equalTypesRelatedCoeffectsInner s rel t1 t2 k sp mode = do
           if handleBySolver then do
             -- Go to SMT
             debugM ("equality on types of kind: " <> pretty k) (pretty t1 ++ " =? " ++ pretty t2)
-            addConstraint $ Eq s t1 t2 k
+            case isSet k of
+              Nothing -> addConstraint $ Eq s t1 t2 k
+              Just _  -> addConstraint $ ApproximatedBy s t1 t2 k
             return (True, [])
           else
             -- No other way to do equality so bail
