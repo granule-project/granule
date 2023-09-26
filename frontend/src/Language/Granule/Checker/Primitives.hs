@@ -345,7 +345,7 @@ handleGr : forall {labels : Type, sig : Type -> Set labels -> Type, a : Type, b 
        --- ^ functoriality of sig
        -> (forall {l : Set labels} . (forall {j : Set labels} . sig (b j) l -> b (j * l)) [0..Inf])
        -> (a -> b {})
-       --- ^ (a * sig) - algebra
+       --- ^ (a * sig) - graded algebra
        -> a <Eff labels sig e>
        -> b e
 handleGr = BUILTIN
