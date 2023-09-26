@@ -955,8 +955,8 @@ flattenable t1 t2
     t1 | t1 == extendedNat -> return $ Just (TyInfix TyOpTimes, [], t1)
 
     TyCon (internalName -> "Nat")   -> return $ Just (TyInfix TyOpTimes, [], t1)
-    TyCon (internalName -> "Level") -> return $ Just (TyInfix TyOpMeet, [], t1)
-    TyCon (internalName -> "Sec") -> return $ Just (TyInfix TyOpMeet, [], t1)
+    TyCon (internalName -> "Level") | SecurityLevels `elem` globalsExtensions ?globals -> return $ Just (TyInfix TyOpMeet, [], t1)
+    TyCon (internalName -> "Sec") -> return $ Just (TyInfix TyOpTimes, [], t1)
 
     TyApp (TyCon (internalName -> "Interval")) t ->  flattenable t t
 
