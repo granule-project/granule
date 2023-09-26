@@ -1,0 +1,18 @@
+-- gr --no-eval
+
+data Bool = True | False
+
+data MaybeTag (a : Type) : Bool -> Type where
+  Nothing : MaybeTag a False;
+  Just    : a -> MaybeTag a True
+
+data Option a = None | Some a
+
+foo : forall {b : Bool, a : Type} . MaybeTag a b -> Option a
+foo Nothing = None;
+foo (Just x) = Some x
+
+foo' : forall {b : Bool, a : Type} . Option (MaybeTag a b) -> Option a
+foo' (Some Nothing) = None;
+foo' (Some (Just x)) = Some x;
+foo' None = None

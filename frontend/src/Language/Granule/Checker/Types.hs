@@ -646,7 +646,7 @@ refineBinderQuantification ctxt ty = mapM computeQuantifier ctxt
     aux id (Box _ t)       = aux id t
     aux id (Diamond _ t)   = aux id t
     aux id (Star _ t)      = aux id t
-    aux id t@(TyApp _ _)   =
+    aux id t@(TyApp _ t2)   =
       case leftmostOfApplication t of
         TyCon tyConId -> do
           st <- get
@@ -655,7 +655,8 @@ refineBinderQuantification ctxt ty = mapM computeQuantifier ctxt
               -- For this type constructor `tyConId`
               -- if any of its argument positions `i` is an index
               -- then check if the `id` here is in the term for that argument
-              return $ any (\i ->
+              onRight <- aux id t2
+              return $ onRight || any (\i ->
                  if i < length (typeArguments t)
                   then id `elem` freeVars (typeArguments t !! i)
                   else False) indices
