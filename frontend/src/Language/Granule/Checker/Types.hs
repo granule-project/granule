@@ -660,7 +660,7 @@ refineBinderQuantification ctxt ty = mapM computeQuantifier ctxt
                  if i < length (typeArguments t)
                   then id `elem` freeVars (typeArguments t !! i)
                   else False) indices
-            Nothing -> throw UnboundVariableError { errLoc = nullSpan , errId = id }
+            Nothing -> throw UnboundVariableError { errLoc = nullSpan , errId = tyConId }
         -- unusual- put possible (e.g., `f t`) give up and go for ForallQ
         _ -> return False
     aux id (TyInfix _ t1 t2) = liftM2 (||) (aux id t1) (aux id t2)
