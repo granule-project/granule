@@ -140,10 +140,10 @@ typeConstructors =
 
      -- Free : (e : Type) -> Effect
     , (mkId "GradedFree", (FunTy (Just $ mkId "labels") Nothing (Type 0)
-                       (FunTy Nothing Nothing (funTy (Type 0) (funTy (tyVar "labels") (Type 0))) keffect), [], [0]))
+                       (FunTy Nothing Nothing (funTy (Type 0) (funTy (TyApp (tyCon "Set") (tyVar "labels")) (Type 0))) keffect), [], [0]))
     , (mkId "Eff",
          (FunTy (Just $ mkId "labels") Nothing (Type 0)
-            (FunTy (Just $ mkId "sig") Nothing (funTy (Type 0) (funTy (tyVar "labels") (Type 0)))
+            (FunTy (Just $ mkId "sig") Nothing (funTy (Type 0) (funTy (TyApp (tyCon "Set") (tyVar "labels")) (Type 0)))
               (funTy (TyApp (tyCon "Set") (tyVar "labels")) (TyApp (TyApp (tyCon "GradedFree") (tyVar "labels")) (tyVar "sig")))), [], [0,1]))
 
     -- Arrays
@@ -324,15 +324,15 @@ fromPure = BUILTIN
 --------------------------------------
 
 --- Lift a CPS-style effect operation to direct-style, also called the "generic effect" operation
-call : forall {s : Semiring, grd : s, i : Type, o : Type, r : Type, labels : Type, sigs : Type -> labels -> Type, e : labels}
-     . (i -> (o -> r) [grd] -> sigs r e) -> i -> o <Eff labels sigs {e}>
+call : forall {s : Semiring, grd : s, i : Type, o : Type, r : Type, labels : Type, sigs : Type -> Set labels -> Type, e : Set labels}
+     . (i -> (o -> r) [grd] -> sigs r e) -> i -> o <Eff labels sigs e>
 call = BUILTIN
 
 --- Deploy an effect handler on a computation tree
-handle : forall {labels : Type, sig : Type -> labels -> Type, a b : Type, e : Set labels}
-       . (fmap : (forall {a : Type} . (forall {b : Type} . (forall {l : labels} . (a -> b) [0..Inf] -> sig a l -> sig b l))))
+handle : forall {labels : Type, sig : Type -> Set labels -> Type, a b : Type, e : Set labels}
+       . (fmap : (forall {a : Type} . (forall {b : Type} . (forall {l : Set labels} . (a -> b) [0..Inf] -> sig a l -> sig b l))))
        --- ^ functoriality of sig
-       -> (forall {l : labels} . sig b l -> b) [0..Inf]
+       -> (forall {l : Set labels} . sig b l -> b) [0..Inf]
        -> (a -> b)
        --- ^ (a * sig) - algebra
        -> a <Eff labels sig e>
