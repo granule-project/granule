@@ -828,7 +828,7 @@ builtIns =
 
     -- Based on the catamorphism of a free monad
     handlePrim :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
-    handlePrim ctxt fmap@(TyAbs _ _ fmap_inner) = do
+    handlePrim ctxt fmap@(Promote _ (Val _ _ _ (TyAbs _ _ fmap_inner))) = do
       -- evaluate the fmap expression down to an abstraction
       fmap_fun <- evalIn ctxt fmap_inner
       return $ Ext () $ Primitive $ \alg ->
@@ -891,7 +891,7 @@ builtIns =
               r -> error $ "Interal bug: handle expecting a free monad but got " <> pretty r
 
 
-    handlePrim ctxt t = error $ "Internal bug: expecting function as first input to 'handle', got " <> pretty t
+    handlePrim ctxt t = error $ "Internal bug: expecting a promoted function as first input to 'handle', got " <> pretty t
 
     forkLinear :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
     forkLinear ctxt e = case e of

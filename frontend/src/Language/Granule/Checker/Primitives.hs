@@ -330,7 +330,7 @@ call = BUILTIN
 
 --- Deploy an effect handler on a computation tree
 handle : forall {labels : Type, sig : Type -> Set labels -> Type, a b : Type, e : Set labels}
-       . (fmap : (forall {a : Type} . (forall {b : Type} . (forall {l : Set labels} . (a -> b) [0..Inf] -> sig a l -> sig b l))))
+       . (fmap : (forall {a : Type} . (forall {b : Type} . (forall {l : Set labels} . (a -> b) [0..Inf] -> sig a l -> sig b l))) [0..Inf])
        --- ^ functoriality of sig
        -> (forall {l : Set labels} . sig b l -> b) [0..Inf]
        -> (a -> b)
@@ -341,7 +341,7 @@ handle = BUILTIN
 
 --- Deploy an effect handler on a computation tree for a graded algebra
 handleGr : forall {labels : Type, sig : Type -> Set labels -> Type, a : Type, b : Set labels -> Type, e : Set labels}
-       . (fmap : (forall {a : Type} . (forall {b : Type} . (forall {l : Set labels} . (a -> b) [0..Inf] -> sig a l -> sig b l))))
+       . (fmap : (forall {a : Type} . (forall {b : Type} . (forall {l : Set labels} . (a -> b) [0..Inf] -> sig a l -> sig b l))) [0..Inf])
        --- ^ functoriality of sig
        -> (forall {l : Set labels} . (forall {j : Set labels} . sig (b j) l -> b (j * l)) [0..Inf])
        -> (a -> b {})
@@ -349,7 +349,6 @@ handleGr : forall {labels : Type, sig : Type -> Set labels -> Type, a : Type, b 
        -> a <Eff labels sig e>
        -> b e
 handleGr = BUILTIN
-
 
 --------------------------------------------------------------------------------
 --- # I/O

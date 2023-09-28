@@ -45,7 +45,7 @@ example2 = let
 
 -- Easy runner
 go : forall {e : Set Labels, a : Type} . a <Eff Labels GameOps e> -> List a
-go = handle (/\{a,b,l}.fmap_gameops) [/\{l}.handler] (return_list)
+go = handle [/\{a,b,l}.fmap_gameops] [/\{l}.handler] (return_list)
 
 main : List (Bool, Bool)
 main = go example1

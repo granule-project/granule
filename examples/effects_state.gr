@@ -40,7 +40,7 @@ incr = let
 handleState : forall {a b : Type, e : Set Labels, s : Type}
             . a <Eff Labels (StateOps s) e>
            -> State s a
-handleState = handle (/\{a,b,l}.fmap_stateops) [/\{l}.stateHandler] (return_state)
+handleState = handle [/\{a,b,l}.fmap_stateops] [/\{l}.stateHandler] (return_state)
 
 main : (Int, Int [])
 main = runState (handleState incr) [42]
