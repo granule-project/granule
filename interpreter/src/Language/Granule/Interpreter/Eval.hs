@@ -823,6 +823,7 @@ builtIns =
                                        Primitive $ \o ->
                                          return (Ext () $ PureWrapper $ return $ (valExpr o))))
   , (mkId "handle", Ext () $ PrimitiveClosure handlePrim)
+  , (mkId "handleGr", Ext () $ PrimitiveClosure handlePrim)
   ]
   where
 
