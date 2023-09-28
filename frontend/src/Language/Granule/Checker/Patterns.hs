@@ -242,13 +242,18 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC tyVarBindsRequ
           -- Put in the ty var context any foralls bound here in the pattern
           -- unifying them with the data constructor's equality information
           freshTyVarsCtxt' <- substitute unifiers freshTyVarsCtxt
+
           let before = tyVarBindsRequested
-          let after =  take (length tyVarBindsRequested) freshTyVarsCtxt'
+          reportM $ "freshTyVarsCtxt' = " <> pretty freshTyVarsCtxt
+          reportM $ "tyVarBinders = " <> (pretty tyVarBinders)
+          let after = (take (length tyVarBindsRequested) freshTyVarsCtxt')
+          reportM $ "requested variables were " <> pretty tyVarBindsRequested
+          reportM $ "corresponds to " <> pretty after
           -- create a substitution for this variable
           let bodySubst = map (\(id_b, (id_a, _)) -> (id_b, SubstT $ TyVar id_a)) (zip before after)
-          let explicitBinds = map (\(id, ty) -> (id, (ty, ForallQ))) (take (length tyVarBindsRequested) freshTyVarsCtxt')
-          modify (\st -> st { tyVarContext = explicitBinds ++ tyVarContext st })
-
+          reportM $ "substitution due to implicits is " <> pretty bodySubst
+          --let explicitBinds = map (\(id, ty) -> (id, (ty, ForallQ))) after
+          -- modify (\st -> st { tyVarContext = explicitBinds ++ tyVarContext st })
 
 
 
