@@ -74,6 +74,12 @@ append
 append Nil ys = ys;
 append (Cons x xs) ys = Cons x (append xs ys)
 
+--- Concatenate a vector of vectors
+concat : forall {a : Type, m n : Nat} .
+        Vec n (Vec m a) -> Vec (n * m) a
+concat Nil = Nil;
+concat (Cons xs xss) = append xs (concat xss)
+
 --- Drop the first `m` elements
 drop
   : forall {a : Type, m n : Nat}
