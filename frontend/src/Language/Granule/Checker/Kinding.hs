@@ -117,21 +117,27 @@ checkKind s (FunTy name mCoeff t1 t2) k = do
   return (substFinal, FunTy name mCoeff t1 t2)
 
 -- KChk_SetKind
-checkKind s (TyApp (TyCon (internalName -> "Set")) t) (TyCon (internalName -> "Coeffect")) =
+checkKind s (TyApp (TyCon (internalName -> "Set")) t) (TyCon (internalName -> "Coeffect")) = do
   -- Sets as coeffects can be themselves over a coeffect type or some other type
-  (checkKind s t kcoeffect) <|> (checkKind s t ktype)
+  (subst, t') <- (checkKind s t kcoeffect) <|> (checkKind s t ktype)
+  return (subst, TyApp (TyCon $ mkId "Set") t')
 
-checkKind s (TyApp (TyCon (internalName -> "Set")) t) (TyCon (internalName -> "Effect")) =
+checkKind s (TyApp (TyCon (internalName -> "Set")) t) (TyCon (internalName -> "Effect")) = do
   -- Sets as effects can be themselves over an effect type or some other type
-  (checkKind s t keffect) <|> (checkKind s t ktype)
+  (subst, t') <- (checkKind s t keffect) <|> (checkKind s t ktype)
+  return (subst, TyApp (TyCon $ mkId "Set") t')
 
-checkKind s (TyApp (TyCon (internalName -> "SetOp")) t) (TyCon (internalName -> "Coeffect")) =
+
+checkKind s (TyApp (TyCon (internalName -> "SetOp")) t) (TyCon (internalName -> "Coeffect")) = do
   -- Sets as coeffects can be themselves over a coeffect type or some other type
-  (checkKind s t kcoeffect) <|> (checkKind s t ktype)
+  (subst, t') <- (checkKind s t kcoeffect) <|> (checkKind s t ktype)
+  return (subst, TyApp (TyCon $ mkId "SetOp") t')
 
-checkKind s (TyApp (TyCon (internalName -> "SetOp")) t) (TyCon (internalName -> "Effect")) =
+
+checkKind s (TyApp (TyCon (internalName -> "SetOp")) t) (TyCon (internalName -> "Effect")) = do
   -- Sets as effects can be themselves over an effect type or some other type
-  (checkKind s t keffect) <|> (checkKind s t ktype)
+  (subst, t') <- (checkKind s t keffect) <|> (checkKind s t ktype)
+  return (subst, TyApp (TyCon $ mkId "SetOp") t')
 
 -- KChk_app
 checkKind s (TyApp t1 t2) k2 = do
