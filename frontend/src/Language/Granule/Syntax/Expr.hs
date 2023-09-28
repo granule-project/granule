@@ -61,7 +61,7 @@ data ValueF ev a value expr =
     | StringLiteralF Text
     | PackF Span a Type expr Id Kind Type
      -- pack <t, e> as exists {x : k} . t
-    | TyAbsF a Id Type expr
+    | TyAbsF a (Either (Id, Type) [Id]) expr
      -- /\(x : k) . t
     -- Extensible part
     | ExtF a ev
@@ -119,11 +119,10 @@ pattern Pack sp a ty e x k ty' = ExprFix2 (PackF sp a ty e x k ty')
 
 pattern TyAbs ::
       a
-   -> Id
-   -> Type
+   -> Either (Id, Type) [Id]
    -> ExprFix2 g ValueF ev a
    -> ExprFix2 ValueF g ev a
-pattern TyAbs a x t e = ExprFix2 (TyAbsF a x t e)
+pattern TyAbs a xt e = ExprFix2 (TyAbsF a xt e)
 
 pattern Ext :: a -> ev -> ExprFix2 ValueF g ev a
 pattern Ext a extv = (ExprFix2 (ExtF a extv))
@@ -284,8 +283,8 @@ instance Functor (Value ev) where
   fmap f (StringLiteral s) = StringLiteral s
   fmap f (Pack s a ty e1 var k ty') =
     Pack s (f a) ty (fmap f e1) var k ty'
-  fmap f (TyAbs a v t e) =
-    TyAbs (f a) v t (fmap f e)
+  fmap f (TyAbs a vart e) =
+    TyAbs (f a) vart (fmap f e)
 
 instance Functor (Expr ev) where
   fmap f (App s a rf e1 e2) = App s (f a) rf (fmap f e1) (fmap f e2)
@@ -388,7 +387,7 @@ instance Term (Value ev a) where
     freeVars StringLiteral{} = []
     freeVars Ext{} = []
     freeVars (Pack s a ty e1 var k ty') = freeVars e1
-    freeVars (TyAbs a v _ e) = freeVars e
+    freeVars (TyAbs a _ e) = freeVars e
 
     hasHole (Abs _ _ _ e) = hasHole e
     hasHole (Pure _ e)    = hasHole e
@@ -416,8 +415,8 @@ instance Substitutable Value where
     subst es _ v@Ext{} = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) False v
     subst es v (Pack s a ty e var k ty') =
       Val (nullSpanInFile $ getSpan es) a False $ Pack s a ty (subst es v e) var k ty'
-    subst es v (TyAbs a var t e) =
-      Val (nullSpanInFile $ getSpan es) a False $ TyAbs a var t (subst es v e)
+    subst es v (TyAbs a vart e) =
+      Val (nullSpanInFile $ getSpan es) a False $ TyAbs a vart (subst es v e)
 
 instance Monad m => Freshenable m (Value v a) where
     freshen (Abs a p t e) = do
@@ -464,11 +463,23 @@ instance Monad m => Freshenable m (Value v a) where
       ty' <- freshen ty'
       return $ Pack s a ty e1 var k ty'
 
-    freshen (TyAbs a v t e) = do
+    freshen (TyAbs a (Left (v, t)) e) = do
       v <- freshIdentifierBase TypeL v
       e <- freshen e
       t <- freshen t
-      return $ TyAbs a v t e
+      return $ TyAbs a (Left (v, t)) e
+
+    freshen (TyAbs a (Right ids) e) = do
+        ids <- mapM freshen' ids
+        e   <- freshen e
+        return $ TyAbs a (Right ids) e
+      where
+        freshen' id = do
+          id' <- freshen (TyVar id)
+          case id' of
+            TyVar id' -> return id'
+            _ -> error "Internal bug in freshener for type abstraction"
+
 
 freshenId :: Monad m => Id -> Freshener m Id
 freshenId v = do

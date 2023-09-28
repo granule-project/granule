@@ -51,7 +51,7 @@ provePredicate predicate vars constructors
       return (0.0, QED)
   | otherwise = do
       debugM "compiletoSBV" (pretty vars ++ " . " ++ pretty predicate)
-      let (sbvTheorem, _, unsats) = compileToSBV predicate vars constructors
+      let (sbvTheorem, _, unsats) = let ?constructors = constructors in compileToSBV predicate vars constructors
       --debugM "compiledtoSBV" ""
 
       -- Benchmarking start
@@ -100,7 +100,7 @@ provePredicate predicate vars constructors
 
 -- | Compile constraint into an SBV symbolic bool, along with a list of
 -- | constraints which are trivially unequal (if such things exist) (e.g., things like 1=0).
-compileToSBV :: (?globals :: Globals)
+compileToSBV :: (?globals :: Globals, ?constructors :: Ctxt [Id])
   => Pred
   -> Ctxt (Type, Quantifier)
   -> Ctxt [Id]
@@ -122,13 +122,19 @@ compileToSBV predicate tyVarContext constructors =
       buildTheorem' solverVars predicate
 
     buildTheoremNew ((v, (t, q)) : ctxt) solverVars =
-      freshSolverVarScoped compileQuantScoped (internalName v) t q
-         (\(varPred, solverVar) -> do
-             pred <- buildTheoremNew ctxt ((v, solverVar) : solverVars)
-             case q of
-              ForallQ   -> return $ varPred .=> pred
-              BoundQ    -> return $ varPred .=> pred
-              InstanceQ -> return $ varPred .&& pred)
+      if v `elem` freeVars predicate
+        then
+
+          let ?constructors = constructors
+          in freshSolverVarScoped compileQuantScoped (internalName v) t q
+              (\(varPred, solverVar) -> do
+                  pred <- buildTheoremNew ctxt ((v, solverVar) : solverVars)
+                  case q of
+                    ForallQ   -> return $ varPred .=> pred
+                    BoundQ    -> return $ varPred .=> pred
+                    InstanceQ -> return $ varPred .&& pred)
+
+        else buildTheoremNew ctxt solverVars
 
     -- Build the theorem, doing local creation of universal variables
     -- when needed (see Impl case)
@@ -186,7 +192,7 @@ compileToSBV predicate tyVarContext constructors =
 zeroToInfinity :: SGrade
 zeroToInfinity = SInterval (SExtNat $ SNatX.SNatX 0) (SExtNat SNatX.inf)
 
-freshSolverVarScoped ::
+freshSolverVarScoped :: (?constructors :: Ctxt [Id]) =>
     (forall a . QuantifiableScoped a => Quantifier -> String -> (SBV a -> Symbolic SBool) -> Symbolic SBool)
   -> String
   -> Type
@@ -253,7 +259,19 @@ freshSolverVarScoped quant name (TyVar v) q k =
   quant q name (\solverVar -> k (sTrue, SUnknown $ SynLeaf $ Just solverVar))
 
 freshSolverVarScoped quant name (Language.Granule.Syntax.Type.isSet -> Just (elemTy, polarity)) q k =
-  quant q name (\solverVar -> k (sTrue, SSet polarity solverVar))
+      quant q name (\solverVar -> k (inUniverse solverVar, SSet polarity solverVar))
+    where
+
+      inUniverse solverVar =
+        case elemTy of
+          TyCon elemTyName ->
+            case lookup elemTyName ?constructors of
+              Nothing       -> sFalse
+              Just xs -> S.isSubsetOf solverVar universe
+                where
+                  universe = S.fromList (map internalName xs)
+          _ -> sTrue
+
 
 freshSolverVarScoped _ _ t _ _ =
    solverError $ "Trying to make a fresh solver variable for a grade of type: "

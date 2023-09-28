@@ -546,7 +546,7 @@ sizeOfVal _ = 1
 
 sizeOfPat :: Pattern () -> Integer
 sizeOfPat (PBox _ _ _ p) = 1 + sizeOfPat p
-sizeOfPat (PConstr _ _ _ _ ps) = 1 + sum (map sizeOfPat ps)
+sizeOfPat (PConstr _ _ _ _ _ ps) = 1 + sum (map sizeOfPat ps)
 sizeOfPat _ = 1
 
 

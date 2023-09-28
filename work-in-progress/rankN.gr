@@ -1,7 +1,0 @@
-data Exists (f : Type → Type) where
-   Exists : ∀ {a : Type} . f a → Exists f
-
-unpack : ∀ (f : Type → Type, a : Type) . Exists f → (∀ t : Type . f t → a) → a
-unpack e f =
-  case e of
-    (Exists x) → f x

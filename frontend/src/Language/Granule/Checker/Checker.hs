@@ -307,6 +307,8 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ binders
 
   -- The type of the equation, after substitution.
   equationTy' <- substitute subst defTy
+  -- Substitute into the body to handle type annotations
+  expr        <- substitute subst expr
   let splittingTy = calculateSplittingTy patternGam equationTy'
 
   -- Store the equation type in the state in case it is needed when splitting
@@ -392,7 +394,7 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ binders
     -- e.g. Cons x xs --> 2
     patternArity :: Pattern a -> Integer
     patternArity (PBox _ _ _ p) = patternArity p
-    patternArity (PConstr _ _ _ _ ps) = sum (map patternArity ps)
+    patternArity (PConstr _ _ _ _ _ ps) = sum (map patternArity ps)
     patternArity _ = 1
 
     replaceParameters :: [[Type]] -> Type -> Type
@@ -682,6 +684,7 @@ checkExpr defs gam pol topLevel tau (App s a rf e1 e2) | (usingExtension GradedB
 
   return (gam, subst, elab)
 
+-- Graded base application
 checkExpr defs gam pol topLevel tau (App s _ rf e1 e2) | not (usingExtension GradedBase) = do
     debugM "checkExpr[App]" (pretty s <> " : " <> pretty tau)
     (argTy, gam2, subst2, elaboratedR) <- synthExpr defs gam pol e2
@@ -732,6 +735,7 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
     let elaborated = Val s ty rf (Promote tau elaboratedE)
     return (gam'', substFinal, elaborated)
 
+-- Necessitation
 checkExpr defs gam pol _ ty@(Star demand tau) (Val s _ rf (Nec _ e)) = do
     debugM "checkExpr[Star]" (pretty s <> " : " <> pretty ty)
 
@@ -1126,7 +1130,7 @@ synthExpr defs gam pol (LetDiamond s _ rf p optionalTySig e1 e2) = do
   let elaborated = LetDiamond s t rf elaboratedP optionalTySig elaborated1 elaborated2
   return (t, gamNew, subst, elaborated)
 
-
+-- Try catch
 synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
   debugM "synthExpr[TryCatch]" (pretty s)
 
@@ -1628,13 +1632,43 @@ synthExpr defs gam pol (Val s0 _ rf p@(Pack sp a ty e x k ty')) = do
 -- ------------------------------------------
 -- G |- /\(x : t) . e : forall {x : t} . A
 
-synthExpr defs gam pol (Val s0 _ rf val@(TyAbs a v k e)) = do
+synthExpr defs gam pol (Val s0 _ rf val@(TyAbs a (Left (v, k)) e)) = do
   debugM "synthExpr [forall]" (pretty val)
   registerTyVarInContextWith' v k ForallQ $ do
     (ty, gam, subst, elabE) <- synthExpr defs gam pol e
     let retTy = TyForall v k ty
-    let elab = Val s0 retTy rf (TyAbs retTy v k elabE)
+    let elab = Val s0 retTy rf (TyAbs retTy (Left (v, k)) elabE)
     return (TyForall v k ty, gam, subst, elab)
+
+-- Implicit lifting of type scheme to rankN
+--- G |- var : forall {id : k} . A
+--- -------------------------------------
+-- G |- /\{id} . var : (forall {id : t} . A)
+
+synthExpr defs gam pol (Val s _ rf val@(TyAbs a (Right ids) e)) = do
+    case e of
+      Val _ _ _ (Var _ x) ->
+        case lookup x (defs <> Primitives.builtins) of
+          Just tyScheme@(Forall s0 bindings constraints tyInner)  -> do
+            let (tyRankN, bindings') = build ids bindings tyInner
+            let newTyScheme = Forall s0 bindings' constraints tyRankN
+            (ty', ctxt, subst, elab) <- freshenTySchemeForVar s rf x newTyScheme
+            return (ty', ctxt, subst, elab)
+
+          Nothing -> throw UnboundVariableError{ errLoc = s, errId = x }
+      _ ->
+        error "Can only do implicit lifting of type scheme to rankN types on a variable"
+
+
+  where
+    build [] bindings tyInner = (tyInner, bindings)
+    build (var:vars) bindings tyInner =
+      case lookupAndCutoutBy sourceName var bindings of
+        Nothing -> build vars bindings tyInner
+        Just (rest, (var', ty))  ->
+            let (tyInner', bindings') = build vars rest tyInner
+            in (TyForall var' ty tyInner', bindings')
+
 
 --
 -- G |- e1 : exists {y : k} . A

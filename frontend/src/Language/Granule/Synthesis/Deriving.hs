@@ -219,7 +219,7 @@ derivePush' s topLevel c _sigma gamma argTy@(leftmostOfApplication -> TyCon name
 
                     -- Build the pattern for this case
                     let consPattern =
-                          PConstr s () True dataConsName (zipWith (\ty var -> PVar s () True var) consParamsTypes consParamsVars)
+                          PConstr s () True dataConsName [] (zipWith (\ty var -> PVar s () True var) consParamsTypes consParamsVars)
                     let consPatternBoxed =
                           PBox s () True consPattern
 
@@ -427,7 +427,7 @@ derivePull' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
 
                     -- Build the pattern for this case
                     let consPattern =
-                          PConstr s () True dataConsName (zipWith (\ty var -> PBox s () True (PVar s () True var)) consParamsTypes consParamsVars)
+                          PConstr s () True dataConsName [] (zipWith (\ty var -> PBox s () True (PVar s () True var)) consParamsTypes consParamsVars)
                     debugM "derive-pull" ("consPattern " <> pretty consPattern )
                     -- Push on all the parameters of a the constructor
                     retTysAndExprs <- zipWithM (\ty var -> do
@@ -704,7 +704,7 @@ deriveCopyShape' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) ar
 
                     -- Build the pattern for this case
                     let consPattern =
-                          PConstr s () True dataConsName (zipWith (\ty var -> PVar s () True var) consParamsTypes consParamsVars)
+                          PConstr s () True dataConsName [] (zipWith (\ty var -> PVar s () True var) consParamsTypes consParamsVars)
 
                     -- Push on all the parameters of a the constructor
                     retTysAndExprs <- zipWithM (\ty var -> do
@@ -721,7 +721,7 @@ deriveCopyShape' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) ar
                     let resPair = makePairUntyped shapeExpr resExpr
 
                     -- Case (Constr x1,..xn) of (s', x') -> Constr s', Constr x'
-                    let caseExpr = Case s () True bodyExpr [(PConstr s () True dataConsName [PConstr s () True (mkId ",") [(PVar s () True s'), (PVar s () True x')]], resPair)]
+                    let caseExpr = Case s () True bodyExpr [(PConstr s () True dataConsName [] [PConstr s () True (mkId ",") []  [(PVar s () True s'), (PVar s () True x')]], resPair)]
 
               --      let returnTy = mkTypeApplication dataConsName shapeTys
                     return (consPattern, caseExpr))
@@ -883,7 +883,7 @@ deriveDrop' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
 
                     -- Build the pattern for this case
                     let consPattern =
-                          PConstr s () True dataConsName (zipWith (\ty var -> PVar s () True var) consParamsTypes consParamsVars)
+                          PConstr s () True dataConsName [] (zipWith (\ty var -> PVar s () True var) consParamsTypes consParamsVars)
 
                     -- Drop on all the parameters of the constructor
                     retTysAndExprs <- zipWithM (\ty var -> do

@@ -41,26 +41,26 @@ import Data.List (find, nub, reverse)
 import Data.List.NonEmpty (NonEmpty, toList)
 import qualified Data.List.NonEmpty as NonEmpty (filter)
 
--- This module handles synthesis of Linear Haskell programs using the Granule synthesis tool. 
--- Starting with a Linear Haskell file with a function with a program hole e.g. 
--- 
+-- This module handles synthesis of Linear Haskell programs using the Granule synthesis tool.
+-- Starting with a Linear Haskell file with a function with a program hole e.g.
+--
 --      f :: a % One -> a
 --      f x = _
--- 
--- invoke the synthesis tool by running: 
+--
+-- invoke the synthesis tool by running:
 --
 --      gr --linear-haskell file.hs
--- 
--- which translates the Haskell type to a graded-base Granule type, runs the synthesis tool and 
+--
+-- which translates the Haskell type to a graded-base Granule type, runs the synthesis tool and
 -- then translates the Granule target program to Linear Haskell.
--- 
--- Currently supports: 
+--
+-- Currently supports:
 --      Lists, tuples, function types, units
--- 
+--
 -- TODO:
---  * Preserve whitespace and comments when reprinting back to Haskell 
+--  * Preserve whitespace and comments when reprinting back to Haskell
 --    (I believe we may need to use Language.Haskell.Exts.Annotated to do this)
---  * Add some tests 
+--  * Add some tests
 
 
 synthesiseLinearHaskell :: (?globals :: Globals) => GrDef.AST () () -> Module SrcSpanInfo -> IO (Maybe (Module SrcSpanInfo))
@@ -121,7 +121,7 @@ exportHaskell eqs (Module spM modHead pragmas imports decls) =
         replaceDecls ((FunBind sp matches):decls) eqs = do
             (FunBind sp (replaceMatches matches eqs)) : (replaceDecls decls eqs)
 
-        -- Our input was a PatBind when synthesising from a hole of the form 
+        -- Our input was a PatBind when synthesising from a hole of the form
         -- f = _
         -- since this will get synthesised to an equation with patterns (a FunBind)
         -- we have to transform PatBind to possibly many FunBinds
@@ -547,11 +547,11 @@ patternToGranule (PTuple _ _ ps) =
      -- the tuple must be in our defined decls so we can just match on the correct Con
     let ps'   = catMaybes $ map patternToGranule ps
         tupId = GrId.mkId $ "," <> (show $ length ps)
-    in Just $ GrPat.PConstr ns () False tupId ps'
+    in Just $ GrPat.PConstr ns () False tupId [] ps'
 patternToGranule (PApp _ (UnQual _ name) ps) =
     let ps'   = catMaybes $ map patternToGranule ps
         conId = nameToGranule name
-    in Just $ GrPat.PConstr ns () False conId ps'
+    in Just $ GrPat.PConstr ns () False conId [] ps'
 patternToGranule _ = Nothing
 
 
@@ -569,7 +569,7 @@ patternToHaskell (GrPat.PWild{})        = PWildCard noSrcSpan
 patternToHaskell (GrPat.PBox _ _ _ pt)  = patternToHaskell pt
 patternToHaskell (GrPat.PInt _ _ _ n)   = PLit noSrcSpan (Signless noSrcSpan) $ Int noSrcSpan (fromIntegral n) (show n)
 patternToHaskell (GrPat.PFloat _ _ _ n) = PLit noSrcSpan (Signless noSrcSpan) $ Frac noSrcSpan (toRational n) (show n)
-patternToHaskell (GrPat.PConstr _ _ _ id@(GrId.Id _ i) l_pt)
+patternToHaskell (GrPat.PConstr _ _ _ id@(GrId.Id _ i) _ l_pt)
   | ',' `elem` i = PTuple noSrcSpan Boxed $ map patternToHaskell (reverse l_pt)
   | otherwise = PApp noSrcSpan (UnQual noSrcSpan $ idToHaskell id) $ map patternToHaskell (reverse l_pt)
 

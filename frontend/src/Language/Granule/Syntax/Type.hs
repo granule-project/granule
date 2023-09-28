@@ -246,6 +246,8 @@ arity _               = 0
 -- the result type is @Pair a b@
 resultType :: Type -> Type
 resultType (FunTy _ _ _ t) = resultType t
+-- jump over type abstractions
+resultType (TyForall _ _ t) = resultType t
 resultType t = t
 
 -- Given a function type, return a list of the parameter tpes
@@ -469,6 +471,7 @@ instance Freshenable m Type where
     typeFoldM (baseTypeFold { tfTyVar = freshenTyVar,
                               tfBox = freshenTyBox,
                               tfTySig = freshenTySig,
+                              tfTyExists = freshenTyExists,
                               tfTyForall = freshenTyForall })
     where
 
@@ -476,6 +479,12 @@ instance Freshenable m Type where
         c' <- freshen c
         t' <- freshen t
         return $ Box c' t'
+
+      freshenTyExists v k t =
+        freshIdentifierBaseInScope TypeL v (\v' -> do
+            k' <- freshen k
+            t' <- freshen t
+            return $ TyExists v' k' t')
 
       freshenTyForall v k t =
         freshIdentifierBaseInScope TypeL v (\v' -> do

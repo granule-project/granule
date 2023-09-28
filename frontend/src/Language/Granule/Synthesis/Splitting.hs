@@ -280,7 +280,7 @@ buildConstructorPatterns span id constructors = do
     mkPat :: (Id, [Maybe Id]) -> Checker (Pattern ())
     mkPat (name, ids) = do
       vars <- genFresh ids
-      return $ PConstr span () False name (map (PVar span () False) vars)
+      return $ PConstr span () False name [] (map (PVar span () False) vars)
 
     -- Generates a list of fresh identifiers, using the potential ids where
     -- possible, and defaulting to a freshening of the id paramter to

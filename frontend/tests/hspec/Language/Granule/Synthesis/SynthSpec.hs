@@ -68,7 +68,7 @@ checkCasePatterns = let ?globals = (mempty :: Globals) {globalsExtensions = [Gra
         expr
           `shouldBe`
             [Just (Case ns () False (Val ns () False (Var () (Id "x" "x")))
-              [(PConstr ns () False (Id "," ",")
+              [(PConstr ns () False (Id "," ",") []
                 [ PVar ns () False (Id "y" "y"),
                   PVar ns () False (Id "z" "z") ] ,(Val ns () False (Var () (Id "y" "y"))))])]
 
@@ -102,7 +102,7 @@ checkCasePatterns = let ?globals = (mempty :: Globals) {globalsExtensions = [Gra
         -- Patter-expr pair
         let patternExprPair = map (fmap fst . fst) results
         patternExprPair
-            `shouldBe` [Just (PConstr ns () False (mkId "True") [], Val ns () False (Var () (mkId "y")))]
+            `shouldBe` [Just (PConstr ns () False (mkId "True") [] [], Val ns () False (Var () (mkId "y")))]
 
         -- Predicate
         let predicate = map (fromPredicateContext . predicateContext . snd) results
@@ -146,7 +146,7 @@ checkCasePatterns = let ?globals = (mempty :: Globals) {globalsExtensions = [Gra
       -- Patter-expr pair
       let patternExprPair = map (fmap (fst . fst) . fst) results
       patternExprPair
-          `shouldBe` [Just (PConstr ns () False (mkId "Right") [PVar ns () False (mkId "x")], Val ns () False (Var () (mkId "x")))]
+          `shouldBe` [Just (PConstr ns () False (mkId "Right") [] [PVar ns () False (mkId "x")], Val ns () False (Var () (mkId "x")))]
 
       -- Predicate
       let predicate = map (fromPredicateContext . predicateContext . snd) results

@@ -266,8 +266,10 @@ instance Pretty (Pattern a) where
     pretty (PBox _ _ _ p)     = "[" <> prettyNested p <> "]"
     pretty (PInt _ _ _ n)     = show n
     pretty (PFloat _ _ _ n)   = show n
-    pretty (PConstr _ _ _ name args) | internalName name == "," = "(" <> intercalate ", " (map prettyNested args) <> ")"
-    pretty (PConstr _ _ _ name args) = unwords (pretty name : map prettyNested args)
+    pretty (PConstr _ _ _ name _ args) | internalName name == "," = "(" <> intercalate ", " (map prettyNested args) <> ")"
+    pretty (PConstr _ _ _ name tyVarBindsRequested args) =
+      unwords (pretty name : (map tyvarbinds tyVarBindsRequested ++ map prettyNested args))
+        where tyvarbinds x = "{" <> pretty x <> "}"
 
 instance {-# OVERLAPS #-} Pretty [Pattern a] where
     pretty [] = ""
@@ -297,8 +299,11 @@ instance Pretty v => Pretty (Value v a) where
     pretty (Pack s a ty e1 var k ty') =
       "pack <" <> pretty ty <> ", " <> pretty e1 <> "> "
       <> "as exists {" <> pretty var <> " : " <> pretty k <> "} . " <> pretty ty'
-    pretty (TyAbs _ v k e) =
+    pretty (TyAbs _ (Left (v, k)) e) =
       "/\\(" <> pretty v <> " : " <> pretty k <> ") -> " <> pretty e
+    pretty (TyAbs _ (Right ids) e) =
+      "/\\{" <> intercalate ", " (map pretty ids) <> "}"
+
 
 instance Pretty Id where
   pretty

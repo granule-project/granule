@@ -96,6 +96,6 @@ refactorPattern (PBox sp a b p) id' subpat =
    in PBox sp a (patRefactored p') p'
 refactorPattern p@PInt {} _ _ = p
 refactorPattern p@PFloat {} _ _ = p
-refactorPattern (PConstr sp a _ id ps) id' subpat =
+refactorPattern (PConstr sp a _ id names ps) id' subpat =
   let ps' = map (\p -> refactorPattern p id' subpat) ps
-  in PConstr sp a (any patRefactored ps') id ps'
+  in PConstr sp a (any patRefactored ps') id names ps'
