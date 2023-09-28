@@ -23,7 +23,7 @@ stateHandler (PutOp s [k])  = join_state (State (\([_] : s [0..Inf]) -> (k (), s
 
 -- # Examples
 
-incr : Int <Eff Labels (StateOps Int) {Get, Put}>
+incr : Int <Eff (Set Labels) (StateOps Int) {Get, Put}>
 incr = let
   y   <- call GetOp ();
   [z] <- pure (moveInt y);
@@ -32,7 +32,7 @@ incr = let
 
 -- Handle state wrapped
 handleState : forall {a b : Type, e : Set Labels, s : Type}
-            . a <Eff Labels (StateOps s) e>
+            . a <Eff (Set Labels) (StateOps s) e>
            -> State s a
 handleState = handle [/\{a,b,l}.fmap_stateops] [/\{l}.stateHandler] (return_state)
 

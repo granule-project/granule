@@ -1,1 +1,0 @@
-Next (True, True) (Next (True, False) (Next (False, True) (Next (False, False) Empty)))
