@@ -104,7 +104,7 @@ cgPat (GrPat.PInt _ _ _ n) =
   return $ PLit () (Signless ()) $ Int () (fromIntegral n) (show n)
 cgPat (GrPat.PFloat _ _ _ n) =
   return $ PLit () (Signless ()) $ Frac () (toRational n) (show n)
-cgPat (GrPat.PConstr _ _ _ i l_pt)
+cgPat (GrPat.PConstr _ _ _ i _ l_pt)
   | i == Id "," ","  = do
       pts <- mapM cgPat l_pt
       return $ pTuple pts

@@ -246,6 +246,8 @@ arity _               = 0
 -- the result type is @Pair a b@
 resultType :: Type -> Type
 resultType (FunTy _ _ _ t) = resultType t
+-- jump over type abstractions
+resultType (TyForall _ _ t) = resultType t
 resultType t = t
 
 -- Given a function type, return a list of the parameter tpes

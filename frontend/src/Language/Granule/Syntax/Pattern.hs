@@ -27,14 +27,14 @@ data Pattern a
   | PBox Span a Bool (Pattern a)       -- ^ Box patterns
   | PInt Span a Bool Int               -- ^ Numeric patterns
   | PFloat Span a Bool Double          -- ^ Float pattern
-  | PConstr Span a Bool Id [Pattern a] -- ^ Constructor pattern
+  | PConstr Span a Bool Id [Id] [Pattern a] -- ^ Constructor pattern
   deriving (Eq, Show, Generic, Functor, Typeable, Data)
 
 instance Term (Pattern a) where
   freeVars _ = []
   hasHole _ = False
 
-  isLexicallyAtomic (PConstr _ _ _ name pats) = null pats || internalName name == ","
+  isLexicallyAtomic (PConstr _ _ _ name _ pats) = null pats || internalName name == ","
   isLexicallyAtomic _  = True
 
 -- | First parameter of patterns is their span
@@ -50,7 +50,7 @@ patternFold
   -> (Span -> ann -> Bool -> b -> b)
   -> (Span -> ann -> Bool -> Int -> b)
   -> (Span -> ann -> Bool -> Double -> b)
-  -> (Span -> ann -> Bool -> Id -> [b] -> b)
+  -> (Span -> ann -> Bool -> Id -> [Id] -> [b] -> b)
   -> Pattern ann
   -> b
 patternFold v w b i f c = go
@@ -61,7 +61,7 @@ patternFold v w b i f c = go
       PBox sp ann rf pat -> b sp ann rf (go pat)
       PInt sp ann rf int -> i sp ann rf int
       PFloat sp ann rf doub -> f sp ann rf doub
-      PConstr sp ann rf nm pats -> c sp ann rf nm (go <$> pats)
+      PConstr sp ann rf nm tyVarBindsRequested pats -> c sp ann rf nm tyVarBindsRequested (go <$> pats)
 
 patternFoldM
   :: (Monad m)
@@ -70,7 +70,7 @@ patternFoldM
   -> (Span -> ann -> Bool -> b -> m b)
   -> (Span -> ann -> Bool -> Int -> m b)
   -> (Span -> ann -> Bool -> Double -> m b)
-  -> (Span -> ann -> Bool -> Id -> [b] -> m b)
+  -> (Span -> ann -> Bool -> Id -> [Id] -> [b] -> m b)
   -> Pattern ann
   -> m b
 patternFoldM v w b i f c = go
@@ -84,10 +84,10 @@ patternFoldM v w b i f c = go
             b sp ann rf pat'
       PInt sp ann rf int -> i sp ann rf int
       PFloat sp ann rf doub -> f sp ann rf doub
-      PConstr sp ann rf nm pats ->
+      PConstr sp ann rf nm tyVarBindsRequested pats ->
         do
             pats' <- mapM go pats
-            c sp ann rf nm pats'
+            c sp ann rf nm tyVarBindsRequested pats'
 
 -- | Variables bound by patterns
 boundVars :: Pattern a -> [Id]
@@ -96,7 +96,7 @@ boundVars PWild {}       = []
 boundVars (PBox _ _ _ p)     = boundVars p
 boundVars PInt {}        = []
 boundVars PFloat {}      = []
-boundVars (PConstr _ _ _ _ ps) = concatMap boundVars ps
+boundVars (PConstr _ _ _ _ _ ps) = concatMap boundVars ps
 
 boundVarsAndAnnotations :: Pattern a -> [(a, Id)]
 boundVarsAndAnnotations =
@@ -106,7 +106,7 @@ boundVarsAndAnnotations =
           box _ _ _ pat     = pat
           int _ _ _ _       = []
           flt _ _ _ _       = []
-          cstr _ _ _ _ pats = concat pats
+          cstr _ _ _ _ _ pats = concat pats
 
 ppair :: Span
       -> a
@@ -114,7 +114,7 @@ ppair :: Span
       -> Pattern a
       -> Pattern a
 ppair s annotation left right =
-    PConstr s annotation False (mkId "(,)") [left, right]
+    PConstr s annotation False (mkId "(,)") [] [left, right]
 
 -- >>> runFreshener (PVar ((0,0),(0,0)) (Id "x" "x"))
 -- PVar ((0,0),(0,0)) (Id "x" "x_0")
@@ -131,9 +131,9 @@ instance Freshenable m (Pattern a) where
       p' <- freshen p
       return $ PBox s a rf p'
 
-  freshen (PConstr s a rf name ps) = do
+  freshen (PConstr s a rf name tyVarBindsRequested ps) = do
       ps <- mapM freshen ps
-      return (PConstr s a rf name ps)
+      return (PConstr s a rf name tyVarBindsRequested ps)
 
   freshen p@PWild {} = return p
   freshen p@PInt {} = return p
@@ -145,7 +145,7 @@ patRefactored (PWild _ _ rf) = rf
 patRefactored (PBox _ _ rf _) = rf
 patRefactored (PInt _ _ rf _) = rf
 patRefactored (PFloat _ _ rf _) = rf
-patRefactored (PConstr _ _ rf _ _) = rf
+patRefactored (PConstr _ _ rf _ _ _) = rf
 
 instance Rp.Refactorable (Pattern a) where
   isRefactored def = if patRefactored def then Just Rp.Replace else Nothing

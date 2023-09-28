@@ -26,7 +26,7 @@ spec = let ?globals = mempty in do
     -- not x = {! x !}
     it "Boolean not function" $ do
       res <- runSplitter (FunTy Nothing Nothing (TyCon boolId) (TyCon boolId)) boolDataCons boolTyCons []  [(xId, Linear (TyCon boolId))] [xId]
-      res `shouldBe` ([xId], [[PConstr nullSpan () False falseId []], [PConstr nullSpan () False trueId []]])
+      res `shouldBe` ([xId], [[PConstr nullSpan () False falseId [] []], [PConstr nullSpan () False trueId [] []]])
 
     -- not : Bool → Bool
     -- not x = {! x !}

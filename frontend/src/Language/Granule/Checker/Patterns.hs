@@ -174,7 +174,7 @@ ctxtFromTypedPattern' outerCoeffAndTy s pos t@(Box coeff ty) (PBox sp _ rf p) _ 
     substU <- combineManySubstitutions s [subst0, subst1, subst]
     return (ctxt, eVars, substU, elabP, NotFull)
 
-ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
+ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC tyVarBindsRequested ps) cons = do
   debugM "Patterns.ctxtFromTypedPattern" $ "ty: " <> show ty <> "\t" <> pretty ty <> "\nPConstr: " <> pretty dataC
 
   reportM $ "Typing pattern " <> prettyNested p <> " at type " <> prettyNested ty
@@ -184,7 +184,7 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
   mConstructor <- lookupDataConstructor s dataC
   case mConstructor of
     Nothing -> throw UnboundDataConstructor{ errLoc = s, errId = dataC }
-    Just (tySch, coercions, indices) -> do
+    Just (tySch@(Forall _ tyVarBinders _ _), coercions, indices) -> do
 
       case outerBoxTy of
         -- Hsup if you only have more than one premise (and have an enclosing grade)
@@ -238,6 +238,19 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
       debugM "Patterns.ctxtFromTypedPattern areEq" $ show areEq
       case areEq of
         (True, ty, unifiers) -> do
+
+          -- Put in the ty var context any foralls bound here in the pattern
+          -- unifying them with the data constructor's equality information
+          freshTyVarsCtxt' <- substitute unifiers freshTyVarsCtxt
+          let before = tyVarBindsRequested
+          let after =  take (length tyVarBindsRequested) freshTyVarsCtxt'
+          -- create a substitution for this variable
+          let bodySubst = map (\(id_b, (id_a, _)) -> (id_b, SubstT $ TyVar id_a)) (zip before after)
+          let explicitBinds = map (\(id, ty) -> (id, (ty, ForallQ))) (take (length tyVarBindsRequested) freshTyVarsCtxt')
+          modify (\st -> st { tyVarContext = explicitBinds ++ tyVarContext st })
+
+
+
 
           reportM $ "EQUAL with unifiers " <> pretty unifiers
           -- Predicate now says:
@@ -295,8 +308,7 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
           -- Combine the substitutions
           --     n`1 ~ t.10.0
           -- subst <- combineSubstitutions s (flipSubstitution unifiers') us
-          subst <- combineSubstitutions s unifiers us
-          subst <- combineSubstitutions s coercions' subst
+          subst <- combineManySubstitutions s [unifiers, us, coercions', bodySubst]
           debugM "ctxt" $ "\n\t### outSubst = " <> pretty subst <> "\n"
           reportM $ "Output substitution = " <> pretty subst
 
@@ -307,7 +319,7 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
           definiteUnification s pos outerBoxTy ty
           -- (ctxtSubbed, ctxtUnsubbed) <- substCtxt subst as
 
-          let elabP = PConstr s ty rf dataC elabPs
+          let elabP = PConstr s ty rf dataC tyVarBindsRequested elabPs
 
           -- Level tracking
           -- GHOST variable made from coeff added to assumptions
@@ -456,4 +468,4 @@ duplicateBinderCheck s ps = case duplicateBinders of
       (\_ _ _ bs -> bs)
       (\_ _ _ _ -> [])
       (\_ _ _ _ -> [])
-      (\_ _ _ _ bss -> concat bss)
+      (\_ _ _ _ _ bss -> concat bss)

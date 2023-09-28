@@ -564,7 +564,7 @@ pmatchCBN ctxt psAll@((PBox _ _ _ p, eb):ps) eg =
         else
           pmatchCBN ctxt ps eg
 
-pmatchCBN ctxt psAll@(p@(PConstr _ _ _ id innerPs, eb):ps) eg = do
+pmatchCBN ctxt psAll@(p@(PConstr _ _ _ id _ innerPs, eb):ps) eg = do
   case constructorApplicationSpine eg of
 
     -- Trigger reduction
@@ -633,7 +633,7 @@ pmatchCBV _ [] _ =
 pmatchCBV _ ((PWild {}, e):_)  _ =
   return $ Just e
 
-pmatchCBV ctxt ((PConstr _ _ _ id innerPs, t0):ps) v@(Val s a b (Constr _ id' vs))
+pmatchCBV ctxt ((PConstr _ _ _ id _ innerPs, t0):ps) v@(Val s a b (Constr _ id' vs))
  | id == id' && length innerPs == length vs = do
 
   -- Fold over the inner patterns

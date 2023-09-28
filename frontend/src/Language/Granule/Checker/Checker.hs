@@ -307,6 +307,8 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ binders
 
   -- The type of the equation, after substitution.
   equationTy' <- substitute subst defTy
+  -- Substitute into the body to handle type annotations
+  expr        <- substitute subst expr
   let splittingTy = calculateSplittingTy patternGam equationTy'
 
   -- Store the equation type in the state in case it is needed when splitting
@@ -392,7 +394,7 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ binders
     -- e.g. Cons x xs --> 2
     patternArity :: Pattern a -> Integer
     patternArity (PBox _ _ _ p) = patternArity p
-    patternArity (PConstr _ _ _ _ ps) = sum (map patternArity ps)
+    patternArity (PConstr _ _ _ _ _ ps) = sum (map patternArity ps)
     patternArity _ = 1
 
     replaceParameters :: [[Type]] -> Type -> Type

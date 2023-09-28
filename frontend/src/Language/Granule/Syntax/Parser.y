@@ -307,7 +307,7 @@ PAtom :: { Pattern () }
        {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ let TokenFloat _ x = $1 in PFloat sp () False $ read x }
 
   | CONSTR
-       {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ let TokenConstr _ x = $1 in PConstr sp () False (mkId x) [] }
+       {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ let TokenConstr _ x = $1 in PConstr sp () False (mkId x) [] [] }
 
   | '(' NAryConstr ')'        { $2 }
 
@@ -321,16 +321,20 @@ PAtom :: { Pattern () }
        {% (mkSpan (getPos $1, getPos $3)) >>= \sp -> return $ PBox sp () False $2 }
 
   | '(' PMolecule ',' PMolecule ')'
-       {% (mkSpan (getPos $1, getPos $5)) >>= \sp -> return $ PConstr sp () False (mkId ",") [$2, $4] }
+       {% (mkSpan (getPos $1, getPos $5)) >>= \sp -> return $ PConstr sp () False (mkId ",") [] [$2, $4] }
 
 PMolecule :: { Pattern () }
   : NAryConstr                { $1 }
   | PAtom                     { $1 }
 
+TyVarBinds :: { [Id] }
+  : {- EMPTY -}                  { [] }
+  | '{' VAR '}' TyVarBinds       { (mkId $ symString $2) : $4 }
+
 NAryConstr :: { Pattern () }
-  : CONSTR Pats               {% let TokenConstr _ x = $1
-                                in (mkSpan (getPos $1, getEnd $ last $2)) >>=
-                                       \sp -> return $ PConstr sp () False (mkId x) $2 }
+  : CONSTR TyVarBinds Pats               {% let TokenConstr _ x = $1
+                                in (mkSpan (getPos $1, getEnd $ last $3)) >>=
+                                       \sp -> return $ PConstr sp () False (mkId x) $2 $3 }
 
 ForallSig :: { [(Id, Kind)] }
  : '{' VarSigs '}' { $2 }
@@ -579,8 +583,8 @@ Expr :: { Expr () () }
         span2 <- mkSpan $ getPosToSpan $3
         span3 <- mkSpan $ getPosToSpan $3
         return $ Case span1 () False $2
-                  [(PConstr span2 () False (mkId "True") [], $4),
-                     (PConstr span3 () False (mkId "False") [], $6)] }
+                  [(PConstr span2 () False (mkId "True") [] [], $4),
+                     (PConstr span3 () False (mkId "False") [] [], $6)] }
 
   | clone Expr as CopyBind in Expr
     {% let t1 = $2; (_, pat, mt) = $4; t2 = $6

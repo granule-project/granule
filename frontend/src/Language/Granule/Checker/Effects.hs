@@ -32,10 +32,9 @@ isFreeEffectMember
  | internalName con == "Eff" = Just (labelType, opsType, grade)
 isFreeEffectMember _ = Nothing
 
-freeEffectMember :: Type -> Type -> [Type] -> Type
-freeEffectMember labelType opsType set =
-  TyApp (TyApp (TyApp (TyCon $ mkId "Eff") labelType) opsType)
-    (TySet Normal set)
+freeEffectMember :: Type -> Type -> Type -> Type
+freeEffectMember labelType opsType eff  =
+  TyApp (TyApp (TyApp (TyCon $ mkId "Eff") labelType) opsType) eff
 
 isFreeEffectMemberGrade :: Type -> Maybe Type
 isFreeEffectMemberGrade
@@ -179,7 +178,9 @@ effectMult sp effTy t1 t2 = do
 
         (isFreeEffectType -> Just (labelType, opsType)) ->
           case (isFreeEffectMemberGrade t1, isFreeEffectMemberGrade t2) of
-            (Just (TySet Normal ef1), Just (TySet Normal ef2)) -> return $ freeEffectMember labelType opsType (nub $ ef1 ++ ef2)
+            (Just e1, Just e2) -> do
+              e_out <- effectMult sp labelType e1 e2
+              return $ freeEffectMember labelType opsType e_out
             _ -> return $ TyInfix TyOpTimes t1 t2
 
         -- Any union-set effects, like IO
@@ -310,8 +311,10 @@ effectTop (isSet -> Just (elemTy, Opposite)) =
     return (Just $ TySet Opposite [])
 
 effectTop (isFreeEffectType -> Just (labelType, opsType)) = do
-  allConstructorsMatchingForElemTy <- allDataConstructorNamesForType labelType
-  return (Just $ freeEffectMember labelType opsType (map TyCon allConstructorsMatchingForElemTy))
+  top <- effectTop labelType
+  case top of
+    Just top -> return (Just $ freeEffectMember labelType opsType top)
+    Nothing -> return Nothing
 
 effectTop _ = return Nothing
 
