@@ -148,7 +148,10 @@ effApproximates s effTy eff1 eff2 =
                         return $ all (\ef2 -> ef2 `elem` efs1) efs2
                     _ -> return False
             -- Unknown effect resource algebra
-            _ -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff1, errK = effTy }
+            _ -> do
+              addConstraint (ApproximatedBy s eff1 eff2 effTy)
+              return True
+              -- throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff1, errK = effTy }
 
 effectMult :: (?globals :: Globals) => Span -> Type -> Type -> Type -> Checker Type
 effectMult sp effTy t1 t2 = do
