@@ -151,6 +151,11 @@ typeConstructors =
 
     -- Capability related things
     , (mkId "CapabilityType", (funTy (tyCon "Capability") (Type 0), [], [0]))
+
+    -- Parallel effects
+    , (mkId "Parallel", (FunTy (Just $ mkId "eff") Nothing keffect $
+                          FunTy Nothing Nothing (TyVar $ mkId "eff") $
+                            FunTy Nothing Nothing (TyVar $ mkId "eff") kpredicate, [], [0,1]))
     ]
 
 -- Various predicates and functions on type operators
@@ -430,6 +435,12 @@ selectRight = BUILTIN
 offer : forall {p1 p2 : Protocol, a : Type}
       . (LChan p1 -> a) -> (LChan p2 -> a) -> LChan (Offer p1 p2) -> a
 offer = BUILTIN
+
+forkWithEffects
+  : forall {s : Protocol, eff : Effect, e : eff} . {Parallel eff e e}
+  => (LChan s -> () <e>) -> (LChan (Dual s)) <e>
+forkWithEffects = BUILTIN
+
 
 --------------------------------------------------------------------------------
 --- # Non-linear communication and concurrency patterns

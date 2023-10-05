@@ -543,6 +543,17 @@ isDualSession :: (?globals :: Globals)
     -- Indicates whether the first type or second type is a specification
     -> SpecIndicator
     -> Checker (Bool, Substitution)
+-- asking if `t` is dual to `Dual t'`
+-- therefore turn this into `t == t'`
+-- This deals with the case where `equalTypes` has asked
+-- if `t == Dual (Dual t')`
+isDualSession sp rel t (TyApp (TyCon c) t') ind =
+  equalTypesRelatedCoeffectsInner sp rel t t' (TyCon $ mkId "Protocol") ind Types
+-- and symmetric of the above:
+isDualSession sp rel (TyApp (TyCon c) t) t' ind =
+  equalTypesRelatedCoeffectsInner sp rel t t' (TyCon $ mkId "Protocol") ind Types
+
+-- Send/receive duality
 isDualSession sp rel (TyApp (TyApp (TyCon c) t) s) (TyApp (TyApp (TyCon c') t') s') ind
   |  (internalName c == "Send" && internalName c' == "Recv")
   || (internalName c == "Recv" && internalName c' == "Send") = do
