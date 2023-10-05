@@ -31,3 +31,16 @@ parList lst =
     (Next f fs) -> case (par f (\x -> case x of
                                    () -> parList fs)) of
                      (e, lst2) -> Next e lst2
+
+--- Effectful par; paralle composition for thosee effects which can be
+--- soundly combined in paralel.
+parEff : forall {a : Type, b : Type, eff : Effect, e f : eff}
+       . {Parallel eff e f}
+       => (() -> a <e>) -> (() -> b <f>) -> ((a, b) <e * f>)
+parEff f g =
+  let c <- forkWithEffects (\c' -> let x <- f () in pure (close (send c' x))); -- compute f in new thread
+      b <- g () -- compute g in current thread
+  in
+    let (a, c') = (recv c); -- get result of f from other thread
+        ()      = (close c')
+    in pure (a, b)
