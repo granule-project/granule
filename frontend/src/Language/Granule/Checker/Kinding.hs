@@ -1282,6 +1282,14 @@ instance Unifiable Type where
       u' <- unify' k k'
       lift $ combineSubstitutionsHere u u'
 
+    -- Unification involved duality
+    -- Trying to unify `Dual s ~ t` then instead try `s ~ Dual t`
+    unify' (TyApp (TyCon (internalName -> "Dual")) (TyVar v)) t = do
+      unify' (TyVar v) (TyApp (tyCon "Dual") t)
+
+    unify' t (TyApp (TyCon (internalName -> "Dual")) (TyVar v)) = do
+      unify' (TyApp (tyCon "Dual") t) (TyVar v)
+
     -- No unification
     unify' t t' = do
       -- But try to generate a constraint if its a solver thing
