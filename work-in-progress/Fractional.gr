@@ -5,11 +5,12 @@ data Colour = Colour (Int, (Int, Int))
 observe : forall {p : Permission, f : p} . & f Colour -> & f Colour
 observe x = x -- placeholder for the sake of example
 
-persimmon : *Colour -> *Colour
-persimmon c =
-  withBorrow (\b -> let (x, y) = split b;
-                         x' = observe x;
-                         f = join (x', y) in f) c
+-- Currently broken due to unification
+-- persimmon : *Colour -> *Colour
+-- persimmon c =
+--   withBorrow (\b -> let (x, y) = split b;
+--                          x' = observe x;
+--                          f = join (x', y) in f) c
 
 mutate : & 1 Colour -> & 1 Colour
 mutate x = x -- placeholder for the sake of example
@@ -35,12 +36,14 @@ indigo' c =
         (r', b') = par (\() -> withBorrow transform r) (\() -> withBorrow transform b);
         p' = uniquePull (g, b') in uniquePull (r', p')
 
-amethyst : *Colour -> *Colour
-amethyst c =
-    withBorrow (\b -> let (x, y) = split b;
-                          (l, r) = split x;
-                          x' = join (l, r);
-                          f = join (x', y) in f) c
+-- Currently broken due to unification
+-- amethyst : *Colour -> *Colour
+-- amethyst c =
+--     withBorrow (\b -> let (x, y) = split b;
+--                           (l, r) = split x;
+--                           x' = join (l, r);
+--                           f = join (x', y) in f) c
 
+-- Currently allowed and should be rejected
 bad : & 1/2 Colour -> & 2/1 Colour
 bad x = x
