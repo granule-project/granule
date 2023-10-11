@@ -128,11 +128,11 @@ uncons
 uncons (Cons x xs) = (x,xs)
 
 --- Split a vector at position 'n'
-split
+splitVec
   : forall {a : Type, m n : Nat}
   . N n -> (Vec (n + m) a) -> (Vec n a, Vec m a)
-split Z xs = (Nil, xs);
-split (S n) (Cons x xs) = let (xs', ys') = split n xs in (Cons x xs', ys')
+splitVec Z xs = (Nil, xs);
+splitVec (S n) (Cons x xs) = let (xs', ys') = splitVec n xs in (Cons x xs', ys')
 
 --- Sum a vector of integers (using `foldr`)
 sum

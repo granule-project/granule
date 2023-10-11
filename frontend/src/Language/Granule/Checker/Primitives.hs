@@ -58,20 +58,20 @@ typeConstructors =
                                        , (mkId "Dunno",    (tyCon "Level", [], []))])] [])
  ++
   -- Everything else is always in scope
-    [ (mkId "Coeffect",  (Type 0, [], False))
-    , (mkId "Effect",    (Type 0, [], False))
-    , (mkId "Guarantee", (Type 0, [], False))
-    , (mkId "Permission", (Type 0, [], False))
-    , (mkId "Predicate", (Type 0, [], False))
-    , (mkId "->",     (funTy (Type 0) (funTy (Type 0) (Type 0)), [], False))
-    , (mkId ",,",     (funTy kcoeffect (funTy kcoeffect kcoeffect), [mkId ",,"], False))
-    , (mkId "Int",    (Type 0, [], False))
-    , (mkId "Float",  (Type 0, [], False))
-    , (mkId "DFloat",  (Type 0, [], False)) -- special floats that can be tracked for sensitivty
-    , (mkId "Char",   (Type 0, [], False))
+    [ (mkId "Coeffect",  (Type 0, [], []))
+    , (mkId "Effect",    (Type 0, [], []))
+    , (mkId "Guarantee", (Type 0, [], []))
+    , (mkId "Permission", (Type 0, [], []))
+    , (mkId "Predicate", (Type 0, [], []))
+    , (mkId "->",     (funTy (Type 0) (funTy (Type 0) (Type 0)), [], []))
+    , (mkId ",,",     (funTy kcoeffect (funTy kcoeffect kcoeffect), [mkId ",,"], []))
+    , (mkId "Int",    (Type 0, [], []))
+    , (mkId "Float",  (Type 0, [], []))
+    , (mkId "DFloat",  (Type 0, [], [])) -- special floats that can be tracked for sensitivty
+    , (mkId "Char",   (Type 0, [], []))
     , (mkId "Void",   (Type 0, [], []))
-    , (mkId "String", (Type 0, [], False))
-    , (mkId "Inverse", ((funTy (Type 0) (Type 0)), [], False))
+    , (mkId "String", (Type 0, [], []))
+    , (mkId "Inverse", ((funTy (Type 0) (Type 0)), [], []))
     , (mkId "Dropable", (funTy (Type 0) kpredicate, [], [0]))
     -- TODO: add deriving for this
     -- , (mkId "Moveable", (funTy (Type 0) kpredicate, [], [0]))
@@ -109,23 +109,15 @@ typeConstructors =
     , (mkId "Hi",    (tyCon "Sec", [], []))
     , (mkId "Lo",    (tyCon "Sec", [], []))
     -- Uniqueness
-<<<<<<< HEAD
     , (mkId "Uniqueness", (kguarantee, [], []))
     , (mkId "Unique", (tyCon "Uniqueness", [], []))
-=======
-    , (mkId "Uniqueness", (kguarantee, [], False))
-    , (mkId "Unique", (tyCon "Uniqueness", [], False))
-    , (mkId "Fraction", (kpermission, [], False))
-    , (mkId "Whole", (tyCon "Fraction", [], False))
-    , (mkId "Half", (tyCon "Fraction", [], False))
->>>>>>> 9dd1e6d8 (prototype that typechecks fractional primitives (no arbitrary fractions, no identifiers, no evaluation yet))
+    , (mkId "Fraction", (tyCon "Permission", [], []))
     -- Integrity
     , (mkId "Integrity", (kguarantee, [], []))
     , (mkId "Trusted", (tyCon "Integrity", [], []))
     -- Other coeffect constructors
     , (mkId "Interval", (kcoeffect .-> kcoeffect, [], []))
     -- Channels and protocol types
-<<<<<<< HEAD
     , (mkId "Send", (funTy (Type 0) (funTy protocol protocol), [], []))
     , (mkId "Recv", (funTy (Type 0) (funTy protocol protocol), [], []))
     , (mkId "End" , (protocol, [], []))
@@ -134,17 +126,6 @@ typeConstructors =
     , (mkId "Chan", (funTy protocol (Type 0), [], [0]))
     , (mkId "LChan", (funTy protocol (Type 0), [], [0]))
     , (mkId "Dual", (funTy protocol protocol, [], [0]))
-=======
-    , (mkId "Send", (funTy (Type 0) (funTy protocol protocol), [], False))
-    , (mkId "Recv", (funTy (Type 0) (funTy protocol protocol), [], False))
-    , (mkId "End" , (protocol, [], False))
-    , (mkId "Select" , (funTy protocol (funTy protocol protocol), [], False))
-    , (mkId "Offer" , (funTy protocol (funTy protocol protocol), [], False)) 
-    , (mkId "Chan", (funTy protocol (Type 0), [], True))
-    , (mkId "LChan", (funTy protocol (Type 0), [], True))
-    , (mkId "Dual", (funTy protocol protocol, [], True))
-    , (mkId "->", (funTy (Type 0) (funTy (Type 0) (Type 0)), [], False))
->>>>>>> 9dd1e6d8 (prototype that typechecks fractional primitives (no arbitrary fractions, no identifiers, no evaluation yet))
     -- Top completion on a coeffect, e.g., Ext Nat is extended naturals (with ∞)
     , (mkId "Ext", (funTy kcoeffect kcoeffect, [], [0]))
     -- Effect grade types - Sessions
@@ -736,25 +717,11 @@ newFloatArray = BUILTIN
 readFloatArray : *FloatArray -> Int -> (Float, *FloatArray)
 readFloatArray = BUILTIN
 
-<<<<<<< HEAD
-writeFloatArray : *FloatArray -> Int -> Float -> *FloatArray
-writeFloatArray = BUILTIN
-
-lengthFloatArray : *FloatArray -> (Int, *FloatArray)
-lengthFloatArray = BUILTIN
-
-=======
-readFloatArrayI : FloatArray -> Int -> (Float, FloatArray)
-readFloatArrayI = BUILTIN
-
 readFloatArrayB : forall {p : Permission} . & p FloatArray -> Int -> (Float, & p FloatArray)
 readFloatArrayB = BUILTIN
 
 writeFloatArray : *FloatArray -> Int -> Float -> *FloatArray
 writeFloatArray = BUILTIN
-
-writeFloatArrayI : FloatArray -> Int -> Float -> FloatArray
-writeFloatArrayI = BUILTIN
 
 writeFloatArrayB : & Whole FloatArray -> Int -> Float -> & Whole FloatArray
 writeFloatArrayB = BUILTIN
@@ -762,13 +729,9 @@ writeFloatArrayB = BUILTIN
 lengthFloatArray : *FloatArray -> (Int, *FloatArray)
 lengthFloatArray = BUILTIN
 
-lengthFloatArrayI : FloatArray -> (Int, FloatArray)
-lengthFloatArrayI = BUILTIN
-
 lengthFloatArrayB : forall {p : Permission} . & p FloatArray -> (Int, & p FloatArray)
 lengthFloatArrayB = BUILTIN
 
->>>>>>> 9dd1e6d8 (prototype that typechecks fractional primitives (no arbitrary fractions, no identifiers, no evaluation yet))
 deleteFloatArray : *FloatArray -> ()
 deleteFloatArray = BUILTIN
 
