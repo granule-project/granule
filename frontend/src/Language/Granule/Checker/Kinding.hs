@@ -1319,6 +1319,11 @@ instance Unifiable Type where
       u' <- unify' k k'
       lift $ combineSubstitutionsHere u u'
 
+    unify' (Borrow p t) (Borrow p' t') = do
+      u  <- unify' p p'
+      u' <- unify' t t'
+      lift $ combineSubstitutionsHere u u'
+
     -- No unification
     unify' t t' = do
       -- But try to generate a constraint if its a solver thing
