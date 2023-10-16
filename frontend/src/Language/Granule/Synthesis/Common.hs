@@ -456,50 +456,53 @@ relevantConstructors id ((typeId, (dCons, _)):tys) =
 
 -- Call the solver on the internally generated predicate and get boolean result
 solve :: (?globals :: Globals) => Synthesiser Bool
-solve = do
-  -- show partial expression
-  partialExpr <- getCurrentPartialExpr
-  debugM "[Partial expression]" (pretty partialExpr)
+solve = 
+  if cartSynth > 0 then 
+    return True
+  else do
+    -- show partial expression
+    partialExpr <- getCurrentPartialExpr
+    debugM "[Partial expression]" (pretty partialExpr)
 
-  cs <- conv get
+    cs <- conv get
 
-  tyVars <- conv $ includeOnlyGradeVariables ns (tyVarContext cs)
+    tyVars <- conv $ includeOnlyGradeVariables ns (tyVarContext cs)
 
-  let pred = fromPredicateContext (predicateContext cs)
+    let pred = fromPredicateContext (predicateContext cs)
 
-  -- Prove the predicate
-  start  <- liftIO $ Clock.getTime Clock.Monotonic
-  constructors <- conv allDataConstructorNames
-  (smtTime', result) <- liftIO $ provePredicate pred tyVars constructors
-  -- Force the result
-  _ <- return result
-  end    <- liftIO $ Clock.getTime Clock.Monotonic
-  let proveTime' = fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double)
-  -- Update benchmarking data
-  Synthesiser $ lift $ lift $ lift $ modify (\state ->
-            state {
-             smtCallsCount = 1 + smtCallsCount state,
-             smtTime = smtTime' + smtTime state,
-             proveTime = proveTime' + proveTime state,
-             theoremSizeTotal = toInteger (length tyVars) + sizeOfPred pred + theoremSizeTotal state
-                  })
+    -- Prove the predicate
+    start  <- liftIO $ Clock.getTime Clock.Monotonic
+    constructors <- conv allDataConstructorNames
+    (smtTime', result) <- liftIO $ provePredicate pred tyVars constructors
+    -- Force the result
+    _ <- return result
+    end    <- liftIO $ Clock.getTime Clock.Monotonic
+    let proveTime' = fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double)
+    -- Update benchmarking data
+    Synthesiser $ lift $ lift $ lift $ modify (\state ->
+              state {
+              smtCallsCount = 1 + smtCallsCount state,
+              smtTime = smtTime' + smtTime state,
+              proveTime = proveTime' + proveTime state,
+              theoremSizeTotal = toInteger (length tyVars) + sizeOfPred pred + theoremSizeTotal state
+                   })
 
-  case result of
-    QED -> do
-      debugM "synthDebug" "SMT said: Yes."
-      return True
-    NotValid s -> do
-      debugM "synthDebug" "SMT said: No."
-      return False
-    SolverProofError msgs ->
-      return False
-    OtherSolverError reason ->
-      return False
-    Timeout -> do
-      debugM "synthDebug" "SMT said: Timeout."
-      return False
-    _ ->
-      return False
+    case result of
+      QED -> do
+        debugM "synthDebug" "SMT said: Yes."
+        return True
+      NotValid s -> do
+        debugM "synthDebug" "SMT said: No."
+        return False
+      SolverProofError msgs ->
+        return False
+      OtherSolverError reason ->
+        return False
+      Timeout -> do
+        debugM "synthDebug" "SMT said: Timeout."
+        return False
+      _ ->
+        return False
 
 -- ## Size calculations on predicates, constraints, and grades
 

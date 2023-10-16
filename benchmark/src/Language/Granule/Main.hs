@@ -98,7 +98,7 @@ modes = [
     , ("Cartesian (No Retries)", ("Cartesian (No Retries)", "--cart-synth 2"))
       ]
 
-defaultRepeatTrys = 10
+defaultRepeatTrys = 1
 
 getRecursiveContents :: FilePath -> IO [FilePath]
 getRecursiveContents topPath = do
@@ -181,7 +181,7 @@ main = do
   (files, categories, fpm, repeatTimes) <- return $ processArgs argsMain
 
   let items = benchmarksToRun benchmarkList
-  let doModes = ["Graded", "Cartesian", "Cartesian (No Retries)"]
+  let doModes = ["Graded", "Cartesian"]
   let fpm = True
   let repeatTime = defaultRepeatTrys
 
@@ -202,13 +202,18 @@ main = do
   let splitTimeAndSMT = True
   let resultsPerFile = transpose resultsPerMode
 
+                -- \scalebox{0.70}{
+                -- \begin{tabular}{p{1.25em}rcc|p{0.75em}rc|p{0.75em}ccc} & & & & 
+                -- \multicolumn{3}{c|}{Graded}&\multicolumn{4}{c|}{Cartesian + Graded type-check} \\ \hline \multicolumn{2}{c}{{Problem}}& \multicolumn{1}{c}{{Ctxt}} & \multicolumn{1}{c|}{{\#/Exs.}}  &  & \multicolumn{1}{c}{$\mu{T}$ (ms)} & \multicolumn{1}{c|}{{Paths}} & & \multicolumn{1}{c}{\textsc{N}} & \multicolumn{1}{c}{$\mu{T}$ (ms)}  & \multicolumn{1}{c|}{{Paths}} \\ \hline
+                -- \hline \multirow{19}{*}{{\rotatebox{90}{\textbf{List}}}} & 
+
   putStrLn "\\begin{table}[t]"
   putStrLn "{\\footnotesize{"
   putStrLn "\\begin{center}"
   putStrLn "\\setlength{\\tabcolsep}{0.3em}"
   -- let seps = replicate (length relevantModes) "p{0.75em}rccc"
-  putStrLn $ "\\begin{tabular}{p{1.25em}cc|p{0.75em}rc|p{0.75em}rcc|p{0.75em}rc} & & & "
-  putStrLn $ "\\multicolumn{3}{c|}{Graded}&\\multicolumn{4}{c|}{Cartesian}&\\multicolumn{3}{c|}{Cartesian (No Retries)} \\\\ \\hline \\multicolumn{2}{c}{{Problem}}& \\multicolumn{1}{c|}{{Ctxt}} & & \\multicolumn{1}{c}{$\\mu{T}$ (ms)} & \\multicolumn{1}{c|}{{\\#/Exs.}} & & \\multicolumn{1}{c}{$\\mu{T}$ (ms)} & \\multicolumn{1}{c}{\\textsc{N}} & \\multicolumn{1}{c|}{$\\mu{T}$ + OracleT (ms)}  & & \\multicolumn{1}{c}{$\\mu{T}$ (ms)} & \\multicolumn{1}{c|}{{\\#/Exs.}}\\\\ \\hline"
+  putStrLn $ "\\begin{tabular}{p{1.25em}ccc|p{0.75em}rc|p{0.75em}rcc} & & & & "
+  putStrLn $ "\\multicolumn{3}{c|}{Graded}&\\multicolumn{4}{c|}{Cartesian + Graded type-check} \\\\ \\hline \\multicolumn{2}{c}{{Problem}}& \\multicolumn{1}{c}{{Ctxt}} & \\multicolumn{1}{c|}{{\\#/Exs.}} & & \\multicolumn{1}{c}{$\\mu{T}$ (ms)} & \\multicolumn{1}{c|}{{Paths}} & & \\multicolumn{1}{c}{$\\mu{T}$ (ms)} & \\multicolumn{1}{c}{\\textsc{N}} & \\multicolumn{1}{c|}{{Paths}} \\\\ \\hline"
   -- let colHeadings = map (\(modeTitle, _) -> "\\multicolumn{5}{c|}{"<> modeTitle <> "}") relevantModes
   -- putStrLn $ intercalate "&" colHeadings <> "\\\\ \\hline"
 
@@ -228,6 +233,9 @@ main = do
           putStr " & "
           let ctxt = fifth5 $ head resultsPerModePerFile
           report1 ctxt contextSize
+          putStr " & "
+          report1 ctxt contextSize
+          putStr " & "
 
           leadTime <- foldM (\(lead :: (Maybe (String, Double), Bool) ) (texName, category, fileName, mode, results@(meausurements, aggregate)) -> do
             let currentTime = read $ report1String results synthTime
@@ -255,32 +263,29 @@ main = do
                       , putStr " & "
                       ,  putStr "Timeout"
                       , putStr " & "
-                      , putStr "-"
-                      , if mode == "--cart-synth 1" then putStr " & " else putStr ""
                       , if mode == "--cart-synth 1" then putStr "-"  else putStr ""
+                      , if mode == "--cart-synth 1" then putStr " & " else putStr ""
+                      , putStr "-"
                       ]
                 else
-                  [ putStr " & ", report1 results success
+                  [ putStr " & ", 
+                    report1 results success
                   , putStr " & "
-                  , 
-                    if mode == "--cart-synth 1" then 
+                  , if mode == "--cart-synth 1" then 
                       if not $ snd leadTime then 
-                        if fromMaybeFst "" (fst leadTime) == mode then reportLead results synthTime else report results synthTime
-                      else 
-                        reportLead2 results synthTime
-                    else 
+                          if fromMaybeFst "" (fst leadTime) == mode then reportLead results checkTime else report results checkTime
+                        else 
+                          reportLead2 results checkTime
+                      else
                       if fromMaybeFst "" (fst leadTime) == mode then reportLead results synthTime else report results synthTime
                   , putStr " & "
                   , if mode == "--cart-synth 1" then 
                       report1 results cartAttempts
                     else  
-                      report1 results examplesUsed
-
-                  , if mode == "--cart-synth 1" then putStr " & " else putStr ""
-                  , if mode == "--cart-synth 1" then do
-                        report results checkTime
-                      else putStr ""
-                        -- printf  "%6.2f" (synthTime aggregate + attemptsToSeconds (cartAttempts aggregate))  else putStr ""
+                      report1 results pathsExplored
+                  , if mode == "--cart-synth 1" then putStr "&" else putStr "" 
+                  , if mode == "--cart-synth 1" then report1 results pathsExplored else putStr "" 
+                
                   ]
               else
                 [ report1 results success
