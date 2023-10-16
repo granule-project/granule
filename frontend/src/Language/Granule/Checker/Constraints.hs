@@ -13,6 +13,7 @@ module Language.Granule.Checker.Constraints where
 --import Data.Foldable (foldrM)
 import Data.SBV hiding (kindOf, name, symbolic, isSet)
 import qualified Data.SBV.Set as S
+import Data.SBV.Rational
 import Data.Maybe (mapMaybe)
 import Control.Monad (liftM2)
 import Control.Monad.IO.Class
@@ -458,6 +459,9 @@ compileCoeffect (TyGrade k' n) k _ | k == extendedNat && (k' == Nothing || k' ==
 compileCoeffect (TyRational r) (TyCon k) _ | internalName k == "Q" =
   return (SFloat  . fromRational $ r, sTrue)
 
+compileCoeffect (TyFraction f) (TyCon k) _ | internalName k == "Fraction" =
+  return (SFraction (fromInteger (numerator f) .% fromInteger (denominator f)) sFalse, sTrue)
+
 compileCoeffect (TySet _ xs) (Language.Granule.Syntax.Type.isSet -> Just (elemTy, polarity)) _ =
     return ((SSet polarity) . S.fromList $ mapMaybe justTyConNames xs, sTrue)
   where
@@ -772,6 +776,7 @@ trivialUnsatisfiableConstraints
     neqC :: Type -> Type -> Bool
     neqC (TyInt n) (TyInt m) = n /= m
     neqC (TyRational n) (TyRational m) = n /= m
+    neqC (TyFraction f) (TyFraction f') = f /= f'
     --neqC (CInterval lb1 ub1) (CInterval lb2 ub2) =
     --   neqC lb1 lb2 || neqC ub1 ub2
     neqC (TySig r t) (TySig r' t') | t == t' = neqC r r'
