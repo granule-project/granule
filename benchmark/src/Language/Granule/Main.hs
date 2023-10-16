@@ -33,6 +33,7 @@ data Measurement = Measurement {
    , synthTime       :: Double -- greater than the prover time
    , proverTime      :: Double -- greater than the solver time
    , solverTime      :: Double
+   , checkTime       :: Double
    , meanTheoremSize :: Double
    , success         :: Bool
    , timeout         :: Bool
@@ -277,7 +278,9 @@ main = do
 
                   , if mode == "--cart-synth 1" then putStr " & " else putStr ""
                   , if mode == "--cart-synth 1" then do
-                        printf  "%6.2f" (synthTime aggregate + attemptsToSeconds (cartAttempts aggregate))  else putStr ""
+                        report results checkTime
+                      else putStr ""
+                        -- printf  "%6.2f" (synthTime aggregate + attemptsToSeconds (cartAttempts aggregate))  else putStr ""
                   ]
               else
                 [ report1 results success
@@ -338,6 +341,7 @@ measureSynthesis repeatTimes file mode logIdent = do
            , proverTime = 0.00
            , solverTime = 0.00
            , meanTheoremSize = 0.00
+           , checkTime = 0.00
            , success = False
            , timeout = True
            , pathsExplored = 0
@@ -366,6 +370,7 @@ aggregate results =
       , synthTime  = sum (map synthTime results) / n
       , proverTime = sum (map proverTime results) / n
       , solverTime = sum (map solverTime results) / n
+      , checkTime = sum (map checkTime results) / n
       , meanTheoremSize = fromMaybe 0 $ the' (map meanTheoremSize results)
       , success = fromMaybe False $ the' (map success results)
       , timeout = fromMaybe True $ the' (map timeout results)
