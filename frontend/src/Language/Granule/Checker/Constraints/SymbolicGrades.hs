@@ -25,7 +25,7 @@ solverError msg = liftIO $ throwIO . ErrorCall $ msg
 -- Symbolic grades, for coeffects and indices
 data SGrade =
        SNat      SInteger
-     | SPermission { sPermission :: SRational, sIsUnique :: SBool }
+     | SFraction { sFraction :: SRational, sIsUnique :: SBool }
      | SFloat    SFloat
      | SLevel    SInteger
      | SSec      SBool -- Hi = True, Lo = False
