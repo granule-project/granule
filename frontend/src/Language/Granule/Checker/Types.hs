@@ -630,6 +630,7 @@ permEquals s _ p1 p2 = do
             -- Check that the types of the effect terms match
             (eq, _, u) <- equalTypes s pTy1 pTy2
             if eq then do
+              addConstraint (Eq s p1 p2 pTy1)
               return True
             else throw $ KindMismatch { errLoc = s, tyActualK = Just p1, kExpected = pTy1, kActual = pTy2 }
           Left k -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = p2 , errK = k }
