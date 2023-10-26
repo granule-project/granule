@@ -753,8 +753,8 @@ builtIns =
           Ext () $ Primitive $ \(StringLiteral t) -> return $ StringLiteral $ s `RT.stringAppend` t)
   , ( mkId "stringUncons"
     , Ext () $ Primitive $ \(StringLiteral s) -> return $ case uncons s of
-        Just (c, s) -> Constr () (mkId "Some") [Constr () (mkId ",") [CharLiteral c, StringLiteral s]]
-        Nothing     -> Constr () (mkId "None") []
+        Just (c, s) -> Constr () (mkId "Just") [Constr () (mkId ",") [CharLiteral c, StringLiteral s]]
+        Nothing     -> Constr () (mkId "Nothing") []
     )
   , ( mkId "stringCons"
     , Ext () $ Primitive $ \(CharLiteral c) -> return $
@@ -762,8 +762,8 @@ builtIns =
     )
   , ( mkId "stringUnsnoc"
     , Ext () $ Primitive $ \(StringLiteral s) -> return $ case unsnoc s of
-        Just (s, c) -> Constr () (mkId "Some") [Constr () (mkId ",") [StringLiteral s, CharLiteral c]]
-        Nothing     -> Constr () (mkId "None") []
+        Just (s, c) -> Constr () (mkId "Just") [Constr () (mkId ",") [StringLiteral s, CharLiteral c]]
+        Nothing     -> Constr () (mkId "Nothing") []
     )
   , ( mkId "stringSnoc"
     , Ext () $ Primitive $ \(StringLiteral s) -> return $
