@@ -1,0 +1,42 @@
+import List
+import Maybe
+
+data Parser (a : Type) = Parser (String → List (a , String))
+
+parse : ∀ {a : Type}. Parser a → String → List (a , String)
+parse (Parser p) = p
+
+result : ∀{a : Type}. a → Parser a
+result a = Parser (λs → Next (a,s) Empty)
+
+concat : ∀{a : Type}. List (List a) → List a
+concat Empty = Empty;
+concat (Next xs xss) = append_list xs (concat xss)
+
+bind : ∀{a b : Type}. Parser a → (a → Parser b)[] → Parser b
+bind (Parser p) [f] = Parser (λ s → concat(lmap [λ(a,s') → parse (f a) s'] (p s)))
+
+zero : ∀{a : Type}. Parser a
+zero = Parser (λ s → let () = drop @String s in Empty)
+
+item : Parser Char
+item = Parser (λ s → case stringUncons s of
+                        Nothing → Empty;
+                        Just (c,cs) → Next (c,cs) Empty)
+
+
+sat : (Char → Bool)[] → Parser Char
+sat [p] = item `bind` [λ c →  let
+                                [c'] : Char[] = moveChar c
+                              in  if (p c')
+                                  then (result c')
+                                  else zero]
+
+lookup : List Char → Char → Bool
+lookup Empty c = let () = drop @Char c in False;
+lookup (Next c' cs) c = let
+                          [c] : Char[] = moveChar c
+                        in (c ≡ c') `or'` (lookup cs c)
+
+main : List (Char, String)
+main = parse (sat [lookup (Next 'h' Empty)]) "h"
