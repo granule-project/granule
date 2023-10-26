@@ -757,6 +757,12 @@ cap = BUILTIN
 -- trace : String -> () <>
 -- trace = BUILTIN
 
+------------------------------
+-- Debugging routines
+------------------------------
+-- debug : forall {a : Type} . String -> a -> a
+-- debug = BUILTIN
+
 |]
 
 

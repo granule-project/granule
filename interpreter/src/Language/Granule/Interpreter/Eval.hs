@@ -790,6 +790,11 @@ builtIns =
   , (mkId "gsend",    Ext () $ Primitive gsend)
   , (mkId "gclose",   Ext () $ Primitive gclose)
   -- , (mkId "trace",   Ext () $ Primitive $ \(StringLiteral s) -> diamondConstr $ do { Text.putStr s; hFlush stdout; return $ Val nullSpan () False (Constr () (mkId "()") []) })
+  -- , (mkId "trace",   Ext () $ Primitive $ \(StringLiteral s) -> do
+  --                         return $ Ext () $ Primitive $ \e -> do
+  --                                               putStrLn $ "TRACE<" <> unpack s <> ">: " <> pretty e <> "\n"
+  --                                               return e )
+
   -- , (mkId "newPtr", malloc)
   -- , (mkId "swapPtr", peek poke castPtr) -- hmm probably don't need to cast the Ptr
   -- , (mkId "freePtr", free)
