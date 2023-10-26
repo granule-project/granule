@@ -1,2 +1,3 @@
+data Vec n a = None
 data VecX (a : Type) where
   VecX : ∀ {n : Nat} . Vec n a → VecX a
