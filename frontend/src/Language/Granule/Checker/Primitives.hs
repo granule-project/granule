@@ -732,10 +732,10 @@ writeFloatArray = BUILTIN
 writeFloatArrayB : & 1 FloatArray -> Int -> Float -> & 1 FloatArray
 writeFloatArrayB = BUILTIN
 
-lengthFloatArray : *FloatArray -> (Int, *FloatArray)
+lengthFloatArray : *FloatArray -> (!Int, *FloatArray)
 lengthFloatArray = BUILTIN
 
-lengthFloatArrayB : forall {p : Permission, f : p} . & f FloatArray -> (Int, & f FloatArray)
+lengthFloatArrayB : forall {p : Permission, f : p} . & f FloatArray -> (!Int, & f FloatArray)
 lengthFloatArrayB = BUILTIN
 
 deleteFloatArray : *FloatArray -> ()

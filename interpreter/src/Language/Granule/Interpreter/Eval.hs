@@ -1185,17 +1185,17 @@ builtIns =
     lengthFloatArray :: RValue -> IO RValue
     lengthFloatArray = \(Nec () (Val _ _ _ (Ext () (Runtime fa)))) ->
       let (e,fa') = RT.lengthFloatArray fa
-      in return $ Constr () (mkId ",") [NumInt e, Nec () (Val nullSpan () False $ Ext () $ Runtime fa')]
+      in return $ Constr () (mkId ",") [Promote () (Val nullSpan () False $ (NumInt e)), Nec () (Val nullSpan () False $ Ext () $ Runtime fa')]
 
     lengthFloatArrayI :: RValue -> IO RValue
     lengthFloatArrayI = \(Ext () (Runtime fa)) ->
       let (e,fa') = RT.lengthFloatArray fa
-      in return $ Constr () (mkId ",") [NumInt e, Ext () $ Runtime fa']
+      in return $ Constr () (mkId ",") [Promote () (Val nullSpan () False $ (NumInt e)), Ext () $ Runtime fa']
 
     lengthFloatArrayB :: RValue -> IO RValue
     lengthFloatArrayB = \(Ref () (Val _ _ _ (Ext () (Runtime fa)))) -> return $ Ext () $ Primitive $ \(NumInt i) ->
       let (e,fa') = RT.lengthFloatArray fa
-      in return $ Constr () (mkId ",") [NumInt e, Ref () (Val nullSpan () False $ Ext () $ Runtime fa')]
+      in return $ Constr () (mkId ",") [Promote () (Val nullSpan () False $ (NumInt e)), Ref () (Val nullSpan () False $ Ext () $ Runtime fa')]
 
     writeFloatArray :: RValue -> IO RValue
     writeFloatArray = \(Nec _ (Val _ _ _ (Ext _ (Runtime fa)))) -> return $
