@@ -147,8 +147,9 @@ typeConstructors =
             (FunTy (Just $ mkId "sig") Nothing (funTy (Type 0) (funTy (tyVar "eff") (Type 0)))
               (funTy (tyVar "eff") (TyApp (TyApp (tyCon "GradedFree") (tyVar "eff")) (tyVar "sig")))), [], [0,1]))
 
-    -- Arrays
+    -- Reference types
     , (mkId "FloatArray", (Type 0, [], []))
+    , (mkId "Ref", (funTy (Type 0) (Type 0), [], []))
 
     -- Capability related things
     , (mkId "CapabilityType", (funTy (tyCon "Capability") (Type 0), [], [0]))
@@ -707,6 +708,11 @@ borrowPull
   . (& f a, & f b) -> & f (a, b)
 borrowPull = BUILTIN
 
+maybePush
+  : forall {a b : Type, p : Permission, f : p}
+  . & f (Maybe a) -> Maybe (& f a)
+maybePush = BUILTIN
+
 --------------------------------------------------------------------------------
 --- # Mutable array operations
 --------------------------------------------------------------------------------
@@ -717,23 +723,35 @@ newFloatArray = BUILTIN
 readFloatArray : *FloatArray -> Int -> (Float, *FloatArray)
 readFloatArray = BUILTIN
 
-readFloatArrayB : forall {p : Permission} . & p FloatArray -> Int -> (Float, & p FloatArray)
+readFloatArrayB : forall {p : Permission, f : p} . & f FloatArray -> Int -> (Float, & f FloatArray)
 readFloatArrayB = BUILTIN
 
 writeFloatArray : *FloatArray -> Int -> Float -> *FloatArray
 writeFloatArray = BUILTIN
 
-writeFloatArrayB : & Whole FloatArray -> Int -> Float -> & Whole FloatArray
+writeFloatArrayB : & 1 FloatArray -> Int -> Float -> & 1 FloatArray
 writeFloatArrayB = BUILTIN
 
 lengthFloatArray : *FloatArray -> (Int, *FloatArray)
 lengthFloatArray = BUILTIN
 
-lengthFloatArrayB : forall {p : Permission} . & p FloatArray -> (Int, & p FloatArray)
+lengthFloatArrayB : forall {p : Permission, f : p} . & f FloatArray -> (Int, & f FloatArray)
 lengthFloatArrayB = BUILTIN
 
 deleteFloatArray : *FloatArray -> ()
 deleteFloatArray = BUILTIN
+
+newRef : forall {a : Type} . a -> *(Ref a)
+newRef = BUILTIN
+
+swapRef : forall {a : Type} . a -> & 1 (Ref a) -> (a, & 1 (Ref a))
+swapRef = BUILTIN
+
+freezeRef : forall {a : Type} . *(Ref a) -> a
+freezeRef = BUILTIN
+
+readRef : forall {a : Type, s : Semiring, r : s, p : Permission, f : p} . & f (Ref (a [r+1])) -> (a, & f (Ref (a [r])))
+readRef = BUILTIN
 
 --------------------------------------------------------------------------------
 --- # Imuutable array operations
@@ -812,5 +830,5 @@ builtins :: [(Id, TypeScheme)]
 
 -- List of primitives that can't be promoted in CBV
 unpromotables :: [String]
-unpromotables = ["newFloatArray", "forkLinear", "forkMulticast", "forkReplicate", "forkReplicateExactly"]
+unpromotables = ["newFloatArray", "newRef", "forkLinear", "forkMulticast", "forkReplicate", "forkReplicateExactly"]
 
