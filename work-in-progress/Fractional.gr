@@ -1,4 +1,6 @@
 import Parallel
+import Vec
+import Nat
 
 data Colour = Colour (Int, (Int, Int))
 
@@ -49,3 +51,12 @@ amethyst c =
 
 test : & 2/4 Colour -> & 1/2 Colour
 test x = x
+
+arrToRefs : *FloatArray -> exists {n : Nat} . Vec n (*(Ref Float))
+arrToRefs arr = let ([l], arr') = lengthFloatArray arr in loop arr' [l] [0]
+
+loop : *FloatArray -> !Int -> !Int -> exists {n : Nat} . Vec n (*(Ref Float))
+loop arr [l] [c] = if (c == l) then let () = deleteFloatArray arr in
+        (pack <0 , Nil> as exists {n : Nat} . Vec n (*(Ref Float)))
+    else let (v, arr') = readFloatArray arr c in
+        (unpack <n , vec> = loop arr' [l] [c + 1] in (pack <n+1 , (Cons (newRef v) vec)> as exists {n : Nat} . Vec n (*(Ref Float))))
