@@ -53,10 +53,18 @@ test : & 2/4 Colour -> & 1/2 Colour
 test x = x
 
 arrToRefs : *FloatArray -> exists {n : Nat} . Vec n (*(Ref Float))
-arrToRefs arr = let ([l], arr') = lengthFloatArray arr in loop arr' [l] [0]
+arrToRefs arr = let ([l], arr') = lengthFloatArray arr in loopAR arr' [l] [0]
 
-loop : *FloatArray -> !Int -> !Int -> exists {n : Nat} . Vec n (*(Ref Float))
-loop arr [l] [c] = if (c == l) then let () = deleteFloatArray arr in
+refsToArr : forall {n : Nat} . Vec n (*(Ref Float)) -> *FloatArray
+refsToArr Nil = newFloatArray 0;
+refsToArr vec = let (l, vec') = length' vec in loopRA (newFloatArray (natToInt l)) vec' [0]
+
+loopAR : *FloatArray -> !Int -> !Int -> exists {n : Nat} . Vec n (*(Ref Float))
+loopAR arr [l] [c] = if (c == l) then let () = deleteFloatArray arr in
         (pack <0 , Nil> as exists {n : Nat} . Vec n (*(Ref Float)))
     else let (v, arr') = readFloatArray arr c in
-        (unpack <n , vec> = loop arr' [l] [c + 1] in (pack <n+1 , (Cons (newRef v) vec)> as exists {n : Nat} . Vec n (*(Ref Float))))
+        (unpack <n , vec> = loopAR arr' [l] [c+1] in (pack <(n+1) , (Cons (newRef v) vec)> as exists {n : Nat} . Vec n (*(Ref Float))))
+
+loopRA : forall {n : Nat} . *FloatArray -> Vec n (*(Ref Float)) -> !Int -> *FloatArray
+loopRA arr Nil [_] = arr;
+loopRA arr (Cons v vec) [c] = let arr' = writeFloatArray arr c (freezeRef v) in loopRA arr' vec [c+1]
