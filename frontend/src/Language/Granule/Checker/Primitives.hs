@@ -750,7 +750,7 @@ swapRef = BUILTIN
 freezeRef : forall {a : Type} . *(Ref a) -> a
 freezeRef = BUILTIN
 
-readRef : forall {a : Type, s : Semiring, r : s, p : Permission, f : p} . & f (Ref (a [r+1])) -> (a, & f (Ref (a [r])))
+readRef : forall {a : Type, s : Semiring, q r : s, p : Permission, f : p} . & f (Ref (a [q+r])) -> (a [q], & f (Ref (a [r])))
 readRef = BUILTIN
 
 --------------------------------------------------------------------------------
