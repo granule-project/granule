@@ -1324,6 +1324,11 @@ instance Unifiable Type where
       u' <- unify' t t'
       lift $ combineSubstitutionsHere u u'
 
+    unify' (Star g t) (Star g' t') = do
+      u  <- unify' g g'
+      u' <- unify' t t'
+      lift $ combineSubstitutionsHere u u'
+
     -- No unification
     unify' t t' = do
       -- But try to generate a constraint if its a solver thing
