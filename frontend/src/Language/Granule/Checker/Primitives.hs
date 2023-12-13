@@ -718,28 +718,28 @@ maybePush = BUILTIN
 --- # Mutable array operations
 --------------------------------------------------------------------------------
 
-newFloatArray : Int -> *FloatArray
+newFloatArray : Int -> exists {id : Id} . *(FloatArray id)
 newFloatArray = BUILTIN
 
-readFloatArray : *FloatArray -> Int -> (Float, *FloatArray)
+readFloatArray : forall {id : Id} . *(FloatArray id) -> Int -> (Float, *FloatArray)
 readFloatArray = BUILTIN
 
-readFloatArrayB : forall {p : Permission, f : p} . & f FloatArray -> Int -> (Float, & f FloatArray)
+readFloatArrayB : forall {p : Permission, f : p, id : Id} . & f (FloatArray id) -> Int -> (Float, & f (FloatArray id))
 readFloatArrayB = BUILTIN
 
-writeFloatArray : *FloatArray -> Int -> Float -> *FloatArray
+writeFloatArray : forall {id : Id} . *(FloatArray id) -> Int -> Float -> *(FloatArray id)
 writeFloatArray = BUILTIN
 
-writeFloatArrayB : & 1 FloatArray -> Int -> Float -> & 1 FloatArray
+writeFloatArrayB : forall {id : Id} . & 1 (FloatArray id) -> Int -> Float -> & 1 (FloatArray id)
 writeFloatArrayB = BUILTIN
 
-lengthFloatArray : *FloatArray -> (!Int, *FloatArray)
+lengthFloatArray : forall {id : Id} . *(FloatArray id) -> (!Int, *(FloatArray id))
 lengthFloatArray = BUILTIN
 
-lengthFloatArrayB : forall {p : Permission, f : p} . & f FloatArray -> (!Int, & f FloatArray)
+lengthFloatArrayB : forall {p : Permission, f : p, id : Id} . & f (FloatArray id) -> (!Int, & f (FloatArray id))
 lengthFloatArrayB = BUILTIN
 
-deleteFloatArray : *FloatArray -> ()
+deleteFloatArray : forall {id : Id} . *(FloatArray id) -> ()
 deleteFloatArray = BUILTIN
 
 newRef : forall {a : Type} . a -> *(Ref a)
@@ -758,16 +758,16 @@ readRef = BUILTIN
 --- # Imuutable array operations
 --------------------------------------------------------------------------------
 
-newFloatArrayI : Int -> FloatArray
+newFloatArrayI : forall {id : Id} . Int -> (FloatArray id)
 newFloatArrayI = BUILTIN
 
-readFloatArrayI : FloatArray -> Int -> (Float, FloatArray)
+readFloatArrayI : forall {id : Id} . (FloatArray id) -> Int -> (Float, (FloatArray id))
 readFloatArrayI = BUILTIN
 
-writeFloatArrayI : FloatArray -> Int -> Float -> FloatArray
+writeFloatArrayI : forall {id : Id} . (FloatArray id) -> Int -> Float -> (FloatArray id)
 writeFloatArrayI = BUILTIN
 
-lengthFloatArrayI : FloatArray -> (Int, FloatArray)
+lengthFloatArrayI : forall {id : Id} . (FloatArray id) -> (Int, (FloatArray id))
 lengthFloatArrayI = BUILTIN
 
 --------------------------------------------------------------------------------
