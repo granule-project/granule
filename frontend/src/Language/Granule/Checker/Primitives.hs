@@ -150,7 +150,7 @@ typeConstructors =
     -- Reference types
     , (mkId "Id", (FunTy Nothing Nothing (Type 0) (Type 0), [], []))
     , (mkId "FloatArray", (FunTy Nothing Nothing (TyCon $ mkId "Id") (Type 0), [], []))
-    , (mkId "Ref", (funTy (Type 0) (Type 0), [], []))
+    , (mkId "Ref",  (FunTy Nothing Nothing (TyCon $ mkId "Id") (FunTy Nothing Nothing (Type 0) (Type 0)), [], []))
 
     -- Capability related things
     , (mkId "CapabilityType", (funTy (tyCon "Capability") (Type 0), [], [0]))
@@ -742,16 +742,16 @@ lengthFloatArrayB = BUILTIN
 deleteFloatArray : forall {id : Id} . *(FloatArray id) -> ()
 deleteFloatArray = BUILTIN
 
-newRef : forall {a : Type} . a -> *(Ref a)
+newRef : forall {a : Type} . a -> exists {id : Id} . *(Ref id a)
 newRef = BUILTIN
 
-swapRef : forall {a : Type} . a -> & 1 (Ref a) -> (a, & 1 (Ref a))
+swapRef : forall {a : Type, id : Id} . a -> & 1 (Ref id a) -> (a, & 1 (Ref id a))
 swapRef = BUILTIN
 
-freezeRef : forall {a : Type} . *(Ref a) -> a
+freezeRef : forall {a : Type, id : Id} . *(Ref id a) -> a
 freezeRef = BUILTIN
 
-readRef : forall {a : Type, s : Semiring, q r : s, p : Permission, f : p} . & f (Ref (a [q+r])) -> (a [q], & f (Ref (a [r])))
+readRef : forall {a : Type, s : Semiring, q r : s, p : Permission, f : p, id : Id} . & f (Ref id (a [q+r])) -> (a [q], & f (Ref id (a [r])))
 readRef = BUILTIN
 
 --------------------------------------------------------------------------------
