@@ -148,7 +148,8 @@ typeConstructors =
               (funTy (tyVar "eff") (TyApp (TyApp (tyCon "GradedFree") (tyVar "eff")) (tyVar "sig")))), [], [0,1]))
 
     -- Reference types
-    , (mkId "FloatArray", (Type 0, [], []))
+    , (mkId "Id", (FunTy Nothing Nothing (Type 0) (Type 0), [], []))
+    , (mkId "FloatArray", (FunTy Nothing Nothing (TyCon $ mkId "Id") (Type 0), [], []))
     , (mkId "Ref", (funTy (Type 0) (Type 0), [], []))
 
     -- Capability related things
