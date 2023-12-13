@@ -23,10 +23,10 @@ sumFromTo array [i] [n] =
       in  (x + y, arr)
 
 
-parSum : forall {id id' : Id} . *(FloatArray id) -> *(Ref id' Float, FloatArray id)
-parSum array = unpack <id , ref> = newRef 0.0 in
- let ([n], array)     = lengthFloatArray array;
-     compIn           = uniquePull (ref, array)
+parSum : forall {id id' : Id} . *(FloatArray id) -> *(Ref id' Float) -> *(Ref id' Float, FloatArray id)
+parSum array ref = let
+     ([n], array) : (!Int, *(FloatArray id))     = lengthFloatArray array;
+     compIn                                      = uniquePull (ref, array)
   in flip withBorrow compIn (\compIn ->
                 let (ref, array)      = borrowPush compIn;
                     (array1, array2)  = split array;
@@ -42,8 +42,9 @@ parSum array = unpack <id , ref> = newRef 0.0 in
 
 main : Float
 main =
-  unpack <id, arr> = toFloatArray (Cons 10.0 (Cons 20.0 (Cons 30.0 (Cons 40.0 Nil))))
-  in let
-      (result, array) = uniquePush (parSum arr);
+  unpack <id, arr> = toFloatArray (Cons 10.0 (Cons 20.0 (Cons 30.0 (Cons 40.0 Nil)))) in
+  unpack <id', ref> = newRef (0.0 : Float) in
+  let
+      (result, array) = uniquePush (parSum arr ref);
       () = deleteFloatArray array
   in freezeRef result
