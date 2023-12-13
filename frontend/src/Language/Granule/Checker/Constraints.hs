@@ -228,21 +228,25 @@ freshSolverVarScoped quant name (TyCon (internalName -> "Sec")) q k =
     quant q name (\solverVar -> k (sTrue, SSec solverVar))
 
 freshSolverVarScoped quant name (TyCon conName) q k =
-    -- Integer based
-    quant q name (\solverVar ->
-      case internalName conName of
-        "Nat"    -> k (solverVar .>= 0, SNat solverVar)
-        "Level"  -> k (solverVar .== literal privateRepresentation
-                  .|| solverVar .== literal publicRepresentation
-                  .|| solverVar .== literal unusedRepresentation
-                    , SLevel solverVar)
-        "LNL"    -> k (solverVar .== literal zeroRep
-                  .|| solverVar .== literal oneRep
-                  .|| solverVar .== literal manyRep
-                    , SLNL solverVar)
-        "OOZ"    -> k (solverVar .== 0 .|| solverVar .== 1, SOOZ (ite (solverVar .== 0) sFalse sTrue))
-        "Cartesian" -> k (sTrue, SPoint)
-        k -> solverError $ "I don't know how to make a fresh solver variable of type " <> show conName)
+  case internalName conName of
+    -- TODO: sFalse should be symbolic
+    "Fraction" -> quant q name (\solverVar -> k (sTrue, SFraction solverVar sFalse))
+    _ ->
+      -- Integer based
+      quant q name (\solverVar ->
+        case internalName conName of
+          "Nat"    -> k (solverVar .>= 0, SNat solverVar)
+          "Level"  -> k (solverVar .== literal privateRepresentation
+                    .|| solverVar .== literal publicRepresentation
+                    .|| solverVar .== literal unusedRepresentation
+                      , SLevel solverVar)
+          "LNL"    -> k (solverVar .== literal zeroRep
+                    .|| solverVar .== literal oneRep
+                    .|| solverVar .== literal manyRep
+                      , SLNL solverVar)
+          "OOZ"    -> k (solverVar .== 0 .|| solverVar .== 1, SOOZ (ite (solverVar .== 0) sFalse sTrue))
+          "Cartesian" -> k (sTrue, SPoint)
+          k -> solverError $ "I don't know how to make a fresh solver variable of type " <> show conName)
 
 freshSolverVarScoped quant name t q k | t == extendedNat = do
    quant q name (\solverVar ->
@@ -292,6 +296,10 @@ class QuantifiableScoped a where
   existentialScoped :: String -> (SBV a -> Symbolic SBool) -> Symbolic SBool
 
 instance QuantifiableScoped Integer where
+  universalScoped v = universal [v]
+  existentialScoped v = existential [v]
+
+instance QuantifiableScoped Rational where
   universalScoped v = universal [v]
   existentialScoped v = existential [v]
 
