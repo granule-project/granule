@@ -1,0 +1,49 @@
+import Parallel
+import Prelude
+import Vec
+
+toFloatArray : forall {n : Nat} . Vec n Float -> exists {id : Id} . *(FloatArray id)
+toFloatArray v =
+  let (n', v) = length' v
+  in unpack <id, arr> = newFloatArray (natToInt n')
+  in pack <id, (toFloatArrayAux arr [0] v)> as exists {id : Id} . *(FloatArray id)
+
+toFloatArrayAux : forall {n : Nat, id : Id} . *(FloatArray id)-> Int [n] -> Vec n Float -> *(FloatArray id)
+toFloatArrayAux a [n] Nil = a;
+toFloatArrayAux a [n] (Cons x xs) =
+  toFloatArrayAux (writeFloatArray a n x) [n + 1] xs
+
+sumFromTo : forall {id : Id, p : Fraction} . & p (FloatArray id) ->  !Int -> !Int -> (Float, & p (FloatArray id))
+sumFromTo array [i] [n] =
+  if i == n
+    then (0.0, array)
+    else
+      let (x, a) = readFloatArrayB array i;
+          (y, arr) = sumFromTo a [i+1] [n]
+      in  (x + y, arr)
+
+
+parSum : forall {id id' : Id} . *(FloatArray id) -> *(Ref id' Float, FloatArray id)
+parSum array = unpack <id , ref> = newRef 0.0 in
+ let ([n], array)     = lengthFloatArray array;
+     compIn           = uniquePull (ref, array)
+  in flip withBorrow compIn (\compIn ->
+                let (ref, array)      = borrowPush compIn;
+                    (array1, array2)  = split array;
+                    -- Compute in parallel
+                    ((x, array1), (y, array2)) =
+                                par (\() -> sumFromTo array1 [0] [div n 2])
+                                    (\() -> sumFromTo array2 [div n 2] [n]);
+                    -- Update the reference
+                    (old, ref') = swapRef ((x : Float) + (y : Float)) ref;
+                    ()          = drop @Float old;
+                    compOut     = borrowPull (ref', join (array1, array2))
+                  in compOut)
+
+main : Float
+main =
+  unpack <id, arr> = toFloatArray (Cons 10.0 (Cons 20.0 (Cons 30.0 (Cons 40.0 Nil))))
+  in let
+      (result, array) = uniquePush (parSum arr);
+      () = deleteFloatArray array
+  in freezeRef result
