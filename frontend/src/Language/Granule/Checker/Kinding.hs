@@ -1262,7 +1262,7 @@ unify x y = runMaybeT $ unify' x y
 
 requiresSolver :: (?globals :: Globals) => Span -> Type -> Checker Bool
 requiresSolver s ty = do
-  (result, putChecker) <- peekChecker (checkKind s ty kcoeffect <|> checkKind s ty keffect)
+  (result, putChecker) <- peekChecker (checkKind s ty kcoeffect <|> checkKind s ty keffect <|> checkKind s ty kpermission)
   case result of
     -- Checking as coeffect or effect caused an error so ignore
     Left _  -> return False
