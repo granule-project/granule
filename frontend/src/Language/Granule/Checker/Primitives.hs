@@ -721,7 +721,7 @@ maybePush = BUILTIN
 newFloatArray : Int -> exists {id : Name} . *(FloatArray id)
 newFloatArray = BUILTIN
 
-readFloatArray : forall {id : Name} . *(FloatArray id) -> Int -> (Float, *FloatArray)
+readFloatArray : forall {id : Name} . *(FloatArray id) -> Int -> (Float, *(FloatArray id))
 readFloatArray = BUILTIN
 
 readFloatArrayB : forall {p : Permission, f : p, id : Name} . & f (FloatArray id) -> Int -> (Float, & f (FloatArray id))
