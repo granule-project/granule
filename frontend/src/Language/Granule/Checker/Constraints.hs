@@ -23,6 +23,7 @@ import Language.Granule.Context (Ctxt)
 
 import Language.Granule.Checker.Constraints.SymbolicGrades
 import qualified Language.Granule.Checker.Constraints.SNatX as SNatX
+import qualified Language.Granule.Checker.Constraints.SFrac as SFrac
 
 import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.Identifiers
@@ -227,11 +228,12 @@ freshSolverVarScoped quant name (TyCon (internalName -> "Q")) q k =
 freshSolverVarScoped quant name (TyCon (internalName -> "Sec")) q k =
     quant q name (\solverVar -> k (sTrue, SSec solverVar))
 
+freshSolverVarScoped quant name (TyCon (internalName -> "Fraction")) q k = do
+   quant q name (\solverVar ->
+    k (SFrac.fractionConstraint solverVar
+     , SFraction (SFrac.SFrac solverVar)))
+
 freshSolverVarScoped quant name (TyCon conName) q k =
-  case internalName conName of
-    -- TODO: sFalse should be symbolic
-    "Fraction" -> quant q name (\solverVar -> k (sTrue, SFraction solverVar sFalse))
-    _ ->
       -- Integer based
       quant q name (\solverVar ->
         case internalName conName of
@@ -468,7 +470,10 @@ compileCoeffect (TyRational r) (TyCon k) _ | internalName k == "Q" =
   return (SFloat  . fromRational $ r, sTrue)
 
 compileCoeffect (TyFraction f) (TyCon k) _ | internalName k == "Fraction" =
-  return (SFraction (fromInteger (numerator f) .% fromInteger (denominator f)) sFalse, sTrue)
+  return (SFraction (SFrac.SFrac $ fromInteger (numerator f) .% fromInteger (denominator f)), sTrue)
+
+compileCoeffect (TyCon (internalName -> "Star")) (TyCon (internalName -> "Fraction")) _ = do
+  return (SFraction (SFrac.SFrac $ 0 .% 1), sTrue)
 
 compileCoeffect (TySet _ xs) (Language.Granule.Syntax.Type.isSet -> Just (elemTy, polarity)) _ =
     return ((SSet polarity) . S.fromList $ mapMaybe justTyConNames xs, sTrue)

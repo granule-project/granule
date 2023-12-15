@@ -1,0 +1,5 @@
+example : Float
+example = unpack <id , a> = newFloatArray 3 in let
+  a'       = writeFloatArray a 1 4.2;
+  (f, a'') = readFloatArray a' 1;
+  ()       = deleteFloatArray a'' in f

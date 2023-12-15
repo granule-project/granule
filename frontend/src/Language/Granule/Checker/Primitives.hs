@@ -77,6 +77,7 @@ typeConstructors =
     -- , (mkId "Moveable", (funTy (Type 0) kpredicate, [], [0]))
     -- Session type related things
     , (mkId "ExactSemiring", (funTy (tyCon "Semiring") (tyCon "Predicate"), [], []))
+    , (mkId "Mutable", (funTy (tyCon "Fraction") (tyCon "Predicate"), [], []))
     , (mkId "Protocol", (Type 0, [], []))
     , (mkId "SingleAction", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], [0]))
     , (mkId "ReceivePrefix", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], [0]))
@@ -112,6 +113,7 @@ typeConstructors =
     , (mkId "Uniqueness", (kguarantee, [], []))
     , (mkId "Unique", (tyCon "Uniqueness", [], []))
     , (mkId "Fraction", (tyCon "Permission", [], []))
+    , (mkId "Star", (tyCon "Fraction", [], []))
     -- Integrity
     , (mkId "Integrity", (kguarantee, [], []))
     , (mkId "Trusted", (tyCon "Integrity", [], []))
@@ -664,16 +666,6 @@ uniqueBind
   . {(1 : s) <= r} => (*a -> b [r]) -> a [r] -> b [r]
 uniqueBind = BUILTIN
 
-uniquePush
-  : forall {a b : Type}
-  . *(a, b)  -> (*a, *b)
-uniquePush = BUILTIN
-
-uniquePull
-  : forall {a b : Type}
-  . (*a, *b) -> *(a, b)
-uniquePull = BUILTIN
-
 reveal
   : forall {a : Type}
   . a *{Trusted} -> a [Lo]
@@ -709,11 +701,6 @@ borrowPull
   . (& f a, & f b) -> & f (a, b)
 borrowPull = BUILTIN
 
-maybePush
-  : forall {a b : Type, p : Permission, f : p}
-  . & f (Maybe a) -> Maybe (& f a)
-maybePush = BUILTIN
-
 --------------------------------------------------------------------------------
 --- # Mutable array operations
 --------------------------------------------------------------------------------
@@ -721,23 +708,14 @@ maybePush = BUILTIN
 newFloatArray : Int -> exists {id : Name} . *(FloatArray id)
 newFloatArray = BUILTIN
 
-readFloatArray : forall {id : Name} . *(FloatArray id) -> Int -> (Float, *(FloatArray id))
+readFloatArray : forall {p : Permission, f : p, id : Name} . & f (FloatArray id) -> Int -> (Float, & f (FloatArray id))
 readFloatArray = BUILTIN
 
-readFloatArrayB : forall {p : Permission, f : p, id : Name} . & f (FloatArray id) -> Int -> (Float, & f (FloatArray id))
-readFloatArrayB = BUILTIN
-
-writeFloatArray : forall {id : Name} . *(FloatArray id) -> Int -> Float -> *(FloatArray id)
+writeFloatArray : forall {id : Name, f : Fraction} . {Mutable f} => & f (FloatArray id) -> Int -> Float -> & f (FloatArray id)
 writeFloatArray = BUILTIN
 
-writeFloatArrayB : forall {id : Name} . & 1 (FloatArray id) -> Int -> Float -> & 1 (FloatArray id)
-writeFloatArrayB = BUILTIN
-
-lengthFloatArray : forall {id : Name} . *(FloatArray id) -> (!Int, *(FloatArray id))
+lengthFloatArray : forall {p : Permission, f : p, id : Name} . & f (FloatArray id) -> (!Int, & f (FloatArray id))
 lengthFloatArray = BUILTIN
-
-lengthFloatArrayB : forall {p : Permission, f : p, id : Name} . & f (FloatArray id) -> (!Int, & f (FloatArray id))
-lengthFloatArrayB = BUILTIN
 
 deleteFloatArray : forall {id : Name} . *(FloatArray id) -> ()
 deleteFloatArray = BUILTIN
@@ -745,7 +723,7 @@ deleteFloatArray = BUILTIN
 newRef : forall {a : Type} . a -> exists {id : Name} . *(Ref id a)
 newRef = BUILTIN
 
-swapRef : forall {a : Type, id : Name} . a -> & 1 (Ref id a) -> (a, & 1 (Ref id a))
+swapRef : forall {a : Type, id : Name, f : Fraction} . {Mutable f} => a -> & f (Ref id a) -> (a, & f (Ref id a))
 swapRef = BUILTIN
 
 freezeRef : forall {a : Type, id : Name} . *(Ref id a) -> a
