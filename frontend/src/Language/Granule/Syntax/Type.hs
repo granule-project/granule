@@ -95,6 +95,7 @@ data TypeOperator
   | TyOpConverge
   | TyOpImpl
   | TyOpHsup
+  | TyOpMutable
   deriving (Eq, Ord, Show, Data)
 
 -- ## Type schemes

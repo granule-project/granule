@@ -167,6 +167,9 @@ instance Pretty Type where
     pretty (TyInfix TyOpInterval t1 t2) =
       prettyNested t1 <> pretty TyOpInterval <> prettyNested t2
 
+    pretty (TyInfix TyOpMutable t1 _) =
+      pretty TyOpMutable <> " " <> prettyNested t1
+
     pretty (TyInfix op t1 t2) =
       prettyNested t1 <> " " <> pretty op <> " " <> prettyNested t2
 
@@ -208,6 +211,7 @@ instance Pretty TypeOperator where
    TyOpConverge        -> "#"
    TyOpImpl            -> "=>"
    TyOpHsup            -> "⨱"
+   TyOpMutable         -> "mut"
 
 instance Pretty v => Pretty (AST v a) where
   pretty (AST dataDecls defs imprts hidden name) =

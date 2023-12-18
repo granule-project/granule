@@ -76,6 +76,7 @@ import Language.Granule.Utils hiding (mkSpan)
     CHAR   { TokenCharLiteral _ _ }
     STRING { TokenStringLiteral _ _ }
     forall { TokenForall _ }
+    mutable { TokenMutable _ }
     '∞'   { TokenInfinity _ }
     '\\'  { TokenLambda _ }
     '/'  { TokenForwardSlash _ }
@@ -440,6 +441,7 @@ TyCase :: { (Type, Type) }
 
 Constraint :: { Type }
   : TyJuxt TyAtom             { TyApp $1 $2 }
+  | mutable TyAtom          { TyInfix TyOpMutable $2 $2}
   | TyAtom '>' TyAtom         { TyInfix TyOpGreaterNat $1 $3 }
   | TyAtom '<' TyAtom         { TyInfix TyOpLesserNat $1 $3 }
   | TyAtom '<=' TyAtom        { TyInfix TyOpLesserEq $1 $3 }

@@ -473,7 +473,7 @@ compileCoeffect (TyFraction f) (TyCon k) _ | internalName k == "Fraction" =
   return (SFraction (SFrac.SFrac $ fromInteger (numerator f) .% fromInteger (denominator f)), sTrue)
 
 compileCoeffect (TyCon (internalName -> "Star")) (TyCon (internalName -> "Fraction")) _ = do
-  return (SFraction (SFrac.SFrac $ 0 .% 1), sTrue)
+  return (SFraction (SFrac.star), sTrue)
 
 compileCoeffect (TySet _ xs) (Language.Granule.Syntax.Type.isSet -> Just (elemTy, polarity)) _ =
     return ((SSet polarity) . S.fromList $ mapMaybe justTyConNames xs, sTrue)
@@ -574,6 +574,7 @@ compileCoeffect (TyGrade k' 1) k vars = do
         "OOZ"       -> return (SOOZ sTrue, sTrue)
         "LNL"       -> return (SLNL (literal oneRep), sTrue)
         "Cartesian" -> return (SPoint, sTrue)
+        "Fraction"  -> return (SFraction (SFrac.SFrac 1), sTrue)
         _           -> solverError $ "I don't know how to compile a 1 for " <> pretty k
 
     otherK | otherK == extendedNat ->
@@ -632,6 +633,7 @@ eqConstraint (SLevel l) (SLevel k) = return $ l .== k
 eqConstraint u@(SUnknown{}) u'@(SUnknown{}) = symGradeEq u u'
 eqConstraint (SExtNat x) (SExtNat y) = return $ x .== y
 eqConstraint SPoint SPoint           = return sTrue
+eqConstraint (SFraction f) (SFraction f') = return $ f .== f'
 
 eqConstraint (SInterval lb1 ub1) (SInterval lb2 ub2) =
   liftM2 (.&&) (eqConstraint lb1 lb2) (eqConstraint ub1 ub2)
@@ -646,8 +648,7 @@ eqConstraint x y =
 approximatedByOrEqualConstraint :: SGrade -> SGrade -> Symbolic SBool
 approximatedByOrEqualConstraint (SNat n) (SNat m)      = return $ n .== m
 approximatedByOrEqualConstraint (SFloat n) (SFloat m)  = return $ n .<= m
-approximatedByOrEqualConstraint s@(SFraction{}) s'@(SFraction{}) =
-  symGradeEq s s'
+approximatedByOrEqualConstraint (SFraction f) (SFraction f') = return $ f .== f'
 approximatedByOrEqualConstraint SPoint SPoint          = return $ sTrue
 approximatedByOrEqualConstraint (SOOZ s) (SOOZ r) = pure $ s .== r
 approximatedByOrEqualConstraint (SSet Normal s) (SSet Normal t) =

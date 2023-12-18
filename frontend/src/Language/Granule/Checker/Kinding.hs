@@ -633,7 +633,13 @@ predicateOperatorAtKind :: (?globals :: Globals) =>
 predicateOperatorAtKind s op t | predicateOperation op = do
   (result, putChecker) <- peekChecker (checkKind s t kcoeffect)
   case result of
-    Left _ -> return Nothing
+    Left _ -> do
+      (result', putChecker') <- peekChecker (checkKind s t kpermission)
+      case result' of
+        Left _ -> return Nothing
+        Right (subst', _) -> do
+          putChecker
+          return $ Just subst'
     Right (subst, _) -> do
       putChecker
       return $ Just subst
