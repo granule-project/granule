@@ -1,0 +1,9 @@
+-- how often can we unroll the loop?
+fix : forall {a : Type, n : Nat} . (a -> a) [] -> a
+fix [f] = f (fix [f] x)
+
+-- go 0 = 0
+-- go n = n + go (n - 1)
+
+-- go_ 0 rec = 0
+-- go_ n rec = n + rec (n - 1)

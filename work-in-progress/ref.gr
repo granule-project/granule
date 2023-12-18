@@ -1,0 +1,9 @@
+
+-- Doubly linked list node
+data DLN a
+  = Node a (Ref (DLN a)) (Ref (DLN a))
+  | Null
+
+-- append : forall a. a -> DLN a -> DLN a
+-- append x (Node elem prev Null) = Node elem prev (alloc )
+-- append x (Node elem prev next) = Node elem prev (mapRef (append x) next);

@@ -1,0 +1,6 @@
+data Signal a = Tick a (Signal a)
+
+data Addr = A Int
+
+ram : Signal (Addr, Int) -> Signal (Addr, Int [])
+ram = ram

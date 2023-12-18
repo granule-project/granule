@@ -1,0 +1,7 @@
+data Either a b where Left a | Right b
+
+pushEither : forall {a : Type, b : Type, c : Nat} . {c <= 1} =>
+             (Either a b) [c] -> Either (a [c]) (b [c])
+
+pullEither : forall {a : Type, b : Type, c : Nat}
+        . Either (a [c]) (b [c]) -> (Either a b) [c]

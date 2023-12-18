@@ -99,6 +99,7 @@ library:
   - clock
   - algebraic-graphs
   - template-haskell
+  - extra
 
 tests:
   frontend-spec:

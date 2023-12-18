@@ -1,0 +1,5 @@
+data Option a = None | Some a
+
+fromOption : forall a . a [] -> Option a -> a
+fromOption [d] None = d;
+fromOption [d] (Some x) = x

@@ -190,9 +190,18 @@ instance Pretty Module where
     <> (unlines . map ("import " <>) . toList) moduleImports
     <> "\n\n" <> pretty' dataTypes
     <> "\n\n" <> pretty' definitions
-    where
-      pretty' :: Pretty l => [l] -> String
-      pretty' = intercalate "\n\n" . map pretty
+
+pretty' :: (?globals :: Globals, Pretty l) => [l] -> String
+pretty' = intercalate "\n\n" . map pretty
+
+instance Pretty ModuleSignature where
+  pretty ModSig
+    { modSigDataDeclarationContext
+    , modSigDefinitionContext
+    , modSigDerivedDefinitions
+    } =
+        pretty' (map snd modSigDataDeclarationContext)
+        <> "\n\n" <> pretty' (map snd modSigDefinitionContext)
 
 instance Pretty v => Pretty (Def v a) where
     pretty (Def _ v _ eqs (Forall _ [] [] t))

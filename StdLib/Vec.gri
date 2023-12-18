@@ -1,0 +1,187 @@
+------
+--- Module: Vec
+--- Description: Base library for operations on type-indexed vectors
+--- Authors: Dominic Orchard, Vilem-Benjamin Liepelt
+--- License: BSD3
+--- Copyright: (c) Authors 2018
+--- Issue-tracking: https://github.com/dorchard/granule/issues
+--- Repository: https://github.com/dorchard/granule
+------
+
+-- # Operations on vectors
+
+import Nat
+import Fin
+
+data Vec (n : Nat) t where
+  Nil  : Vec 0 t;
+  Cons : t -> Vec n t -> Vec (n+1) t
+
+-- Length of an indexed vector into an indexed nat
+-- discarding the elements
+length
+  : forall {a : Type, n : Nat}
+  . Vec n (a [0]) -> N n
+length Nil = Z;
+length (Cons [_] xs) = S (length xs)
+
+-- Length of a `Vec` into an indexed `N`, preserving the elements
+length'
+  : forall {a : Type, n : Nat}
+  . Vec n a -> (N n, Vec n a)
+length' Nil = (Z, Nil);
+length' (Cons x xs) = let (n, xs) = length' xs in (S n, Cons x xs)
+
+--- Map function
+map
+  : forall {a b : Type, n : Nat}
+  . (a -> b) [n] -> Vec n a -> Vec n b
+map [_] Nil = Nil;
+map [f] (Cons x xs) = Cons (f x) (map [f] xs)
+
+-- Safe random-access indexing from a vector
+index : forall {a : Type, n m : Nat}
+     . {m > n} => N n -> (Vec m a) [0..1] -> a
+index Z     [Cons x _]   = x;
+index (S k) [Cons _ xs'] = index k [xs']
+
+-- Standard foldr on vectors
+foldr
+  : forall {a b : Type, n : Nat}
+  . (a -> b -> b) [n] -> b -> Vec n a -> b
+foldr [_] z Nil = z;
+foldr [f] z (Cons x xs) = f x (foldr [f] z xs)
+
+foldr1
+  : forall {a : Type, n : Nat}
+  . (a -> a -> a) [n] -> Vec (n + 1) a -> a
+foldr1 [_] (Cons x Nil) = x;
+foldr1 [mag] (Cons x (Cons x' xs)) = foldr1 [mag] (Cons (x `mag` x') xs)
+
+foldl
+  : forall {a b : Type, n : Nat}
+  . (b -> a -> b) [n] -> b -> Vec n a -> b
+foldl [_] acc Nil = acc;
+foldl [op] acc (Cons x xs) = foldl [op] (acc `op` x) xs
+
+-- Append two vectors
+append
+  : forall {a : Type, m n : Nat}
+  . Vec n a -> Vec m a -> Vec (n + m) a
+append Nil ys = ys;
+append (Cons x xs) ys = Cons x (append xs ys)
+
+drop
+  : forall {a : Type, m n : Nat}
+  . N m -> (Vec n a) [0..1] -> Vec (n - m) a
+drop Z [xs] = xs;
+drop (S n) [Nil] = drop n [Nil];
+drop (S n) [Cons _ xs] = drop n [xs]
+
+take
+  : forall {a : Type, m n : Nat}
+  . N m -> (Vec n a) [0..1] -> Vec (n + (m - n)) a
+take Z [xs] = xs;
+take (S k) [Cons x xs] = Cons x (take k [xs])
+
+--- Return the first item (head) of the vector
+--- NB: non-linear in the vector
+head
+  : forall {a : Type, n : Nat}
+  . (Vec (n + 1) a) [0..1] -> a
+head [Cons x _] = x
+
+--- Return the vector with the first item removed
+--- NB: non-linear in the vector
+tail
+  : forall {a : Type, n : Nat}
+  . (Vec (n + 1) a) [0..1] -> Vec n a
+tail [Cons _ xs] = xs
+
+--- Get the last item of a Vector
+--last : forall {a : Type, n : Nat}
+--     . (Vec (n + 1) a) [0..1] -> a
+--last [Cons x Nil] = x;
+--last [Cons _ xs] = last [xs]
+
+---
+--init : forall {a : Type, n : Nat}
+--     . (Vec (n + 1) a) [0..1] -> Vec n a
+--init [Cons _ Nil] = Nil;
+--init [Cons x xs] = Cons x (init [xs])
+
+uncons
+  : forall {a : Type, n : Nat}
+  . Vec (n + 1) a -> (a, Vec n a)
+uncons (Cons x xs) = (x,xs)
+
+--- Split a vector at position 'n'
+split
+  : forall {a : Type, m n : Nat}
+  . N n -> (Vec (n + m) a) -> (Vec n a, Vec m a)
+split Z xs = (Nil, xs);
+split (S n) (Cons x xs) = let (xs', ys') = split n xs in (Cons x xs', ys')
+
+--- Simple folds
+sum
+  : forall {n : Nat}
+  . Vec n Int -> Int
+sum = foldr [\(x : Int) -> \(y : Int) -> x + y] 0
+
+product
+  : forall {n : Nat}
+  . Vec n Int -> Int
+product = foldr [\(x : Int) -> \(y : Int) -> x * y] 1
+
+--- Replicate n x is a vector of length n with x the value of every element
+replicate
+  : forall {a : Type, n : Nat}
+  . N n -> a [n] -> Vec n a
+replicate Z [c] = Nil;
+replicate (S n) [c] = Cons c (replicate n [c])
+
+--- Make a vector of length n with all integers from 0 to n-1
+---     > range (S (S (S (S Z))))
+---     Cons 0 (Cons 1 (Cons 2 (Cons 3 Nil)))
+range
+  : forall {n : Nat}
+  . N n -> Vec n Int
+range n = range' n [0]
+
+--- Make a vector of length n with all integers from `start` up until `n + i - 1`
+---     > range' (S (S (S (S Z)))) [-6]
+---     Cons -6 (Cons -5 (Cons -4 (Cons -3 Nil)))
+range'
+  : forall {n : Nat}
+  . N n -> Int [n] -> Vec n Int
+range' Z [i] = Nil;
+range' (S n) [i] = Cons i (range' n [i + 1])
+
+--- pullVec pulls non linearity in elements into a non linearity on the whole vector
+pullVec : forall {a : Type, s : Semiring, k : s, n : Nat}
+  . Vec n (a [k]) -> (Vec n a) [k]
+pullVec = pull @Vec
+
+--- pushVec pushes in non linearity of vector into the elements
+pushVec : ∀ {a : Type, s : Semiring, k : s, n : Nat} . {(1 : s) <= k}
+      => (Vec n a) [k] → Vec n (a [k])
+pushVec = push @Vec
+
+copySpine
+  : forall {a : Type, n : Nat}
+  . Vec n a -> Vec n () × Vec n a
+copySpine Nil = (Nil, Nil);
+copySpine (Cons x xs) = let
+  (ss, xs) = copySpine xs
+  in (Cons () ss, Cons x xs)
+
+data VecX a where
+  VecX : ∀ {n : Nat} . Vec n a → VecX a
+
+import Maybe
+
+stringToVecX : String → VecX Char
+stringToVecX s = case stringUncons s of
+  None → VecX Nil;
+  Some (c, s) → let VecX v = stringToVecX s in VecX (Cons c v)
+

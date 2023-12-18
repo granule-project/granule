@@ -9,26 +9,25 @@ where
 import Language.Granule.Utils
 import Language.Granule.Syntax.Def as Reexport
 import Language.Granule.Syntax.Type
-import Language.Granule.Syntax.Preprocessor
 
 import Algebra.Graph.AdjacencyMap (AdjacencyMap)
-import Data.Time.Clock (UTCTime)
+-- import Data.Time.Clock (UTCTime)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Control.Applicative (empty)
-import System.FilePath ((<.>))
-import Control.Exception (try)
+
 
 -- | Invariants:
 -- * rootModule \in modules
 -- if a Module has a module signature, then it is assumed that type checking can be skipped
 data GranuleProgram = GranulePrg
-  { rootModule :: ModuleName
-  , modules :: Map ModuleName Module
-  , dependencyGraph :: AdjacencyMap ModuleName
+  { granulePrgRootModule :: ModuleName
+  , granulePrgModules :: Map ModuleName Module
+  , granulePrgDependencyGraph :: AdjacencyMap ModuleName
   }
+  deriving (Show, Eq)
 
 type ModuleName = String
 
@@ -41,6 +40,7 @@ data Module = Mod
   , moduleImports :: Set ModuleName
   , moduleHiddenNames :: Map Id ModuleName -- map from names to the module hiding them
   }
+  deriving (Show, Eq)
 
 emptyModule :: Module
 emptyModule = Mod
@@ -70,33 +70,18 @@ emptyModule = Mod
 --     }
 
 data ModuleSignature = ModSig
-  { dataDeclarationContext :: Ctxt DataDecl
-  , definitionContext :: Ctxt TypeScheme
-  , derivedDefinitions :: [Def () ()]
+  { modSigDataDeclarationContext :: Ctxt DataDecl
+  , modSigDefinitionContext :: Ctxt TypeScheme
+  , modSigDerivedDefinitions :: [Def () ()]
   }
+  deriving (Show, Eq)
 
-type E = String
-
-readAndPreprocessGranuleProgram :: (?globals :: Globals)
-  => FilePath
-  -> IO (Either E GranuleProgram)
-readAndPreprocessGranuleProgram filePath = do
-  src <- preprocess filePath
-  rootModule <- parseModule src
-  let ?gloabals = ?globals { globalsRewriter = Nothing }
-  moduleImports rootModule
-
-
-goImports :: (?globals :: Globals)
-  => Module
-  -> Set ModuleName
-  -> IO (Either E [(ModuleName, ModuleName)])
-goImports rootModule imports = do
-  let (foo :: _) = traverse (try . readFile) [fp <.> ext | ext <- granuleFileTypes]
-  undefined
-
-granuleFileTypes = ["gr", "gr.md", "gr.tex", "gr.latex"]
-
+emptyModuleSignature :: ModuleSignature
+emptyModuleSignature = ModSig
+  { modSigDataDeclarationContext = empty
+  , modSigDefinitionContext = empty
+  , modSigDerivedDefinitions = empty
+  }
 
 
 -- fileLocal <- doesFileExist i

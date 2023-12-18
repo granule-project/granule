@@ -67,12 +67,22 @@ import System.Directory (getModificationTime)
 import Control.Exception (try, SomeException)
 
 -- Checking (top-level)
+
+-- TODO: Return typed GranuleProgram
 check :: (?globals :: Globals)
-  => Module
-  -> IO (Either (NonEmpty CheckerError) (AST () Type, ModuleSignature))
-check mod@Mod{ moduleAST = ast } =
-  case moduleSignature mod of
-    Just sig -> do
+  => GranuleProgram
+  -> IO (Either (NonEmpty CheckerError) (AST () Type, [Def () ()]))
+check prog = do
+  topSort (dependencyGraph prog)
+
+
+-- checkModule :: (?globals :: Globals)
+--   => Module
+--   -> IO (Either (NonEmpty CheckerError) (AST () Type, ModuleSignature))
+-- checkModule mod@Mod{ moduleAST = ast } =
+--   case moduleSignature mod of
+--     Just sig -> do
+
   -- case moduleMetadata of
   --   ModMeta
   --     -- { moduleMetaFilePath = Just sourceFilePath
@@ -84,22 +94,22 @@ check mod@Mod{ moduleAST = ast } =
   --     , Just sig <- moduleSignature mod
 
 
-  evalChecker (initState { allHiddenNames = moduleHiddenNames mod }) $ do
-      ast <- return $ replaceTypeAliases ast
-      _    <- checkNameClashes ast
-      _    <- runAll checkTyCon (Primitives.dataTypes ++ dataTypes ast)
-      _    <- runAll checkDataCons (Primitives.dataTypes ++ dataTypes ast)
-      debugM "extensions" (show $ globalsExtensions ?globals)
-      debugM "check" "kindCheckDef"
-      defs <- runAll kindCheckDef (definitions ast)
-      let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
-      defs <- runAll (checkDef defCtxt) defs
-      -- Add on any definitions computed by the type checker (derived)
-      st <- get
-      let derivedDefs = map (snd . snd) (derivedDefinitions st)
-      -- traceM $ show $ AST dataDecls defs imports hidden name
-      -- traceM $ show derivedDefs
-      pure (AST{ dataTypes = dataTypes ast, definitions = defs }, derivedDefs)
+  -- evalChecker (initState { allHiddenNames = moduleHiddenNames mod }) $ do
+  --     ast <- return $ replaceTypeAliases ast
+  --     _    <- checkNameClashes ast
+  --     _    <- runAll checkTyCon (Primitives.dataTypes ++ dataTypes ast)
+  --     _    <- runAll checkDataCons (Primitives.dataTypes ++ dataTypes ast)
+  --     debugM "extensions" (show $ globalsExtensions ?globals)
+  --     debugM "check" "kindCheckDef"
+  --     defs <- runAll kindCheckDef (definitions ast)
+  --     let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
+  --     defs <- runAll (checkDef defCtxt) defs
+  --     -- Add on any definitions computed by the type checker (derived)
+  --     st <- get
+  --     let derivedDefs = map (snd . snd) (derivedDefinitions st)
+  --     -- traceM $ show $ AST dataDecls defs imports hidden name
+  --     -- traceM $ show derivedDefs
+  --     pure (AST{ dataTypes = dataTypes ast, definitions = defs }, derivedDefs)
 
 -- Synthing the type of a single expression in the context of a Module
 synthExprInIsolation :: (?globals :: Globals)
@@ -325,8 +335,8 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
     checkGuardsForImpossibility s defName
     checkGuardsForExhaustivity s defName ty equations
     let el' = el { equations = elaboratedEquations }
-    traceM "\n\n********\n"
-    traceM $ show $ Def s defName rf el' tys
+    -- traceM "\n\n********\n"
+    -- traceM $ show $ Def s defName rf el' tys
     pure $ Def s defName rf el' tys
   where
     elaborateEquation :: Equation () () -> Checker (Equation () Type)

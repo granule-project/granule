@@ -1,8 +1,9 @@
 {
-{-# LANGUAGE ImplicitParams #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Language.Granule.Syntax.Parser where
 
@@ -14,19 +15,26 @@ import Control.Monad.Trans.Class (lift)
 import Data.Char (isSpace)
 import Data.Foldable (toList)
 import Data.List (intercalate, nub, stripPrefix)
-import Data.Maybe (mapMaybe)
+import Data.Maybe (catMaybes, mapMaybe)
 import Data.Set (Set, (\\), fromList, insert, empty, singleton)
-import qualified Data.Map as M
+import qualified Data.Map as Map
 import Numeric
 import System.FilePath ((</>), takeBaseName)
 import System.Exit
 import System.Directory (doesFileExist)
+
+import Algebra.Graph as Graph
+import System.FilePath ((<.>))
+import Control.Exception (SomeException, try)
+import Data.Either.Extra (partitionEithers, eitherToMaybe)
+import qualified Data.Set as Set
 
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Lexer
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Pattern
+import Language.Granule.Syntax.Preprocessor
 import Language.Granule.Syntax.Preprocessor.Markdown
 import Language.Granule.Syntax.Preprocessor.Latex
 import Language.Granule.Syntax.Span
@@ -37,6 +45,7 @@ import Language.Granule.Syntax.Program
 }
 
 %name topLevel TopLevel
+%name moduleSig ModuleSig
 %name expr Expr
 %name tscheme TypeScheme
 %tokentype { Token }
@@ -135,7 +144,7 @@ TopLevel :: { Module }
   | module CONSTR hiding '(' Ids ')' where  NL Defs
       { $9
         { moduleName = constrString $2
-        , moduleHiddenNames = M.fromList $ map (\id -> (id, constrString $2)) $5
+        , moduleHiddenNames = Map.fromList $ map (\id -> (id, constrString $2)) $5
         }
       }
 
@@ -156,9 +165,19 @@ Defs :: { Module }
   : Def                       { emptyModule{ moduleAST = emptyAST{ definitions = [$1] } } }
   | DataDecl                  { emptyModule{ moduleAST = emptyAST{ dataTypes = [$1] } } }
   | Import                    { emptyModule{ moduleImports = singleton $1 } }
-  | DataDecl NL Defs          { $3 { moduleAST = (moduleAST $3){ dataTypes = $1 : dataTypes (moduleAST $3) } } }
-  | Def NL Defs               { $3 { moduleAST = (moduleAST $3){ definitions = $1 : definitions (moduleAST $3) } } }
-  | Import NL Defs            { $3 { moduleImports = insert $1 (moduleImports $3) } }
+  | DataDecl NL Defs          { $3{ moduleAST = (moduleAST $3){ dataTypes = $1 : dataTypes (moduleAST $3) } } }
+  | Def NL Defs               { $3{ moduleAST = (moduleAST $3){ definitions = $1 : definitions (moduleAST $3) } } }
+  | Import NL Defs            { $3{ moduleImports = insert $1 (moduleImports $3) } }
+
+ModuleSig :: { ModuleSignature }
+  : Sig
+      { let (name, tySch, _) = $1 in emptyModuleSignature{ modSigDefinitionContext = [(mkId name, tySch)] } }
+  | Sig NL ModuleSig
+      { let (name, tySch, _) = $1 in $3{ modSigDefinitionContext = (mkId name, tySch) : modSigDefinitionContext $3 } }
+  | DataDecl
+      { emptyModuleSignature{ modSigDataDeclarationContext = [(dataDeclId $1, $1)] } }
+  | DataDecl NL ModuleSig
+      { $3{ modSigDataDeclarationContext = (dataDeclId $1, $1) : modSigDataDeclarationContext $3 } }
 
 NL :: { () }
   : nl NL                     { }
@@ -458,7 +477,7 @@ Guarantee :: { Type }
 Expr :: { Expr () () }
   : let LetBind MultiLet
       {% let (_, pat, mt, expr) = $2
-      	in (mkSpan (getPos $1, getEnd $3)) >>=
+        in (mkSpan (getPos $1, getEnd $3)) >>=
            \sp -> return $ App sp () False
                    (Val (getSpan $3) () False (Abs () pat mt $3)) expr
       }
@@ -536,9 +555,9 @@ MultiLet
   : ';' LetBind MultiLet
     {% let (_, pat, mt, expr) = $2
 
-     	in (mkSpan (getPos $1, getEnd $3)) >>=
+       in (mkSpan (getPos $1, getEnd $3)) >>=
            \sp -> return $ App sp () False
-     	               (Val (getSpan $3) () False (Abs () pat mt $3)) expr }
+                      (Val (getSpan $3) () False (Abs () pat mt $3)) expr }
   | in Expr
     { $2 }
 
@@ -550,7 +569,7 @@ MultiLetEff :: { Expr () () }
 MultiLetEff
   : ';' LetBindEff MultiLetEff
       {% let (_, pat, mt, expr) = $2
-	      in (mkSpan (getPos $1, getEnd $3)) >>=
+        in (mkSpan (getPos $1, getEnd $3)) >>=
              \sp -> return $ LetDiamond sp () False pat mt expr $3
       }
   | in Expr                   { $2 }
@@ -652,6 +671,84 @@ parseError t = do
 
 parseModule :: FilePath -> String -> Either String Module
 parseModule file input = runReaderT (topLevel $ scanTokens input) file
+
+parseModuleSignature :: FilePath -> String -> Either String ModuleSignature
+parseModuleSignature file input = runReaderT (moduleSig $ scanTokens input) file
+
+type E = String
+
+-- | Given a root module path, discover a GranuleProgram on the filesystem
+readAndPreprocessGranuleProgram :: (?globals :: Globals)
+  => FilePath
+  -> IO (Either E GranuleProgram)
+readAndPreprocessGranuleProgram filePath = do
+  src <- preprocess filePath
+  case parseModule filePath src of
+    Left err -> pure $ Left err
+    Right rootModule -> do
+      let ?globals = ?globals{ globalsRewriter = Nothing }
+      eImports <- traverse tryReadModuleFromDisk (Set.toList $ moduleImports rootModule)
+      case partitionEithers eImports of
+        (errs@(_:_), _) -> pure $ Left "TODO"
+        ([], imports) -> do
+          let granulePrg = GranulePrg
+                { granulePrgRootModule = moduleName rootModule
+                , granulePrgModules = insertIntoModuleMap rootModule Map.empty
+                , granulePrgDependencyGraph = Graph.empty
+                }
+          crawlImportGraph (moduleName rootModule) imports granulePrg
+
+insertIntoModuleMap mod = Map.insert (moduleName mod) mod
+
+crawlImportGraph :: ModuleName -> [Module] -> GranuleProgram -> IO (Either E GranuleProgram)
+crawlImportGraph currentModule imports prg = undefined
+
+tryReadModuleFromDisk :: (?globals :: Globals)
+  => ModuleName
+  -> IO (Either E Module)
+tryReadModuleFromDisk moduleName = do
+  -- search for candidate source files, in the current working directory (TODO: is this always
+  -- well-defined?) or on include path
+  candidates <-
+    sequence
+      [ tryReadAndPreprocessGranuleSourceFile prefix ext
+      | prefix <- [moduleName, includePath </> moduleName], ext <- granuleFileExtensions
+      ]
+
+  case catMaybes candidates of
+    -- No modules found
+    [] -> pure $ Left "module not found"
+
+    -- More than one module found
+    srcs@(_:_:_) -> pure $ Left ("ambiguous module '" ++ moduleName ++ "'")
+
+    -- Exactly one module found
+    [(prefix, ext, src)] -> do
+      let fp = prefix <.> ext
+      let ?globals = ?globals{ globalsSourceFilePath = Just fp }
+      case parseModule fp src of
+        Left err -> pure $ Left err
+        Right mod -> do
+          eModuleSignatureSrc <- try @SomeException (readFile (prefix <.> granuleInterfaceFileExtension))
+          case eModuleSignatureSrc of
+            Left{} -> pure $ Right mod
+            Right moduleSignatureSrc ->
+              case parseModuleSignature fp moduleSignatureSrc of
+                Left{} -> error "TODO"
+                Right sig ->
+                  pure $ Right mod{ moduleSignature = Just sig }
+
+granuleFileExtensions :: [String]
+granuleFileExtensions = ["gr", "gr.md", "gr.tex", "gr.latex"]
+
+granuleInterfaceFileExtension :: String
+granuleInterfaceFileExtension = "gri"
+
+-- | Try to read and preprocess file @prefix@ with extension @ext@, returning @(prefix, ext, contents)@.
+tryReadAndPreprocessGranuleSourceFile :: (?globals :: Globals) => FilePath -> String -> IO (Maybe (FilePath, String, String))
+tryReadAndPreprocessGranuleSourceFile prefix ext = do
+  mbSrc <- eitherToMaybe <$> try @SomeException (preprocess =<< readFile (prefix <.> ext))
+  pure ((prefix, ext,) <$> mbSrc)
 
 -- parseAndDoImportsAndFreshenDefs :: (?globals :: Globals) => String -> IO (AST () (), [Extension])
 -- parseAndDoImportsAndFreshenDefs input = do

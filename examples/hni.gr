@@ -1,0 +1,6 @@
+main : Char <IO>
+main = let
+  h <- openHandle ReadMode "examples/hni.gr";
+  (h2, c) <- readChar h;
+  () <- closeHandle h2
+  in pure c
