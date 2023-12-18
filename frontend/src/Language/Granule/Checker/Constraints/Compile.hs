@@ -117,9 +117,6 @@ isDefinedConstraint s (TyApp (TyCon (internalName -> "Sends")) protocol)
 isDefinedConstraint s (TyApp (TyCon (internalName -> "ExactSemiring")) semiring)
   = return (exactSemiring semiring)
 
-isDefinedConstraint s (TyApp (TyCon (internalName -> "Mutable")) fraction)
-  = return (mutable fraction)
-
 isDefinedConstraint s (TyApp (TyCon (internalName -> "Dropable")) typ)
   = return (dropable typ)
 
@@ -171,10 +168,6 @@ exactSemiring (TyApp
                  s1)
                  s2) = exactSemiring s1 && exactSemiring s2
 exactSemiring _ = False
-
--- TODO
-mutable :: Type -> Bool
-mutable _ = True
 
 dropable :: Type -> Bool
 dropable =
