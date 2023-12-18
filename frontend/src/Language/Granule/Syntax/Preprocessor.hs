@@ -36,9 +36,12 @@ preprocess filePath
     extension = reverse . takeWhile (/= '.') . reverse $ filePath
 
     -- (file extension, (stripNonGranule, destructivePreprocessor))
-    acceptedFormats =
-      [ ("gr",    (id,         id))
-      , ("md",    (unMarkdown, processGranuleMarkdown id literateEnvName))
-      , ("tex",   (unLatex,    processGranuleLatex id literateEnvName))
-      , ("latex", (unLatex,    processGranuleLatex id literateEnvName))
-      ]
+
+acceptedFormats =
+  [ ("gr",    (id,         id))
+  , ("md",    (unMarkdown, processGranuleMarkdown id literateEnvName))
+  , ("tex",   (unLatex,    processGranuleLatex id literateEnvName))
+  , ("latex", (unLatex,    processGranuleLatex id literateEnvName))
+  ]
+
+data GranuleFileExtension = Gr | GrMd | GrTex | GrLatex

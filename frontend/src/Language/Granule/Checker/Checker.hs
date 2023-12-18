@@ -335,8 +335,8 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
     checkGuardsForImpossibility s defName
     checkGuardsForExhaustivity s defName ty equations
     let el' = el { equations = elaboratedEquations }
-    -- traceM "\n\n********\n"
-    -- traceM $ show $ Def s defName rf el' tys
+    traceM "\n\n********\n"
+    traceM $ show $ Def s defName rf el' tys
     pure $ Def s defName rf el' tys
   where
     elaborateEquation :: Equation () () -> Checker (Equation () Type)

@@ -208,37 +208,21 @@ parseGrFlags
 
 
 data GrConfig = GrConfig
-  { grRewriter        :: Maybe (String -> String)
-  , grKeepBackup      :: Maybe Bool
-  , grLiterateEnvName :: Maybe String
-  , grShowVersion     :: Bool
+  { grShowVersion     :: Bool
   , grGlobals         :: Globals
   }
 
-rewriter :: GrConfig -> Maybe (String -> String)
-rewriter c = grRewriter c <|> Nothing
 
-keepBackup :: GrConfig -> Bool
-keepBackup = fromMaybe False . grKeepBackup
-
-literateEnvName :: GrConfig -> String
-literateEnvName = fromMaybe "granule" . grLiterateEnvName
 
 instance Semigroup GrConfig where
   c1 <> c2 = GrConfig
-    { grRewriter    = grRewriter    c1 <|> grRewriter  c2
-    , grKeepBackup      = grKeepBackup      c1 <|> grKeepBackup      c2
-    , grLiterateEnvName = grLiterateEnvName c1 <|> grLiterateEnvName c2
-    , grGlobals         = grGlobals         c1 <>  grGlobals         c2
+    { grGlobals         = grGlobals         c1 <>  grGlobals         c2
     , grShowVersion     = grShowVersion     c1 ||  grShowVersion     c2
     }
 
 instance Monoid GrConfig where
   mempty = GrConfig
-    { grRewriter    = Nothing
-    , grKeepBackup      = Nothing
-    , grLiterateEnvName = Nothing
-    , grGlobals         = mempty
+    { grGlobals         = mempty
     , grShowVersion     = False
     }
 
@@ -248,7 +232,6 @@ getGrConfig = do
     configHome <- readUserConfig (grGlobals configCLI)
     pure (globPatterns, configCLI <> configHome)
   where
-  -- TODO: UNIX specific
     readUserConfig :: Globals -> IO GrConfig
     readUserConfig globals = do
       let ?globals = globals
@@ -420,7 +403,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             <> (help . unwords)
             [ "Index of synthesised programs"
             , "Defaults to"
-            , show synthIndex 
+            , show synthIndex
             ]
 
         grRewriter
