@@ -44,7 +44,7 @@ instance OrdSymbolic SFrac where
   (SFrac a) .< (SFrac b) = a .== b
 
 fractionConstraint :: SFloat -> SBool
-fractionConstraint v = v .== v .&& v .< sInfinity .&& v .>= 0
+fractionConstraint v = v .== v .&& v .<= 1 .&& v .>= 0
 
 freeSFrac :: String -> Symbolic SFrac
 freeSFrac nm = do
