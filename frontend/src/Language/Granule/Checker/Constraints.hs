@@ -13,7 +13,6 @@ module Language.Granule.Checker.Constraints where
 --import Data.Foldable (foldrM)
 import Data.SBV hiding (kindOf, name, symbolic, isSet)
 import qualified Data.SBV.Set as S
-import Data.SBV.Rational
 import Data.Maybe (mapMaybe)
 import Control.Monad (liftM2)
 import Control.Monad.IO.Class
@@ -229,6 +228,11 @@ freshSolverVarScoped quant name (TyCon (internalName -> "Sec")) q k =
     quant q name (\solverVar -> k (sTrue, SSec solverVar))
 
 freshSolverVarScoped quant name (TyCon (internalName -> "Fraction")) q k = do
+   quant q name (\solverVar ->
+    k (SFrac.fractionConstraint solverVar
+     , SFraction (SFrac.SFrac solverVar)))
+
+freshSolverVarScoped quant name (TyCon (internalName -> "Star")) q k = do
    quant q name (\solverVar ->
     k (SFrac.fractionConstraint solverVar
      , SFraction (SFrac.SFrac solverVar)))
@@ -470,7 +474,7 @@ compileCoeffect (TyRational r) (TyCon k) _ | internalName k == "Q" =
   return (SFloat  . fromRational $ r, sTrue)
 
 compileCoeffect (TyFraction f) (TyCon k) _ | internalName k == "Fraction" =
-  return (SFraction (SFrac.SFrac $ fromInteger (numerator f) .% fromInteger (denominator f)), sTrue)
+  return (SFraction (SFrac.SFrac $ fromInteger (numerator f) / fromInteger (denominator f)), sTrue)
 
 compileCoeffect (TyCon (internalName -> "Star")) (TyCon (internalName -> "Fraction")) _ = do
   return (SFraction (SFrac.star), sTrue)
