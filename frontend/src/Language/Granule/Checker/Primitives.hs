@@ -684,12 +684,12 @@ withBorrow = BUILTIN
 
 split
   : forall {a : Type, f : Fraction}
-  . & f a -> (& (f * 1/2) a, & (f * 1/2) a)
+  . {f /= Star} => & f a -> (& (f * 1/2) a, & (f * 1/2) a)
 split = BUILTIN
 
 join
-  : forall {a : Type, f : Fraction}
-  . (& f a, & f a) -> & (f+f) a
+  : forall {a : Type, f g : Fraction}
+  . {f /= Star, g /= Star} => (& f a, & g a) -> & (f+g) a
 join = BUILTIN
 
 borrowPush
