@@ -1,0 +1,11 @@
+app : forall {a : Type, b : Type} . (a -> b) -> a -> b
+app f x = f x
+
+idspec : Int [3] -> (Int [1], Int [2])
+idspec [x] = ([x], [x])
+
+thing : Int [2] -> (Int, Int)
+thing [x] = (x, x)
+
+bad : (Int [2], Int [1])
+bad = app (\x -> let (a, b) = idspec x; ((), (a, b)) = ((), (a, b)) in (a, b)) [42]
