@@ -255,7 +255,7 @@ equalTypesRelatedCoeffectsInner s rel (Star g1 t1) (Star g2 t2) _ sp mode = do
   return (eq && eq', u)
 
 equalTypesRelatedCoeffectsInner s rel (Star g1 t1) t2 _ sp mode
-  | t1 == t2 = throw $ UniquenessError { errLoc = s, uniquenessMismatch = NonUniqueUsedUniquely t2}
+  | t1 == t2 = throw $ UniquenessError { errLoc = s, uniquenessMismatch = NonUniqueUsedUniquely t2 (TyCon (mkId $ "Star"))}
   | otherwise = do
     (g, _, u) <- equalTypes s t1 t2
     return (g, u)
@@ -271,7 +271,7 @@ equalTypesRelatedCoeffectsInner s rel (Borrow p1 t1) (Borrow p2 t2) _ sp Types =
   return (eq && eq', u)
 
 equalTypesRelatedCoeffectsInner s rel (Borrow p1 t1) t2 _ sp mode
-  | t1 == t2 = error "" -- placeholder error
+  | t1 == t2 = throw $ UniquenessError { errLoc = s, uniquenessMismatch = NonUniqueUsedUniquely t2 p1}
   | otherwise = do
     (g, _, u) <- equalTypes s t1 t2
     return (g, u)

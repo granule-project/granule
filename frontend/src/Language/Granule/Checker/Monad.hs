@@ -709,7 +709,7 @@ instance UserMsg CheckerError where
   title KindsNotEqual{} = "Kind error"
   title IntervalGradeKindError{} = "Interval kind error"
   title LinearityError{} = "Linearity error"
-  title UniquenessError{} = "Uniqueness error"
+  title UniquenessError{} = "Ownership error"
   title UnpromotableError{} = "Unpromotable error"
   title PatternTypingError{} = "Pattern typing error"
   title PatternTypingMismatch{} = "Pattern typing mismatch"
@@ -860,8 +860,8 @@ instance UserMsg CheckerError where
       "Linearity of Handler clauses does not match"
 
   msg UniquenessError{..} = case uniquenessMismatch of
-    NonUniqueUsedUniquely t ->
-      "Cannot guarantee uniqueness of reference to value of type `" <> pretty t <> "`."
+    NonUniqueUsedUniquely t1 t2 ->
+      "Cannot guarantee usage of reference to value of type `" <> pretty t1 <> "` at permission `" <> pretty t2 <> "`."
     UniquePromotion t ->
       "Cannot promote non-unique value of type `" <> pretty t <> "` to unique, since uniqueness is not a coeffect."
 
@@ -1119,7 +1119,7 @@ data LinearityMismatch
   deriving (Eq, Show) -- for debugging
 
 data UniquenessMismatch
-  = NonUniqueUsedUniquely Type
+  = NonUniqueUsedUniquely Type Type
   | UniquePromotion Type
   deriving (Eq, Show)
 
