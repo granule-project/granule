@@ -151,7 +151,8 @@ instance Show (Runtime a) where
   show (PrimitiveClosure _) = "Some primitive closure"
   show (Handle _) = "Some handle"
   show (PureWrapper _) = "<suspended IO>"
-  show (Runtime _) = "<array>"
+  show (Runtime (RT.FA _)) = "<array>"
+  show (Runtime (RT.PR _)) = "<ref>"
   show (FreeMonadImpure r) = "Impure(" <> show r <> ")"
   show (FreeMonadBind r p k) = "do {... <- " <> show r <> "; ...}"
 
