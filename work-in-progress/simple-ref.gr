@@ -1,0 +1,14 @@
+simpleLinear : (Float, Float)
+simpleLinear = unpack <id , ref> = newRef 0.0 in let
+    (x, ref') = swapRef ref 42.0;
+    y = freezeRef ref'
+    in (x, y)
+
+simpleGraded : (Float [4], Float [2])
+simpleGraded = unpack <id , ref> = newRef test in let
+    ([x], ref') : (Float [4], *(Ref id (Float [2]))) = readRef ref;
+    [y] : Float [2] = freezeRef ref'
+    in ([x], [y])
+
+test : Float [6]
+test = [42.0]
