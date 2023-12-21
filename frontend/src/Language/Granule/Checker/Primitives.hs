@@ -724,7 +724,7 @@ deleteFloatArray = BUILTIN
 newRef : forall {a : Type} . a -> exists {id : Name} . *(Ref id a)
 newRef = BUILTIN
 
-swapRef : forall {a : Type, id : Name, f : Fraction} . {mut f} => a -> & f (Ref id a) -> (a, & f (Ref id a))
+swapRef : forall {a : Type, f : Fraction, id : Name} . {mut f} => & f (Ref id a) -> a -> (a, & f (Ref id a))
 swapRef = BUILTIN
 
 freezeRef : forall {a : Type, id : Name} . *(Ref id a) -> a

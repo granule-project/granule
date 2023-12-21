@@ -60,7 +60,7 @@ data Runtime a =
   | PureWrapper (IO (Expr (Runtime a) ()))
 
   -- | Data managed by the runtime module (mutable arrays)
-  | Runtime RuntimeData
+  | Runtime (RuntimeData RValue)
 
   -- | Free monad representation
   | FreeMonadImpure (Expr (Runtime a) ())
@@ -816,6 +816,10 @@ builtIns =
   , (mkId "readFloatArray",  Ext () $ Primitive readFloatArray)
   , (mkId "writeFloatArray",  Ext () $ Primitive writeFloatArray)
   , (mkId "deleteFloatArray", Ext () $ Primitive deleteFloatArray)
+  , (mkId "newRef",  Ext () $ Primitive newRef)
+  , (mkId "swapRef",  Ext () $ Primitive swapRef)
+  , (mkId "freezeRef",  Ext () $ Primitive freezeRef)
+  , (mkId "readRef", Ext () $ Primitive readRef)
   -- Additive conjunction (linear logic)
   , (mkId "with", Ext () $ Primitive $ \v -> return $ Ext () $ Primitive $ \w -> return $ Constr () (mkId "&") [v, w])
   , (mkId "projL", Ext () $ Primitive $ \(Constr () (Id "&" "&") [v, w]) -> return $ v)
@@ -983,21 +987,21 @@ builtIns =
     uniqueReturn :: RValue -> IO RValue
     uniqueReturn (Nec () v) =
       case v of
-        (Val nullSpan () False (Ext () (Runtime fa))) -> do
+        (Val nullSpan () False (Ext () (Runtime (RT.FA fa)))) -> do
           borrowed <- borrowFloatArraySafe fa
-          return $ Promote () (Val nullSpan () False (Ext () (Runtime borrowed)))
+          return $ Promote () (Val nullSpan () False (Ext () (Runtime (RT.FA borrowed))))
         _otherwise -> return $ Promote () v
     uniqueReturn v = error $ "Bug in Granule. Can't borrow a non-unique: " <> prettyDebug v
 
     uniqueBind :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
     uniqueBind ctxt f = return $ Ext () $ Primitive $ \(Promote () v) ->
       case v of
-        (Val nullSpan () False (Ext () (Runtime fa))) -> do
+        (Val nullSpan () False (Ext () (Runtime (RT.FA fa)))) -> do
           copy <- copyFloatArraySafe fa
           evalIn ctxt
               (App nullSpan () False
                 (Val nullSpan () False f)
-                (Val nullSpan () False (Nec () (Val nullSpan () False (Ext () (Runtime copy))))))
+                (Val nullSpan () False (Nec () (Val nullSpan () False (Ext () (Runtime (RT.FA copy)))))))
         _otherwise -> do
           evalIn ctxt
             (App nullSpan () False
@@ -1011,12 +1015,12 @@ builtIns =
     trustedBind :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
     trustedBind ctxt f = return $ Ext () $ Primitive $ \(Promote () v) -> return $
       case v of
-        (Val nullSpan () False (Ext () (Runtime fa))) ->
+        (Val nullSpan () False (Ext () (Runtime (RT.FA fa)))) ->
           let copy = copyFloatArray' fa in
           unsafePerformIO $ evalIn ctxt
               (App nullSpan () False
                 (Val nullSpan () False f)
-                (Val nullSpan () False (Nec () (Val nullSpan () False (Ext () (Runtime copy))))))
+                (Val nullSpan () False (Nec () (Val nullSpan () False (Ext () (Runtime (RT.FA copy)))))))
         _otherwise ->
           unsafePerformIO $ evalIn ctxt
             (App nullSpan () False
@@ -1154,65 +1158,91 @@ builtIns =
     newFloatArray :: RValue -> IO RValue
     newFloatArray = \(NumInt i) -> do
       arr <- RT.newFloatArraySafe i
-      return $ Nec () $ Val nullSpan () False $ Ext () $ Runtime arr
+      return $ Nec () $ Val nullSpan () False $ Ext () $ Runtime (RT.FA arr)
+
+    newRef :: RValue -> IO RValue
+    newRef = \v -> do
+      ref <- RT.newRefSafe v
+      return $ Nec () $ Val nullSpan () False $ Ext () $ Runtime (RT.PR ref)
 
     newFloatArrayI :: RValue -> IO RValue
     newFloatArrayI = \(NumInt i) -> do
       arr <- RT.newFloatArrayISafe i
-      return $ Ext () $ Runtime arr
+      return $ Ext () $ Runtime (RT.FA arr)
 
     readFloatArray :: RValue -> IO RValue
-    readFloatArray (Nec () (Val _ _ _ (Ext () (Runtime fa)))) = return $ Ext () $ Primitive $ \(NumInt i) -> do
+    readFloatArray (Nec () (Val _ _ _ (Ext () (Runtime (RT.FA fa))))) = return $ Ext () $ Primitive $ \(NumInt i) -> do
       (e,fa') <- RT.readFloatArraySafe fa i
-      return $ Constr () (mkId ",") [NumFloat e, Nec () (Val nullSpan () False $ Ext () $ Runtime fa')]
-    readFloatArray (Ref () (Val _ _ _ (Ext () (Runtime fa)))) = return $ Ext () $ Primitive $ \(NumInt i) -> do
+      return $ Constr () (mkId ",") [NumFloat e, Nec () (Val nullSpan () False $ Ext () $ Runtime (RT.FA fa'))]
+    readFloatArray (Ref () (Val _ _ _ (Ext () (Runtime (RT.FA fa))))) = return $ Ext () $ Primitive $ \(NumInt i) -> do
       (e,fa') <- RT.readFloatArraySafe fa i
-      return $ Constr () (mkId ",") [NumFloat e, Ref () (Val nullSpan () False $ Ext () $ Runtime fa')]
+      return $ Constr () (mkId ",") [NumFloat e, Ref () (Val nullSpan () False $ Ext () $ Runtime (RT.FA fa'))]
     readFloatArray _ = error "Runtime exception: trying to read from a non-array value"
 
     readFloatArrayI :: RValue -> IO RValue
-    readFloatArrayI = \(Ext () (Runtime fa)) -> return $ Ext () $ Primitive $ \(NumInt i) -> do
+    readFloatArrayI = \(Ext () (Runtime (RT.FA fa))) -> return $ Ext () $ Primitive $ \(NumInt i) -> do
       (e,fa') <- RT.readFloatArrayISafe fa i
-      return $ Constr () (mkId ",") [NumFloat e, Ext () $ Runtime fa']
+      return $ Constr () (mkId ",") [NumFloat e, Ext () $ Runtime (RT.FA fa')]
+
+    swapRef :: RValue -> IO RValue
+    swapRef (Nec () (Val _ _ _ (Ext () (Runtime (RT.PR pr))))) = return $ Ext () $ Primitive $ \v -> do
+      (e,pr') <- RT.swapRefSafe pr v
+      return $ Constr () (mkId ",") [e, Nec () (Val nullSpan () False $ Ext () $ Runtime (RT.PR pr'))]
+    swapRef (Ref () (Val _ _ _ (Ext () (Runtime (RT.PR pr))))) = return $ Ext () $ Primitive $ \v -> do
+      (e,pr') <- RT.swapRefSafe pr v
+      return $ Constr () (mkId ",") [e, Ref () (Val nullSpan () False $ Ext () $ Runtime (RT.PR pr'))]
+    swapRef _ = error "Runtime exception: trying to swap a non-reference value"
+
+    readRef :: RValue -> IO RValue
+    readRef (Nec () (Val _ _ _ (Ext () (Runtime (RT.PR pr))))) = do
+      (e,pr') <- RT.readRefSafe pr
+      return $ Constr () (mkId ",") [e, Nec () (Val nullSpan () False $ Ext () $ Runtime (RT.PR pr'))]
+    readRef (Ref () (Val _ _ _ (Ext () (Runtime (RT.PR pr))))) = return $ Ext () $ Primitive $ \v -> do
+      (e,pr') <- RT.readRefSafe pr
+      return $ Constr () (mkId ",") [e, Ref () (Val nullSpan () False $ Ext () $ Runtime (RT.PR pr'))]
+    readRef _ = error "Runtime exception: trying to read a non-reference value"
 
     lengthFloatArray :: RValue -> IO RValue
-    lengthFloatArray (Nec () (Val _ _ _ (Ext () (Runtime fa)))) = return $ Ext () $ Primitive $ \(NumInt i) ->
+    lengthFloatArray (Nec () (Val _ _ _ (Ext () (Runtime (RT.FA fa))))) = return $ Ext () $ Primitive $ \(NumInt i) ->
       let (e,fa') = RT.lengthFloatArray fa
-      in return $ Constr () (mkId ",") [Promote () (Val nullSpan () False $ (NumInt e)), Nec () (Val nullSpan () False $ Ext () $ Runtime fa')]
-    lengthFloatArray (Ref () (Val _ _ _ (Ext () (Runtime fa)))) = return $ Ext () $ Primitive $ \(NumInt i) ->
+      in return $ Constr () (mkId ",") [Promote () (Val nullSpan () False $ (NumInt e)), Nec () (Val nullSpan () False $ Ext () $ Runtime (RT.FA fa'))]
+    lengthFloatArray (Ref () (Val _ _ _ (Ext () (Runtime (RT.FA fa))))) = return $ Ext () $ Primitive $ \(NumInt i) ->
       let (e,fa') = RT.lengthFloatArray fa
-      in return $ Constr () (mkId ",") [Promote () (Val nullSpan () False $ (NumInt e)), Ref () (Val nullSpan () False $ Ext () $ Runtime fa')]
+      in return $ Constr () (mkId ",") [Promote () (Val nullSpan () False $ (NumInt e)), Ref () (Val nullSpan () False $ Ext () $ Runtime (RT.FA fa'))]
     lengthFloatArray _ = error "Runtime exception: trying to take the length of a non-array value"
 
     lengthFloatArrayI :: RValue -> IO RValue
-    lengthFloatArrayI = \(Ext () (Runtime fa)) ->
+    lengthFloatArrayI = \(Ext () (Runtime (RT.FA fa))) ->
       let (e,fa') = RT.lengthFloatArray fa
-      in return $ Constr () (mkId ",") [Promote () (Val nullSpan () False $ (NumInt e)), Ext () $ Runtime fa']
+      in return $ Constr () (mkId ",") [Promote () (Val nullSpan () False $ (NumInt e)), Ext () $ Runtime (RT.FA fa')]
 
     writeFloatArray :: RValue -> IO RValue
-    writeFloatArray (Nec _ (Val _ _ _ (Ext _ (Runtime fa)))) = return $
+    writeFloatArray (Nec _ (Val _ _ _ (Ext _ (Runtime (RT.FA fa))))) = return $
       Ext () $ Primitive $ \(NumInt i) -> return $
         Ext () $ Primitive $ \(NumFloat v) -> do
           arr <- RT.writeFloatArraySafe fa i v
-          return $ Nec () $ Val nullSpan () False $ Ext () $ Runtime arr
-    writeFloatArray (Ref _ (Val _ _ _ (Ext _ (Runtime fa)))) = return $
+          return $ Nec () $ Val nullSpan () False $ Ext () $ Runtime (RT.FA arr)
+    writeFloatArray (Ref _ (Val _ _ _ (Ext _ (Runtime (RT.FA fa))))) = return $
       Ext () $ Primitive $ \(NumInt i) -> return $
         Ext () $ Primitive $ \(NumFloat v) -> do
           arr <- RT.writeFloatArraySafe fa i v
-          return $ Ref () $ Val nullSpan () False $ Ext () $ Runtime arr
+          return $ Ref () $ Val nullSpan () False $ Ext () $ Runtime (RT.FA arr)
     writeFloatArray _ = error "Runtime exception: trying to write to a non-array value"
 
     writeFloatArrayI :: RValue -> IO RValue
-    writeFloatArrayI = \(Ext () (Runtime fa)) -> return $
+    writeFloatArrayI = \(Ext () (Runtime (RT.FA fa))) -> return $
       Ext () $ Primitive $ \(NumInt i) -> return $
       Ext () $ Primitive $ \(NumFloat v) -> do
         arr <- RT.writeFloatArrayISafe fa i v
-        return $ Ext () $ Runtime arr
+        return $ Ext () $ Runtime (RT.FA arr)
 
     deleteFloatArray :: RValue -> IO RValue
-    deleteFloatArray = \(Nec _ (Val _ _ _ (Ext _ (Runtime fa)))) -> do
+    deleteFloatArray = \(Nec _ (Val _ _ _ (Ext _ (Runtime (RT.FA fa))))) -> do
       deleteFloatArraySafe fa
       return $ Constr () (mkId "()") []
+
+    freezeRef :: RValue -> IO RValue
+    freezeRef = \(Nec _ (Val _ _ _ (Ext _ (Runtime (RT.PR pr))))) -> freezeRefSafe pr
 
 -- Convert a Granule value representation of `N n` type into an Int
 natToInt :: RValue -> Int

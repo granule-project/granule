@@ -25,7 +25,7 @@ sumFromTo array [i] [n] =
 -- A reference to a droppable value can be written to without violating linearity
 writeRef : forall {a : Type, id : Name} . {Dropable a} => a -> & 1 (Ref id a) -> & 1 (Ref id a)
 writeRef x r = let 
-    (y, r') = swapRef x r;
+    (y, r') = swapRef r x;
     () = drop@a y in r'
 
 parSum : forall {id id' : Name} . *(FloatArray id) -> *(Ref id' Float) -> *(Ref id' Float, FloatArray id)

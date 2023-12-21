@@ -2,11 +2,11 @@
 
 {-# LANGUAGE NamedFieldPuns, Strict, NoImplicitPrelude, TypeFamilies,
              DataKinds, GADTs #-}
-{-# OPTIONS_GHC -fno-full-laziness #-}
+{-# OPTIONS_GHC -fno-full-laziness -fno-warn-unused-binds #-}
 module Language.Granule.Runtime
   (
     -- Granule runtime-specific data structures
-    FloatArray(..), BenchList(..), RuntimeData
+    FloatArray(..), BenchList(..), RuntimeData(..)
 
     -- Granule runtime-specific procedures
   , pure
@@ -18,6 +18,7 @@ module Language.Granule.Runtime
   , newFloatArraySafe,newFloatArrayISafe,writeFloatArraySafe,writeFloatArrayISafe
   , readFloatArraySafe,readFloatArrayISafe,deleteFloatArraySafe,copyFloatArraySafe
   , uniquifyFloatArraySafe,borrowFloatArraySafe
+  , newRefSafe, freezeRefSafe, swapRefSafe, readRefSafe
   , cap, Cap(..), Capability(..), CapabilityType
 
   -- Re-exported from Prelude
@@ -45,9 +46,10 @@ import Data.Function (const)
 import Data.Text
 import Data.Text.IO
 import Data.Time.Clock
+import qualified Data.IORef as MR
 
 -- ^ Eventually this can be expanded with other kinds of runtime-managed data
-type RuntimeData = FloatArray
+data RuntimeData a = FA FloatArray | PR (PolyRef a)
 
 -- ^ Granule calls doubles floats
 type Float = Double
@@ -143,6 +145,11 @@ data FloatArray =
     -- | Pointer to a block of memory
     grPtr :: Ptr Float }
 
+data PolyRef a =
+  HaskellRef {
+    haskRef :: MR.IORef a
+  }
+
 {-# NOINLINE newFloatArray #-}
 newFloatArray :: Int -> FloatArray
 newFloatArray = unsafePerformIO . newFloatArraySafe
@@ -151,6 +158,15 @@ newFloatArraySafe :: Int -> IO FloatArray
 newFloatArraySafe size = do
   ptr <- callocArray size
   return $ PointerArray size ptr
+
+{-# NOINLINE newRef #-}
+newRef :: a -> PolyRef a
+newRef = unsafePerformIO . newRefSafe
+
+newRefSafe :: a -> IO (PolyRef a)
+newRefSafe v = do
+  r <- MR.newIORef v
+  return $ HaskellRef r
 
 {-# NOINLINE newFloatArrayI #-}
 newFloatArrayI :: Int -> FloatArray
@@ -189,6 +205,25 @@ writeFloatArrayISafe a i v =
       arr' <- MA.mapArray id arr
       () <- MA.writeArray arr' i v
       return $ HaskellArray len arr'
+
+{-# NOINLINE swapRef #-}
+swapRef :: PolyRef a -> a -> (a, PolyRef a)
+swapRef r v = unsafePerformIO $ swapRefSafe r v
+
+swapRefSafe :: PolyRef a -> a -> IO (a, PolyRef a)
+swapRefSafe HaskellRef{haskRef} v = do
+  x <- MR.readIORef haskRef
+  MR.writeIORef haskRef v
+  return $ (x, HaskellRef haskRef)
+
+{-# NOINLINE readRef #-}
+readRef :: PolyRef a -> (a, PolyRef a)
+readRef = unsafePerformIO . readRefSafe
+
+readRefSafe :: PolyRef a -> IO (a, PolyRef a)
+readRefSafe HaskellRef{haskRef} = do
+  x <- MR.readIORef haskRef
+  return $ (x, HaskellRef haskRef)
 
 {-# NOINLINE readFloatArray #-}
 readFloatArray :: FloatArray -> Int -> (Float, FloatArray)
@@ -230,6 +265,14 @@ deleteFloatArraySafe PointerArray{grPtr} =
   free grPtr
 deleteFloatArraySafe HaskellArray{grArr} =
   void (MA.mapArray (const undefined) grArr)
+
+{-# NOINLINE freezeRef #-}
+freezeRef :: PolyRef a -> a
+freezeRef = unsafePerformIO . freezeRefSafe
+
+freezeRefSafe :: PolyRef a -> IO a
+freezeRefSafe HaskellRef{haskRef} =
+  MR.readIORef haskRef
 
 {-# NOINLINE copyFloatArray' #-}
 copyFloatArray' :: FloatArray -> FloatArray
