@@ -54,6 +54,8 @@ class Report a where
   reportLead2 :: ([Measurement], Measurement) -> (Measurement -> a) -> IO ()
   reportString :: ([Measurement], Measurement) -> (Measurement -> a) -> String
   report1String :: ([Measurement], Measurement) -> (Measurement -> a) -> String
+  reportLeadString :: ([Measurement], Measurement) -> (Measurement -> a) -> String
+  reportLead2String :: ([Measurement], Measurement) -> (Measurement -> a) -> String
 
 
 instance Report Bool where
@@ -66,16 +68,23 @@ instance Report Bool where
   reportString (_, aggregate) view | view aggregate = "\\success{}"
                                    | otherwise      = "\\fail{} "
   report1String = reportString
+  reportLeadString = reportString
+  reportLead2String = reportString
 
 instance Report Integer where
   report (_, aggregate) view =
     printf "%3d      " (view aggregate)
   report1 = report
-  reportLead = report
+  reportLead (_, aggregate) view =
+    printf "{\\newhighlight{$ %3d $}}" (view aggregate)
   reportLead2 = report
   reportString (_, aggregate) view =
     printf "%3d      " (view aggregate)
-  report1String = reportString
+  report1String (_, aggregate) view =
+    printf "%3d      " (view aggregate)
+  reportLeadString (_, aggregate) view =
+    printf "{\\newhighlight{$ %3d $}}" (view aggregate)
+  reportLead2String = reportLeadString
 
 instance Report Double where
   report (results, aggregate) view =
@@ -90,6 +99,11 @@ instance Report Double where
     printf "%6.2f (\\stderr{%6.2f})" (view aggregate) (stdError $ map view results)
   report1String (_, aggregate) view =
     printf "%6.2f" (view aggregate)
+  reportLeadString (results, aggregate) view =
+    printf "{\\highlight{$ %6.2f (\\stderr{%6.2f}) $}}" (view aggregate) (stdError $ map view results)
+  reportLead2String (results, aggregate) view =
+    printf "{\\highlight{$ %6.2f (\\stderr{%6.2f}) $}}" (view aggregate) (stdError $ map view results)
+
 
 modes :: [(String, (String, String))]
 modes = [
@@ -98,7 +112,7 @@ modes = [
     , ("Cartesian (No Retries)", ("Cartesian (No Retries)", "--cart-synth 2"))
       ]
 
-defaultRepeatTrys = 1
+defaultRepeatTrys = 10
 
 getRecursiveContents :: FilePath -> IO [FilePath]
 getRecursiveContents topPath = do
@@ -170,6 +184,9 @@ printUsage = ""
 attemptsToSeconds :: Integer -> Double
 attemptsToSeconds n = 1000.0 * fromIntegral n
 
+latexfile :: FilePath
+latexfile = "benchmarkTable"
+
 main :: IO ()
 main = do
   argsMain <- getArgs
@@ -186,129 +203,122 @@ main = do
   let repeatTime = defaultRepeatTrys
 
   let relevantModes = lookupMany doModes modes
+  putStrLn "Running benchmarks..."
+  -- putStrLn $ "No. of retries: " <> show defaultRepeatTrys
 
   -- Collect the results
   resultsPerMode <-
     forM relevantModes $ \(modeTitle, mode) -> do
+      putStrLn $ "---------------------------"
+      putStrLn $ "Running benchmarks for mode: " <> modeTitle
 
       forM (filter (\(_, _, path, _) -> ".gr" `isSuffixOf` path) items) $ \(texName, category, file, _) -> do
           -- Run granule
+          putStrLn $ "   Running benchmark: " <> texName
           results <- measureSynthesis repeatTimes file mode logIdent
           return (texName, category, file, mode, results)
 
-      -- Paper view
-      -- Transpose the results to get per-file rather than per-mode
-  -- putStrLn $ "results per mode: " <> (show resultsPerMode)
+  -- Transpose the results to get per-file rather than per-mode
   let splitTimeAndSMT = True
   let resultsPerFile = transpose resultsPerMode
+  putStrLn $ "---------------------------"
+  putStrLn "Benchmarks complete. Creating table of results..."
 
-                -- \scalebox{0.70}{
-                -- \begin{tabular}{p{1.25em}rcc|p{0.75em}rc|p{0.75em}ccc} & & & & 
-                -- \multicolumn{3}{c|}{Graded}&\multicolumn{4}{c|}{Cartesian + Graded type-check} \\ \hline \multicolumn{2}{c}{{Problem}}& \multicolumn{1}{c}{{Ctxt}} & \multicolumn{1}{c|}{{\#/Exs.}}  &  & \multicolumn{1}{c}{$\mu{T}$ (ms)} & \multicolumn{1}{c|}{{Paths}} & & \multicolumn{1}{c}{\textsc{N}} & \multicolumn{1}{c}{$\mu{T}$ (ms)}  & \multicolumn{1}{c|}{{Paths}} \\ \hline
-                -- \hline \multirow{19}{*}{{\rotatebox{90}{\textbf{List}}}} & 
+  let tableOuter = latexContentHeader
 
-  putStrLn "\\begin{table}[t]"
-  putStrLn "{\\footnotesize{"
-  putStrLn "\\begin{center}"
-  putStrLn "\\setlength{\\tabcolsep}{0.3em}"
-  -- let seps = replicate (length relevantModes) "p{0.75em}rccc"
-  putStrLn $ "\\begin{tabular}{p{1.25em}ccc|p{0.75em}rc|p{0.75em}rcc} & & & & "
-  putStrLn $ "\\multicolumn{3}{c|}{Graded}&\\multicolumn{4}{c|}{Cartesian + Graded type-check} \\\\ \\hline \\multicolumn{2}{c}{{Problem}}& \\multicolumn{1}{c}{{Ctxt}} & \\multicolumn{1}{c|}{{\\#/Exs.}} & & \\multicolumn{1}{c}{$\\mu{T}$ (ms)} & \\multicolumn{1}{c|}{{Paths}} & & \\multicolumn{1}{c}{$\\mu{T}$ (ms)} & \\multicolumn{1}{c}{\\textsc{N}} & \\multicolumn{1}{c|}{{Paths}} \\\\ \\hline"
-  -- let colHeadings = map (\(modeTitle, _) -> "\\multicolumn{5}{c|}{"<> modeTitle <> "}") relevantModes
-  -- putStrLn $ intercalate "&" colHeadings <> "\\\\ \\hline"
-
-  -- let subHeadings = replicate (length relevantModes) "\\multicolumn{1}{c}{$\\mu{T}$ (ms)} & \\multicolumn{1}{c}{\\textsc{SMT}} & \\multicolumn{1}{c}{Paths} & \\multicolumn{1}{r|}{\\textsc{N}}"
-  -- putStrLn $ "\\multicolumn{2}{r}{{Problem}}& \\multicolumn{1}{c|}{{Exs}} & & " <> intercalate " & & " subHeadings <> "\\\\ \\hline"
-
-  res <- foldM (\seq@(resultsFormattedPrev, prevCategory) resultsPerModePerFile -> do
+  tableContent <- foldM (\(table, prevCategory) resultsPerModePerFile -> do
           let category = snd5 $ head resultsPerModePerFile
           let texName = fst5 $ head resultsPerModePerFile
           let categoryMessage = if fromMaybe "" prevCategory /= category
                                 then "\\hline \\multirow{" <> show (categorySize category True) <> "}{*}{{\\rotatebox{90}{\\textbf{" <> category <> "}}}}"
                                 else ""
 
-          putStr categoryMessage
-          putStrLn " & "
-          putStr texName 
-          putStr " & "
           let ctxt = fifth5 $ head resultsPerModePerFile
-          report1 ctxt contextSize
-          putStr " & "
-          report1 ctxt contextSize
-          putStr " & "
+          let cartCtxt = fifth5 $ last resultsPerModePerFile
+          let examples :: Integer = read $ report1String ctxt examplesUsed
+          let cartExamples :: Integer = read $ report1String cartCtxt examplesUsed
+          let ctxtSize :: Integer = read $ report1String ctxt contextSize
+          let cartExamplesDiff = cartExamples - examples
+
+          let (table' :: String) = table <> categoryMessage <> " & " <> texName <> " & " <> show ctxtSize <> " & " <> show examples
+          let table'' = if cartExamplesDiff > 0 then table' <> " (+" <> show cartExamples <> ")" else table'
 
           leadTime <- foldM (\(lead :: (Maybe (String, Double), Bool) ) (texName, category, fileName, mode, results@(meausurements, aggregate)) -> do
-            let currentTime = read $ report1String results synthTime
+            let currentTime = if mode == "--cart-synth 1" then read $ report1String results checkTime else read $ report1String results synthTime
             case lead of
               (Nothing, _) -> return (Just (mode, currentTime), False)
               (Just (m, leadTime), cartLead) ->
                 if not (timeout aggregate) && leadTime > currentTime then
                   if mode == "--cart-synth 1" then
-                    if leadTime > currentTime +  attemptsToSeconds (cartAttempts aggregate) then
-                      return $ (Just (mode, currentTime), cartLead)
-                    else
-                      return (Just (m, leadTime), True)
+                      return $ (Just (mode, currentTime), True)
+                    -- if leadTime > currentTime +  attemptsToSeconds (cartAttempts aggregate) then
+                    --   return $ (Just (mode, currentTime), cartLead)
+                    -- else
+                    --   return (Just (m, leadTime), True)
                   else
                     return $ (Just (mode, currentTime), cartLead)
                 else
                   return lead
             ) (Nothing, False) resultsPerModePerFile
 
-          resultsFormatted <- forM resultsPerModePerFile $ (\(texName, category, fileName, mode, results@(measurements, aggregate)) -> do
-            return $  sequence (if splitTimeAndSMT then
-                if not $ success aggregate then
-                  [
-                      putStr " & "
-                      , putStr "\\fail{}"
-                      , putStr " & "
-                      ,  putStr "Timeout"
-                      , putStr " & "
-                      , if mode == "--cart-synth 1" then putStr "-"  else putStr ""
-                      , if mode == "--cart-synth 1" then putStr " & " else putStr ""
-                      , putStr "-"
-                      ]
+          fewestPaths <- foldM (\(shortest :: Maybe (String, Int)) (texName, category, fileName, mode, results@(measurements, aggregate)) -> do
+            let currentPaths = read $ report1String results pathsExplored
+            case shortest of
+              Nothing -> return $ Just (mode, currentPaths)
+              (Just (m, shortestPaths)) ->
+                if not (timeout aggregate) && shortestPaths > currentPaths then
+                  return $ Just (mode, currentPaths)
                 else
-                  [ putStr " & ", 
-                    report1 results success
-                  , putStr " & "
-                  , if mode == "--cart-synth 1" then 
-                      if not $ snd leadTime then 
-                          if fromMaybeFst "" (fst leadTime) == mode then reportLead results checkTime else report results checkTime
-                        else 
-                          reportLead2 results checkTime
+                  if not (timeout aggregate) && shortestPaths == currentPaths then
+                  return Nothing
+                  else return shortest
+              ) Nothing resultsPerModePerFile
+
+          tableFormatted <- foldM (\tableI (texName, category, fileName, mode, results@(measurements, aggregate)) -> do
+            if not $ success aggregate || timeout aggregate then
+              return $ tableI <> " & \\fail {} & Timeout & " <> (if mode == "--cart-synth 1" then "- & " else "")
+            else do
+              let tableI1 = tableI <> " & \\success{} & "
+              let checkSynthTime
+                    | mode == "--cart-synth 1" = if snd leadTime then reportLeadString results checkTime
+                        -- if fromMaybeFst "-" (fst leadTime) == mode then reportLeadString results checkTime else reportString results checkTime
                       else
-                      if fromMaybeFst "" (fst leadTime) == mode then reportLead results synthTime else report results synthTime
-                  , putStr " & "
-                  , if mode == "--cart-synth 1" then 
-                      report1 results cartAttempts
-                    else  
-                      report1 results pathsExplored
-                  , if mode == "--cart-synth 1" then putStr "&" else putStr "" 
-                  , if mode == "--cart-synth 1" then report1 results pathsExplored else putStr "" 
-                
-                  ]
-              else
-                [ report1 results success
-                , report results synthTime
-                , report results solverTime
-                , report1 results smtCalls
-                , report1 results meanTheoremSize
-                , report1 results pathsExplored]))
+                        reportString results checkTime
+                    | fromMaybeFst "-" (fst leadTime) == mode = reportLeadString results synthTime
+                    | otherwise = reportString results synthTime
 
-          forM_ resultsFormatted $ \res -> do res
-          putStrLn "\\\\ \n%"
-          return (resultsFormatted:resultsFormattedPrev, Just category)
-          ) ([], Nothing) resultsPerFile
+              let tableI2 = tableI1 <> checkSynthTime <> " & "
+              let pathsCartAttempts
+                    | mode == "--cart-synth 1" = report1String results cartAttempts
+                    | fromMaybeFst "-" fewestPaths == mode = do
+                            reportLeadString results pathsExplored
+                    | otherwise = do
+                            reportString results pathsExplored
+              let tableI3 = tableI2 <> pathsCartAttempts
+              let cartPaths = (if fromMaybeFst "-" fewestPaths == mode then reportLeadString results pathsExplored else reportString results pathsExplored)
+
+              let tableI4 = if mode == "--cart-synth 1" then tableI3 <> " & " <> cartPaths else tableI3
+              return tableI4) "" resultsPerModePerFile
+
+          let tableOut = table'' <> tableFormatted <> "\\\\ \n"
+          return (tableOut, Just category)
+          ) (tableOuter, Nothing) resultsPerFile
 
 
 
-  putStrLn "\\end{tabular}"
-  putStrLn "\\end{center}}}"
-  putStrLn "\\caption{Results. $\\mu{T}$ in \\emph{ms} to 2 d.p. with standard sample error in brackets}"
-  putStrLn "\\label{tab:results}"
-  putStrLn "\\vspace{-2.5em}"
-  putStrLn "\\end{table}"
+  let tableDone = (fst tableContent) <> latexContentFooter
+  writeFile (latexfile <> ".tex") tableDone
+  putStrLn $ "LaTeX table created. Written to: " <> latexfile <> ".tex"
+  putStrLn $ "Generating PDF... "
+  code <- system $ "pdflatex -shell-escape -synctex=1 -file-line-error -interaction=nonstopmode -halt-on-error " <> latexfile <> ".tex > /dev/null" 
+  case code of 
+    ExitFailure _ -> do
+      putStrLn $ "Unable to generate PDF from " <> latexfile <> ".tex!"
+    ExitSuccess -> do 
+      putStrLn $ "Done! The benchmark results table can be viewed in: " <> latexfile <> ".pdf"
+  
   -- removeFile $ "log-" <> logIdent
+  -- putStrLn tableDone
 
 
 fst5 (x, _, _, _, _) = x
@@ -325,18 +335,28 @@ pad str = str ++ (replicate (if length str > 25 then 0 else 25 - length str) ' '
 
 lookupMany xs map = mapMaybe (flip lookup map) xs
 
-measureSynthesis :: Int -> String -> FilePath -> String -> IO ([Measurement], Measurement)
+measureSynthesis :: Int -> FilePath -> String -> FilePath -> IO ([Measurement], Measurement)
 measureSynthesis repeatTimes file mode logIdent = do
-    measurements <- replicateM repeatTimes measure
+    measurements <- replicateM' 1 repeatTimes
+    removeFile $ "log-" <>  logIdent
     return (measurements, aggregate measurements)
  where
    -- Command to run granule
    cmd   = "gr " <> file <> " " <> flags <> " >> " <> "log-" <> logIdent
    flags = unwords ["--synthesis","--benchmark","--raw-data","--ignore-holes",mode]
+   replicateM' curr no | no == curr = do
+    res <- measure curr no
+    return [res]
+   replicateM' curr no = do
+      res <- measure curr no
+      reses <- replicateM' (curr+1) no
+      return $ res : reses -- replicateM' (curr+1) no
+      -- return $ res : reses
 
    -- Measurement computation
-   measure :: IO Measurement
-   measure = do
+   measure :: Int -> Int -> IO Measurement
+   measure no total = do
+     putStrLn $ "     Repeat no: [" <> show no <> "/" <> show total <> "]"
      code <- system $ cmd
      case code of
        ExitFailure _ -> do
@@ -359,10 +379,6 @@ measureSynthesis repeatTimes file mode logIdent = do
          logData <- SIO.readFile $ "log-" <> logIdent
          -- Read off the current results which should be on the second last line of the log file
          let k = length (lines logData)
-        --  putStrLn $ show $ lines logData
-        --  putStrLn "STOP"
-        --  putStrLn $ show $ (head $ drop (k - 1) $ lines logData)
-        --  putStrLn "BLAH"
 
          return $ read (head $ drop (k - 1) $ lines logData)
 
@@ -393,3 +409,44 @@ the' (x:xs)
   | all (x ==) xs = Just x
   | otherwise      = Nothing
 the' []            = Nothing
+
+
+latexContentHeader :: String
+latexContentHeader =
+     "\\documentclass{article}\n"
+  <> "\\usepackage{mathpartir}\n"
+  <> "\\usepackage{amsmath}\n"
+  <> "\\usepackage{amsfonts}\n"
+  <> "\\usepackage[dvipsnames]{xcolor}\n"
+  <> "\\usepackage{xypic}\n"
+  <> "\\usepackage{float}\n"
+  <> "\\usepackage{multirow}\n"
+  <> "\\usepackage{resizegather}\n"
+  <> "\\definecolor{mypink3}{cmyk}{0, 0.82, 0.98, 0.28}\n"
+  <> "\\newcommand{\\stderr}[1]{\\textcolor{gray}{${#1}$}}\n"
+  <> "\\newcommand{\\fail}{\\textcolor{mypink3}{$\\times$}}\n"
+  <> "\\newcommand{\\success}{\\checkmark}\n"
+  <> "\\newcommand{\\highlight}[1]{%\n"
+  <> "{\\setlength{\\fboxsep}{0pt}\\colorbox{SkyBlue!50}{$\\displaystyle#1$}}}\n"
+  <> "\\newcommand{\\newhighlight}[1]{%\n"
+  <> "{\\setlength{\\fboxsep}{0pt}\\colorbox{yellow!50}{$\\displaystyle#1$}}}\n"
+  <> "\\begin{document}\n"
+  <> "\\begin{table}[t]\n"
+  <> "{\\footnotesize{\n"
+  <> "\\begin{center}\n"
+  <> "\\setlength{\\tabcolsep}{0.3em}\n"
+  <> "\\begin{tabular}{p{1.25em}ccl|p{0.75em}rc|p{0.75em}rcc} & & & & \n"
+  <> "\\multicolumn{3}{c|}{Graded}&\\multicolumn{4}{c|}{Cartesian + Graded type-check} \\\\ \\hline \\multicolumn{2}{c}{{Problem}}& \\multicolumn{1}{c}{{Ctxt}} & \\multicolumn{1}{c|}{{\\#/Exs.}} & & \\multicolumn{1}{c}{$\\mu{T}$ (ms)} & \\multicolumn{1}{c|}{{Paths}} & & \\multicolumn{1}{c}{$\\mu{T}$ (ms)} & \\multicolumn{1}{c}{\\textsc{N}} & \\multicolumn{1}{c|}{{Paths}} \\\\ \\hline\n"
+
+
+
+latexContentFooter :: String
+latexContentFooter =
+     "\n\\end{tabular}\n"
+  <> "\\end{center}}}\n"
+  <> "\\caption{Results. $\\mu{T}$ in \\emph{ms} to 2 d.p. with standard sample error in brackets}\n"
+  <> "\\label{tab:results}\n"
+  <> "\\vspace{-2.5em}\n"
+  <> "\\end{table}\n"
+  <> "\\end{document}"
+
