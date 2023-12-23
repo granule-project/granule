@@ -112,7 +112,12 @@ modes = [
     , ("Cartesian (No Retries)", ("Cartesian (No Retries)", "--cart-synth 2"))
       ]
 
+defaultRepeatTrys :: Int
 defaultRepeatTrys = 10
+
+timeoutLimit :: Double
+timeoutLimit = 10000.0
+
 
 getRecursiveContents :: FilePath -> IO [FilePath]
 getRecursiveContents topPath = do
@@ -139,53 +144,31 @@ fileArgs (arg:args)
 
 
 processArgs :: [String]
-            -> ([String] {- Files -}, [String] {- Categories -}, Bool {- FilesPerMode -}, Int {- Repeat -})
-processArgs [] = ([], [], False, defaultRepeatTrys)
+            -> (Int {- Repeat -})
+processArgs [] = (defaultRepeatTrys)
 processArgs (arg:args)
-  | arg == "--categories" =
-      let (categories, args') = fileArgs args
-          (files, categories', fpm, repeats) = processArgs args'
-      in (files, categories ++ categories', fpm, repeats)
-  | arg == "-c" =
-      let (categories, args') = fileArgs args
-          (files, categories', fpm, repeats) = processArgs args'
-      in (files, categories ++ categories', fpm, repeats)
-  | arg == "--files" =
-      let (files, args') = fileArgs args
-          (files', categories, fpm, repeats) = processArgs args'
-      in (files ++ files', categories, fpm, repeats)
-  | arg == "-f" =
-      let (files, args') = fileArgs args
-          (files', categories, fpm, repeats) = processArgs args'
-      in (files ++ files', categories, fpm, repeats)
-  | arg == "--per-mode" =
-      let (files, categories, fpm, repeats) = processArgs args
-      in (files, categories, True, repeats)
-  | arg == "-p" =
-      let (files, categories, fpm, repeats) = processArgs args
-      in (files, categories, True, repeats)
   | arg == "--repeats" =
       case args of
         (arg':args') ->
-          let (files, categories, fpm, repeats) = processArgs args'
-          in (files, categories, fpm, fromInteger $ read arg')
+          let (repeats) = processArgs args'
+          in (fromInteger $ read arg')
         _ -> error "--repeats must be given an integer argument"
   | arg == "-n" =
       case args of
         (arg':args') ->
-          let (files, categories, fpm, repeats) = processArgs args'
-          in (files, categories, fpm, fromInteger $ read arg')
+          let (repeats) = processArgs args'
+          in (fromInteger $ read arg')
         _ -> error "-n must be given an integer argument"
   | otherwise = error $ printUsage
 
 printUsage :: String
-printUsage = ""
+printUsage = "Bad usage. Run with no args or with -n N where N is an integer"
 
 attemptsToSeconds :: Integer -> Double
 attemptsToSeconds n = 1000.0 * fromIntegral n
 
 latexfile :: FilePath
-latexfile = "benchmarkTable"
+latexfile = "results"
 
 main :: IO ()
 main = do
@@ -195,12 +178,14 @@ main = do
   currentTime <- T.getCurrentTime
   let logIdent = T.formatTime T.defaultTimeLocale "%F-%H-%M" currentTime
 
-  (files, categories, fpm, repeatTimes) <- return $ processArgs argsMain
+  let repeatTimes = processArgs argsMain
+  bList <- benchmarkList
+  -- _ <- error $ show bList
 
-  let items = benchmarksToRun benchmarkList
+  let items = benchmarksToRun bList
   let doModes = ["Graded", "Cartesian"]
   let fpm = True
-  let repeatTime = defaultRepeatTrys
+  -- let repeatTime = defaultRepeatTrys
 
   let relevantModes = lookupMany doModes modes
   putStrLn "Running benchmarks..."
@@ -230,7 +215,7 @@ main = do
           let category = snd5 $ head resultsPerModePerFile
           let texName = fst5 $ head resultsPerModePerFile
           let categoryMessage = if fromMaybe "" prevCategory /= category
-                                then "\\hline \\multirow{" <> show (categorySize category True) <> "}{*}{{\\rotatebox{90}{\\textbf{" <> category <> "}}}}"
+                                then "\\hline \\multirow{" <> show (categorySize items category True) <> "}{*}{{\\rotatebox{90}{\\textbf{" <> category <> "}}}}"
                                 else ""
 
           let ctxt = fifth5 $ head resultsPerModePerFile
@@ -275,7 +260,7 @@ main = do
               ) Nothing resultsPerModePerFile
 
           tableFormatted <- foldM (\tableI (texName, category, fileName, mode, results@(measurements, aggregate)) -> do
-            if not $ success aggregate || timeout aggregate then
+            if not (success aggregate) || timeout aggregate then
               return $ tableI <> " & \\fail {} & Timeout & " <> (if mode == "--cart-synth 1" then "- & " else "")
             else do
               let tableI1 = tableI <> " & \\success{} & "
@@ -310,15 +295,13 @@ main = do
   writeFile (latexfile <> ".tex") tableDone
   putStrLn $ "LaTeX table created. Written to: " <> latexfile <> ".tex"
   putStrLn $ "Generating PDF... "
-  code <- system $ "pdflatex -shell-escape -synctex=1 -file-line-error -interaction=nonstopmode -halt-on-error " <> latexfile <> ".tex > /dev/null" 
-  case code of 
+  code <- system $ "pdflatex -shell-escape -synctex=1 -file-line-error -interaction=nonstopmode -halt-on-error " <> latexfile <> ".tex > /dev/null"
+  case code of
     ExitFailure _ -> do
       putStrLn $ "Unable to generate PDF from " <> latexfile <> ".tex!"
-    ExitSuccess -> do 
+    ExitSuccess -> do
       putStrLn $ "Done! The benchmark results table can be viewed in: " <> latexfile <> ".pdf"
-  
-  -- removeFile $ "log-" <> logIdent
-  -- putStrLn tableDone
+
 
 
 fst5 (x, _, _, _, _) = x
@@ -342,7 +325,7 @@ measureSynthesis repeatTimes file mode logIdent = do
     return (measurements, aggregate measurements)
  where
    -- Command to run granule
-   cmd   = "gr " <> file <> " " <> flags <> " >> " <> "log-" <> logIdent
+   cmd   = "timeout 10s gr " <> file <> " " <> flags <> " >> " <> "log-" <> logIdent
    flags = unwords ["--synthesis","--benchmark","--raw-data","--ignore-holes",mode]
    replicateM' curr no | no == curr = do
     res <- measure curr no
