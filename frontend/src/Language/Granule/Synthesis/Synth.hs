@@ -1012,41 +1012,52 @@ appRule sParams inIntroPhase focusPhase gamma (Focused [var@(x1, assumption)]) g
                           SDef tySch Nothing _     -> undefined
                     let isScrutinee = case scrutinee of Just scr -> scr == x2 ; _ -> False
 
-                    (t2, delta2, subst2, struct2, _, rInfo2) <- do
+                    -- s' <- freshIdentifier
+                    -- let grade_s' = TyVar s'
+                    -- (kind, _, _) <- conv $ synthKind ns s2
 
-                      navigatePartialExpr (upExpr >=> rightExpr)
-                      -- If we are synthesising the argument for a recursive definition, the argument MUST be a variable
-                      if x1 `elem` currDef st  || (case sInfo of Just (NonDecreasing 42) -> True ; _ -> False) then
-                        varRule [] (Focused []) (Focused $ gamma ++ [increaseDepth var]) tyA
-                      else
-                        gSynthInner (sParams { scrutCurrent = scrutCurrent sParams + 1 }) True RightAsync (gamma ++ [increaseDepth var]) (Focused []) tyA
+                    -- conv $ existentialTopLevel s' kind
+                    -- modifyPred $ (ExistsHere s' kind)
+                    -- modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (s2 `gPlus` grade_s') grade_r  kind)
+                    -- res <- solve
+                    if True then do
+
+                      (t2, delta2, subst2, struct2, _, rInfo2) <- do
+
+                        navigatePartialExpr (upExpr >=> rightExpr)
+                        -- If we are synthesising the argument for a recursive definition, the argument MUST be a variable
+                        if x1 `elem` currDef st  || (case sInfo of Just (NonDecreasing 42) -> True ; _ -> False) then
+                          varRule [] (Focused []) (Focused $ gamma ++ [increaseDepth var]) tyA
+                        else
+                          gSynthInner (sParams { scrutCurrent = scrutCurrent sParams + 1 }) True RightAsync (gamma ++ [increaseDepth var]) (Focused []) tyA
 
 
-                    case lookupAndCutout x1 delta2 of
-                      Just (delta2', varUsed') -> do
-                        let s3 = case varUsed' of
-                              SVar (Discharged _ s3') _ _ -> s3'
-                              SDef tySch (Just s3') _   -> s3'
-                              SDef tySch Nothing _     -> undefined
-                        delta2Out <- (s2 `ctxtMultByCoeffect` delta2') >>= (\d2' -> grade_q `ctxtMultByCoeffect` d2')
-                        -- s2 + s1 + (s2 * q * s3)
-                        let outputGrade = s2 `gPlus` s1 `gPlus` (s2 `gTimes` grade_q `gTimes` s3)
-                        if (struct1 || struct2) || notElem x1 (currDef st) then
-                          case ctxtAdd delta1Out delta2Out of
-                            Just delta3 -> do
-                              substOut <- conv $ combineSubstitutions ns subst1 subst2
-                              let appExpr = App ns () False (Val ns () False (Var () x1)) t2
-                              let assumption' = if funDef
-                                  then (x1, SDef tySch (Just outputGrade) 0)
-                                  -- TODO: We should be able to return "Just grade_q" instead of "gradeM" here but this fails later on
-                                  -- (possibly related to the caseRule)
-                                  else (x1, SVar (Discharged (FunTy bName gradeM tyA tyB) outputGrade) sInfo 0)
+                      case lookupAndCutout x1 delta2 of
+                        Just (delta2', varUsed') -> do
+                          let s3 = case varUsed' of
+                                SVar (Discharged _ s3') _ _ -> s3'
+                                SDef tySch (Just s3') _   -> s3'
+                                SDef tySch Nothing _     -> undefined
+                          delta2Out <- (s2 `ctxtMultByCoeffect` delta2') >>= (\d2' -> grade_q `ctxtMultByCoeffect` d2')
+                          -- s2 + s1 + (s2 * q * s3)
+                          let outputGrade = s2 `gPlus` s1 `gPlus` (s2 `gTimes` grade_q `gTimes` s3)
+                          if (struct1 || struct2) || notElem x1 (currDef st) then
+                            case ctxtAdd delta1Out delta2Out of
+                              Just delta3 -> do
+                                substOut <- conv $ combineSubstitutions ns subst1 subst2
+                                let appExpr = App ns () False (Val ns () False (Var () x1)) t2
+                                let assumption' = if funDef
+                                      then (x1, SDef tySch (Just outputGrade) 0)
+                                      -- TODO: We should be able to return "Just grade_q" instead of "gradeM" here but this fails later on
+                                      -- (possibly related to the caseRule)
+                                      else (x1, SVar (Discharged (FunTy bName gradeM tyA tyB) outputGrade) sInfo 0)
 
-                              let rInfo' = AppRule focusPhase var goal gamma [] (x2, SVar (Discharged tyB grade_r) Nothing 0) t1 rInfo1 delta1 t2 rInfo2 delta2 (assumption':delta3)
-                              return (Language.Granule.Syntax.Expr.subst appExpr x2 t1, assumption':delta3, substOut, struct1 || struct2, if isScrutinee then Nothing else scrutinee, rInfo')
-                            _ -> none
-                          else none
-                      _ -> none
+                                let rInfo' = AppRule focusPhase var goal gamma [] (x2, SVar (Discharged tyB grade_r) Nothing 0) t1 rInfo1 delta1 t2 rInfo2 delta2 (assumption':delta3)
+                                return (Language.Granule.Syntax.Expr.subst appExpr x2 t1, assumption':delta3, substOut, struct1 || struct2, if isScrutinee then Nothing else scrutinee, rInfo')
+                              _ -> none
+                            else none
+                        _ -> none
+                      else none
                 _ -> none
             _ -> none
         else none
