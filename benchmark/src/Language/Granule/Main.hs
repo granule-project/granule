@@ -124,43 +124,49 @@ fileArgs (arg:args)
 
 
 processArgs :: [String]
-            -> ([String] {- Files -}, [String] {- Categories -}, Bool {- FilesPerMode -}, Int {- Repeat -})
-processArgs [] = ([], [], False, defaultRepeatTrys)
+            -> ([String] {- Files -}, [String] {- Categories -}, Bool {- FilesPerMode -}, Int {- Repeat -}, String {- @gr@ path -})
+processArgs [] = ([], [], False, defaultRepeatTrys, "gr")
 processArgs (arg:args)
   | arg == "--categories" =
       let (categories, args') = fileArgs args
-          (files, categories', fpm, repeats) = processArgs args'
-      in (files, categories ++ categories', fpm, repeats)
+          (files, categories', fpm, repeats, grPath) = processArgs args'
+      in (files, categories ++ categories', fpm, repeats, grPath)
   | arg == "-c" =
       let (categories, args') = fileArgs args
-          (files, categories', fpm, repeats) = processArgs args'
-      in (files, categories ++ categories', fpm, repeats)
+          (files, categories', fpm, repeats, grPath) = processArgs args'
+      in (files, categories ++ categories', fpm, repeats, grPath)
   | arg == "--files" =
       let (files, args') = fileArgs args
-          (files', categories, fpm, repeats) = processArgs args'
-      in (files ++ files', categories, fpm, repeats)
+          (files', categories, fpm, repeats, grPath) = processArgs args'
+      in (files ++ files', categories, fpm, repeats, grPath)
   | arg == "-f" =
       let (files, args') = fileArgs args
-          (files', categories, fpm, repeats) = processArgs args'
-      in (files ++ files', categories, fpm, repeats)
+          (files', categories, fpm, repeats, grPath) = processArgs args'
+      in (files ++ files', categories, fpm, repeats, grPath)
   | arg == "--per-mode" =
-      let (files, categories, fpm, repeats) = processArgs args
-      in (files, categories, True, repeats)
+      let (files, categories, fpm, repeats, grPath) = processArgs args
+      in (files, categories, True, repeats, grPath)
   | arg == "-p" =
-      let (files, categories, fpm, repeats) = processArgs args
-      in (files, categories, True, repeats)
+      let (files, categories, fpm, repeats, grPath) = processArgs args
+      in (files, categories, True, repeats, grPath)
   | arg == "--repeats" =
       case args of
         (arg':args') ->
-          let (files, categories, fpm, repeats) = processArgs args'
-          in (files, categories, fpm, fromInteger $ read arg')
+          let (files, categories, fpm, repeats, grPath) = processArgs args'
+          in (files, categories, fpm, fromInteger (read arg'), grPath)
         _ -> error "--repeats must be given an integer argument"
   | arg == "-n" =
       case args of
         (arg':args') ->
-          let (files, categories, fpm, repeats) = processArgs args'
-          in (files, categories, fpm, fromInteger $ read arg')
+          let (files, categories, fpm, repeats, grPath) = processArgs args'
+          in (files, categories, fpm, fromInteger (read arg'), grPath)
         _ -> error "-n must be given an integer argument"
+  | arg == "--gr-path" =
+      case args of
+        (arg':args') ->
+          let (files, categories, fpm, repeats, grPath) = processArgs args'
+          in (files, categories, fpm, repeats, arg')
+        _ -> error "--gr-path must be given a filepath"
   | otherwise = error $ printUsage
 
 printUsage :: String
@@ -177,7 +183,7 @@ main = do
   currentTime <- T.getCurrentTime
   let logIdent = T.formatTime T.defaultTimeLocale "%F-%H-%M" currentTime
 
-  (files, categories, fpm, repeatTimes) <- return $ processArgs argsMain
+  let (files, categories, fpm, repeatTimes, grPath) = processArgs argsMain
 
   let items = benchmarksToRun benchmarkList
   let doModes = ["Graded", "Cartesian", "Cartesian (No Retries)"]
@@ -192,7 +198,7 @@ main = do
 
       forM (filter (\(_, _, path, _) -> ".gr" `isSuffixOf` path) items) $ \(texName, category, file, _) -> do
           -- Run granule
-          results <- measureSynthesis repeatTimes file mode logIdent
+          results <- measureSynthesis grPath repeatTimes file mode logIdent
           return (texName, category, file, mode, results)
 
       -- Paper view
@@ -317,13 +323,13 @@ pad str = str ++ (replicate (if length str > 25 then 0 else 25 - length str) ' '
 
 lookupMany xs map = mapMaybe (flip lookup map) xs
 
-measureSynthesis :: Int -> String -> FilePath -> String -> IO ([Measurement], Measurement)
-measureSynthesis repeatTimes file mode logIdent = do
+measureSynthesis :: String -> Int -> String -> FilePath -> String -> IO ([Measurement], Measurement)
+measureSynthesis grPath repeatTimes file mode logIdent = do
     measurements <- replicateM repeatTimes measure
     return (measurements, aggregate measurements)
  where
    -- Command to run granule
-   cmd   = "gr " <> file <> " " <> flags <> " >> " <> "log-" <> logIdent
+   cmd   = grPath <> " " <> file <> " " <> flags <> " >> " <> "log-" <> logIdent
    flags = unwords ["--synthesis","--benchmark","--raw-data","--ignore-holes",mode]
 
    -- Measurement computation
