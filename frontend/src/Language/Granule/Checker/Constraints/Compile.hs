@@ -120,6 +120,9 @@ isDefinedConstraint s (TyApp (TyCon (internalName -> "ExactSemiring")) semiring)
 isDefinedConstraint s (TyApp (TyCon (internalName -> "Dropable")) typ)
   = return (dropable typ)
 
+isDefinedConstraint s (TyApp (TyCon (internalName -> "Cloneable")) typ)
+  = return (cloneable typ)
+
 isDefinedConstraint _ _
   = return False
 
@@ -168,6 +171,17 @@ exactSemiring (TyApp
                  s1)
                  s2) = exactSemiring s1 && exactSemiring s2
 exactSemiring _ = False
+
+cloneable :: Type -> Bool
+cloneable (TyApp
+  (TyCon (internalName -> "FloatArray")) _ ) = True
+cloneable (TyApp
+  (TyApp
+    (TyCon (internalName -> "Ref")) _) _) = True
+cloneable (TyApp
+  (TyApp
+    (TyCon (internalName -> ",")) x) y) = cloneable x && cloneable y
+cloneable _ = False
 
 dropable :: Type -> Bool
 dropable =

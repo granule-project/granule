@@ -75,6 +75,7 @@ typeConstructors =
     , (mkId "Dropable", (funTy (Type 0) kpredicate, [], [0]))
     -- TODO: add deriving for this
     -- , (mkId "Moveable", (funTy (Type 0) kpredicate, [], [0]))
+    , (mkId "Cloneable", (funTy (Type 0) kpredicate, [], [0]))
     -- Session type related things
     , (mkId "ExactSemiring", (funTy (tyCon "Semiring") (tyCon "Predicate"), [], []))
     , (mkId "Mutable", (funTy (tyCon "Fraction") (tyCon "Predicate"), [], []))
@@ -664,7 +665,7 @@ uniqueReturn = BUILTIN
 
 uniqueBind
   : forall {a b : Type, s : Semiring, r : s}
-  . {(1 : s) <= r} => (*a -> b [r]) -> a [r] -> b [r]
+  . {(1 : s) <= r, Cloneable a} => (*a -> b) -> a [r] -> b
 uniqueBind = BUILTIN
 
 reveal
