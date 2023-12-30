@@ -660,7 +660,8 @@ isIndexedType t = do
       , tfTyCase = \_ _ -> return $ Const False
       , tfTySig = \(Const b) _ _ -> return $ Const b
       , tfTyExists = \_ _ (Const a) -> return $ Const a
-      , tfTyForall = \_ _ (Const a) -> return $ Const a } t
+      , tfTyForall = \_ _ (Const a) -> return $ Const a
+      , tfTyName = \_ -> return $ Const False } t
   return $ getConst b
 
 -- Given a type term, works out if its kind is actually an effect type

@@ -18,6 +18,7 @@ import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span (nullSpanNoFile)
+import Language.Granule.Syntax.Type
 import Language.Granule.Context
 import Language.Granule.Utils (nullSpan, Globals, globalsExtensions, entryPoint, Extension(..))
 import Language.Granule.Runtime as RT
@@ -1159,12 +1160,12 @@ builtIns =
     newFloatArray :: RValue -> IO RValue
     newFloatArray = \(NumInt i) -> do
       arr <- RT.newFloatArraySafe i
-      return $ Nec () $ Val nullSpan () False $ Ext () $ Runtime (RT.FA arr)
+      return $ Pack nullSpan () (TyName 0) (valExpr $ Nec () $ Val nullSpan () False $ Ext () $ Runtime (RT.FA arr)) (mkId "dummy") (TyCon (mkId "Name")) (Borrow (TyCon $ mkId "Star") (TyCon $ mkId "FloatArray"))
 
     newRef :: RValue -> IO RValue
     newRef = \v -> do
       ref <- RT.newRefSafe v
-      return $ Nec () $ Val nullSpan () False $ Ext () $ Runtime (RT.PR ref)
+      return $ Pack nullSpan () (TyName 0) (valExpr $ Nec () $ Val nullSpan () False $ Ext () $ Runtime (RT.PR ref)) (mkId "dummy") (TyCon (mkId "Name")) (Borrow (TyCon $ mkId "Star") (TyCon $ mkId "Ref"))
 
     newFloatArrayI :: RValue -> IO RValue
     newFloatArrayI = \(NumInt i) -> do

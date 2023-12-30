@@ -190,6 +190,8 @@ instance Pretty Type where
 
     pretty (TyForall var k t) =
       docSpan "keyword" "forall" <> " {" <> pretty var <> " : " <> pretty k <> "} . " <> pretty t
+    
+    pretty (TyName n) = "id" ++ show n
 
 instance Pretty TypeOperator where
   pretty = \case

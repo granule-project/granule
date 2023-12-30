@@ -68,6 +68,7 @@ data Type where
     TySig   :: Type -> Kind -> Type           -- ^ Kind signature
     TyExists :: Id -> Kind -> Type -> Type    -- ^ Exists
     TyForall :: Id -> Kind -> Type -> Type    -- ^ RankNForall
+    TyName :: Int -> Type
 
 deriving instance Show Type
 deriving instance Eq Type
@@ -244,7 +245,8 @@ containsTypeSig =
       , tfTyCase = \_ _ -> return False
       , tfTySig = \_ _ _ -> return True
       , tfTyExists = \_ _ x -> return x
-      , tfTyForall = \_ _ x -> return x})
+      , tfTyForall = \_ _ x -> return x
+      , tfTyName = \_ -> return False})
 
 -- | Compute the arity of a function type
 arity :: Type -> Int
@@ -333,6 +335,8 @@ mTyExists :: Monad m => Id -> Kind -> Type -> m Type
 mTyExists v k t   = return (TyExists v k t)
 mTyForall :: Monad m => Id -> Kind -> Type -> m Type
 mTyForall v k t   = return (TyForall v k t)
+mTyName :: Monad m => Int -> m Type
+mTyName = return . TyName
 
 -- Monadic algebra for types
 data TypeFold m a = TypeFold
@@ -355,12 +359,13 @@ data TypeFold m a = TypeFold
   , tfTySig   :: a -> Type -> (a -> m a)
   , tfTyExists :: Id -> a -> a      -> m a
   , tfTyForall :: Id -> a -> a      -> m a
+  , tfTyName :: Int -> m a
   }
 
 -- Base monadic algebra
 baseTypeFold :: Monad m => TypeFold m Type --Type
 baseTypeFold =
-  TypeFold mTy mFunTy mTyCon mBox mDiamond mStar mBorrow mTyVar mTyApp mTyInt mTyRational mTyFraction mTyGrade mTyInfix mTySet mTyCase mTySig mTyExists mTyForall
+  TypeFold mTy mFunTy mTyCon mBox mDiamond mStar mBorrow mTyVar mTyApp mTyInt mTyRational mTyFraction mTyGrade mTyInfix mTySet mTyCase mTySig mTyExists mTyForall mTyName
 
 -- | Monadic fold on a `Type` value
 typeFoldM :: forall m a . Monad m => TypeFold m a -> Type -> m a
@@ -432,6 +437,7 @@ typeFoldM algebra = go
     k' <- go k
     t' <- go t
     (tfTyForall algebra) var k' t'
+   go (TyName i) = (tfTyName algebra) i
 
 ----------------------------------------------------------------------
 -- # Types are terms
@@ -457,6 +463,7 @@ instance Term Type where
       , tfTySig   = \(Const t) _ (Const k) -> return $ Const (t <> k)
       , tfTyExists = \v _ (Const fvs) -> return $ Const [v' | v' <- fvs, v /= v']
       , tfTyForall = \v _ (Const fvs) -> return $ Const [v' | v' <- fvs, v /= v']
+      , tfTyName = \_ -> return (Const [])
       }
 
     isLexicallyAtomic TyInt{} = True
@@ -467,6 +474,7 @@ instance Term Type where
     isLexicallyAtomic TySet{} = True
     isLexicallyAtomic TyCon{} = True
     isLexicallyAtomic (TyApp (TyApp (TyCon (sourceName -> ",")) _) _) = True
+    isLexicallyAtomic TyName{} = True
     isLexicallyAtomic _ = False
 
 substType :: Type -> Id -> Type -> Type
@@ -533,7 +541,7 @@ instance Freshenable m Type where
 --   local evaluation of natural numbers
 --   There is plenty more scope to make this more comprehensive
 --   None of this is stricly necessary but it improves type errors
---   and speeds up some constarint solving.
+--   and speeds up some constraint solving.
 normalise :: Type -> Type
 normalise (TyInfix TyOpPlus (TyRational n) (TyRational m)) = TyRational (n + m)
 normalise (TyInfix TyOpTimes (TyRational n) (TyRational m)) = TyRational (n * m)

@@ -173,6 +173,11 @@ checkKind s t@(TyInt n) k =
     -- Not valid
     _ -> throw $ NaturalNumberAtWrongKind s t k
 
+checkKind s t@(TyName n) k =
+  case k of
+    TyCon (internalName -> "Name") -> return ([], t)
+    _ -> throw $ NaturalNumberAtWrongKind s t k
+
 -- KChk_effOne
 checkKind s t@(TyGrade mk n) k = do
   let k' = fromMaybe k mk
@@ -360,6 +365,9 @@ synthKindWithConfiguration s config t@(TyInfix op t1 t2) =
 -- KChkS_int
 synthKindWithConfiguration s _ t@(TyInt n) = do
   return (TyCon (Id "Nat" "Nat"), [], t)
+
+synthKindWithConfiguration s _ t@(TyName n) = do
+  return (TyCon (Id "Name" "Name"), [], t)
 
 -- KChkS_grade [with type already resolved]
 synthKindWithConfiguration s config t@(TyGrade (Just k) n) =

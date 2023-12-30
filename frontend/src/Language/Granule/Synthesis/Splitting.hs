@@ -250,6 +250,7 @@ getAssumConstr a =
        allSame [x] = True
        allSame (x:(y:xs)) =
          if x == y then allSame xs else False
+    getTypeConstr (TyName _) = Nothing
 
 -- Given a function type, expand grades on parameters to be more permissive,
 -- for the purpose of generating theorems. Exact natural number grades greater
