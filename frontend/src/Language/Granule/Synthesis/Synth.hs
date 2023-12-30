@@ -70,6 +70,7 @@ import qualified Data.List.NonEmpty as NonEmpty
 import Language.Granule.Checker.Checker (checkExpr, Polarity (Positive, Negative), checkDef, check)
 import qualified Language.Granule.Checker.Primitives as Primitives
 import Language.Granule.Synthesis.Monad (SynthesisData(gradedProgram), Measurement (cartAttempts))
+import qualified Control.Exception as E
 
 ------------------------------
 
@@ -209,6 +210,7 @@ synthesiseLinearBase hints index unrComps rComps defId ctxt constructors goalTy 
                       ,  currDef = [defId]
                       ,  maxReached = False
                       ,  attempts = 0
+                      ,  checkerTime = 0
                       ,  gradedProgram = Nothing
                       }
 
@@ -391,6 +393,7 @@ synthesiseGradedBase ast gradedProgram hole spec eval hints index unrestricted r
                       ,  currDef = [currentDef]
                       ,  maxReached = False
                       ,  attempts = 0
+                      ,  checkerTime = 0
                       ,  gradedProgram = gradedProgram
                       }
 
@@ -441,15 +444,17 @@ synthesiseGradedBase ast gradedProgram hole spec eval hints index unrestricted r
         $ nubBy (\(expr1, _, _) (expr2, _, _) -> expr1 == expr2) $ rights (map fst res)
         -- <benchmarking-output>
   let agg = case datas of (_:_) -> (last datas <> agg1) ; _ -> agg1
+  let synthT =  fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double) - checkerTime agg
 
 
   if benchmarking then
     if benchmarkingRawData then
       let measurement = Measurement
                         { smtCalls = smtCallsCount agg
-                        , synthTime = fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double)
+                        , synthTime = synthT 
                         , proverTime = proveTime agg
                         , solverTime = Language.Granule.Synthesis.Monad.smtTime agg
+                        , checkTime = synthT + checkerTime agg
                         , meanTheoremSize = if smtCallsCount agg == 0 then 0 else fromInteger (theoremSizeTotal agg) / fromInteger (smtCallsCount agg)
                         , success = if null programs then False else True
                         , timeout = False
@@ -537,8 +542,10 @@ runExamples eval ast@(AST decls defs imports hidden mod) examples defId = do
         let astWithExampleMain = AST declsWithBool (defsWithoutMain ++ [exampleMainDef]) imports hidden mod
         let timeout = 100000
         res <- liftIO $ System.Timeout.timeout timeout $ eval astWithExampleMain
+
         case res of
-          Just True -> return True;
+          Just True -> do 
+            return True;
           _ -> do
             return False;
   else return True
@@ -616,24 +623,36 @@ gSynthOuter
       -- Only accept programs which check with the original non-cartesian semiring type
       checked <- if cartSynth == 0 then return True else do
         if cartSynth == 1 then do
+          startC <- liftIO $ Clock.getTime Clock.Monotonic
           st <- getSynthState
           case gradedProgram st of
             Nothing -> return True
             Just prog -> do
               let hole = HoleMessage sp hgoal hctxt htyVars hVars synthCtxt [([], expr)]
               let holeCases = concatMap (\h -> map (\(pats, e) -> (errLoc h, zip (getCtxtIds (holeVars h)) pats, e)) (cases h)) [hole]
-              let (AST _ defs' _ _ _) = holeRefactor holeCases ast
+              let ast'@(AST _ defs' _ _ _) = holeRefactor holeCases ast
+              -- let defCtxt = map (\(Def _ name _ _ _ tys) -> (name, tys)) defs'
               let [defId] = currDef st
-              Synthesiser $ lift $ lift $ lift $ modify (\state ->
-                state {
-                  attempts = 1 + attempts state
-                    })
+              case find (\(Def _ id _ _ _ _) -> id == defId) defs' of
+                (Just def@(Def _ _ _ _ (EquationList _ _ _ eqs) _)) ->  do
 
+                  checked <- liftIO $ E.try $ check ast'
 
-              case (find (\(Def _ id _ _ _ _) -> id == defId) defs', prog) of
-                (Just (Def _ _ _ _ (EquationList _ _ _ eqs) _), Def _ _ _ _ (EquationList _ _ _ eqs') _) ->  do
-                  return $ pretty eqs == pretty eqs'
-                _ -> return False
+                  endC    <- liftIO $ Clock.getTime Clock.Monotonic
+
+                  let checkerTime' = fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec endC startC)) / (10^(6 :: Integer)::Double)
+
+                  
+                  Synthesiser $ lift $ lift $ lift $ modify (\state ->
+                    state {
+                        attempts = 1 + attempts state
+                      , checkerTime = checkerTime' + checkerTime state
+                      })
+
+                  case checked of
+                    Left (e :: E.SomeException) -> return False
+                    Right (Left errs) -> return False
+                    Right (Right _) -> return True
         else do
           return True
 
@@ -653,8 +672,8 @@ gSynthOuter
         --     Nothing -> return False
 
       if checked then
-        case (spec, cartSynth == 1) of
-          (Just (Spec _ _ examples@(_:_) _), False) -> do
+        case (spec) of
+          (Just (Spec _ _ examples@(_:_) _)) -> do
             st <- getSynthState
             let hole = HoleMessage sp hgoal hctxt htyVars hVars synthCtxt [([], expr)]
             let holeCases = concatMap (\h -> map (\(pats, e) -> (errLoc h, zip (getCtxtIds (holeVars h)) pats, e)) (cases h)) [hole]
@@ -895,6 +914,8 @@ absRule sParams inIntroPhase focusPhase gamma (Focused omega) goal@(FunTy name g
   let bindToOmega =
       -- argument type must be left async type
           (isLAsync tyA)
+
+        && (case isADTorGADT tyA of Just id -> hasDataConstructors id (constructors st) ; _ -> True)
           -- && matchMax sParams > 0
       -- if we are a recursive type then check whether we are below max depth
         && ((isRecursiveType tyA (constructors st)) ==> ((matchCurrent sParams) + (recVarCount omega (constructors st)) ) + 1  <= matchMax sParams)
@@ -991,41 +1012,52 @@ appRule sParams inIntroPhase focusPhase gamma (Focused [var@(x1, assumption)]) g
                           SDef tySch Nothing _     -> undefined
                     let isScrutinee = case scrutinee of Just scr -> scr == x2 ; _ -> False
 
-                    (t2, delta2, subst2, struct2, _, rInfo2) <- do
+                    -- s' <- freshIdentifier
+                    -- let grade_s' = TyVar s'
+                    -- (kind, _, _) <- conv $ synthKind ns s2
 
-                      navigatePartialExpr (upExpr >=> rightExpr)
-                      -- If we are synthesising the argument for a recursive definition, the argument MUST be a variable
-                      if x1 `elem` currDef st  || (case sInfo of Just (NonDecreasing 42) -> True ; _ -> False) then
-                        varRule [] (Focused []) (Focused $ gamma ++ [increaseDepth var]) tyA
-                      else
-                        gSynthInner (sParams { scrutCurrent = scrutCurrent sParams + 1 }) True RightAsync (gamma ++ [increaseDepth var]) (Focused []) tyA
+                    -- conv $ existentialTopLevel s' kind
+                    -- modifyPred $ (ExistsHere s' kind)
+                    -- modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (s2 `gPlus` grade_s') grade_r  kind)
+                    -- res <- solve
+                    if True then do
+
+                      (t2, delta2, subst2, struct2, _, rInfo2) <- do
+
+                        navigatePartialExpr (upExpr >=> rightExpr)
+                        -- If we are synthesising the argument for a recursive definition, the argument MUST be a variable
+                        if x1 `elem` currDef st  || (case sInfo of Just (NonDecreasing 42) -> True ; _ -> False) then
+                          varRule [] (Focused []) (Focused $ gamma ++ [increaseDepth var]) tyA
+                        else
+                          gSynthInner (sParams { scrutCurrent = scrutCurrent sParams + 1 }) True RightAsync (gamma ++ [increaseDepth var]) (Focused []) tyA
 
 
-                    case lookupAndCutout x1 delta2 of
-                      Just (delta2', varUsed') -> do
-                        let s3 = case varUsed' of
-                              SVar (Discharged _ s3') _ _ -> s3'
-                              SDef tySch (Just s3') _   -> s3'
-                              SDef tySch Nothing _     -> undefined
-                        delta2Out <- (s2 `ctxtMultByCoeffect` delta2') >>= (\d2' -> grade_q `ctxtMultByCoeffect` d2')
-                        -- s2 + s1 + (s2 * q * s3)
-                        let outputGrade = s2 `gPlus` s1 `gPlus` (s2 `gTimes` grade_q `gTimes` s3)
-                        if (struct1 || struct2) || notElem x1 (currDef st) then
-                          case ctxtAdd delta1Out delta2Out of
-                            Just delta3 -> do
-                              substOut <- conv $ combineSubstitutions ns subst1 subst2
-                              let appExpr = App ns () False (Val ns () False (Var () x1)) t2
-                              let assumption' = if funDef
-                                  then (x1, SDef tySch (Just outputGrade) 0)
-                                  -- TODO: We should be able to return "Just grade_q" instead of "gradeM" here but this fails later on
-                                  -- (possibly related to the caseRule)
-                                  else (x1, SVar (Discharged (FunTy bName gradeM tyA tyB) outputGrade) sInfo 0)
+                      case lookupAndCutout x1 delta2 of
+                        Just (delta2', varUsed') -> do
+                          let s3 = case varUsed' of
+                                SVar (Discharged _ s3') _ _ -> s3'
+                                SDef tySch (Just s3') _   -> s3'
+                                SDef tySch Nothing _     -> undefined
+                          delta2Out <- (s2 `ctxtMultByCoeffect` delta2') >>= (\d2' -> grade_q `ctxtMultByCoeffect` d2')
+                          -- s2 + s1 + (s2 * q * s3)
+                          let outputGrade = s2 `gPlus` s1 `gPlus` (s2 `gTimes` grade_q `gTimes` s3)
+                          if (struct1 || struct2) || notElem x1 (currDef st) then
+                            case ctxtAdd delta1Out delta2Out of
+                              Just delta3 -> do
+                                substOut <- conv $ combineSubstitutions ns subst1 subst2
+                                let appExpr = App ns () False (Val ns () False (Var () x1)) t2
+                                let assumption' = if funDef
+                                      then (x1, SDef tySch (Just outputGrade) 0)
+                                      -- TODO: We should be able to return "Just grade_q" instead of "gradeM" here but this fails later on
+                                      -- (possibly related to the caseRule)
+                                      else (x1, SVar (Discharged (FunTy bName gradeM tyA tyB) outputGrade) sInfo 0)
 
-                              let rInfo' = AppRule focusPhase var goal gamma [] (x2, SVar (Discharged tyB grade_r) Nothing 0) t1 rInfo1 delta1 t2 rInfo2 delta2 (assumption':delta3)
-                              return (Language.Granule.Syntax.Expr.subst appExpr x2 t1, assumption':delta3, substOut, struct1 || struct2, if isScrutinee then Nothing else scrutinee, rInfo')
-                            _ -> none
-                          else none
-                      _ -> none
+                                let rInfo' = AppRule focusPhase var goal gamma [] (x2, SVar (Discharged tyB grade_r) Nothing 0) t1 rInfo1 delta1 t2 rInfo2 delta2 (assumption':delta3)
+                                return (Language.Granule.Syntax.Expr.subst appExpr x2 t1, assumption':delta3, substOut, struct1 || struct2, if isScrutinee then Nothing else scrutinee, rInfo')
+                              _ -> none
+                            else none
+                        _ -> none
+                      else none
                 _ -> none
             _ -> none
         else none
@@ -1419,43 +1451,47 @@ caseRule sParams inIntroPhase focusPhase gamma (Focused left) (Focused (var@(x, 
 
           (kind, _,_ ) <- conv $ synthKind ns grade_r
           -- join contexts
-          delta <- foldM (ctxtMerge (computeJoin (Just kind))) (head deltas) (tail deltas)
+          case (deltas, grade_rs, grade_ss) of
+            (_:_, _:_, _:_) -> do
+              delta <- foldM (ctxtMerge (computeJoin (Just kind))) (head deltas) (tail deltas)
 
-          -- join grades
-          grade_r_out <- foldM (computeJoin (Just kind))  (head grade_rs) (tail grade_rs)
-          grade_s_out <- foldM (computeJoin' (Just kind)) (head grade_ss) (tail grade_ss)
+              -- join grades
+              grade_r_out <- foldM (computeJoin (Just kind))  (head grade_rs) (tail grade_rs)
+              grade_s_out <- foldM (computeJoin' (Just kind)) (head grade_ss) (tail grade_ss)
 
 
 
-          -- join substitutions
-          subst <- conv $ combineManySubstitutions ns substs
+              -- join substitutions
+              subst <- conv $ combineManySubstitutions ns substs
 
-          grade_final <- case grade_s_out of
+
+              grade_final <- case grade_s_out of
                   -- Add the usages of each branch to the usages of x inside each branch
                   Just grade_s_out' -> return $ grade_r_out `gPlus` grade_s_out'
                   -- Not sure when this case should arise, since nullary constrguctors get a 1 grade
                   Nothing -> return grade_r_out
           -- Focussed variable output assumption
-          let var_x_out = (x, SVar (Discharged ty grade_final) sInfo 0)
+              let var_x_out = (x, SVar (Discharged ty grade_final) sInfo 0)
 
-          debugM "synth candidate" (pretty $ makeCaseUntyped x patExprs)
-          solved <-
-            ifM (conv $ polyShaped ty)
-              (do
-                (kind, _, _) <- conv $ synthKind ns grade_r
-                debugM ("polyShaped for " ++ pretty goal) (pretty grade_r)
-                modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (TyGrade (Just kind) 1) (getGradeFromArrow grade_s_out) kind)
-                res <- solve
-                debugM "solver result" (show res)
-                return res)
-              solve
+              debugM "synth candidate" (pretty $ makeCaseUntyped x patExprs)
+              solved <-
+                ifM (conv $ polyShaped ty)
+                  (do
+                    (kind, _, _) <- conv $ synthKind ns grade_r
+                    debugM ("polyShaped for " ++ pretty goal) (pretty grade_r)
+                    modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (TyGrade (Just kind) 1) (getGradeFromArrow grade_s_out) kind)
+                    res <- solve
+                    debugM "solver result" (show res)
+                    return res)
+                  solve
 
-          if solved && not (null patExprs)
-            then do
+              if solved && not (null patExprs)
+                then do
 
-              let rInfo = CaseRule focusPhase var goal gamma omega (makeCaseUntyped x patExprs) branchInfos (var_x_out:delta)
-              return (makeCaseUntyped x patExprs, var_x_out:delta, subst, False, Just x, rInfo)
-            else none
+                  let rInfo = CaseRule focusPhase var goal gamma omega (makeCaseUntyped x patExprs) branchInfos (var_x_out:delta)
+                  return (makeCaseUntyped x patExprs, var_x_out:delta, subst, False, Just x, rInfo)
+                else none
+            _ -> none
       (False, TyCon _) -> none
       _ -> none
   `try`
