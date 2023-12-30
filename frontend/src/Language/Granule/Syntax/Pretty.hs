@@ -147,7 +147,9 @@ instance Pretty Type where
         otherwise -> prettyNested t <> " *" <> docSpan "uniq" (pretty g)
 
     pretty (Borrow p t) =
-      "& " <> prettyNested p <> " " <> prettyNested t
+      case p of
+        (TyCon (Id "Star" "Star")) -> docSpan "uniq" ("*" <> prettyNested t)
+        otherwise -> docSpan "perm" ("& " <> prettyNested p <> " " <> prettyNested t)
 
     pretty (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "," =
       "(" <> pretty t1 <> ", " <> pretty t2 <> ")"
