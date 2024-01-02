@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Language.Granule.Benchmarks where
 
-import Data.Csv 
+import Data.Csv
 
 import GHC.Generics
 import System.IO
@@ -12,6 +12,8 @@ import Data.Vector (toList)
 
 import Data.Char (isSpace)
 
+import Paths_granule_benchmark ( getDataDir )
+
 trim :: String -> String
 trim = f . f
    where f = reverse . dropWhile isSpace
@@ -19,20 +21,21 @@ trim = f . f
 rootDir :: String
 rootDir = "frontend/tests/cases/synthesis/"
 
-
-benchmarkFile :: FilePath
-benchmarkFile = "benchmark/benchmarkList"
+getBenchmarkFile :: IO FilePath
+getBenchmarkFile = do
+    dataDir <- getDataDir
+    pure $ dataDir<>"/benchmarkList"
 
 benchmarkList :: IO [(String, String, String, Bool)]
-benchmarkList = do 
-
-    csv <- LB.readFile benchmarkFile 
+benchmarkList = do
+    benchmarkFile <- getBenchmarkFile
+    csv <- LB.readFile benchmarkFile
     case decode NoHeader csv of
         (Left _) -> error "Couldn't parse benchmark list - bad data"
-        (Right res) -> do 
+        (Right res) -> do
             let resList = map (\(a, b, c, d) -> (trim a, trim b, trim c, read d)) $ toList res 
             return resList
-    
+
 
 benchmarkListFullPath :: [(String, String, String, Bool)] -> [(String, String, String, Bool)]
 benchmarkListFullPath = map (\(title, cat, path, incl) -> (title, cat, rootDir <> path, incl))

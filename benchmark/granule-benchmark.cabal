@@ -15,6 +15,9 @@ copyright:      2018-2023 authors
 license:        BSD3
 build-type:     Simple
 
+data-files:
+    benchmarkList
+
 source-repository head
   type: git
   location: https://github.com/granule-project/granule
