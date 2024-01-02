@@ -331,7 +331,7 @@ measureSynthesis grPath repeatTimes file mode logIdent = do
     return (measurements, aggregate measurements)
  where
    -- Command to run granule
-   cmd   = "timeout 10s " <> grPath <> file <> " " <> flags <> " >> " <> "log-" <> logIdent
+   cmd   = "timeout 10s " <> grPath <> " " <> file <> " " <> flags <> " >> " <> "log-" <> logIdent
    flags = unwords ["--synthesis","--benchmark","--raw-data","--ignore-holes",mode]
    replicateM' curr no | no == curr = do
     res <- measure curr no
