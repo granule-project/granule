@@ -11,6 +11,9 @@ dependencies:
 ghc-options:
 - -O2
 
+data-files:
+- benchmarkList
+
 executables:
   grenchmark:
     main: Language/Granule/Main.hs
