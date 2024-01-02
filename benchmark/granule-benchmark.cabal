@@ -30,6 +30,8 @@ executable grenchmark
   ghc-options: -O2 -main-is Language.Granule.Main
   build-depends:
       base >=4.10 && <5
+    , bytestring
+    , cassava
     , directory
     , filepath
     , granule-frontend
@@ -38,4 +40,5 @@ executable grenchmark
     , strict
     , text
     , time
+    , vector
   default-language: Haskell2010

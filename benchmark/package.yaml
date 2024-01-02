@@ -20,6 +20,9 @@ executables:
     - granule-interpreter
     - granule-frontend
     - strict 
+    - cassava
+    - bytestring
+    - vector
     - directory
     - process
     - time

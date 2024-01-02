@@ -36,13 +36,14 @@ data SynthesisData =
   , currDef                   :: [Id]
   , maxReached                :: Bool
   , attempts                  :: Integer
+  , checkerTime               :: Double
   , gradedProgram             :: Maybe (Def () ())
   }
   deriving Show
 
 instance Semigroup SynthesisData where
- (SynthesisData c smt t s p st cons def max atps gp) <>
-    (SynthesisData c' smt' t' s' p' st' cons' def' max' atps' gp') =
+ (SynthesisData c smt t s p st cons def max atps ct gp) <>
+    (SynthesisData c' smt' t' s' p' st' cons' def' max' atps' ct' gp') =
       SynthesisData
         (c + c')
         (smt + smt')
@@ -54,10 +55,11 @@ instance Semigroup SynthesisData where
         (def ++ def')
         (max || max')
         (atps + atps)
+        (ct + ct')
         gp
 
 instance Monoid SynthesisData where
-  mempty  = SynthesisData 0 0 0 0 0 0 [] [] False 0 Nothing
+  mempty  = SynthesisData 0 0 0 0 0 0 [] [] False 0 0 Nothing
   mappend = (<>)
 
 -- Synthesiser monad
@@ -183,6 +185,7 @@ data Measurement =
   , synthTime       :: Double
   , proverTime      :: Double
   , solverTime      :: Double
+  , checkTime       :: Double
   , meanTheoremSize :: Double
   , success         :: Bool
   , timeout         :: Bool
@@ -195,13 +198,14 @@ data Measurement =
   } deriving Show
 
 instance Semigroup Measurement where
- (Measurement smt synTime provTime solveTime meanTheorem success timeout paths progs ctxt exs cart ca) <>
-  (Measurement smt' synTime' provTime' solveTime' meanTheorem' success' timeout' paths' progs' ctxt' exs' cart' ca') =
+ (Measurement smt synTime provTime solveTime checkTime meanTheorem success timeout paths progs ctxt exs cart ca) <>
+  (Measurement smt' synTime' provTime' solveTime' checkTime' meanTheorem' success' timeout' paths' progs' ctxt' exs' cart' ca') =
     Measurement
       (smt + smt')
       (synTime + synTime')
       (provTime + provTime')
       (solveTime + solveTime')
+      (checkTime + checkTime')
       (meanTheorem + meanTheorem')
       (success || success')
       (timeout || timeout')
@@ -213,7 +217,7 @@ instance Semigroup Measurement where
       (ca + ca')
 
 instance Monoid Measurement where
-  mempty  = Measurement 0 0.0 0.0 0.0 0.0 False False 0 0 0 0 False 0
+  mempty  = Measurement 0 0.0 0.0 0.0 0.0 0.0 False False 0 0 0 0 False 0
   mappend = (<>)
 
 getCurrentPartialExpr :: Synthesiser (Expr () ())

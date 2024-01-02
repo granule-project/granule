@@ -1094,7 +1094,7 @@ synthExpr defs gam pol (LetDiamond s _ rf p optionalTySig e1 e2) = do
 
   -- Check that usage matches the binding grades/linearity
   -- (performs the linearity check)
-  subst0 <- ctxtApprox s (gam2 `intersectCtxts` binders) binders
+  subst0 <- ctxtApprox (getSpan e2) (gam2 `intersectCtxts` binders) binders
 
   gamNew <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
 
