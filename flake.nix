@@ -110,7 +110,7 @@
         packages.image-jackh = pkgs.dockerTools.streamLayeredImage {
           name = "grenchmark-jackh";
           tag = self.rev or "dev";
-          contents = [ pkgs.bash pkgs.coreutils pkgs.texlive.combined.scheme-basic ];
+          contents = [ pkgs.bash pkgs.coreutils (pkgs.texlive.combine { inherit (pkgs.texlive) scheme-basic mathpartir amsmath float multirow xcolor xypic; } ) ];
           config = {
             Entrypoint = [ "${self'.packages.granule-benchmark-gr-fixup}/bin/grenchmark" ];
           };
