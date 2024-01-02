@@ -107,6 +107,16 @@
           maxLayers = 100; # less than Docker max layers to allow extending
         };
 
+        packages.image-jackh = pkgs.dockerTools.streamLayeredImage {
+          name = "grenchmark-jackh";
+          tag = self.rev or "dev";
+          contents = [ pkgs.bash pkgs.coreutils pkgs.texlive.combined.scheme-basic ];
+          config = {
+            Entrypoint = [ "${self'.packages.granule-benchmark-gr-fixup}/bin/grenchmark" ];
+          };
+          maxLayers = 100;
+        };
+
       };
     };
 }
