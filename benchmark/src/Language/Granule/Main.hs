@@ -143,22 +143,27 @@ fileArgs (arg:args)
                 in (arg:files, args')
 
 
-processArgs :: [String]
-            -> (Int {- Repeat -})
-processArgs [] = (defaultRepeatTrys)
+processArgs :: [String] -> (Int {- Repeat -}, String {- @gr@ path -})
+processArgs [] = (defaultRepeatTrys, "gr")
 processArgs (arg:args)
   | arg == "--repeats" =
       case args of
         (arg':args') ->
-          let (repeats) = processArgs args'
-          in (fromInteger $ read arg')
+          let (repeats, grPath) = processArgs args'
+          in (fromInteger $ read arg', grPath)
         _ -> error "--repeats must be given an integer argument"
   | arg == "-n" =
       case args of
         (arg':args') ->
-          let (repeats) = processArgs args'
-          in (fromInteger $ read arg')
+          let (repeats, grPath) = processArgs args'
+          in (fromInteger (read arg'), grPath)
         _ -> error "-n must be given an integer argument"
+  | arg == "--gr-path" =
+      case args of
+        (arg':args') ->
+          let (repeats, grPath) = processArgs args'
+          in (repeats, arg')
+        _ -> error "--gr-path must be given a filepath"
   | otherwise = error $ printUsage
 
 printUsage :: String
@@ -178,9 +183,9 @@ main = do
   currentTime <- T.getCurrentTime
   let logIdent = T.formatTime T.defaultTimeLocale "%F-%H-%M" currentTime
 
-  let repeatTimes = processArgs argsMain
+
+  let (repeatTimes, grPath) = processArgs argsMain
   bList <- benchmarkList
-  -- _ <- error $ show bList
 
   let items = benchmarksToRun bList
   let doModes = ["Graded", "Cartesian"]
@@ -199,8 +204,8 @@ main = do
 
       forM (filter (\(_, _, path, _) -> ".gr" `isSuffixOf` path) items) $ \(texName, category, file, _) -> do
           -- Run granule
+          results <- measureSynthesis grPath repeatTimes file mode logIdent
           putStrLn $ "   Running benchmark: " <> texName
-          results <- measureSynthesis repeatTimes file mode logIdent
           return (texName, category, file, mode, results)
 
   -- Transpose the results to get per-file rather than per-mode
@@ -318,14 +323,15 @@ pad str = str ++ (replicate (if length str > 25 then 0 else 25 - length str) ' '
 
 lookupMany xs map = mapMaybe (flip lookup map) xs
 
-measureSynthesis :: Int -> FilePath -> String -> FilePath -> IO ([Measurement], Measurement)
-measureSynthesis repeatTimes file mode logIdent = do
+
+measureSynthesis :: String -> Int -> FilePath -> String -> FilePath -> IO ([Measurement], Measurement)
+measureSynthesis grPath repeatTimes file mode logIdent = do
     measurements <- replicateM' 1 repeatTimes
     removeFile $ "log-" <>  logIdent
     return (measurements, aggregate measurements)
  where
    -- Command to run granule
-   cmd   = "timeout 10s gr " <> file <> " " <> flags <> " >> " <> "log-" <> logIdent
+   cmd   = "timeout 10s " <> grPath <> file <> " " <> flags <> " >> " <> "log-" <> logIdent
    flags = unwords ["--synthesis","--benchmark","--raw-data","--ignore-holes",mode]
    replicateM' curr no | no == curr = do
     res <- measure curr no
@@ -393,7 +399,6 @@ the' (x:xs)
   | otherwise      = Nothing
 the' []            = Nothing
 
-
 latexContentHeader :: String
 latexContentHeader =
      "\\documentclass{article}\n"
@@ -421,8 +426,6 @@ latexContentHeader =
   <> "\\begin{tabular}{p{1.25em}ccl|p{0.75em}rc|p{0.75em}rcc} & & & & \n"
   <> "\\multicolumn{3}{c|}{Graded}&\\multicolumn{4}{c|}{Cartesian + Graded type-check} \\\\ \\hline \\multicolumn{2}{c}{{Problem}}& \\multicolumn{1}{c}{{Ctxt}} & \\multicolumn{1}{c|}{{\\#/Exs.}} & & \\multicolumn{1}{c}{$\\mu{T}$ (ms)} & \\multicolumn{1}{c|}{{Paths}} & & \\multicolumn{1}{c}{$\\mu{T}$ (ms)} & \\multicolumn{1}{c}{\\textsc{N}} & \\multicolumn{1}{c|}{{Paths}} \\\\ \\hline\n"
 
-
-
 latexContentFooter :: String
 latexContentFooter =
      "\n\\end{tabular}\n"
@@ -432,4 +435,3 @@ latexContentFooter =
   <> "\\vspace{-2.5em}\n"
   <> "\\end{table}\n"
   <> "\\end{document}"
-

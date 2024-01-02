@@ -38,6 +38,12 @@
             $@
         '';
 
+        packages.granule-benchmark-gr-fixup = pkgs.writeShellScriptBin "grenchmark" ''
+          ${self'.packages.granule-benchmark}/bin/grenchmark \
+            --gr-path ${self'.packages.granule-interpreter}/bin/gr \
+            $@
+        '';
+
         #haskellProjects.ghc96 = import ./haskell-flake-ghc96.nix pkgs;
         haskellProjects.default = {
           #basePackages = config.haskellProjects.ghc96.outputs.finalPackages;
