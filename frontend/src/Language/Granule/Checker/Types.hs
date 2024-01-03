@@ -306,6 +306,14 @@ equalTypesRelatedCoeffectsInner s rel t' t0@(TyApp (TyApp (TyCon d) grd) t) ind 
   | internalName d == "Graded" = do
     eqGradedProtocolFunction s rel grd t t' sp
 
+equalTypesRelatedCoeffectsInner s rel t0@(TyApp (TyApp (TyCon d) name) t) t' ind sp mode
+  | internalName d == "Rename" = do
+    eqRenameFunction s rel name t t' sp
+
+equalTypesRelatedCoeffectsInner s rel t' t0@(TyApp (TyApp (TyCon d) name) t) ind sp mode
+  | internalName d == "Rename" = do
+    eqRenameFunction s rel name t t' sp
+
 -- ## GENERAL EQUALITY
 
 -- Equality on existential types
@@ -558,6 +566,46 @@ eqGradedProtocolFunction sp rel grad (TyVar v) t ind = do
 
 eqGradedProtocolFunction sp _ grad t1 t2 _ = throw
   TypeError{ errLoc = sp, tyExpected = (TyApp (TyApp (TyCon $ mkId "Graded") grad) t1), tyActual = t2 }
+
+-- Compute the behaviour of `Rename id a` on a type `A`
+renameBeta :: (?globals :: Globals)
+  => Type -- name
+  -> Type -- type
+  -> Checker Type
+renameBeta name (TyApp (TyApp (TyCon c) t) s)
+  | internalName c == "Ref" = do
+    s' <- renameBeta name s
+    return $ (TyApp (TyApp (TyCon c) name) s')
+
+renameBeta name (TyApp (TyCon c) t)
+  | internalName c == "FloatArray" = do
+    return $ (TyApp (TyCon c) name)
+
+renameBeta name (TyApp (TyApp (TyCon c) t1) t2)
+  | internalName c == "," = do
+  t1' <- renameBeta name t1
+  t2' <- renameBeta name t2
+  return $ (TyApp (TyApp (TyCon c) t1') t2')
+
+renameBeta name t = return $ TyApp (TyApp (TyCon $ mkId "Rename") name) t
+
+-- Check if `Rename id a ~ a'` which may involve some normalisation in the
+-- case where `a'` is a variable
+eqRenameFunction :: (?globals :: Globals)
+  => Span
+  -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
+  -- These two arguments are the arguments to `Rename id a`
+  -> Type -- name
+  -> Type -- type
+  -- This is the argument of the type which we are trying to see if it equal to `Rename id a`
+  -> Type -- compared against
+  -> SpecIndicator
+  -> Checker (Bool, Substitution)
+
+eqRenameFunction sp rel name t t' ind = do
+  t'' <- renameBeta name t
+  (eq, u) <- equalTypesRelatedCoeffects sp rel t'' t' ind Types
+  return (eq, u)
 
 -- | Is this protocol dual to the other?
 isDualSession :: (?globals :: Globals)
