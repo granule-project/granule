@@ -118,8 +118,8 @@
           maxLayers = 100; # less than Docker max layers to allow extending
         };
 
-        packages.image-jackh = pkgs.dockerTools.streamLayeredImage {
-          name = "grenchmark-jackh";
+        packages.image-benchmarks-artefact = pkgs.dockerTools.streamLayeredImage {
+          name = "benchmarks-artefact";
           tag = self.rev or "dev";
           contents = [ pkgs.bash pkgs.coreutils (pkgs.texlive.combine { inherit (pkgs.texlive) scheme-basic mathpartir amsmath float multirow xcolor xypic; } ) ];
           config = {
