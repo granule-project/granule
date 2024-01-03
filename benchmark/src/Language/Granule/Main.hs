@@ -443,7 +443,7 @@ main = do
     ExitFailure _ -> do
       infoM "Grenchmark" ("Unable to generate PDF from " <> latexfile <> ".tex!")
     ExitSuccess -> do
-      infoM "Grenchmark" ("Done! The benchmark results table can be viewed in: " <> latexfile <> ".pdf")
+      infoM "Grenchmark" ("Done: PDF generated!") -- The benchmark results table can be viewed in: " <> latexfile <> ".pdf")
 
 
 
