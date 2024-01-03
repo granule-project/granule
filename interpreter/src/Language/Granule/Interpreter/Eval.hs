@@ -1216,10 +1216,10 @@ builtIns =
     readRef _ = error "Runtime exception: trying to read a non-reference value"
 
     lengthFloatArray :: RValue -> IO RValue
-    lengthFloatArray (Nec () (Val _ _ _ (Ext () (Runtime (RT.FA fa))))) = return $ Ext () $ Primitive $ \(NumInt i) ->
+    lengthFloatArray (Nec () (Val _ _ _ (Ext () (Runtime (RT.FA fa))))) =
       let (e,fa') = RT.lengthFloatArray fa
       in return $ Constr () (mkId ",") [Promote () (Val nullSpan () False $ (NumInt e)), Nec () (Val nullSpan () False $ Ext () $ Runtime (RT.FA fa'))]
-    lengthFloatArray (Ref () (Val _ _ _ (Ext () (Runtime (RT.FA fa))))) = return $ Ext () $ Primitive $ \(NumInt i) ->
+    lengthFloatArray (Ref () (Val _ _ _ (Ext () (Runtime (RT.FA fa))))) =
       let (e,fa') = RT.lengthFloatArray fa
       in return $ Constr () (mkId ",") [Promote () (Val nullSpan () False $ (NumInt e)), Ref () (Val nullSpan () False $ Ext () $ Runtime (RT.FA fa'))]
     lengthFloatArray _ = error "Runtime exception: trying to take the length of a non-array value"
