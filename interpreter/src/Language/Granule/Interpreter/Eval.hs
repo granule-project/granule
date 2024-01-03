@@ -38,6 +38,7 @@ import qualified System.IO as SIO
 --import System.IO.Error (mkIOError)
 import Data.Bifunctor
 import Control.Monad.Extra (void)
+import Data.Unique
 
 type RValue = Value (Runtime ()) ()
 type RExpr = Expr (Runtime ()) ()
@@ -1160,12 +1161,14 @@ builtIns =
     newFloatArray :: RValue -> IO RValue
     newFloatArray = \(NumInt i) -> do
       arr <- RT.newFloatArraySafe i
-      return $ Pack nullSpan () (TyName 0) (valExpr $ Nec () $ Val nullSpan () False $ Ext () $ Runtime (RT.FA arr)) (mkId "dummy") (TyCon (mkId "Name")) (Borrow (TyCon $ mkId "Star") (TyCon $ mkId "FloatArray"))
+      name <- newUnique
+      return $ Pack nullSpan () (TyName (hashUnique name)) (valExpr $ Nec () $ Val nullSpan () False $ Ext () $ Runtime (RT.FA arr)) (mkId ("id" ++ show (hashUnique name))) (TyCon (mkId "Name")) (Borrow (TyCon $ mkId "Star") (TyCon $ mkId "FloatArray"))
 
     newRef :: RValue -> IO RValue
     newRef = \v -> do
       ref <- RT.newRefSafe v
-      return $ Pack nullSpan () (TyName 0) (valExpr $ Nec () $ Val nullSpan () False $ Ext () $ Runtime (RT.PR ref)) (mkId "dummy") (TyCon (mkId "Name")) (Borrow (TyCon $ mkId "Star") (TyCon $ mkId "Ref"))
+      name <- newUnique
+      return $ Pack nullSpan () (TyName (hashUnique name)) (valExpr $ Nec () $ Val nullSpan () False $ Ext () $ Runtime (RT.PR ref)) (mkId ("id" ++ show (hashUnique name))) (TyCon (mkId "Name")) (Borrow (TyCon $ mkId "Star") (TyCon $ mkId "Ref"))
 
     newFloatArrayI :: RValue -> IO RValue
     newFloatArrayI = \(NumInt i) -> do
