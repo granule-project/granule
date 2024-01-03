@@ -51,6 +51,7 @@ data Measurement = Measurement {
    , examplesUsed    :: Integer
    , cartesian       :: Bool
    , cartAttempts    :: Integer
+   , program         :: String 
     -- To extend with other info...
    }
    deriving (Read, Show)
@@ -58,6 +59,7 @@ data Measurement = Measurement {
 class Report a where
   report :: ([Measurement], Measurement) -> (Measurement -> a) -> IO ()
   report1 :: ([Measurement], Measurement) -> (Measurement -> a) -> IO ()
+  report2 :: ([Measurement], Measurement) -> (Measurement -> a) -> String 
   reportLead :: ([Measurement], Measurement) -> (Measurement -> a) -> IO ()
   reportLead2 :: ([Measurement], Measurement) -> (Measurement -> a) -> IO ()
   reportString :: ([Measurement], Measurement) -> (Measurement -> a) -> String
@@ -70,6 +72,7 @@ instance Report Bool where
   report (_, aggregate) view | view aggregate = putStr "\\success{}"
                              | otherwise      = putStr "\\fail{} "
   report1 = report
+  report2 = undefined
   reportLead = report
   reportLead2 = report
 
@@ -114,6 +117,18 @@ instance Report Double where
     printf "{\\highlight{$ %6.2f (\\stderr{%6.2f}) $}}" (view aggregate) (stdError $ map view results)
   reportLead2String (results, aggregate) view =
     printf "{\\highlight{$ %6.2f (\\stderr{%6.2f}) $}}" (view aggregate) (stdError $ map view results)
+
+instance Report String where 
+  report (results, aggregate) view = 
+    putStrLn $ "    " <> (view aggregate) <> "\n"
+  reportLead = undefined 
+  reportLead2 = undefined 
+  report1 = undefined 
+  report2 = undefined
+  reportString = undefined 
+  report1String = undefined
+  reportLeadString = undefined 
+  reportLead2String = undefined
 
 
 modes :: [(String, (String, String))]
@@ -473,7 +488,8 @@ measureSynthesis grPath bmarkPath repeatTimes file mode logIdent = do
            , contextSize = 0
            , examplesUsed = 0
            , cartesian = False
-           , cartAttempts = 0 }
+           , cartAttempts = 0
+           , program = "" }
        ExitSuccess -> do
          logData <- SIO.readFile $ "log-" <> logIdent
          -- Read off the current results which should be on the second last line of the log file
@@ -500,6 +516,7 @@ aggregate results =
       , examplesUsed = fromMaybe 0 $ the' (map examplesUsed results)
       , cartesian = fromMaybe False $ the' (map cartesian results)
       , cartAttempts = fromMaybe 0 $ the' (map cartAttempts results)
+      , program = fromMaybe "" $ the' (map program results)
       }
 
 

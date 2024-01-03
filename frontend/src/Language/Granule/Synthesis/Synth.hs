@@ -470,6 +470,7 @@ synthesiseGradedBase ast gradedProgram hole spec eval hints index unrestricted r
                               Nothing -> 0
                         , cartesian = cartSynth > 0
                         , cartAttempts = attempts agg
+                        , program = pretty $ fst $ head programs
                         } in
                 return (programs, Just measurement)
           else do
