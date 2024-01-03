@@ -168,22 +168,24 @@ fileArgs (arg:args)
   | otherwise = let (files, args') = fileArgs args
                 in (arg:files, args')
 
+splitAtFirst :: Eq a => a -> [a] -> ([a], [a])
+splitAtFirst x = break (x ==)
 
 processArgs :: [String] -> (Int {- Repeat -}, String {- @gr@ path -}, String {- benchmark path -}, Maybe [String], Maybe [(String, String)], Bool, Bool, Bool, Int)
 processArgs [] = (defaultRepeatTrys, "gr", "frontend/tests/cases/synthesis/", Nothing, Nothing, False, False, False, timeoutLimit)
 processArgs (arg:args)
-  | arg == "--repeats" =
+  | arg == "--attempts" =
       case args of
         (arg':args') ->
           let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args'
           in (fromInteger $ read arg', grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout)
-        _ -> error "--repeats must be given an integer argument"
-  | arg == "-n" =
+        _ -> error "--attempts must be given an integer argument"
+  | arg == "-a" =
       case args of
         (arg':args') ->
           let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args'
           in (fromInteger (read arg'), grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout)
-        _ -> error "-n must be given an integer argument"
+        _ -> error "-a must be given an integer argument"
   | arg == "--gr-path" =
       case args of
         (arg':args') ->
@@ -197,29 +199,21 @@ processArgs (arg:args)
           in (repeats, grPath, arg', categories, files, verbose, showProgram, createLog, timeout)
         _ -> error "--bmark-path must be given a filepath"
   | arg == "--categories" =
-      case args of
-        (arg':args') ->
-          let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args'
-          in (repeats, grPath, bmarkPath, Just $ words arg', files, verbose, showProgram, createLog, timeout)
-        _ -> error "--categories must be given as a non-empty whitespace separated list of the following categories: List, Stream, Maybe, Bool, Nat, Tree, Misc"
+      let (catArgs, args') = splitAtFirst "-" args in 
+      let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args'
+      in (repeats, grPath, bmarkPath, Just $ catArgs, files, verbose, showProgram, createLog, timeout)
   | arg == "-c" =
-      case args of
-        (arg':args') ->
-          let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args'
-          in (repeats, grPath, bmarkPath, Just $ words arg', files, verbose, showProgram, createLog, timeout)
-        _ -> error "-c must be given as a non-empty whitespace separated list of the following categories: List, Stream, Maybe, Bool, Nat, Tree, Misc"
+      let (catArgs, args') = splitAtFirst "-" args in 
+      let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args'
+      in (repeats, grPath, bmarkPath, Just $ catArgs, files, verbose, showProgram, createLog, timeout)
   | arg == "--files" =
-      case args of
-        (arg':args') ->
-          let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args'
-          in (repeats, grPath, bmarkPath, categories, Just $ map (\x -> let spl = splitOn ":" x in (head spl, last spl)) $ words arg', verbose, showProgram, createLog, timeout)
-        _ -> error "-f must be given as a non-empty whitespace separated list of benchmark names with their category (i.e. append:List)"
+      let (fileArgs, args') = splitAtFirst "-" args in 
+      let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args'
+      in (repeats, grPath, bmarkPath, categories, Just $ map (\x -> let spl = splitOn ":" x in (head spl, last spl)) fileArgs, verbose, showProgram, createLog, timeout)
   | arg == "-f" =
-      case args of
-        (arg':args') ->
-          let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args'
-          in (repeats, grPath, bmarkPath, categories, Just $ map (\x -> let spl = splitOn ":" x in (head spl, last spl)) $ words arg', verbose, showProgram, createLog, timeout)
-        _ -> error "-f must be given as a non-empty whitespace separated list of benchmark names with their category (i.e. append:List)"
+        let (fileArgs, args') = splitAtFirst "-" args in 
+        let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args'
+        in (repeats, grPath, bmarkPath, categories, Just $ map (\x -> let spl = splitOn ":" x in (head spl, last spl)) fileArgs, verbose, showProgram, createLog, timeout)
   | arg == "--verbose" =
       let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args
       in (repeats, grPath, bmarkPath, categories, files, True, showProgram, createLog, timeout)
