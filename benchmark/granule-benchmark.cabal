@@ -38,7 +38,9 @@ executable grenchmark
     , filepath
     , granule-frontend
     , granule-interpreter
+    , hslogger
     , process
+    , split
     , strict
     , text
     , time

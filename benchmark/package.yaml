@@ -24,9 +24,11 @@ executables:
     - granule-frontend
     - strict 
     - cassava
+    - split
     - bytestring
     - vector
     - directory
+    - hslogger
     - process
     - time
     - text

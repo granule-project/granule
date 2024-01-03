@@ -11,6 +11,7 @@ import qualified Data.ByteString.Lazy as LB
 import Data.Vector (toList)
 
 import Data.Char (isSpace)
+import Data.List (nub)
 
 import Paths_granule_benchmark ( getDataDir )
 
@@ -36,12 +37,19 @@ benchmarkList = do
             let resList = map (\(a, b, c, d) -> (trim a, trim b, trim c, read d)) $ toList res 
             return resList
 
+inFiles :: [(String, String)] -> String -> String -> Bool
+inFiles [] _ _ = False
+inFiles ((ftitle, fcat):files) file cat = if file == ftitle && cat == fcat then True else inFiles files file cat 
 
 benchmarkListFullPath :: [(String, String, String, Bool)] -> [(String, String, String, Bool)]
 benchmarkListFullPath = map (\(title, cat, path, incl) -> (title, cat, rootDir <> path, incl))
 
-benchmarksToRun :: [(String, String, String, Bool)] -> [(String, String, String, Bool)]
-benchmarksToRun = benchmarkListFullPath . filter (\(_,_,_,b) -> b) 
+
+benchmarksToRun :: (Maybe [String]) -> (Maybe [(String, String)]) -> [(String, String, String, Bool)] -> [(String, String, String, Bool)]
+benchmarksToRun (Just cats) (Just files) bList = nub $ benchmarkListFullPath (filter (\(_,_,_,b) -> b) (benchmarksByCategory bList cats True)) ++ (filter (\(title,cat,_,_) -> inFiles files title cat) bList)
+benchmarksToRun Nothing (Just files) bList = benchmarkListFullPath (filter (\(title,cat,_,_) -> inFiles files title cat) bList)
+benchmarksToRun (Just cats) Nothing bList = benchmarkListFullPath (filter (\(_,_,_,b) -> b) (benchmarksByCategory bList cats True))
+benchmarksToRun Nothing Nothing bList = benchmarkListFullPath (filter (\(_,_,_,b) -> b) bList)
 
 benchmarksByCategory :: [(String, String, String, Bool)] -> [String] -> Bool -> [(String, String, String, Bool)]
 benchmarksByCategory bList bs onlyIncls = foldr

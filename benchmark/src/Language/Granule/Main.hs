@@ -13,9 +13,9 @@ import System.Exit
 import System.Directory (listDirectory, removeFile, doesDirectoryExist, getDirectoryContents)
 import System.FilePath.Posix ((</>))
 import Control.Monad (forM_, forM, foldM, replicateM, when, unless)
-import Data.List (isPrefixOf, isSuffixOf, unwords, intersperse, sort, intercalate, transpose)
+import Data.List (isPrefixOf, isSuffixOf, unwords, intersperse, sort, intercalate, transpose, elemIndex)
 import Data.Text (replace, pack, unpack, isInfixOf)
-import Data.Maybe (mapMaybe, fromMaybe)
+import Data.Maybe (mapMaybe, fromMaybe, fromJust)
 import GHC.Exts (the)
 import System.IO
 import Text.Printf
@@ -74,7 +74,8 @@ instance Report Bool where
 instance Report Integer where
   report (_, aggregate) view =
     printf "%3d      " (view aggregate)
-  report1 = report
+  report2 (_, aggregate) view =
+    printf "%3d" (view aggregate)
   reportLead (_, aggregate) view =
     printf "{\\newhighlight{$ %3d $}}" (view aggregate)
   reportLead2 = report
@@ -97,6 +98,8 @@ instance Report Double where
     printf "%6.2f" (view aggregate)
   reportString (results, aggregate) view =
     printf "%6.2f (\\stderr{%6.2f})" (view aggregate) (stdError $ map view results)
+  report2 (results, aggregate) view =
+    printf "%6.2f (%6.2f)" (view aggregate) (stdError $ map view results)
   report1String (_, aggregate) view =
     printf "%6.2f" (view aggregate)
   reportLeadString (results, aggregate) view =
@@ -143,33 +146,79 @@ fileArgs (arg:args)
                 in (arg:files, args')
 
 
-processArgs :: [String] -> (Int {- Repeat -}, String {- @gr@ path -}, String {- benchmark path -})
-processArgs [] = (defaultRepeatTrys, "gr", "frontend/tests/cases/synthesis/")
+processArgs :: [String] -> (Int {- Repeat -}, String {- @gr@ path -}, String {- benchmark path -}, Maybe [String], Maybe [(String, String)], Bool, Bool, Bool)
+processArgs [] = (defaultRepeatTrys, "gr", "frontend/tests/cases/synthesis/", Nothing, Nothing, False, False, False)
 processArgs (arg:args)
   | arg == "--repeats" =
       case args of
         (arg':args') ->
-          let (repeats, grPath, bmarkPath) = processArgs args'
-          in (fromInteger $ read arg', grPath, bmarkPath)
+          let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog) = processArgs args'
+          in (fromInteger $ read arg', grPath, bmarkPath, categories, files, verbose, showProgram, createLog)
         _ -> error "--repeats must be given an integer argument"
   | arg == "-n" =
       case args of
         (arg':args') ->
-          let (repeats, grPath, bmarkPath) = processArgs args'
-          in (fromInteger (read arg'), grPath, bmarkPath)
+          let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog) = processArgs args'
+          in (fromInteger (read arg'), grPath, bmarkPath, categories, files, verbose, showProgram, createLog)
         _ -> error "-n must be given an integer argument"
   | arg == "--gr-path" =
       case args of
         (arg':args') ->
-          let (repeats, grPath, bmarkPath) = processArgs args'
-          in (repeats, arg', bmarkPath)
+          let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog) = processArgs args'
+          in (repeats, arg', bmarkPath, categories, files, verbose, showProgram, createLog)
         _ -> error "--gr-path must be given a filepath"      
   | arg == "--bmark-path" =
       case args of
         (arg':args') ->
-          let (repeats, grPath, bmarkPath) = processArgs args'
-          in (repeats, grPath, arg')
-        _ -> error "--gr-path must be given a filepath"
+          let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog) = processArgs args'
+          in (repeats, grPath, arg', categories, files, verbose, showProgram, createLog)
+        _ -> error "--bmark-path must be given a filepath"
+  | arg == "--categories" =
+      case args of
+        (arg':args') ->
+          let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog) = processArgs args'
+          in (repeats, grPath, bmarkPath, Just $ words arg', files, verbose, showProgram, createLog)
+        _ -> error "--categories must be given as a non-empty whitespace separated list of the following categories: List, Stream, Maybe, Bool, Nat, Tree, Misc"
+  | arg == "-c" =
+      case args of
+        (arg':args') ->
+          let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog) = processArgs args'
+          in (repeats, grPath, bmarkPath, Just $ words arg', files, verbose, showProgram, createLog)
+        _ -> error "-c must be given as a non-empty whitespace separated list of the following categories: List, Stream, Maybe, Bool, Nat, Tree, Misc"
+  | arg == "--files" =
+      case args of
+        (arg':args') ->
+          let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog) = processArgs args'
+          in (repeats, grPath, bmarkPath, categories, Just $ map (\x -> let spl = splitOn ":" x in (head spl, last spl)) $ words arg', verbose, showProgram, createLog)
+        _ -> error "-f must be given as a non-empty whitespace separated list of benchmark names with their category (i.e. append:List)"
+  | arg == "-f" =
+      case args of
+        (arg':args') ->
+          let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog) = processArgs args'
+          in (repeats, grPath, bmarkPath, categories, Just $ map (\x -> let spl = splitOn ":" x in (head spl, last spl)) $ words arg', verbose, showProgram, createLog)
+        _ -> error "-f must be given as a non-empty whitespace separated list of benchmark names with their category (i.e. append:List)"
+  | arg == "--verbose" =
+      let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog) = processArgs args
+      in (repeats, grPath, bmarkPath, categories, files, True, showProgram, createLog)
+  | arg == "-v" =
+      let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog) = processArgs args
+      in (repeats, grPath, bmarkPath, categories, files, True, showProgram, createLog)
+  | arg == "--show-program" =
+      let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog) = processArgs args
+      in (repeats, grPath, bmarkPath, categories, files, verbose, True, createLog)
+  | arg == "-s" =
+      let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog) = processArgs args
+      in (repeats, grPath, bmarkPath, categories, files, verbose, True, createLog)
+  | arg == "-s" =
+      let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog) = processArgs args
+      in (repeats, grPath, bmarkPath, categories, files, verbose, True, createLog)
+  | arg == "--log" =
+      let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog) = processArgs args
+      in (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, True)
+  | arg == "-l" =
+      let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog) = processArgs args
+      in (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, True)
+
   | otherwise = error $ printUsage
 
 printUsage :: String
@@ -180,6 +229,7 @@ attemptsToSeconds n = 1000.0 * fromIntegral n
 
 latexfile :: FilePath
 latexfile = "results"
+
 
 main :: IO ()
 main = do
