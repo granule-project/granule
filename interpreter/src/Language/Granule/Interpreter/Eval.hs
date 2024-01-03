@@ -1001,10 +1001,18 @@ builtIns =
       case v of
         (Val nullSpan () False (Ext () (Runtime (RT.FA fa)))) -> do
           copy <- copyFloatArraySafe fa
+          name <- newUnique
           evalIn ctxt
               (App nullSpan () False
                 (Val nullSpan () False f)
-                (Val nullSpan () False (Nec () (Val nullSpan () False (Ext () (Runtime (RT.FA copy)))))))
+                (Val nullSpan () False (Pack nullSpan () (TyName (hashUnique name)) (valExpr $ Nec () $ Val nullSpan () False $ Ext () $ Runtime (RT.FA copy)) (mkId ("id" ++ show (hashUnique name))) (TyCon (mkId "Name")) (Borrow (TyCon $ mkId "Star") (TyCon $ mkId "FloatArray")))))
+        (Val nullSpan () False (Ext () (Runtime (RT.PR pr)))) -> do
+          copy <- copyRefSafe pr
+          name <- newUnique
+          evalIn ctxt
+              (App nullSpan () False
+                (Val nullSpan () False f)
+                (Val nullSpan () False (Pack nullSpan () (TyName (hashUnique name)) (valExpr $ Nec () $ Val nullSpan () False $ Ext () $ Runtime (RT.PR copy)) (mkId ("id" ++ show (hashUnique name))) (TyCon (mkId "Name")) (Borrow (TyCon $ mkId "Star") (TyCon $ mkId "Ref")))))
         _otherwise -> do
           evalIn ctxt
             (App nullSpan () False

@@ -84,7 +84,7 @@ typeConstructors =
     , (mkId "ReceivePrefix", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], [0]))
     , (mkId "Sends", (funTy (tyCon "Nat") (funTy (tyCon "Protocol") (tyCon "Predicate")), [], [0]))
     , (mkId "Graded", (funTy (tyCon "Nat") (funTy (tyCon "Protocol") (tyCon "Protocol")), [], [0]))
-
+    , (mkId "Rename", (funTy (tyCon "Name") (funTy (Type 0) (Type 0)), [], [0]))
     -- # Coeffect types
     , (mkId "Nat",      (kcoeffect, [], []))
     , (mkId "Q",        (kcoeffect, [], [])) -- Rationals
@@ -665,7 +665,7 @@ uniqueReturn = BUILTIN
 
 uniqueBind
   : forall {a b : Type, s : Semiring, r : s}
-  . {(1 : s) <= r, Cloneable a} => (*a -> b) -> a [r] -> b
+  . {(1 : s) <= r, Cloneable a} => ((exists {id : Name} . *(Rename id a)) -> b) -> a [r] -> b
 uniqueBind = BUILTIN
 
 reveal

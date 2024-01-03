@@ -18,7 +18,7 @@ module Language.Granule.Runtime
   , newFloatArraySafe,newFloatArrayISafe,writeFloatArraySafe,writeFloatArrayISafe
   , readFloatArraySafe,readFloatArrayISafe,deleteFloatArraySafe,copyFloatArraySafe
   , uniquifyFloatArraySafe,borrowFloatArraySafe
-  , newRefSafe, freezeRefSafe, swapRefSafe, readRefSafe
+  , newRefSafe, freezeRefSafe, swapRefSafe, readRefSafe, copyRefSafe
   , cap, Cap(..), Capability(..), CapabilityType
 
   -- Re-exported from Prelude
@@ -285,6 +285,16 @@ copyFloatArraySafe a =
     HaskellArray len arr -> do
       arr' <- MA.mapArray id arr
       return $ uniquifyFloatArray $ HaskellArray len arr'
+
+{-# NOINLINE copyRef #-}
+copyRef :: PolyRef a -> PolyRef a
+copyRef = unsafePerformIO . copyRefSafe
+
+copyRefSafe :: PolyRef a -> IO (PolyRef a)
+copyRefSafe HaskellRef{haskRef} = do
+  val <- MR.readIORef haskRef
+  haskRef' <- MR.newIORef val
+  return $ HaskellRef haskRef'
 
 {-# NOINLINE uniquifyFloatArray #-}
 uniquifyFloatArray :: FloatArray -> FloatArray
