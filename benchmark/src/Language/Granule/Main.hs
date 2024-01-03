@@ -141,8 +141,8 @@ modes = [
 defaultRepeatTrys :: Int
 defaultRepeatTrys = 10
 
-timeoutLimit :: Double
-timeoutLimit = 10000.0
+timeoutLimit :: Int
+timeoutLimit = 10
 
 
 getRecursiveContents :: FilePath -> IO [FilePath]
@@ -169,83 +169,96 @@ fileArgs (arg:args)
                 in (arg:files, args')
 
 
-processArgs :: [String] -> (Int {- Repeat -}, String {- @gr@ path -}, String {- benchmark path -}, Maybe [String], Maybe [(String, String)], Bool, Bool, Bool)
-processArgs [] = (defaultRepeatTrys, "gr", "frontend/tests/cases/synthesis/", Nothing, Nothing, False, False, False)
+processArgs :: [String] -> (Int {- Repeat -}, String {- @gr@ path -}, String {- benchmark path -}, Maybe [String], Maybe [(String, String)], Bool, Bool, Bool, Int)
+processArgs [] = (defaultRepeatTrys, "gr", "frontend/tests/cases/synthesis/", Nothing, Nothing, False, False, False, timeoutLimit)
 processArgs (arg:args)
   | arg == "--repeats" =
       case args of
         (arg':args') ->
-          let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog) = processArgs args'
-          in (fromInteger $ read arg', grPath, bmarkPath, categories, files, verbose, showProgram, createLog)
+          let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args'
+          in (fromInteger $ read arg', grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout)
         _ -> error "--repeats must be given an integer argument"
   | arg == "-n" =
       case args of
         (arg':args') ->
-          let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog) = processArgs args'
-          in (fromInteger (read arg'), grPath, bmarkPath, categories, files, verbose, showProgram, createLog)
+          let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args'
+          in (fromInteger (read arg'), grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout)
         _ -> error "-n must be given an integer argument"
   | arg == "--gr-path" =
       case args of
         (arg':args') ->
-          let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog) = processArgs args'
-          in (repeats, arg', bmarkPath, categories, files, verbose, showProgram, createLog)
+          let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args'
+          in (repeats, arg', bmarkPath, categories, files, verbose, showProgram, createLog, timeout)
         _ -> error "--gr-path must be given a filepath"      
   | arg == "--bmark-path" =
       case args of
         (arg':args') ->
-          let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog) = processArgs args'
-          in (repeats, grPath, arg', categories, files, verbose, showProgram, createLog)
+          let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args'
+          in (repeats, grPath, arg', categories, files, verbose, showProgram, createLog, timeout)
         _ -> error "--bmark-path must be given a filepath"
   | arg == "--categories" =
       case args of
         (arg':args') ->
-          let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog) = processArgs args'
-          in (repeats, grPath, bmarkPath, Just $ words arg', files, verbose, showProgram, createLog)
+          let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args'
+          in (repeats, grPath, bmarkPath, Just $ words arg', files, verbose, showProgram, createLog, timeout)
         _ -> error "--categories must be given as a non-empty whitespace separated list of the following categories: List, Stream, Maybe, Bool, Nat, Tree, Misc"
   | arg == "-c" =
       case args of
         (arg':args') ->
-          let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog) = processArgs args'
-          in (repeats, grPath, bmarkPath, Just $ words arg', files, verbose, showProgram, createLog)
+          let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args'
+          in (repeats, grPath, bmarkPath, Just $ words arg', files, verbose, showProgram, createLog, timeout)
         _ -> error "-c must be given as a non-empty whitespace separated list of the following categories: List, Stream, Maybe, Bool, Nat, Tree, Misc"
   | arg == "--files" =
       case args of
         (arg':args') ->
-          let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog) = processArgs args'
-          in (repeats, grPath, bmarkPath, categories, Just $ map (\x -> let spl = splitOn ":" x in (head spl, last spl)) $ words arg', verbose, showProgram, createLog)
+          let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args'
+          in (repeats, grPath, bmarkPath, categories, Just $ map (\x -> let spl = splitOn ":" x in (head spl, last spl)) $ words arg', verbose, showProgram, createLog, timeout)
         _ -> error "-f must be given as a non-empty whitespace separated list of benchmark names with their category (i.e. append:List)"
   | arg == "-f" =
       case args of
         (arg':args') ->
-          let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog) = processArgs args'
-          in (repeats, grPath, bmarkPath, categories, Just $ map (\x -> let spl = splitOn ":" x in (head spl, last spl)) $ words arg', verbose, showProgram, createLog)
+          let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args'
+          in (repeats, grPath, bmarkPath, categories, Just $ map (\x -> let spl = splitOn ":" x in (head spl, last spl)) $ words arg', verbose, showProgram, createLog, timeout)
         _ -> error "-f must be given as a non-empty whitespace separated list of benchmark names with their category (i.e. append:List)"
   | arg == "--verbose" =
-      let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog) = processArgs args
-      in (repeats, grPath, bmarkPath, categories, files, True, showProgram, createLog)
+      let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args
+      in (repeats, grPath, bmarkPath, categories, files, True, showProgram, createLog, timeout)
   | arg == "-v" =
-      let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog) = processArgs args
-      in (repeats, grPath, bmarkPath, categories, files, True, showProgram, createLog)
+      let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args
+      in (repeats, grPath, bmarkPath, categories, files, True, showProgram, createLog, timeout)
   | arg == "--show-program" =
-      let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog) = processArgs args
-      in (repeats, grPath, bmarkPath, categories, files, verbose, True, createLog)
+      let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args
+      in (repeats, grPath, bmarkPath, categories, files, verbose, True, createLog, timeout)
   | arg == "-s" =
-      let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog) = processArgs args
-      in (repeats, grPath, bmarkPath, categories, files, verbose, True, createLog)
+      let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog,timeout) = processArgs args
+      in (repeats, grPath, bmarkPath, categories, files, verbose, True, createLog, timeout)
   | arg == "-s" =
-      let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog) = processArgs args
-      in (repeats, grPath, bmarkPath, categories, files, verbose, True, createLog)
+      let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args
+      in (repeats, grPath, bmarkPath, categories, files, verbose, True, createLog, timeout)
   | arg == "--log" =
-      let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog) = processArgs args
-      in (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, True)
+      let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args
+      in (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, True, timeout)
   | arg == "-l" =
-      let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog) = processArgs args
-      in (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, True)
+      let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args
+      in (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, True, timeout)
+  | arg == "--timeout" =
+      case args of
+        (arg':args') ->
+          let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args'
+          in (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, read arg')
+        _ -> error "--timeout must be given an integer argument"
+  | arg == "-t" =
+      case args of
+        (arg':args') ->
+          let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args'
+          in (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, read arg')
+        _ -> error "-t must be given an integer argument"
+
 
   | otherwise = error $ printUsage
 
 printUsage :: String
-printUsage = "Bad usage. Run with no args or with -n N where N is an integer"
+printUsage = "Bad usage."
 
 attemptsToSeconds :: Integer -> Double
 attemptsToSeconds n = 1000.0 * fromIntegral n
@@ -272,7 +285,7 @@ main = do
   updateGlobalLogger "Grenchmark" (addHandler h)
 
 
-  let (repeatTimes, grPath, bmarkPath, categoriesToRun, filesToRun, verboseMode, showProgram, createLog) = processArgs argsMain
+  let (repeatTimes, grPath, bmarkPath, categoriesToRun, filesToRun, verboseMode, showProgram, createLog, timeoutL) = processArgs argsMain
   bList <- benchmarkList
 
   let items = benchmarksToRun categoriesToRun filesToRun bList
@@ -298,7 +311,7 @@ main = do
           let percentString = (printf "%.2f" percent :: String)
           -- Run granule
           infoM "Grenchmark" ("   Running benchmark " <> show index <> "/" <> show total <> " (" <> percentString <> "%)" <> ": " <> texName)
-          results@(_, aggregate) <- measureSynthesis grPath bmarkPath repeatTimes file mode logIdent
+          results@(_, aggregate) <- measureSynthesis grPath bmarkPath repeatTimes file mode logIdent timeoutL
           _ <- if showProgram then do 
                   infoM "Grenchmark" ("   Synthesised program for " <> texName <> ":\n")
                   report results program
@@ -449,14 +462,14 @@ pad str = str ++ (replicate (if length str > 25 then 0 else 25 - length str) ' '
 lookupMany xs map = mapMaybe (flip lookup map) xs
 
 
-measureSynthesis :: String -> String -> Int -> FilePath -> String -> FilePath -> IO ([Measurement], Measurement)
-measureSynthesis grPath bmarkPath repeatTimes file mode logIdent = do
+measureSynthesis :: String -> String -> Int -> FilePath -> String -> FilePath -> Int -> IO ([Measurement], Measurement)
+measureSynthesis grPath bmarkPath repeatTimes file mode logIdent timeout = do
     measurements <- replicateM' 1 repeatTimes
     removeFile $ "log-" <>  logIdent
     return (measurements, aggregate measurements)
  where
    -- Command to run granule
-   cmd   = "timeout 10s " <> grPath <> " " <> bmarkPath <> "/" <> file <> " " <> flags <> " >> " <> "log-" <> logIdent
+   cmd   = "timeout " <> show timeout <> "s " <> grPath <> " " <> bmarkPath <> "/" <> file <> " " <> flags <> " >> " <> "log-" <> logIdent
    flags = unwords ["--synthesis","--benchmark " <> bmarkPath <> "/" <> file,"--raw-data","--ignore-holes",mode]
    replicateM' curr no | no == curr = do
     res <- measure curr no
