@@ -25,6 +25,14 @@ import qualified Data.Time as T
 import qualified System.IO.Strict as SIO
 import System.Environment (getArgs)
 
+import System.Log.Logger
+import System.Log.Handler.Syslog
+import System.Log.Handler.Simple
+import System.Log.Handler (setFormatter)
+import System.Log.Formatter
+
+import Data.List.Split
+
 import Language.Granule.Benchmarks
 
 
@@ -238,37 +246,82 @@ main = do
   -- Get current time for log file name
   currentTime <- T.getCurrentTime
   let logIdent = T.formatTime T.defaultTimeLocale "%F-%H-%M" currentTime
+  let logSummaryIdent = "benchmark-log" 
+
+  -- s <- openlog "SyslogStuff" [PID] USER INFO
+  -- updateGlobalLogger rootLoggerName (addHandler s)
+  updateGlobalLogger "Grenchmark" (setLevel INFO)
+
+  h <- fileHandler "benchmarks.log" INFO >>= \lh -> return $
+    setFormatter lh (simpleLogFormatter "[$time] | $msg ")
+  updateGlobalLogger "Grenchmark" (addHandler h)
 
 
-  let (repeatTimes, grPath, bmarkPath) = processArgs argsMain
+  let (repeatTimes, grPath, bmarkPath, categoriesToRun, filesToRun, verboseMode, showProgram, createLog) = processArgs argsMain
   bList <- benchmarkList
 
-  let items = benchmarksToRun bList
+  let items = benchmarksToRun categoriesToRun filesToRun bList
+  let total = length items * 2
   let doModes = ["Graded", "Cartesian"]
   let fpm = True
   -- let repeatTime = defaultRepeatTrys
 
   let relevantModes = lookupMany doModes modes
-  putStrLn "Running benchmarks..."
-  -- putStrLn $ "No. of retries: " <> show defaultRepeatTrys
+  infoM "Grenchmark" "Running benchmarks..."
 
   -- Collect the results
   resultsPerMode <-
     forM relevantModes $ \(modeTitle, mode) -> do
-      putStrLn $ "---------------------------"
-      putStrLn $ "Running benchmarks for mode: " <> modeTitle
+      infoM "Grenchmark" "---------------------------"
+      infoM "Grenchmark" $ "Running benchmarks for mode: " <> modeTitle
+      let items' = filter (\(_, _, path, _) -> ".gr" `isSuffixOf` path) items
 
-      forM (filter (\(_, _, path, _) -> ".gr" `isSuffixOf` path) items) $ \(texName, category, file, _) -> do
+      forM items' $ \item@(texName, category, file, _) -> do
+          let position = (fromJust $ elemIndex item items')
+          let index = if mode == "--cart-synth 1" then position * 2 else position
+          let percent = ((fromIntegral index :: Double) / (fromIntegral total :: Double)) * (100.0 :: Double)
+          let percentString = (printf "%.2f" percent :: String)
           -- Run granule
-          putStrLn $ "   Running benchmark: " <> texName
-          results <- measureSynthesis grPath bmarkPath repeatTimes file mode logIdent
+          infoM "Grenchmark" ("   Running benchmark " <> show index <> "/" <> show total <> " (" <> percentString <> "%)" <> ": " <> texName)
+          results@(_, aggregate) <- measureSynthesis grPath bmarkPath repeatTimes file mode logIdent
+          _ <- if showProgram then do 
+                  infoM "Grenchmark" ("   Synthesised program for " <> texName <> ":\n")
+                  report results program
+               else 
+                  return ()
+          _ <- if verboseMode then do 
+                  infoM "Grenchmark" ("   Aggregate measurements for " <> show repeatTimes <> " runs: ")
+                  if timeout aggregate then do 
+                    infoM "Grenchmark" "    Synthesis timed out - no data to report!"
+                  else do 
+                    infoM "Grenchmark" ("    - Context size: " <> show (contextSize aggregate))
+
+                    infoM "Grenchmark " ("    - Examples used: " <> show (examplesUsed aggregate))
+
+                    _ <- if mode == "--cart-synth 1" then do 
+                      infoM "Grenchmark" ("    - Synthesis time: " <> report2 results synthTime)
+                      else do
+                      infoM "Grenchmark" ("    - Synthesis time: " <> report2 results checkTime)
+
+                    infoM "Grenchmark" ("    - Paths explored: " <> report2 results pathsExplored)
+
+                    _ <- if not (mode  == "--cart-synth 1") then do 
+                      infoM "Grenchmark" "    SMT data for graded mode:"
+                      infoM "Grenchmark" ("    - Solver time: " <> report2 results solverTime)
+                      infoM "Grenchmark" ("    - SMT calls made: " <> report2 results smtCalls)
+                      infoM "Grenchmark" ("    - Mean theorem size: " <> report2 results meanTheoremSize)
+                      else 
+                        return ()
+                    infoM "Grenchmark" ""
+              else return ()
+
           return (texName, category, file, mode, results)
 
   -- Transpose the results to get per-file rather than per-mode
   let splitTimeAndSMT = True
   let resultsPerFile = transpose resultsPerMode
-  putStrLn $ "---------------------------"
-  putStrLn "Benchmarks complete. Creating table of results..."
+  infoM "Grenchmark" "---------------------------"
+  infoM "Grenchmark" "Benchmarks complete. Creating table of results..."
 
   let tableOuter = latexContentHeader
 
@@ -354,14 +407,15 @@ main = do
 
   let tableDone = (fst tableContent) <> latexContentFooter
   writeFile (latexfile <> ".tex") tableDone
-  putStrLn $ "LaTeX table created. Written to: " <> latexfile <> ".tex"
-  putStrLn $ "Generating PDF... "
+  infoM "Grenchmark" "LaTeX table created." -- Written to: " <> latexfile <> ".tex")
+  infoM "Grenchmark" ""
+  infoM "Grenchmark" "Generating PDF... "
   code <- system $ "pdflatex -shell-escape -synctex=1 -file-line-error -interaction=nonstopmode -halt-on-error " <> latexfile <> ".tex > /dev/null"
   case code of
     ExitFailure _ -> do
-      putStrLn $ "Unable to generate PDF from " <> latexfile <> ".tex!"
+      infoM "Grenchmark" ("Unable to generate PDF from " <> latexfile <> ".tex!")
     ExitSuccess -> do
-      putStrLn $ "Done! The benchmark results table can be viewed in: " <> latexfile <> ".pdf"
+      infoM "Grenchmark" ("Done! The benchmark results table can be viewed in: " <> latexfile <> ".pdf")
 
 
 
@@ -401,7 +455,7 @@ measureSynthesis grPath bmarkPath repeatTimes file mode logIdent = do
    -- Measurement computation
    measure :: Int -> Int -> IO Measurement
    measure no total = do
-     putStrLn $ "     Repeat no: [" <> show no <> "/" <> show total <> "]"
+     infoM "Grenchmark" ("     Repeat no: [" <> show no <> "/" <> show total <> "]")
      code <- system $ cmd
      case code of
        ExitFailure _ -> do
