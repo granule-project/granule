@@ -124,6 +124,7 @@
           contents = [ pkgs.bash pkgs.coreutils (pkgs.texlive.combine { inherit (pkgs.texlive) scheme-basic mathpartir amsmath float multirow xcolor xypic; } ) ];
           config = {
             Entrypoint = [ "${self'.packages.granule-benchmark-gr-fixup}/bin/grenchmark" ];
+            Env = [ "LANG=C.UTF-8" ];
           };
           maxLayers = 100;
         };
