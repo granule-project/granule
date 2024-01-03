@@ -305,8 +305,8 @@ main = do
       let items' = filter (\(_, _, path, _) -> ".gr" `isSuffixOf` path) items
 
       forM items' $ \item@(texName, category, file, _) -> do
-          let position = (fromJust $ elemIndex item items')
-          let index = if mode == "--cart-synth 1" then position * 2 else position
+          let position = (fromJust $ elemIndex item items') + 1 
+          let index = if modeTitle == "Cartesian" then (total `div` 2 + position) else position
           let percent = ((fromIntegral index :: Double) / (fromIntegral total :: Double)) * (100.0 :: Double)
           let percentString = (printf "%.2f" percent :: String)
           -- Run granule
