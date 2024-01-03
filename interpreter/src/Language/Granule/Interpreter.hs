@@ -86,7 +86,7 @@ runGrOnFiles globPatterns config = let ?globals = grGlobals config in do
           return [result]
         _ -> forM paths $ \path -> do
           let fileName = if pwd `isPrefixOf` path then takeFileName path else path
-          let ?globals = ?globals{ globalsSourceFilePath = Just fileName } in do
+          let ?globals = if benchmarking then ?globals{ globalsSourceFilePath = Just benchmark } else ?globals{ globalsSourceFilePath = Just fileName } in do
             printInfo $ "Checking " <> fileName <> "..."
             case globalsHaskellSynth ?globals of
               Just True -> do
@@ -579,7 +579,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
                     <> show (literateEnvName mempty))
 
         globalsBenchmark <-
-          flag Nothing (Just True)
+          optional $ strOption
            $ long "benchmark"
            <> help "Compute benchmarking results for the synthesis procedure."
 

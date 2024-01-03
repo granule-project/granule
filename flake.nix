@@ -32,6 +32,16 @@
           '';
         };
 
+        packages.granule-benchmarks = pkgs.stdenv.mkDerivation {
+          name = "granule-benchmarks";
+          src = ./frontend/tests/cases/synthesis;
+          phases = [ "unpackPhase" "installPhase" ];
+          installPhase = ''
+            mkdir -p $out
+            cp -r $src/* $out
+          '';
+        };
+
         packages.granule-repl-with-stdlib = pkgs.writeShellScriptBin "grepl" ''
           ${self'.packages.granule-repl}/bin/grepl \
             --include-path ${self'.packages.granule-stdlib} \
@@ -41,6 +51,7 @@
         packages.granule-benchmark-gr-fixup = pkgs.writeShellScriptBin "grenchmark" ''
           ${self'.packages.granule-benchmark}/bin/grenchmark \
             --gr-path ${self'.packages.granule-interpreter}/bin/gr \
+            --bmark-path ${self'.packages.granule-benchmarks} \
             $@
         '';
 

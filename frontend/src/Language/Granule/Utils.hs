@@ -13,7 +13,7 @@ import Control.Monad.State.Class
 import Data.List ((\\), nub, sortBy)
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NonEmpty
-import Data.Maybe (fromMaybe, mapMaybe)
+import Data.Maybe (fromMaybe, mapMaybe, isJust)
 import Data.Ord
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.LocalTime (getTimeZone, utc, utcToLocalTime)
@@ -48,7 +48,7 @@ data Globals = Globals
   , globalsRewriteHoles        :: Maybe Bool
   , globalsHolePosition        :: Maybe Pos
   , globalsSynthesise          :: Maybe Bool
-  , globalsBenchmark           :: Maybe Bool
+  , globalsBenchmark           :: Maybe FilePath
   , globalsBenchmarkRaw        :: Maybe Bool
   , globalsSubtractiveSynthesis   :: Maybe Bool
   , globalsAlternateSynthesisMode :: Maybe Bool
@@ -101,7 +101,7 @@ suppressErrors    = fromMaybe False $ globalsSuppressErrors ?globals
 ignoreHoles       = fromMaybe False $ globalsIgnoreHoles ?globals
 timestamp         = fromMaybe False $ globalsTimestamp ?globals
 testing           = fromMaybe False $ globalsTesting ?globals
-benchmarking      = fromMaybe False $ globalsBenchmark ?globals
+benchmarking      = isJust $ globalsBenchmark ?globals
 benchmarkingRawData = fromMaybe False $ globalsBenchmarkRaw ?globals
 subtractiveSynthesisMode = fromMaybe False $ globalsSubtractiveSynthesis ?globals
 alternateSynthesisMode = fromMaybe False $ globalsAlternateSynthesisMode ?globals
@@ -128,6 +128,10 @@ sourceFilePath      = fromMaybe ""       $ globalsSourceFilePath ?globals
 -- | Accessor for program entry point
 entryPoint :: (?globals :: Globals) => String
 entryPoint = fromMaybe "main" $ globalsEntryPoint ?globals
+
+-- | Accessor for benchmark file path
+benchmark :: (?globals :: Globals) => String
+benchmark = fromMaybe "" $ globalsBenchmark ?globals
 
 -- | Merge two 'Globals', giving preference to the settings of the left one
 instance Semigroup Globals where

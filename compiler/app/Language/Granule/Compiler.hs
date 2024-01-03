@@ -352,7 +352,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
                     <> show (literateEnvName mempty))
 
         globalsBenchmark <-
-          flag Nothing (Just True)
+          optional $ strOption
            $ long "benchmark"
            <> help "Compute benchmarking results for the synthesis procedure."
 

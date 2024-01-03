@@ -143,26 +143,32 @@ fileArgs (arg:args)
                 in (arg:files, args')
 
 
-processArgs :: [String] -> (Int {- Repeat -}, String {- @gr@ path -})
-processArgs [] = (defaultRepeatTrys, "gr")
+processArgs :: [String] -> (Int {- Repeat -}, String {- @gr@ path -}, String {- benchmark path -})
+processArgs [] = (defaultRepeatTrys, "gr", "frontend/tests/cases/synthesis/")
 processArgs (arg:args)
   | arg == "--repeats" =
       case args of
         (arg':args') ->
-          let (repeats, grPath) = processArgs args'
-          in (fromInteger $ read arg', grPath)
+          let (repeats, grPath, bmarkPath) = processArgs args'
+          in (fromInteger $ read arg', grPath, bmarkPath)
         _ -> error "--repeats must be given an integer argument"
   | arg == "-n" =
       case args of
         (arg':args') ->
-          let (repeats, grPath) = processArgs args'
-          in (fromInteger (read arg'), grPath)
+          let (repeats, grPath, bmarkPath) = processArgs args'
+          in (fromInteger (read arg'), grPath, bmarkPath)
         _ -> error "-n must be given an integer argument"
   | arg == "--gr-path" =
       case args of
         (arg':args') ->
-          let (repeats, grPath) = processArgs args'
-          in (repeats, arg')
+          let (repeats, grPath, bmarkPath) = processArgs args'
+          in (repeats, arg', bmarkPath)
+        _ -> error "--gr-path must be given a filepath"      
+  | arg == "--bmark-path" =
+      case args of
+        (arg':args') ->
+          let (repeats, grPath, bmarkPath) = processArgs args'
+          in (repeats, grPath, arg')
         _ -> error "--gr-path must be given a filepath"
   | otherwise = error $ printUsage
 
@@ -184,7 +190,7 @@ main = do
   let logIdent = T.formatTime T.defaultTimeLocale "%F-%H-%M" currentTime
 
 
-  let (repeatTimes, grPath) = processArgs argsMain
+  let (repeatTimes, grPath, bmarkPath) = processArgs argsMain
   bList <- benchmarkList
 
   let items = benchmarksToRun bList
@@ -204,8 +210,8 @@ main = do
 
       forM (filter (\(_, _, path, _) -> ".gr" `isSuffixOf` path) items) $ \(texName, category, file, _) -> do
           -- Run granule
-          results <- measureSynthesis grPath repeatTimes file mode logIdent
           putStrLn $ "   Running benchmark: " <> texName
+          results <- measureSynthesis grPath bmarkPath repeatTimes file mode logIdent
           return (texName, category, file, mode, results)
 
   -- Transpose the results to get per-file rather than per-mode
@@ -324,15 +330,15 @@ pad str = str ++ (replicate (if length str > 25 then 0 else 25 - length str) ' '
 lookupMany xs map = mapMaybe (flip lookup map) xs
 
 
-measureSynthesis :: String -> Int -> FilePath -> String -> FilePath -> IO ([Measurement], Measurement)
-measureSynthesis grPath repeatTimes file mode logIdent = do
+measureSynthesis :: String -> String -> Int -> FilePath -> String -> FilePath -> IO ([Measurement], Measurement)
+measureSynthesis grPath bmarkPath repeatTimes file mode logIdent = do
     measurements <- replicateM' 1 repeatTimes
     removeFile $ "log-" <>  logIdent
     return (measurements, aggregate measurements)
  where
    -- Command to run granule
-   cmd   = "timeout 10s " <> grPath <> " " <> file <> " " <> flags <> " >> " <> "log-" <> logIdent
-   flags = unwords ["--synthesis","--benchmark","--raw-data","--ignore-holes",mode]
+   cmd   = "timeout 10s " <> grPath <> " " <> bmarkPath <> "/" <> file <> " " <> flags <> " >> " <> "log-" <> logIdent
+   flags = unwords ["--synthesis","--benchmark " <> bmarkPath <> "/" <> file,"--raw-data","--ignore-holes",mode]
    replicateM' curr no | no == curr = do
     res <- measure curr no
     return [res]

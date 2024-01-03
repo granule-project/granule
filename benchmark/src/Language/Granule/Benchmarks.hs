@@ -19,7 +19,7 @@ trim = f . f
    where f = reverse . dropWhile isSpace
 
 rootDir :: String
-rootDir = "frontend/tests/cases/synthesis/"
+rootDir = ""
 
 getBenchmarkFile :: IO FilePath
 getBenchmarkFile = do
