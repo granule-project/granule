@@ -648,6 +648,13 @@ eqRenameFunction :: (?globals :: Globals)
   -> SpecIndicator
   -> Checker (Bool, Substitution)
 
+eqRenameFunction sp rel name t (TyApp (TyApp (TyCon d) name') t') ind
+  | internalName d == "Rename" = do
+  (_, subst) <- equalTypesRelatedCoeffects sp rel name name' ind Types
+  (eq, subst') <- eqRenameFunction sp rel name t t' ind
+  substFinal <- combineSubstitutions sp subst subst'
+  return (eq, substFinal)
+  
 eqRenameFunction sp rel name (TyVar v) t ind = do
   (t', subst) <- renameBetaInvert sp rel name t ind Types
   (eq, subst') <- equalTypesRelatedCoeffects sp rel t' (TyVar v) ind Types
