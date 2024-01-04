@@ -587,8 +587,54 @@ renameBeta name (TyApp (TyApp (TyCon c) t1) t2)
   t2' <- renameBeta name t2
   return $ (TyApp (TyApp (TyCon c) t1') t2')
 
-renameBeta name t = return $ TyApp (TyApp (TyCon $ mkId "Rename") name) t
+renameBeta name (Star g t) = do
+  t' <- renameBeta name t
+  return $ (Star g t')
 
+renameBeta name (Borrow p t) = do
+  t' <- renameBeta name t
+  return $ (Borrow p t')
+
+renameBeta name t = return t
+
+renameBetaInvert :: (?globals :: Globals)
+  => Span
+  -- Explain how coeffects should be related by a solver constraint
+  -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
+  -> Type -- name
+  -> Type -- type
+  -- Indicates whether the first type or second type is a specification
+  -> SpecIndicator
+  -- Flag to say whether this type is actually an effect or not
+  -> Mode
+  -> Checker (Type, Substitution)
+
+-- Ref case
+-- i.e., Rename id a = Ref id' a'
+-- therefore check `id ~ id'` and then recurse
+renameBetaInvert sp rel name (TyApp (TyApp (TyCon c) name') s) spec mode
+  | internalName c == "Ref" = do
+    -- Compute equality on names
+    (_, subst) <- equalTypesRelatedCoeffects sp rel name name' spec mode
+    (s, subst') <- renameBetaInvert sp rel name s spec mode
+    substFinal <- combineSubstitutions sp subst subst'
+    return (TyApp (TyApp (TyCon c) name') s, substFinal)
+
+renameBetaInvert sp rel name (TyApp (TyCon c) name') spec mode
+  | internalName c == "FloatArray" = do
+    -- Compute equality on names
+    (_, subst) <- equalTypesRelatedCoeffects sp rel name name' spec mode
+    return (TyApp (TyCon c) name', subst)
+
+renameBetaInvert sp rel name (TyApp (TyApp (TyCon c) t1) t2) spec mode
+  | internalName c == "," = do
+    (t1', subst1) <- renameBetaInvert sp rel name t1 spec mode
+    (t2', subst2) <- renameBetaInvert sp rel name t2 spec mode
+    substFinal <- combineSubstitutions sp subst1 subst2
+    return (TyApp (TyApp (TyCon c) t1') t2', substFinal)
+
+renameBetaInvert _ _ name t _ _ = return (t, [])
+  
 -- Check if `Rename id a ~ a'` which may involve some normalisation in the
 -- case where `a'` is a variable
 eqRenameFunction :: (?globals :: Globals)
@@ -601,6 +647,12 @@ eqRenameFunction :: (?globals :: Globals)
   -> Type -- compared against
   -> SpecIndicator
   -> Checker (Bool, Substitution)
+
+eqRenameFunction sp rel name (TyVar v) t ind = do
+  (t', subst) <- renameBetaInvert sp rel name t ind Types
+  (eq, subst') <- equalTypesRelatedCoeffects sp rel t' (TyVar v) ind Types
+  substFinal <- combineSubstitutions sp subst subst'
+  return (eq, substFinal)
 
 eqRenameFunction sp rel name t t' ind = do
   t'' <- renameBeta name t
