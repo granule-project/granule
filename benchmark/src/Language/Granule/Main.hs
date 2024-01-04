@@ -13,7 +13,7 @@ import System.Exit
 import System.Directory (listDirectory, removeFile, doesDirectoryExist, getDirectoryContents)
 import System.FilePath.Posix ((</>))
 import Control.Monad (forM_, forM, foldM, replicateM, when, unless)
-import Data.List (isPrefixOf, isSuffixOf, unwords, intersperse, sort, intercalate, transpose, elemIndex)
+import Data.List (isPrefixOf, isSuffixOf, isInfixOf, unwords, intersperse, sort, intercalate, transpose, elemIndex)
 import Data.Text (replace, pack, unpack, isInfixOf)
 import Data.Maybe (mapMaybe, fromMaybe, fromJust)
 import GHC.Exts (the)
@@ -168,8 +168,17 @@ fileArgs (arg:args)
   | otherwise = let (files, args') = fileArgs args
                 in (arg:files, args')
 
-splitAtFirst :: Eq a => a -> [a] -> ([a], [a])
-splitAtFirst x = break (x ==)
+
+-- splitAtFirst :: Eq a => a -> [a] -> ([a], [a])
+-- splitAtFirst x = fmap (drop 1) . break (x ==)
+
+splitAtFirst ::  [String] -> ([String], [String])
+splitAtFirst [] = ([], [])
+splitAtFirst (arg:args) | "-" `Data.List.isInfixOf` arg || "--" `Data.List.isInfixOf` arg = ([], arg:args)
+splitAtFirst (arg:args) = 
+  let (cArgs, args') = splitAtFirst args in 
+  (arg : cArgs, args')
+
 
 processArgs :: [String] -> (Int {- Repeat -}, String {- @gr@ path -}, String {- benchmark path -}, Maybe [String], Maybe [(String, String)], Bool, Bool, Bool, Int)
 processArgs [] = (defaultRepeatTrys, "gr", "frontend/tests/cases/synthesis/", Nothing, Nothing, False, False, False, timeoutLimit)
@@ -199,19 +208,19 @@ processArgs (arg:args)
           in (repeats, grPath, arg', categories, files, verbose, showProgram, createLog, timeout)
         _ -> error "--bmark-path must be given a filepath"
   | arg == "--categories" =
-      let (catArgs, args') = splitAtFirst "-" args in 
+      let (catArgs, args') = splitAtFirst args in 
       let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args'
       in (repeats, grPath, bmarkPath, Just $ catArgs, files, verbose, showProgram, createLog, timeout)
   | arg == "-c" =
-      let (catArgs, args') = splitAtFirst "-" args in 
+      let (catArgs, args') = splitAtFirst args in 
       let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args'
       in (repeats, grPath, bmarkPath, Just $ catArgs, files, verbose, showProgram, createLog, timeout)
   | arg == "--files" =
-      let (fileArgs, args') = splitAtFirst "-" args in 
+      let (fileArgs, args') = splitAtFirst args in 
       let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args'
       in (repeats, grPath, bmarkPath, categories, Just $ map (\x -> let spl = splitOn ":" x in (head spl, last spl)) fileArgs, verbose, showProgram, createLog, timeout)
   | arg == "-f" =
-        let (fileArgs, args') = splitAtFirst "-" args in 
+        let (fileArgs, args') = splitAtFirst args in 
         let (repeats, grPath, bmarkPath, categories, files, verbose, showProgram, createLog, timeout) = processArgs args'
         in (repeats, grPath, bmarkPath, categories, Just $ map (\x -> let spl = splitOn ":" x in (head spl, last spl)) fileArgs, verbose, showProgram, createLog, timeout)
   | arg == "--verbose" =
