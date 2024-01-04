@@ -276,7 +276,7 @@ equalTypesRelatedCoeffectsInner s rel (Borrow p1 t1) t2 _ sp mode
     (g, _, u) <- equalTypes s t1 t2
     return (g, u)
 
-equalTypesRelatedCoeffectsInner s rel t1 (Borrow p2 t2) k sp mode = 
+equalTypesRelatedCoeffectsInner s rel t1 (Borrow p2 t2) k sp mode =
   equalTypesRelatedCoeffectsInner s rel (Borrow p2 t2) t1 k (flipIndicator sp) mode
 
 -- ## SESSION TYPES
@@ -326,7 +326,9 @@ equalTypesRelatedCoeffectsInner s rel a@(TyExists x1 k1 t1) b@(TyExists x2 k2 t2
   registerTyVarInContextWith' x1 k1 ForallQ $ do
       (eqT, subst2) <- equalTypesRelatedCoeffectsInner s rel t1 t2' ind sp mode
       substFinal <- combineSubstitutions s subst1 subst2
-      return (eqK && eqT, substFinal)
+      -- remove from substFinal any substitutions which contain a use of x1 in their substituted type
+      let substFinal' = filter (\(x, SubstT t) -> not $ x1 `elem` freeVars t) substFinal
+      return (eqK && eqT, substFinal')
 
 -- Equality on rank-N forall types
 equalTypesRelatedCoeffectsInner s rel a@(TyForall x1 k1 t1) b@(TyForall x2 k2 t2) ind sp mode = do
@@ -634,7 +636,7 @@ renameBetaInvert sp rel name (TyApp (TyApp (TyCon c) t1) t2) spec mode
     return (TyApp (TyApp (TyCon c) t1') t2', substFinal)
 
 renameBetaInvert _ _ name t _ _ = return (t, [])
-  
+
 -- Check if `Rename id a ~ a'` which may involve some normalisation in the
 -- case where `a'` is a variable
 eqRenameFunction :: (?globals :: Globals)
@@ -654,7 +656,7 @@ eqRenameFunction sp rel name t (TyApp (TyApp (TyCon d) name') t') ind
   (eq, subst') <- eqRenameFunction sp rel name t t' ind
   substFinal <- combineSubstitutions sp subst subst'
   return (eq, substFinal)
-  
+
 eqRenameFunction sp rel name (TyVar v) t ind = do
   (t', subst) <- renameBetaInvert sp rel name t ind Types
   (eq, subst') <- equalTypesRelatedCoeffects sp rel t' (TyVar v) ind Types

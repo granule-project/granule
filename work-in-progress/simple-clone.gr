@@ -1,8 +1,16 @@
-example : ()
-example = unpack <id , a> = newFloatArray 3 in
-  clone (share a) as x in 
-    unpack <id' , a'> = x in (deleteFloatArray a')
+-- example : ()
+-- example = unpack <id , a> = newFloatArray 3 in
+--   clone (share a) as x in
+--     unpack <id' , a'> = x in (deleteFloatArray a')
 
 example' : ()
-example' = unpack <id , a> = newFloatArray 3 in uniqueBind
-    (\(x : (exists {id : Name} . *(FloatArray id))) -> unpack <id' , a'> = x in deleteFloatArray a') (share a)
+example' =
+  unpack <id , a> = newFloatArray 3
+  in
+    uniqueBind
+       (\(x : (exists {id : Name} . *(FloatArray id))) ->
+            unpack <id' , a'> = x in deleteFloatArray a') (share a)
+
+uniqueBind'   : forall {a b : Type, s : Semiring, r : s}
+  . {(1 : s) <= r, Cloneable a} => ((exists {id : Name} . *(Rename id a)) -> b) -> a [r] -> b
+uniqueBind' = uniqueBind
