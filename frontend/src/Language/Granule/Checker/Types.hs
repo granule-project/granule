@@ -266,6 +266,7 @@ equalTypesRelatedCoeffectsInner s rel t1 (Star g2 t2) k sp mode =
 equalTypesRelatedCoeffectsInner s rel (Borrow p1 t1) (Borrow p2 t2) _ sp Types = do
   debugM "equalTypesRelatedCoeffectsInner (borrow)" $ "grades " <> show p1 <> " and " <> show p2
   (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 sp Types
+  debugM "equalTypesRelatedCoeffectsInner (borrow)" $ "unif = " <> pretty unif
   (eq', unif') <- equalTypesRelatedCoeffects s rel (normalise p1) (normalise p2) sp Permissions
   u <- combineSubstitutions s unif unif'
   return (eq && eq', u)
@@ -827,7 +828,7 @@ refineBinderQuantification ctxt ty = mapM computeQuantifier ctxt
       where
         anyM f xs = mapM f xs >>= (return . or)
     aux id _ = return False
-    
+
 isPermission :: (?globals :: Globals) => Span -> Type -> Checker (Either Kind Type)
 isPermission s ty = do
   (pTy, _, _) <- synthKind s ty

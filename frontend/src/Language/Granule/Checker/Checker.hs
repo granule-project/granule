@@ -897,8 +897,9 @@ synthExpr :: (?globals :: Globals)
 
 -- Hit an unfilled hole
 synthExpr _ ctxt _ (Hole s _ _ _ _) = do
+  st <- get
   debugM "synthExpr[Hole]" (pretty s)
-  throw $ InvalidHolePosition s
+  throw $ InvalidHolePosition s ctxt (tyVarContext st)
 
 -- Literals can have their type easily synthesised
 synthExpr _ _ _ (Val s _ rf (NumInt n))  = do
@@ -1204,7 +1205,7 @@ synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
 
 -- Variables
 synthExpr defs gam _ (Val s _ rf (Var _ x)) = do
-   debugM "synthExpr[Var]" (pretty s)
+   debugM ("synthExpr[Var] - " <> pretty x) (pretty s)
 
    -- Try the local context
    case lookup x gam of

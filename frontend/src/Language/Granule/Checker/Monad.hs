@@ -671,7 +671,7 @@ data CheckerError
   | InvalidTypeDefinition
     { errLoc :: Span, errTy :: Type }
   | InvalidHolePosition
-    { errLoc :: Span }
+    { errLoc :: Span, context :: Ctxt Assumption, tyContext :: Ctxt (Type, Quantifier) }
   | UnknownResourceAlgebra
     { errLoc :: Span, errTy :: Type, errK :: Kind }
   | CaseOnIndexedType
@@ -1070,7 +1070,19 @@ instance UserMsg CheckerError where
   msg InvalidTypeDefinition{ errTy }
     = "The type `" <> pretty errTy <> "` is not valid in a datatype definition."
 
-  msg InvalidHolePosition{} = "Hole occurs in synthesis position so the type is not yet known"
+  msg InvalidHolePosition{ errLoc , context , tyContext } = "Hole occurs in synthesis position so the type is not yet known"
+    <>
+    -- Print the context if there is anything to use
+    (if null context
+      then ""
+      else "\n\n   Context:" <> concatMap (\x -> "\n     " ++ pretty x) context)
+    <>
+    (if null tyContext
+      then ""
+      else "\n\n   Type context:" <> concatMap (\(v, (t , _)) ->  "\n     "
+                                                <> pretty v
+                                                <> " : " <> pretty t) tyContext)
+
 
   msg UnknownResourceAlgebra{ errK, errTy }
     = "There is no resource algebra defined for `" <> pretty errK <> "`, arising from effect term `" <> pretty errTy <> "`"
