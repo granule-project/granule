@@ -1,11 +1,8 @@
 example : ()
-example = unpack <id , a> = newFloatArray 3 in let
-  [t] : !(FloatArray id) = clone (share a) as x in 
-    unpack <id' , a'> = x in (share a')
-      in ()
+example = unpack <id , a> = newFloatArray 3 in
+  clone (share a) as x in 
+    unpack <id' , a'> = x in (deleteFloatArray a')
 
 example' : ()
-example' = unpack <id , a> = newFloatArray 3 in let
-  [t] : !(FloatArray id) = uniqueBind
-    (\x -> unpack <id' , a'> = x in (share a')) (share a)
-      in ()
+example' = unpack <id , a> = newFloatArray 3 in uniqueBind
+    (\(x : (exists {id : Name} . *(FloatArray id))) -> unpack <id' , a'> = x in deleteFloatArray a') (share a)
