@@ -954,6 +954,12 @@ synthExpr defs gam pol
                   (App s contType rf (Val s cloneType rf (Var cloneType $ mkId "uniqueBind"))
                      (Val s funType rf (Abs funType (PVar s clonedInputTy rf var) Nothing elabBody))) elabE
 
+      -- Add constraints of `clone`
+      -- Constraint that 1 : s <= r
+      (semiring, subst2, _) <- synthKind s r
+      let constraint = ApproximatedBy s (TyGrade (Just semiring) 1) r semiring
+      addConstraint constraint
+
       substFinal <- combineSubstitutions s subst0 subst1
       return (tyB, ghostVarCtxt <> (deleteVar var ghostVarCtxt'), substFinal, elab)
     _ -> throw TypeError{ errLoc = s, tyExpected = Box (TyVar $ mkId "a") (TyVar $ mkId "b"), tyActual = ty }
