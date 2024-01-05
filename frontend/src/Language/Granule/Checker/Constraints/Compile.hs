@@ -177,7 +177,7 @@ cloneable (TyApp
   (TyCon (internalName -> "FloatArray")) _ ) = True
 cloneable (TyApp
   (TyApp
-    (TyCon (internalName -> "Ref")) _) _) = True
+    (TyCon (internalName -> "Ref")) _) t) = cloneable t
 cloneable (TyApp
   (TyApp
     (TyCon (internalName -> ",")) x) y) = cloneable x && cloneable y
