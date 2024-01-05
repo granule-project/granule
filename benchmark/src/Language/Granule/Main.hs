@@ -266,9 +266,6 @@ printUsage = "Bad usage."
 attemptsToSeconds :: Integer -> Double
 attemptsToSeconds n = 1000.0 * fromIntegral n
 
-latexfile :: FilePath
-latexfile = "results"
-
 
 main :: IO ()
 main = do
@@ -277,13 +274,14 @@ main = do
   -- Get current time for log file name
   currentTime <- T.getCurrentTime
   let logIdent = T.formatTime T.defaultTimeLocale "%F-%H-%M" currentTime
-  let logSummaryIdent = "benchmark-log" 
+  let logfile = "benchmarks-" <> logIdent <> ".log"
+  let latexfile = "results-" <> logIdent 
 
   -- s <- openlog "SyslogStuff" [PID] USER INFO
   -- updateGlobalLogger rootLoggerName (addHandler s)
   updateGlobalLogger "Grenchmark" (setLevel INFO)
 
-  h <- fileHandler "benchmarks.log" INFO >>= \lh -> return $
+  h <- fileHandler logfile INFO >>= \lh -> return $
     setFormatter lh (simpleLogFormatter "[$time] | $msg ")
   updateGlobalLogger "Grenchmark" (addHandler h)
 
@@ -445,8 +443,13 @@ main = do
   case code of
     ExitFailure _ -> do
       infoM "Grenchmark" ("Unable to generate PDF from " <> latexfile <> ".tex!")
+      infoM "Grenchmark" ("Log file written to: ")
+      infoM "Grenchmark" logfile
     ExitSuccess -> do
-      infoM "Grenchmark" ("Done: PDF generated!") -- The benchmark results table can be viewed in: " <> latexfile <> ".pdf")
+      infoM "Grenchmark" ("Done: PDF generated and written to: ") -- The benchmark results table can be viewed in: " <> latexfile <> ".pdf")
+      infoM "Grenchmark" (latexfile <> ".pdf")
+      infoM "Grenchmark" ("Log file written to: ")
+      infoM "Grenchmark" logfile
 
 
 
