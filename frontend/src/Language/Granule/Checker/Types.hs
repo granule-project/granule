@@ -263,32 +263,6 @@ equalTypesRelatedCoeffectsInner s rel (Borrow p1 t1) t2 _ sp mode
 equalTypesRelatedCoeffectsInner s rel t1 (Borrow p2 t2) k sp mode =
   equalTypesRelatedCoeffectsInner s rel (Borrow p2 t2) t1 k (flipIndicator sp) mode
 
--- ## SESSION TYPES
--- Duality is idempotent (left)
-equalTypesRelatedCoeffectsInner s rel (TyApp (TyCon d') (TyApp (TyCon d) t)) t' k sp mode
-  | internalName d == "Dual" && internalName d' == "Dual" =
-  equalTypesRelatedCoeffectsInner s rel t t' k sp mode
-
--- Duality is idempotent (right)
-equalTypesRelatedCoeffectsInner s rel t (TyApp (TyCon d') (TyApp (TyCon d) t')) k sp mode
-  | internalName d == "Dual" && internalName d' == "Dual" =
-  equalTypesRelatedCoeffectsInner s rel t t' k sp mode
-
--- Do duality check (left) [special case of TyApp rule]
-equalTypesRelatedCoeffectsInner s rel (TyApp (TyCon d) t) t' _ sp mode
-  | internalName d == "Dual" = isDualSession s rel t t' sp
-
-equalTypesRelatedCoeffectsInner s rel t (TyApp (TyCon d) t') _ sp mode
-  | internalName d == "Dual" = isDualSession s rel t t' sp
-
--- Do duality check (left) [special case of TyApp rule]
-equalTypesRelatedCoeffectsInner s rel t0@(TyApp (TyApp (TyCon d) grd) t) t' ind sp mode
-  | internalName d == "Graded" = do
-    eqGradedProtocolFunction s rel grd t t' sp
-
-equalTypesRelatedCoeffectsInner s rel t' t0@(TyApp (TyApp (TyCon d) grd) t) ind sp mode
-  | internalName d == "Graded" = do
-    eqGradedProtocolFunction s rel grd t t' sp
 
 equalTypesRelatedCoeffectsInner s rel t0@(TyApp (TyApp (TyCon d) name) t) t' ind sp mode
   | internalName d == "Rename" = do
@@ -320,6 +294,33 @@ equalTypesRelatedCoeffectsInner s rel ty1@(TyVar var1) ty2 kind _ _ = do
 equalTypesRelatedCoeffectsInner s rel ty1 (TyVar var2) kind sp mode =
   -- Use the case above since it is symmetric
   equalTypesRelatedCoeffectsInner s rel (TyVar var2) ty1 kind sp mode
+
+-- -- ## SESSION TYPES
+-- Duality is idempotent (left)
+equalTypesRelatedCoeffectsInner s rel (TyApp (TyCon d') (TyApp (TyCon d) t)) t' k sp mode
+  | internalName d == "Dual" && internalName d' == "Dual" =
+  equalTypesRelatedCoeffectsInner s rel t t' k sp mode
+
+-- Duality is idempotent (right)
+equalTypesRelatedCoeffectsInner s rel t (TyApp (TyCon d') (TyApp (TyCon d) t')) k sp mode
+  | internalName d == "Dual" && internalName d' == "Dual" =
+  equalTypesRelatedCoeffectsInner s rel t t' k sp mode
+
+-- Do duality check (left) [special case of TyApp rule]
+equalTypesRelatedCoeffectsInner s rel (TyApp (TyCon d) t) t' _ sp mode
+  | internalName d == "Dual" = isDualSession s rel t t' sp
+
+equalTypesRelatedCoeffectsInner s rel t (TyApp (TyCon d) t') _ sp mode
+  | internalName d == "Dual" = isDualSession s rel t t' sp
+
+-- Do duality check (left) [special case of TyApp rule]
+equalTypesRelatedCoeffectsInner s rel t0@(TyApp (TyApp (TyCon d) grd) t) t' ind sp mode
+  | internalName d == "Graded" = do
+    eqGradedProtocolFunction s rel grd t t' sp
+
+equalTypesRelatedCoeffectsInner s rel t' t0@(TyApp (TyApp (TyCon d) grd) t) ind sp mode
+  | internalName d == "Graded" = do
+    eqGradedProtocolFunction s rel grd t t' sp
 
 -- Equality on existential types
 equalTypesRelatedCoeffectsInner s rel a@(TyExists x1 k1 t1) b@(TyExists x2 k2 t2) ind sp mode = do
