@@ -228,23 +228,6 @@ equalTypesRelatedCoeffectsInner s rel x@(Box c t) y@(Box c' t') k sp Types = do
   substU <- combineManySubstitutions s [subst, subst']
   return (eq, substU)
 
-equalTypesRelatedCoeffectsInner s rel ty1@(TyVar var1) ty2 kind _ _ = do
-  useSolver <- requiresSolver s kind
-  reportM ("Equality between " <> pretty ty1 <> " and " <> pretty ty2)
-  if useSolver then do
-    reportM ("Is a solver variable so no substitution just an equality")
-    addConstraint (rel s (TyVar var1) ty2 kind)
-    return (True, [])
-  else do
-    -- If this isn't a solver type then use normal unfication
-    subst <- unification s var1 ty2 rel
-    reportM ("Not a solver therefore subst = " <> pretty subst)
-    return (True, subst)
-
-equalTypesRelatedCoeffectsInner s rel ty1 (TyVar var2) kind sp mode =
-  -- Use the case above since it is symmetric
-  equalTypesRelatedCoeffectsInner s rel (TyVar var2) ty1 kind sp mode
-
 -- ## UNIQUENESS TYPES
 
 equalTypesRelatedCoeffectsInner s rel (Star g1 t1) (Star g2 t2) _ sp mode = do
@@ -309,13 +292,34 @@ equalTypesRelatedCoeffectsInner s rel t' t0@(TyApp (TyApp (TyCon d) grd) t) ind 
 
 equalTypesRelatedCoeffectsInner s rel t0@(TyApp (TyApp (TyCon d) name) t) t' ind sp mode
   | internalName d == "Rename" = do
+    debugM "RenameL" (pretty t <> " = " <> pretty t')
     eqRenameFunction s rel name t t' sp
 
 equalTypesRelatedCoeffectsInner s rel t' t0@(TyApp (TyApp (TyCon d) name) t) ind sp mode
   | internalName d == "Rename" = do
+    debugM "RenameR" (pretty t <> " = " <> pretty t')
     eqRenameFunction s rel name t t' sp
 
 -- ## GENERAL EQUALITY
+
+-- Equality with variables
+
+equalTypesRelatedCoeffectsInner s rel ty1@(TyVar var1) ty2 kind _ _ = do
+  useSolver <- requiresSolver s kind
+  reportM ("Equality between " <> pretty ty1 <> " and " <> pretty ty2)
+  if useSolver then do
+    reportM ("Is a solver variable so no substitution just an equality")
+    addConstraint (rel s (TyVar var1) ty2 kind)
+    return (True, [])
+  else do
+    -- If this isn't a solver type then use normal unfication
+    subst <- unification s var1 ty2 rel
+    reportM ("Not a solver therefore subst = " <> pretty subst)
+    return (True, subst)
+
+equalTypesRelatedCoeffectsInner s rel ty1 (TyVar var2) kind sp mode =
+  -- Use the case above since it is symmetric
+  equalTypesRelatedCoeffectsInner s rel (TyVar var2) ty1 kind sp mode
 
 -- Equality on existential types
 equalTypesRelatedCoeffectsInner s rel a@(TyExists x1 k1 t1) b@(TyExists x2 k2 t2) ind sp mode = do

@@ -975,6 +975,9 @@ synthExpr defs gam pol
       (semiring, subst2, _) <- synthKind s r
       let constraint = ApproximatedBy s (TyGrade (Just semiring) 1) r semiring
       addConstraint constraint
+      -- Cloneable constraint
+      otherTypeConstraints <- enforceConstraints s [TyApp (TyCon $ mkId "Cloneable") tyA]
+      registerWantedTypeConstraints otherTypeConstraints
 
       substFinal <- combineSubstitutions s subst0 subst1
       return (tyB, ghostVarCtxt <> (deleteVar var ghostVarCtxt'), substFinal, elab)
