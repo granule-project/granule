@@ -5,7 +5,7 @@ cabal-version: 1.12
 -- see: https://github.com/sol/hpack
 
 name:           granule-repl
-version:        0.9.4.0
+version:        0.9.5.0
 synopsis:       The Granule interactive interpreter (grepl)
 homepage:       https://github.com/dorchard/granule#readme
 bug-reports:    https://github.com/dorchard/granule/issues
