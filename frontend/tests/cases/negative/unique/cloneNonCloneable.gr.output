@@ -1,0 +1,3 @@
+Type checking failed: frontend/tests/cases/negative/unique/cloneNonCloneable.gr:
+Type constraint error: frontend/tests/cases/negative/unique/cloneNonCloneable.gr:1:1:
+Constraint `Cloneable Int` does not hold or is not provided by the type constraint assumptions here.

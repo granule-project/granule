@@ -663,11 +663,13 @@ uniqueReturn
   . *a -> a [r]
 uniqueReturn = BUILTIN
 
-uniqueBind
-  : forall {a b : Type, s : Semiring, r : s}
-  . {(1 : s) <= r, Cloneable a}
- => ((exists {id : Name} . *(Rename id a)) -> b) -> a [r] -> b
-uniqueBind = BUILTIN
+-- Provided by clone
+
+-- uniqueBind
+--   : forall {a b : Type, s : Semiring, r : s}
+--   . {(1 : s) <= r, Cloneable a}
+--  => ((exists {id : Name} . *(Rename id a)) -> b) -> a [r] -> b
+-- uniqueBind = BUILTIN
 
 reveal
   : forall {a : Type}
