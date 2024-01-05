@@ -663,6 +663,22 @@ checkExpr defs gam pol topLevel tau
       else
         throw $ TypeError { errLoc = s, tyExpected = TyCon $ mkId "DFloat", tyActual = tau }
 
+-- Clone
+-- Pattern match on an applicable of `uniqueBind fun e`
+checkExpr defs gam pol topLevel tau
+   expr@(App s a rf
+     (App _ _ _
+       (Val _ _ _ (Var _ (internalName -> "uniqueBind")))
+       (Val _ _ _ (Abs _ (PVar _ _ _ var) _ body)))
+     e) = do
+  debugM "checkExpr[Clone]" (pretty s <> " : " <> pretty tau)
+  (tau', gam, subst, elab) <- synthExpr defs gam pol expr
+  -- Check the return types match
+  (eqT, _, substTy) <- equalTypes s tau tau'
+  unless eqT $ throw TypeError{ errLoc = s, tyExpected = tau, tyActual = tau' }
+  substF <- combineSubstitutions s subst substTy
+  return (gam, subst, elab)
+
 -- Application checking
 checkExpr defs gam pol topLevel tau (App s a rf e1 e2) | (usingExtension GradedBase) = do
   debugM "checkExpr[App]-gradedBase" (pretty s <> " : " <> pretty tau)
