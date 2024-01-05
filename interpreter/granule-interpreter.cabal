@@ -5,7 +5,7 @@ cabal-version: 1.12
 -- see: https://github.com/sol/hpack
 
 name:           granule-interpreter
-version:        0.9.4.0
+version:        0.9.5.0
 synopsis:       The Granule interpreter
 homepage:       https://github.com/dorchard/granule#readme
 bug-reports:    https://github.com/dorchard/granule/issues
@@ -42,6 +42,7 @@ library
     , base >=4.10 && <5
     , clock
     , concurrent-extra
+    , containers
     , directory
     , extra
     , filepath
@@ -77,6 +78,7 @@ executable gr
     , base >=4.10 && <5
     , clock
     , concurrent-extra
+    , containers
     , directory
     , extra
     , filepath
@@ -112,6 +114,7 @@ test-suite gr-golden
     , base >=4.10 && <5
     , clock
     , concurrent-extra
+    , containers
     , directory
     , extra
     , filepath
