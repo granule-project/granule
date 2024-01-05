@@ -1,7 +1,7 @@
--- example : ()
--- example = unpack <id , a> = newFloatArray 3 in
---   clone (share a) as x in
---     unpack <id' , a'> = x in (deleteFloatArray a')
+example : ()
+example = unpack <id , a> = newFloatArray 3 in
+  clone (share a) as x in
+    unpack <id' , a'> = x in (deleteFloatArray a')
 
 example' : ()
 example' =

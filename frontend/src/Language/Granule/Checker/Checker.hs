@@ -922,6 +922,42 @@ synthExpr _ _ _ (Val s _ rf (StringLiteral c)) = do
   let t = TyCon $ mkId "String"
   return (t, usedGhostVariableContext, [], Val s t rf (StringLiteral c))
 
+-- Clone
+-- Pattern match on an applicable of `uniqueBind fun e`
+synthExpr defs gam pol
+   expr@(App s a rf
+     (App _ _ _
+       (Val _ _ _ (Var _ (internalName -> "uniqueBind")))
+       (Val _ _ _ (Abs _ (PVar _ _ _ var) _ body)))
+     e) = do
+  debugM "synthExpr[uniqueBind]" (pretty s <> pretty expr)
+  -- Infer the type of e (the boxed argument)
+  (ty, ghostVarCtxt, subst0, elabE) <- synthExpr defs gam pol e
+  -- Check that ty is actually a boxed type
+  case ty of
+    Box r tyA -> do
+      -- existential type for the cloned var ((exists {id : Name} . *(Rename id a))
+      idVar <- mkId <$> freshIdentifierBase "id"
+      let clonedInputTy =
+            TyExists idVar (TyCon $ mkId "Name")
+              (Borrow (TyCon $ mkId "Star") (TyApp (TyApp (TyCon $ mkId "Rename") (TyVar idVar)) tyA))
+      let clonedAssumption = (var, Linear clonedInputTy)
+
+      debugM "synthExpr[uniqueBind]body" (pretty clonedAssumption)
+      -- synthesise the type of the body for the clone
+      (tyB, ghostVarCtxt', subst1, elabBody) <- synthExpr defs (clonedAssumption : gam) pol body
+
+      let contType = FunTy Nothing Nothing (Box r tyA) tyB
+      let funType  = FunTy Nothing Nothing clonedInputTy tyB
+      let cloneType = FunTy Nothing Nothing contType funType
+      let elab = App s tyB rf
+                  (App s contType rf (Val s cloneType rf (Var cloneType $ mkId "uniqueBind"))
+                     (Val s funType rf (Abs funType (PVar s clonedInputTy rf var) Nothing elabBody))) elabE
+
+      substFinal <- combineSubstitutions s subst0 subst1
+      return (tyB, ghostVarCtxt <> (deleteVar var ghostVarCtxt'), substFinal, elab)
+    _ -> throw TypeError{ errLoc = s, tyExpected = Box (TyVar $ mkId "a") (TyVar $ mkId "b"), tyActual = ty }
+
 -- Secret syntactic weakening
 synthExpr defs gam pol
     (App s _ _ (Val _ _ _ (Var _ (sourceName -> "weak__"))) v@(Val _ _ _ (Var _ x))) = do
