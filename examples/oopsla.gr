@@ -29,29 +29,28 @@ sumFromTo array [i] [n] =
           (y, arr) = sumFromTo a [i+1] [n]
       in  (x + y, arr)
 
+parSum : forall {id id' : Name} . *(FloatArray id) -> *(Ref id' Float, FloatArray id)
+parSum array =
+ let ([n], array)     = lengthFloatArray array;
+     ref              = newRef (0.0 : Float);
+     compIn           = borrowPull (ref, array)
+  in flip withBorrow compIn (\compIn ->
+                let (ref, array)      = borrowPush compIn;
+                    (array1, array2)  = split array;
+                    -- Compute in parallel
+                    ((x, array1), (y, array2)) =
+                                par (\() -> sumFromTo array1 [0] [div n 2])
+                                    (\() -> sumFromTo array2 [div n 2] [n]);
+                    -- Update the reference
+                    (old, ref') = swapRef ref ((x : Float) + (y : Float));
+                    ()          = drop @Float old;
+                    compOut     = borrowPull (ref', join (array1, array2))
+                  in compOut)
 
--- parSum : forall {id id' : Name} . *(FloatArray id) -> *(Ref id' Float, FloatArray id)
--- parSum array =
---  let ([n], array)     = lengthFloatArray array;
---      ref              = newRef (0.0 : Float);
---      compIn           = borrowPull (ref, array)
---   in flip withBorrow compIn (\compIn ->
---                 let (ref, array)      = borrowPush compIn;
---                     (array1, array2)  = split array;
---                     -- Compute in parallel
---                     ((x, array1), (y, array2)) =
---                                 par (\() -> sumFromTo array1 [0] [div n 2])
---                                     (\() -> sumFromTo array2 [div n 2] [n]);
---                     -- Update the reference
---                     (old, ref') = swapRef ref ((x : Float) + (y : Float));
---                     ()          = drop @Float old;
---                     compOut     = borrowPull (ref', join (array1, array2))
---                   in compOut)
-
--- main : Float
--- main =
---   unpack <id, arr> = toFloatArray (Cons 10.0 (Cons 20.0 (Cons 30.0 (Cons 40.0 Nil))))
---   in let
---       (result, array) = borrowPush (parSum arr);
---       () = deleteFloatArray array
---   in freezeRef result
+main : Float
+main =
+  unpack <id, arr> = toFloatArray (Cons 10.0 (Cons 20.0 (Cons 30.0 (Cons 40.0 Nil))))
+  in let
+      (result, array) = borrowPush (parSum arr);
+      () = deleteFloatArray array
+  in freezeRef result

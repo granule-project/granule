@@ -237,15 +237,6 @@ equalTypesRelatedCoeffectsInner s rel (Star g1 t1) (Star g2 t2) _ sp mode = do
   u <- combineSubstitutions s unif unif'
   return (eq && eq', u)
 
-equalTypesRelatedCoeffectsInner s rel (Star g1 t1) t2 _ sp mode
-  | t1 == t2 = throw $ UniquenessError { errLoc = s, uniquenessMismatch = NonUniqueUsedUniquely t2 (TyCon (mkId $ "Star"))}
-  | otherwise = do
-    (g, _, u) <- equalTypes s t1 t2
-    return (g, u)
-
-equalTypesRelatedCoeffectsInner s rel t1 (Star g2 t2) k sp mode =
-  equalTypesRelatedCoeffectsInner s rel (Star g2 t2) t1 k (flipIndicator sp) mode
-
 equalTypesRelatedCoeffectsInner s rel (Borrow p1 t1) (Borrow p2 t2) _ sp Types = do
   debugM "equalTypesRelatedCoeffectsInner (borrow)" $ "grades " <> show p1 <> " and " <> show p2
   (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 sp Types
@@ -253,15 +244,6 @@ equalTypesRelatedCoeffectsInner s rel (Borrow p1 t1) (Borrow p2 t2) _ sp Types =
   (eq', unif') <- equalTypesRelatedCoeffects s rel (normalise p1) (normalise p2) sp Permissions
   u <- combineSubstitutions s unif unif'
   return (eq && eq', u)
-
-equalTypesRelatedCoeffectsInner s rel (Borrow p1 t1) t2 _ sp mode
-  | t1 == t2 = throw $ UniquenessError { errLoc = s, uniquenessMismatch = NonUniqueUsedUniquely t2 p1}
-  | otherwise = do
-    (g, _, u) <- equalTypes s t1 t2
-    return (g, u)
-
-equalTypesRelatedCoeffectsInner s rel t1 (Borrow p2 t2) k sp mode =
-  equalTypesRelatedCoeffectsInner s rel (Borrow p2 t2) t1 k (flipIndicator sp) mode
 
 
 equalTypesRelatedCoeffectsInner s rel t0@(TyApp (TyApp (TyCon d) name) t) t' ind sp mode
