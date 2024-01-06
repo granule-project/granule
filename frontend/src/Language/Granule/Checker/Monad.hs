@@ -776,7 +776,7 @@ instance UserMsg CheckerError where
     -- Print the context if there is anything to use
     (if null context
       then ""
-      else "\n\n   Context:" <> concatMap (\x -> "\n     " ++ pretty x) context)
+      else "\n\n   Context:" <> concatMap (\x -> "\n     " ++ pretty x) (nubContext context))
     <>
     (if null tyContext
       then ""
@@ -1075,7 +1075,7 @@ instance UserMsg CheckerError where
     -- Print the context if there is anything to use
     (if null context
       then ""
-      else "\n\n   Context:" <> concatMap (\x -> "\n     " ++ pretty x) context)
+      else "\n\n   Context:" <> concatMap (\x -> "\n     " ++ pretty x) (nubContext context))
     <>
     (if null tyContext
       then ""
