@@ -1458,7 +1458,7 @@ synthExpr defs gam pol (Val s _ rf (Nec _ e)) = do
   let elaborated = Val s finalTy rf (Nec t elaboratedE)
   return (finalTy, gam', subst, elaborated)
 
--- placeholder!
+-- Infer type for references
 synthExpr defs gam pol (Val s _ rf (Ref _ e)) = do
   debugM "synthExpr[Ref]" (pretty s)
 
