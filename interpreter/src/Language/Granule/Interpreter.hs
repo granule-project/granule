@@ -51,7 +51,6 @@ import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Preprocessor
 import Language.Granule.Syntax.Parser
-import Language.Granule.Syntax.Preprocessor.Ascii
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Synthesis.DebugTree
@@ -156,6 +155,7 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
           -- update globals with extensions
           let ?globals = ?globals { globalsExtensions = extensions } in do
           -- Print to terminal when in debugging mode:
+          debugM "Config:" $ show config
           debugM "Pretty-printed AST:" $ pretty ast
           debugM "Raw AST:" $ show ast
           -- Check and evaluate
@@ -194,8 +194,9 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
                   Right Nothing -> if testing
                     then return $ Right NoEval
                     else return $ Left NoEntryPoint
-                  Right (Just result) -> do
-                    return . Right $ InterpreterResult result
+                  Right (Just result)
+                    | grNoPrintReturnValue config -> return $ Right NoEval
+                    | otherwise -> return . Right $ InterpreterResult result
 
   where
     getHoleMessages :: NonEmpty CheckerError -> [CheckerError]
@@ -234,8 +235,8 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
       let holesWithEmptyMeasurements = map (\h -> (h, Nothing, 0)) holes
       res <- synthesiseHoles config ast holesWithEmptyMeasurements isGradedBase
       let (holes', measurements, _) = unzip3 res
-      when benchmarkingRawData $ do 
-        forM_ measurements (\m -> case m of (Just m') -> putStrLn $ show m' ; _ -> return ()) 
+      when benchmarkingRawData $ do
+        forM_ measurements (\m -> case m of (Just m') -> putStrLn $ show m' ; _ -> return ())
       return holes'
 
 
@@ -265,7 +266,7 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
       res <- if usingExtension GradedBase then do
                 liftIO $ System.Timeout.timeout timeout $
                   synthesiseGradedBase astSrc gradedExpr hole spec synEval hints index unrestricted restricted defId constructors ctxt (Forall nullSpan [] [] goal) cs
-             else do 
+             else do
                 liftIO $ System.Timeout.timeout timeout $
                   synthesiseLinearBase Nothing 1 [] [] defId ctxt constructors (Forall nullSpan [] [] goal) cs
 
@@ -273,7 +274,7 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
         Just ([], measurement) -> do
           return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt hcases, measurement, attemptNo) : rest
         Nothing -> do
-          _ <- if benchmarkingRawData 
+          _ <- if benchmarkingRawData
             then return ()
             else printInfo $ "No programs synthesised - Timeout after: " <> show (fromIntegral timeout / (10^(6 :: Integer)::Double))  <> "s"
           return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt hcases, Just mempty, attemptNo) : rest
@@ -298,13 +299,13 @@ synEval ast = do
 
 
 getGradedExpr :: (?globals :: Globals) => GrConfig -> Id -> IO (Maybe (Def () ()))
-getGradedExpr config def = do 
+getGradedExpr config def = do
   let file = (fromJust $ globalsSourceFilePath ?globals) <> ".output"
   src <- preprocess
           (rewriter config)
           (keepBackup config)
           file
-          (literateEnvName config) 
+          (literateEnvName config)
   ((AST _ defs _ _ _), _) <- parseDefsAndDoImports src
   return $ find (\(Def _ id _ _ _ _) -> id == def) defs
 
@@ -330,17 +331,18 @@ parseGrFlags
   = pure . snd
   <=< getParseResult . execParserPure (prefs disambiguate) parseGrConfig . words
 
-
 data GrConfig = GrConfig
-  { grRewriter        :: Maybe (String -> String)
+  { grRewriter        :: Maybe Rewriter
   , grDocMode         :: Bool -- are we generating docs instead of checking/running?
   , grKeepBackup      :: Maybe Bool
   , grLiterateEnvName :: Maybe String
   , grShowVersion     :: Bool
+  , grNoPrintReturnValue :: Bool
   , grGlobals         :: Globals
   }
+  deriving (Show)
 
-rewriter :: GrConfig -> Maybe (String -> String)
+rewriter :: GrConfig -> Maybe Rewriter
 rewriter c = grRewriter c <|> Nothing
 
 keepBackup :: GrConfig -> Bool
@@ -357,6 +359,7 @@ instance Semigroup GrConfig where
     , grLiterateEnvName = grLiterateEnvName c1 <|> grLiterateEnvName c2
     , grGlobals         = grGlobals         c1 <>  grGlobals         c2
     , grShowVersion     = grShowVersion     c1 ||  grShowVersion     c2
+    , grNoPrintReturnValue = grNoPrintReturnValue c1 || grNoPrintReturnValue c2
     }
 
 instance Monoid GrConfig where
@@ -367,6 +370,7 @@ instance Monoid GrConfig where
     , grLiterateEnvName = Nothing
     , grGlobals         = mempty
     , grShowVersion     = False
+    , grNoPrintReturnValue = False
     }
 
 getGrConfig :: IO ([FilePath], GrConfig)
@@ -439,6 +443,12 @@ parseGrConfig = info (go <**> helper) $ briefDesc
           flag False True
             $ long "version"
             <> help "Show version"
+
+        grNoPrintReturnValue <-
+          flag False True
+            $ long "no-print-return-value"
+            <> long "no-return-value"
+            <> help "Don't print return value"
 
         globalsSuppressInfos <-
           flag Nothing (Just True)
@@ -561,10 +571,10 @@ parseGrConfig = info (go <**> helper) $ briefDesc
 
         grRewriter
           <- flag'
-            (Just asciiToUnicode)
+            (Just AsciiToUnicode)
             (long "ascii-to-unicode" <> help "WARNING: Destructively overwrite ascii characters to multi-byte unicode.")
           <|> flag Nothing
-            (Just unicodeToAscii)
+            (Just UnicodeToAscii)
             (long "unicode-to-ascii" <> help "WARNING: Destructively overwrite multi-byte unicode to ascii.")
 
         grKeepBackup <-
@@ -596,6 +606,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             , grKeepBackup
             , grLiterateEnvName
             , grShowVersion
+            , grNoPrintReturnValue
             , grGlobals = Globals
               { globalsDebugging
               , globalsInteractiveDebugging
@@ -640,7 +651,7 @@ data InterpreterError
   deriving Show
 
 data InterpreterResult
-  = NoEval
+  = NoEval -- --no-eval or --no-return-value flags active
   | InterpreterResult RValue
   deriving Show
 
