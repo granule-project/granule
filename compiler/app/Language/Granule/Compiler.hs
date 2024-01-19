@@ -23,7 +23,6 @@ import Language.Granule.Checker.Checker
 import Language.Granule.Syntax.Def (extendASTWith)
 import Language.Granule.Syntax.Preprocessor
 import Language.Granule.Syntax.Parser
-import Language.Granule.Syntax.Preprocessor.Ascii
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Utils
 import Paths_granule_compiler (version)
@@ -112,14 +111,14 @@ parseGrFlags
   <=< getParseResult . execParserPure (prefs disambiguate) parseGrConfig . words
 
 data GrConfig = GrConfig
-  { grRewriter        :: Maybe (String -> String)
+  { grRewriter        :: Maybe Rewriter
   , grKeepBackup      :: Maybe Bool
   , grLiterateEnvName :: Maybe String
   , grShowVersion     :: Bool
   , grGlobals         :: Globals
   }
 
-rewriter :: GrConfig -> Maybe (String -> String)
+rewriter :: GrConfig -> Maybe Rewriter
 rewriter c = grRewriter c <|> Nothing
 
 keepBackup :: GrConfig -> Bool
@@ -334,10 +333,10 @@ parseGrConfig = info (go <**> helper) $ briefDesc
 
         grRewriter
           <- flag'
-            (Just asciiToUnicode)
+            (Just AsciiToUnicode)
             (long "ascii-to-unicode" <> help "WARNING: Destructively overwrite ascii characters to multi-byte unicode.")
           <|> flag Nothing
-            (Just unicodeToAscii)
+            (Just UnicodeToAscii)
             (long "unicode-to-ascii" <> help "WARNING: Destructively overwrite multi-byte unicode to ascii.")
 
         grKeepBackup <-
