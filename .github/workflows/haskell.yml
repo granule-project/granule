@@ -20,22 +20,21 @@ jobs:
     - name: Setup Haskell
       uses: actions/setup-haskell@v1
 
-    - uses: actions/cache@v3
-      name: Cache ~/.stack
+    - name: Cache Stack build artifacts (user + project)
+      uses: actions/cache@v3
       with:
-        path: ~/.stack
-        key: ${{ runner.os }}-stack-global-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}
+        path: |
+          ~/.stack
+          .stack-work
+        # best effort for cache: tie it to Stack resolver and package config
+        key: ${{ runner.os }}-stack-${{ hashFiles('stack.yaml.lock', 'package.yaml') }}
         restore-keys: |
-          ${{ runner.os }}-stack-global-
+          ${{ runner.os }}-stack
+  
+    - name: Install GHC using Stack
+      if: steps.ghc.outputs.cache-hit != 'true'
+      run: stack setup --install-ghc  
           
-    - uses: actions/cache@v3
-      name: Cache .stack-work
-      with:
-        path: .stack-work
-        key: ${{ runner.os }}-stack-work-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}-${{ hashFiles('**/*.hs') }}
-        restore-keys: |
-          ${{ runner.os }}-stack-work-
-
     - name: Build
       run: stack build
 
