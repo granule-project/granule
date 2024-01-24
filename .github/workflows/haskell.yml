@@ -17,6 +17,12 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
+    - name: Install required libraries
+    run: >-
+      sudo apt install
+      z3
+
+
     - name: Cache Stack build artifacts (user + project)
       uses: actions/cache@v3
       with:
