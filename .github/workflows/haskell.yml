@@ -11,26 +11,33 @@ permissions:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - uses: actions/setup-haskell@v1
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-    - name: Cache
-      uses: actions/cache@v3
-      env:
-        cache-name: cache-cabal
+    - name: Setup Haskell
+      uses: actions/setup-haskell@v1
+
+    - uses: actions/cache@v3
+      name: Cache ~/.stack
       with:
-        path: ~/.cabal
-        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
+        path: ~/.stack
+        key: ${{ runner.os }}-stack-global-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}
         restore-keys: |
-          ${{ runner.os }}-build-${{ env.cache-name }}-
-          ${{ runner.os }}-build-
-          ${{ runner.os }}-
+          ${{ runner.os }}-stack-global-
+          
+    - uses: actions/cache@v3
+      name: Cache .stack-work
+      with:
+        path: .stack-work
+        key: ${{ runner.os }}-stack-work-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}-${{ hashFiles('**/*.hs') }}
+        restore-keys: |
+          ${{ runner.os }}-stack-work-
 
     - name: Build
       run: stack build
+
     - name: Run tests
       run: stack test
