@@ -53,9 +53,9 @@ overlapsAllowed =
 typeConstructors :: (?globals :: Globals) => [(Id, (Type, [Id], [Int]))]
 typeConstructors =
   -- If we have the security levels extension turned on then include these things
-  (extensionDependent [(SecurityLevels, [(mkId "Level",    (kcoeffect, [], []))
+  extensionDependent [(SecurityLevels, [ (mkId "Level",    (kcoeffect, [], []))
                                        , (mkId "Unused",   (tyCon "Level", [], []))
-                                       , (mkId "Dunno",    (tyCon "Level", [], []))])] [])
+                                       , (mkId "Dunno",    (tyCon "Level", [], []))])] []
  ++
   -- Everything else is always in scope
     [ (mkId "Coeffect",  (Type 2, [], []))
@@ -70,16 +70,17 @@ typeConstructors =
     , (mkId "Char",   (Type 0, [], []))
     , (mkId "Void",   (Type 0, [], []))
     , (mkId "String", (Type 0, [], []))
-    , (mkId "Inverse", ((funTy (Type 0) (Type 0)), [], []))
+    , (mkId "Inverse", (funTy (Type 0) (Type 0), [], []))
     -- Predicates on deriving operations:x
     , (mkId "Dropable", (funTy (Type 0) kpredicate, [], [0]))
     -- TODO: add deriving for this
     -- , (mkId "Moveable", (funTy (Type 0) kpredicate, [], [0]))
     -- Session type related things
     , (mkId "ExactSemiring", (funTy (tyCon "Semiring") (tyCon "Predicate"), [], []))
+    , (mkId "NonInterfering", (funTy (tyCon "Coeffect") (tyCon "Predicate"), [], []))
     , (mkId "Protocol", (Type 0, [], []))
-    , (mkId "SingleAction", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], [0]))
-    , (mkId "ReceivePrefix", ((funTy (tyCon "Protocol") (tyCon "Predicate")), [], [0]))
+    , (mkId "SingleAction", (funTy (tyCon "Protocol") (tyCon "Predicate"), [], [0]))
+    , (mkId "ReceivePrefix", (funTy (tyCon "Protocol") (tyCon "Predicate"), [], [0]))
     , (mkId "Sends", (funTy (tyCon "Nat") (funTy (tyCon "Protocol") (tyCon "Predicate")), [], [0]))
     , (mkId "Graded", (funTy (tyCon "Nat") (funTy (tyCon "Protocol") (tyCon "Protocol")), [], [0]))
 
@@ -793,4 +794,3 @@ builtins :: [(Id, TypeScheme)]
 -- List of primitives that can't be promoted in CBV
 unpromotables :: [String]
 unpromotables = ["newFloatArray", "forkLinear", "forkMulticast", "forkReplicate", "forkReplicateExactly"]
-
