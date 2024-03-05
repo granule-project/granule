@@ -1,0 +1,20 @@
+nonInterf : forall {a : Type, b : Type, semir : Semiring, s r : semir} .
+               {NonInterfering semir, s <= r, r =/ s}
+            => (a [s] -> b [r]) -- in Granule Hi <= Lo
+            -> (()    -> b [r])
+nonInterf = BUILTIN
+
+--
+declassifyShape : forall {a : Type, f : Type -> Type, s : Semiring}
+                . {NonIntefering s}
+                => (f a) [0 : s] -> f () [1 : s]
+declassifyShape = -- ILL-TYPE IMPLEMENTATION
+                   \[x] -> let (spine, x') = copyShape @f x in [spine]
+
+-- 
+equality : DeclassCap -> String [Hi] -> String [Hi] -> Bool [Lo]
+
+
+-- compilation takes the n as an input for how much declassification to do
+main : forall (n : Nat) . DeclassCap [n] -> Int [Hi]
+main = ....
