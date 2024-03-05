@@ -1,4 +1,3 @@
-{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DataKinds #-}
@@ -116,6 +115,9 @@ isDefinedConstraint s (TyApp (TyCon (internalName -> "Sends")) protocol)
 isDefinedConstraint s (TyApp (TyCon (internalName -> "ExactSemiring")) semiring)
   = return (exactSemiring semiring)
 
+isDefinedConstraint s (TyApp (TyCon (internalName -> "NonInterfering")) semiring)
+  = return (nonInterfering semiring)
+
 isDefinedConstraint s (TyApp (TyCon (internalName -> "Dropable")) typ)
   = return (dropable typ)
 
@@ -168,15 +170,22 @@ exactSemiring (TyApp
                  s2) = exactSemiring s1 && exactSemiring s2
 exactSemiring _ = False
 
+nonInterfering :: Type -> Bool
+nonInterfering (TyCon (internalName -> "Level")) = True
+nonInterfering (TyCon (internalName -> "Set")) = True
+nonInterfering (TyCon (internalName -> "SetOp")) = True
+nonInterfering (TyApp (TyApp (TyCon (internalName -> ",,")) s1) s2) = nonInterfering s1 && nonInterfering s2
+nonInterfering _ = False
+
 dropable :: Type -> Bool
 dropable =
     runIdentity . typeFoldM (TypeFold
-      { tfTy = \_ -> return $ True
+      { tfTy = \_ -> return True
       , tfFunTy = \_ c x y -> return y
-      , tfTyCon = \id -> return $ not (id `elem` nonDropable)
+      , tfTyCon = \id -> return $ notElem id nonDropable
       , tfBox = \x y -> return (x && y)
-      , tfDiamond = \x y -> return $ (x && y)
-      , tfStar = \x y -> return $ (x && y)
+      , tfDiamond = \x y -> return (x && y)
+      , tfStar = \x y -> return (x && y)
       , tfTyVar = \_ -> return False
       , tfTyApp = \x y -> return x
       , tfTyInt = \_ -> return True
