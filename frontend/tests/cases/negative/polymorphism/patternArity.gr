@@ -1,0 +1,4 @@
+data Vec a = Nil a | Cons a (Vec a)
+
+extract : Vec Int -> Int
+extract (Cons x) = x

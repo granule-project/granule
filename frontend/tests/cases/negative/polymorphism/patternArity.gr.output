@@ -1,0 +1,3 @@
+Type checking failed: blappy.gr:
+Pattern arity error: blappy.gr:4:10:
+Data constructor `Cons` is applied to wrong number of arguments. Expecting 2 but pattern match has 1 patterns.

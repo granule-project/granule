@@ -581,7 +581,7 @@ data CheckerError
   | PatternTypingMismatch
     { errLoc :: Span, errPat :: Pattern (), tyExpected :: Type, tyActual :: Type }
   | PatternArityError
-    { errLoc :: Span, errId :: Id }
+    { errLoc :: Span, errId :: Id, expectedArgs :: Int, actualArgs :: Int }
   | UnboundVariableError
     { errLoc :: Span, errId :: Id }
   | UnboundTypeVariable
@@ -886,7 +886,9 @@ instance UserMsg CheckerError where
   msg PatternArityError{..}
     = "Data constructor `"
       <> pretty errId
-      <> "` is applied to too many arguments."
+      <> "` is applied to wrong number of arguments. Expecting "
+      <> show expectedArgs <> " but pattern match has "
+      <> show actualArgs <> " patterns."
 
   msg UnboundVariableError{..} = "`" <> pretty errId <> "`"
 
