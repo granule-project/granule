@@ -1,0 +1,7 @@
+data List a = Nil | Cons Int a (List a)
+
+copyShapeLister : forall {a : Type} . List a -> (List (), List a)
+copyShapeLister = copyShape @List
+
+main : (List (), List Int)
+main = copyShapeLister (Cons 0 1 (Cons 1 2 (Cons 2 3 (Cons 3 4 Nil))))

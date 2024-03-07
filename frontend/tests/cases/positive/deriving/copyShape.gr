@@ -1,6 +1,3 @@
-copyShapeInt : Int -> ((), Int)
-copyShapeInt = copyShape @Int
-
 data Maybe a = Just a | Nothing
 
 copyShapeMaybe : forall {a : Type} . Maybe a -> (Maybe (), Maybe a)
