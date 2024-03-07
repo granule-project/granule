@@ -11,7 +11,6 @@ two =
 
 mapLinear : forall {a b : Type, n : Nat, f : Nat}
           . (a -> b <f>) [] -> Vec n a -> (Vec n b) <n*f>
-
 mapLinear [_] Nil = pure Nil;
 mapLinear [f] (Cons x xs) =
  let y <- f x;

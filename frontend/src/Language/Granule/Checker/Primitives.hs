@@ -324,8 +324,8 @@ fromPure = BUILTIN
 --------------------------------------
 
 --- Lift a CPS-style effect operation to direct-style, also called the "generic effect" operation
-call : forall {eff : Effect, s : Semiring, grd : s, i : Type, o : Type, r : Type, sigs : eff -> Type -> Type, e : eff}
-     . (i -> (o -> r) [grd] -> sigs e r) -> i -> o <Eff eff sigs e>
+call : forall {eff : Effect, s : Semiring, grd : s, i : Type, o : Type, r : Type, sig : eff -> Type -> Type, e : eff}
+     . (i -> (o -> r) [grd] -> sig e r) -> i -> o <Eff eff sig e>
 call = BUILTIN
 
 --- Deploy an effect handler on a computation tree
