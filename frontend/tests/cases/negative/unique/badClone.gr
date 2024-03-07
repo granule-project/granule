@@ -1,0 +1,13 @@
+nonShareable : exists {id : Name} . ((FloatArray id) [0])
+nonShareable =
+  unpack <id , a> = newFloatArray 3
+  in
+     (pack <id, (share a)> as exists {id : Name} . (FloatArray id) [0])
+
+example : ()
+example = unpack <id , a> = nonShareable in
+  clone a as x in
+    unpack <id' , a'> = x in (deleteFloatArray a')
+
+-- main : ()
+-- main = example

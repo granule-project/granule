@@ -671,7 +671,7 @@ data CheckerError
   | InvalidTypeDefinition
     { errLoc :: Span, errTy :: Type }
   | InvalidHolePosition
-    { errLoc :: Span }
+    { errLoc :: Span, context :: Ctxt Assumption, tyContext :: Ctxt (Type, Quantifier) }
   | UnknownResourceAlgebra
     { errLoc :: Span, errTy :: Type, errK :: Kind }
   | CaseOnIndexedType
@@ -709,7 +709,7 @@ instance UserMsg CheckerError where
   title KindsNotEqual{} = "Kind error"
   title IntervalGradeKindError{} = "Interval kind error"
   title LinearityError{} = "Linearity error"
-  title UniquenessError{} = "Uniqueness error"
+  title UniquenessError{} = "Ownership error"
   title UnpromotableError{} = "Unpromotable error"
   title PatternTypingError{} = "Pattern typing error"
   title PatternTypingMismatch{} = "Pattern typing mismatch"
@@ -776,7 +776,7 @@ instance UserMsg CheckerError where
     -- Print the context if there is anything to use
     (if null context
       then ""
-      else "\n\n   Context:" <> concatMap (\x -> "\n     " ++ pretty x) context)
+      else "\n\n   Context:" <> concatMap (\x -> "\n     " ++ pretty x) (nubContext context))
     <>
     (if null tyContext
       then ""
@@ -860,8 +860,8 @@ instance UserMsg CheckerError where
       "Linearity of Handler clauses does not match"
 
   msg UniquenessError{..} = case uniquenessMismatch of
-    NonUniqueUsedUniquely t ->
-      "Cannot guarantee uniqueness of reference to value of type `" <> pretty t <> "`."
+    NonUniqueUsedUniquely t1 t2 ->
+      "Cannot guarantee usage of reference to value of type `" <> pretty t1 <> "` at permission `" <> pretty t2 <> "`."
     UniquePromotion t ->
       "Cannot promote non-unique value of type `" <> pretty t <> "` to unique, since uniqueness is not a coeffect."
 
@@ -1072,7 +1072,19 @@ instance UserMsg CheckerError where
   msg InvalidTypeDefinition{ errTy }
     = "The type `" <> pretty errTy <> "` is not valid in a datatype definition."
 
-  msg InvalidHolePosition{} = "Hole occurs in synthesis position so the type is not yet known"
+  msg InvalidHolePosition{ errLoc , context , tyContext } = "Hole occurs in synthesis position so the type is not yet known"
+    <>
+    -- Print the context if there is anything to use
+    (if null context
+      then ""
+      else "\n\n   Context:" <> concatMap (\x -> "\n     " ++ pretty x) (nubContext context))
+    <>
+    (if null tyContext
+      then ""
+      else "\n\n   Type context:" <> concatMap (\(v, (t , _)) ->  "\n     "
+                                                <> pretty v
+                                                <> " : " <> pretty t) tyContext)
+
 
   msg UnknownResourceAlgebra{ errK, errTy }
     = "There is no resource algebra defined for `" <> pretty errK <> "`, arising from effect term `" <> pretty errTy <> "`"
@@ -1121,7 +1133,7 @@ data LinearityMismatch
   deriving (Eq, Show) -- for debugging
 
 data UniquenessMismatch
-  = NonUniqueUsedUniquely Type
+  = NonUniqueUsedUniquely Type Type
   | UniquePromotion Type
   deriving (Eq, Show)
 

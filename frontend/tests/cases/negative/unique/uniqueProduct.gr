@@ -1,9 +1,9 @@
-writeTwoArrays : (*FloatArray, *FloatArray) -> (*FloatArray, *FloatArray)
+writeTwoArrays : forall {id id' : Name} . (*(FloatArray id), *(FloatArray id')) -> (*(FloatArray id), *(FloatArray id'))
 writeTwoArrays (arr1, arr2) = (writeFloatArray arr1 0 2.3, writeFloatArray arr2 1 4.5)
 
-haveAndEatTwo : (*FloatArray, *FloatArray) -> ((*FloatArray, *FloatArray), (*FloatArray, *FloatArray))
+haveAndEatTwo : forall {id id' : Name} . (*(FloatArray id), *(FloatArray id')) -> ((*(FloatArray id), *(FloatArray id')), (*(FloatArray id), *(FloatArray id')))
 haveAndEatTwo arrs = (writeTwoArrays arrs, arrs)
 
--- products are *linear* in Granule rather than unique, so we cannot sneakily 
+-- products are *linear* in Granule rather than unique, so we cannot sneakily
 -- copy a uniqueness guarantee by duplicating a product of two arrays rather
 -- than having to duplicate the individual arrays themselves

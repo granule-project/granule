@@ -49,6 +49,7 @@ data Constraint =
     Eq  Span Type Type Type
   | Neq Span Type Type Type
   | ApproximatedBy Span Type Type Type
+  -- last argument is the kind of the coeffect
 
   -- (Least) upper bound; the last argument controls whether
   -- we do a check for leastness of the third argument (True) or not (False)

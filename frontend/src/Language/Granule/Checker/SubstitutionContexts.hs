@@ -24,6 +24,9 @@ newtype Substitutors =
     SubstT  Type
   deriving (Eq, Show)
 
+instance Pretty Substitutors where
+  pretty (SubstT t) = pretty t
+
 instance {-# OVERLAPS #-} Pretty (Ctxt Substitutors) where
   pretty = (intercalate " | ") . (map prettyCoerce)
     where
