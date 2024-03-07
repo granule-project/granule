@@ -553,15 +553,15 @@ deriveCopyShape s ty = do
 
   -- Create fresh variables for the type parameter
   tvar <- freshIdentifierBase "a" >>= (return . mkId)
-  
+
   -- Get kind of type constructor
   (kind, _, _) <- synthKind nullSpanNoFile ty
-  
+
   -- Generate fresh type variables and apply them to the kind constructor
   let argTy    = TyApp ty (TyVar tvar)
   let returnTy = ProdTy (TyApp ty (TyCon $ mkId "()")) argTy
   let tyVars = [(tvar, Type 0)]
-  
+
   let tyS = Forall nullSpan tyVars [] (FunTy Nothing Nothing argTy returnTy)
 
   let localTyVarContext = [(tvar, (Type 0, ForallQ))]
@@ -573,7 +573,7 @@ deriveCopyShape s ty = do
 
   z <- freshIdentifierBase "z" >>= (return . mkId)
   ((shapeTy, returnTy), bodyExpr, primitive) <- deriveCopyShape' s True tyVars argTy (makeVarUntyped z)
-  
+
   let expr = Val s () True $ Abs () (PVar s () True z) Nothing bodyExpr
   let name = mkId $ "copyShape@" ++ pretty ty
   let def = Def s name True Nothing (EquationList s name True [Equation s name () True [] expr]) tyS
@@ -703,7 +703,7 @@ deriveCopyShape' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) ar
                     -- Build the pattern for this case
                     let consPattern =
                           PConstr s () True dataConsName [] (zipWith (\ty var -> PVar s () True var) consParamsTypes consParamsVars)
-                    
+
                     -- Recursively applying copyShape
                     retTysAndExprs <- zipWithM (\ty var -> do
                             deriveCopyShape' s False gamma ty (makeVarUntyped var))
@@ -747,33 +747,39 @@ deriveDrop s ty = do
 
   -- Get kind of type constructor
   (kind, _, _) <- synthKind nullSpanNoFile ty
-  -- Generate fresh type variables and apply them to the kind constructor
-  (localTyVarContext, baseTy, returnTy') <- fullyApplyType kind (TyVar cVar) ty
-  let tyVars = map (\(id, (t, _)) -> (id, t)) localTyVarContext
-  
-  -- For the purposes of recursive types, temporarily 'register' a dummy definition
-  st0 <- get
-  modify (\st -> st { derivedDefinitions =
-                        ((mkId "drop", ty), (trivialScheme $ FunTy Nothing Nothing ty (TyCon $ mkId "()"), undefined))
-                         : derivedDefinitions st,
-                    tyVarContext = tyVarContext st ++ localTyVarContext })
+  case kind of
+    Type _ -> do
+      -- Generate fresh type variables and apply them to the kind constructor
+      let baseTy = ty
+      let returnTy = TyCon $ mkId "()"
 
-  z <- freshIdentifierBase "z" >>= (return . mkId)
-  (returnTy, bodyExpr, primitive, constraints) <- deriveDrop' s True tyVars baseTy (makeVarUntyped z)
-  let tyS = Forall s
-              tyVars
-              (nub constraints)
-              (FunTy Nothing Nothing baseTy returnTy)
-  let expr = Val s () True $ Abs () (PVar s () True z) Nothing bodyExpr
-  let name = mkId $ "drop@" ++ pretty ty
-  let def = Def s name True Nothing (EquationList s name True [Equation s name () True [] expr]) tyS
-  modify (\st -> st { derivedDefinitions = deleteVar' (mkId "drop", ty) (derivedDefinitions st)
-                    -- Restore type variables and predicate stack
-                    , tyVarContext = tyVarContext st0
-                    , predicateStack = predicateStack st0 } )
-  if primitive
-    then return (tyS, Nothing)
-    else return (tyS, Just def)
+      -- For the purposes of recursive types, temporarily 'register' a dummy definition
+      st0 <- get
+      modify (\st -> st { derivedDefinitions =
+                            ((mkId "drop", ty), (trivialScheme $ FunTy Nothing Nothing baseTy returnTy, undefined))
+                            : derivedDefinitions st })
+
+      z <- freshIdentifierBase "z" >>= (return . mkId)
+      (returnTy, bodyExpr, primitive, constraints) <- deriveDrop' s True [] baseTy (makeVarUntyped z)
+      let tyS = Forall s
+                  []
+                  (nub constraints)
+                  (FunTy Nothing Nothing baseTy returnTy)
+      let expr = Val s () True $ Abs () (PVar s () True z) Nothing bodyExpr
+      let name = mkId $ "drop@" ++ pretty ty
+      let def = Def s name True Nothing (EquationList s name True [Equation s name () True [] expr]) tyS
+      modify (\st -> st { derivedDefinitions = deleteVar' (mkId "drop", ty) (derivedDefinitions st)
+                        -- Restore type variables and predicate stack
+                        , tyVarContext = tyVarContext st0
+                        , predicateStack = predicateStack st0 } )
+      if primitive
+        then return (tyS, Nothing)
+        else return (tyS, Just def)
+    _ ->
+      throw $ KindMismatch { errLoc = s
+                           , kExpected = FunTy Nothing Nothing (Type 0) (Type 0)
+                           , kActual = kind
+                           , tyActualK = Nothing }
 
 dropableConstr :: Type -> Type
 dropableConstr t = TyApp (TyCon $ mkId "Dropable") t
