@@ -140,10 +140,10 @@ typeConstructors =
 
      -- Free : (e : Type) -> Effect
     , (mkId "GradedFree", (FunTy (Just $ mkId "eff") Nothing keffect
-                       (FunTy Nothing Nothing (funTy (Type 0) (funTy (tyVar "eff") (Type 0))) keffect), [], [0]))
+                       (FunTy Nothing Nothing (funTy (tyVar "eff") (funTy (Type 0) (Type 0))) keffect), [], [0]))
     , (mkId "Eff",
          (FunTy (Just $ mkId "eff") Nothing keffect
-            (FunTy (Just $ mkId "sig") Nothing (funTy (Type 0) (funTy (tyVar "eff") (Type 0)))
+            (FunTy (Just $ mkId "sig") Nothing (funTy (tyVar "eff") (funTy (Type 0) (Type 0)))
               (funTy (tyVar "eff") (TyApp (TyApp (tyCon "GradedFree") (tyVar "eff")) (tyVar "sig")))), [], [0,1]))
 
     -- Arrays
@@ -324,15 +324,15 @@ fromPure = BUILTIN
 --------------------------------------
 
 --- Lift a CPS-style effect operation to direct-style, also called the "generic effect" operation
-call : forall {eff : Effect, s : Semiring, grd : s, i : Type, o : Type, r : Type, sigs : Type -> eff -> Type, e : eff}
-     . (i -> (o -> r) [grd] -> sigs r e) -> i -> o <Eff eff sigs e>
+call : forall {eff : Effect, s : Semiring, grd : s, i : Type, o : Type, r : Type, sigs : eff -> Type -> Type, e : eff}
+     . (i -> (o -> r) [grd] -> sigs e r) -> i -> o <Eff eff sigs e>
 call = BUILTIN
 
 --- Deploy an effect handler on a computation tree
-handle : forall {eff : Effect, sig : Type -> eff -> Type, a b : Type, e : eff}
-       . (fmap : (forall {a : Type} . (forall {b : Type} . (forall {l : eff} . (a -> b) [0..Inf] -> sig a l -> sig b l))) [0..Inf])
+handle : forall {eff : Effect, sig : eff -> Type -> Type, a b : Type, e : eff}
+       . (fmap : (forall {a : Type} . (forall {b : Type} . (forall {l : eff} . (a -> b) [0..Inf] -> sig l a -> sig l b))) [0..Inf])
        --- ^ functoriality of sig
-       -> (forall {l : eff} . sig b l -> b) [0..Inf]
+       -> (forall {l : eff} . sig l b -> b) [0..Inf]
        -> (a -> b)
        --- ^ (a * sig) - algebra
        -> a <Eff eff sig e>
@@ -340,10 +340,10 @@ handle : forall {eff : Effect, sig : Type -> eff -> Type, a b : Type, e : eff}
 handle = BUILTIN
 
 --- Deploy an effect handler on a computation tree for a graded algebra
-handleGr : forall {eff : Effect, sig : Type -> eff -> Type, a : Type, b : eff -> Type, e : eff}
-       . (fmap : (forall {a : Type} . (forall {b : Type} . (forall {l : eff} . (a -> b) [0..Inf] -> sig a l -> sig b l))) [0..Inf])
+handleGr : forall {eff : Effect, sig : eff -> Type -> Type, a : Type, b : eff -> Type, e : eff}
+       . (fmap : (forall {a : Type} . (forall {b : Type} . (forall {l : eff} . (a -> b) [0..Inf] -> sig l a -> sig l b))) [0..Inf])
        --- ^ functoriality of sig
-       -> (forall {l : eff} . (forall {j : eff} . sig (b j) l -> b (l * j)) [0..Inf])
+       -> (forall {l : eff} . (forall {j : eff} . sig l (b j) -> b (l * j)) [0..Inf])
        -> (a -> b (1 : eff))
        --- ^ (a * sig) - graded algebra
        -> a <Eff eff sig e>

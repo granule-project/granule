@@ -11,19 +11,19 @@ import State
 data Labels = Get | Put
 
 -- Operations
-data StateOps (s : Type) (r : Type) : Set Labels -> Type where
- GetOp : ()         -> (s  -> r) [1] -> StateOps s r {Get};
- PutOp : s [0..Inf] -> (() -> r) [1] -> StateOps s r {Put}
+data StateOps (s : Type) : (Set Labels) -> Type -> Type where
+ GetOp : forall {r : Type} . ()         -> (s  -> r) [1] -> StateOps s {Get} r;
+ PutOp : forall {r : Type} . s [0..Inf] -> (() -> r) [1] -> StateOps s {Put} r
 
  -- Functoriality of operations
 fmap_stateops : forall {s a b : Type, l : Set Labels}
-              . (a -> b) [0..Inf] -> StateOps s a l -> StateOps s b l
+              . (a -> b) [0..Inf] -> StateOps s l a -> StateOps s l b
 fmap_stateops [f] (GetOp () [k]) = GetOp () [f . k];
 fmap_stateops [f] (PutOp [s] [k]) = PutOp [s] [f . k]
 
 -- Handler to state monad
 stateHandler : forall {s r : Type, l : Set Labels}
-             . StateOps s (State s r) l -> State s r
+             . StateOps s l (State s r) -> State s r
 stateHandler (GetOp () [k]) = join_state (State (\([s] : s [0..Inf]) -> (k s, [s])));
 stateHandler (PutOp s [k])  = join_state (State (\([_] : s [0..Inf]) -> (k (), s)))
 
