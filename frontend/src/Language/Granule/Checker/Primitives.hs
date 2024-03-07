@@ -763,6 +763,15 @@ cap = BUILTIN
 -- debug : forall {a : Type} . String -> a -> a
 -- debug = BUILTIN
 
+------------------------------
+-- Derivable operations
+------------------------------
+
+drop : forall {a : Type} . {Dropable a} => a -> ()
+drop = BUILTIN
+
+copyShape : forall {a : Type, f : Type -> Type} . f a -> (f (), f a)
+copyShape = BUILTIN
 |]
 
 
