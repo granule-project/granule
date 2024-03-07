@@ -443,6 +443,7 @@ instance Term Type where
     isLexicallyAtomic TyVar{} = True
     isLexicallyAtomic TySet{} = True
     isLexicallyAtomic TyCon{} = True
+    isLexicallyAtomic (Type 0) = True
     isLexicallyAtomic (TyApp (TyApp (TyCon (sourceName -> ",")) _) _) = True
     isLexicallyAtomic _ = False
 
