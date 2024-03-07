@@ -777,7 +777,7 @@ deriveDrop s ty = do
         else return (tyS, Just def)
     _ ->
       throw $ KindMismatch { errLoc = s
-                           , kExpected = FunTy Nothing Nothing (Type 0) (Type 0)
+                           , kExpected = Type 0
                            , kActual = kind
                            , tyActualK = Nothing }
 
