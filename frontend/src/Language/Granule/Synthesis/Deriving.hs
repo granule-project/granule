@@ -752,9 +752,11 @@ deriveDrop s ty = do
   -- Generate fresh type variables and apply them to the kind constructor
   (localTyVarContext, baseTy, returnTy') <- fullyApplyType kind (TyVar cVar) ty
   let tyVars = map (\(id, (t, _)) -> (id, t)) localTyVarContext
+  
+  -- For the purposes of recursive types, temporarily 'register' a dummy definition
   st0 <- get
   modify (\st -> st { derivedDefinitions =
-                        ((mkId "drop", ty), (trivialScheme $ FunTy Nothing Nothing ty returnTy', undefined))
+                        ((mkId "drop", ty), (trivialScheme $ FunTy Nothing Nothing ty (TyCon $ mkId "()"), undefined))
                          : derivedDefinitions st,
                     tyVarContext = tyVarContext st ++ localTyVarContext })
 
@@ -825,7 +827,7 @@ deriveDrop' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
     if topLevel
       then return Nothing
       else
-        case lookup (mkId "drop", TyCon name) (derivedDefinitions st) of
+        case lookup (mkId "drop", argTy) (derivedDefinitions st) of
           -- We have it in context, so now we need to apply its type
           Just (tyScheme, _) -> do
             -- freshen the type
