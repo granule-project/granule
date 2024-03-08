@@ -5,17 +5,17 @@ data List a = Cons a (List a) | Nil
 data N = S N | Z
 
 
-drop : forall a .  N %0..∞ -> List (a) %0..∞ -> List a
-spec 
-    drop (S Z) (Cons (S Z) (Cons Z Nil)) = Cons Z Nil; 
-    drop % 0..∞
-drop x y = 
+dropper : forall a .  N %0..∞ -> List (a) %0..∞ -> List a
+spec
+    dropper (S Z) (Cons (S Z) (Cons Z Nil)) = Cons Z Nil;
+    dropper % 0..∞
+dropper x y =
     (case y of
-      Nil -> 
+      Nil ->
     (case x of
       Z -> y;
-      S z -> (drop z) y);
-      Cons p q -> 
+      S z -> (dropper z) y);
+      Cons p q ->
     (case x of
       Z -> q;
       S x8 -> q))
