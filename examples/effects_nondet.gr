@@ -1,0 +1,54 @@
+-- Example of using algebraic effects and handlers in Granule to capture
+-- non-determinism effects
+
+-- Uses the builtin `call` and `handle` operations.
+-- See https://granule-project.github.io/docs/modules/Primitives.html#algebraiceffectsandhandlers
+
+import List
+
+-- # Coin toss game effect operations
+
+data Labels = Toss | Drop
+
+-- Operations
+data GameOps : Set Labels -> Type -> Type where
+  FlipCoin : forall {r : Type} . () -> (Bool -> r) [2] -> GameOps {Toss} r;
+  Fumble   : forall {r : Type} . () -> (Void -> r) [0] -> GameOps {Drop} r
+
+-- -- Functoriality of operations
+fmap_gameops : forall {a b : Type, l : Set Labels}
+             . (a -> b) [0..Inf] -> GameOps l a -> GameOps l b
+fmap_gameops [f] (FlipCoin () [k]) = FlipCoin () [f . k];
+fmap_gameops [f] (Fumble () [k]) = Fumble () [f . k]
+
+-- -- Handler to list monad
+handler : forall {a : Type, l : Set Labels} . GameOps l (List a) -> List a
+handler (FlipCoin () [k]) = join_list (Next (k True) (Next (k False) Empty));
+handler (Fumble ()   [k]) = Empty
+
+-- # Examples
+
+foo : Bool <Eff (Set Labels) GameOps {Toss}>
+foo = call FlipCoin ()
+
+-- Two coin flips, all good
+example1 : (Bool, Bool) <Eff (Set Labels) GameOps {Toss}>
+example1 = let
+  x <- call FlipCoin ();
+  y <- call FlipCoin ()
+  in pure (x, y)
+
+-- -- Two coin flips, attempt, but fumble in the middle
+example2 : (Bool, Bool) <Eff (Set Labels) GameOps {Toss,Drop}>
+example2 = let
+  x <- call FlipCoin ();
+  a <- call Fumble ();
+  y <- call FlipCoin ()
+  in let () = drop @Void a in pure (x, y)
+
+-- -- Easy runner
+go : forall {e : Set Labels, a : Type} . a <Eff (Set Labels) GameOps e> -> List a
+go = handle [/\{a,b,l}.fmap_gameops] [/\{l}.handler] (return_list)
+
+main : List (Bool, Bool)
+main = go example1

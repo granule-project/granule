@@ -63,6 +63,7 @@ tokens :-
   pack                          { \p s -> TokenPack p }
   unpack                        { \p s -> TokenUnpack p }
   exists                        { \p s -> TokenExists p }
+  "∃"                           { \p s -> TokenExists p }
   ∞                             { \p s -> TokenInfinity p }
   @float                        { \p s -> TokenFloat p s }
   @int                          { \p s -> TokenInt p $ read s }

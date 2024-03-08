@@ -62,6 +62,10 @@ data Runtime a =
   -- | Data managed by the runtime module (mutable arrays)
   | Runtime RuntimeData
 
+  -- | Free monad representation
+  | FreeMonadImpure (Expr (Runtime a) ())
+  | FreeMonadBind (Value (Runtime a) ()) (Pattern a) (Expr (Runtime a) ())
+
 -- Dual-ended channel
 data BinaryChannel a =
        BChan { fwd :: CC.Chan (Value (Runtime a) a)
@@ -148,6 +152,8 @@ instance Show (Runtime a) where
   show (Handle _) = "Some handle"
   show (PureWrapper _) = "<suspended IO>"
   show (Runtime _) = "<array>"
+  show (FreeMonadImpure r) = "Impure(" <> show r <> ")"
+  show (FreeMonadBind r p k) = "do {... <- " <> show r <> "; ...}"
 
 instance Pretty (Runtime a) where
   pretty = show
@@ -261,16 +267,20 @@ evalInWHNF ctxt (App s a b e1 e2) = do
       (Val _ _ _ (Constr _ c vs)) -> do
         return $ App s a b v1 e2
 
-      _ -> error $ "LHS of an application is not a function value " ++ pretty v1
+      _ -> error $ "LHS of an application is not a function value " <> pretty v1
       -- _ -> error "Cannot apply value"
 
 -- Deriving applications get resolved to their names
 evalInWHNF ctxt (AppTy _ _ _ (Val s a rf (Var a' n)) t) | internalName n `elem` ["push", "pull", "copyShape", "drop"] =
   evalInWHNF ctxt (Val s a rf (Var a' (mkId $ pretty n <> "@" <> pretty t)))
 
--- Other type applications have no run time component (currently)
-evalInWHNF ctxt (AppTy s _ _ e t) =
-  evalInWHNF ctxt e
+-- General type applications
+evalInWHNF ctxt (AppTy s _ _ e t) = do
+  v <- evalInWHNF ctxt e
+  case v of
+    -- Note, doesn't bother substituting the types
+    (Val _ _ _ (TyAbs _ (Left (var, t)) expr)) -> evalInWHNF ctxt expr
+    _ -> error $ "Bug: LHS of a type application is not a type abstraction: " <> pretty v
 
 evalInWHNF ctxt (Binop s a b op e1 e2) = do
      v1 <- evalIn ctxt e1
@@ -294,7 +304,7 @@ evalInWHNF ctxt (LetDiamond s _ _ p _ e1 e2) = do
               evalInWHNF ctxt e2'
           Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in let at " <> pretty s
 
-    other -> fail $ "Runtime exception: Expecting a diamonad value but got: "
+    other -> fail $ "Runtime exception: Expecting a diamond value but got: "
                       <> prettyDebug other
 
 evalInWHNF ctxt (Val s a b (Var _ x)) =
@@ -376,16 +386,19 @@ evalInCBV ctxt (App s _ _ e1 e2) = do
 evalInCBV ctxt (AppTy _ _ _ (Val s a rf (Var a' n)) t) | internalName n `elem` ["push", "pull", "copyShape", "drop"] =
   evalInCBV ctxt (Val s a rf (Var a' (mkId $ pretty n <> "@" <> pretty t)))
 
--- Other type applications have no run time component (currently)
-evalInCBV ctxt (AppTy s _ _ e t) =
-  evalInCBV ctxt e
+-- General type applications
+evalInCBV ctxt (AppTy s _ _ e t) = do
+  v <- evalInCBV ctxt e
+  case v of
+    (TyAbs _ (Left (var, t)) expr) -> evalInCBV ctxt expr
+    _ -> error $ "Bug: LHS of a type application is not a type abstraction: " <> pretty v
 
 evalInCBV ctxt (Binop _ _ _ op e1 e2) = do
      v1 <- evalInCBV ctxt e1
      v2 <- evalInCBV ctxt e2
      return $ evalBinOp op v1 v2
 
-evalInCBV ctxt (LetDiamond s _ _ p _ e1 e2) = do
+evalInCBV ctxt (LetDiamond s a rf p mt e1 e2) = do
   -- (cf. LET_1)
   v1 <- evalInCBV ctxt e1
   case v1 of
@@ -400,6 +413,15 @@ evalInCBV ctxt (LetDiamond s _ _ p _ e1 e2) = do
           Just e2' ->
               evalInCBV ctxt e2'
           Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in let at " <> pretty s
+
+    -- Free monad impure case
+    (Ext _ (FreeMonadImpure eInner)) -> do
+        -- Do the inner
+        v1' <- evalInCBV ctxt eInner
+        --
+        return $ Ext () $ FreeMonadBind v1' p e2
+
+
 
     other -> fail $ "Runtime exception: Expecting a diamonad value but got: "
                       <> prettyDebug other
@@ -418,6 +440,7 @@ evalInCBV ctxt (TryCatch s _ _ e1 p _ e2 e3) = do
       )
        -- (cf. TRY_BETA_2)
       (\(e :: IOException) -> evalInCBV ctxt e3)
+
     other -> fail $ "Runtime exception: Expecting a diamond value but got: " <> prettyDebug other
 
 evalInCBV ctxt (Unpack s a rf tyVar var e1 e2) = do
@@ -446,7 +469,7 @@ evalInCBV ctxt (Val _ _ _ (Var _ x)) =
     case lookup x ctxt of
       Just val@(Ext _ (PrimitiveClosure f)) -> return $ Ext () $ Primitive (f ctxt)
       Just val -> return val
-      Nothing  -> fail $ "Variable '" <> sourceName x <> "' is undefined in context. Context is " <> show ctxt
+      Nothing  -> fail $ "Variable '" <> sourceName x <> "' is undefined in context."
 
 evalInCBV ctxt (Val s _ _ (Promote _ e)) =
   if CBN `elem` globalsExtensions ?globals
@@ -541,7 +564,7 @@ pmatchCBN ctxt psAll@((PBox _ _ _ p, eb):ps) eg =
         else
           pmatchCBN ctxt ps eg
 
-pmatchCBN ctxt psAll@(p@(PConstr _ _ _ id innerPs, eb):ps) eg = do
+pmatchCBN ctxt psAll@(p@(PConstr _ _ _ id _ innerPs, eb):ps) eg = do
   case constructorApplicationSpine eg of
 
     -- Trigger reduction
@@ -610,7 +633,7 @@ pmatchCBV _ [] _ =
 pmatchCBV _ ((PWild {}, e):_)  _ =
   return $ Just e
 
-pmatchCBV ctxt ((PConstr _ _ _ id innerPs, t0):ps) v@(Val s a b (Constr _ id' vs))
+pmatchCBV ctxt ((PConstr _ _ _ id _ innerPs, t0):ps) v@(Val s a b (Constr _ id' vs))
  | id == id' && length innerPs == length vs = do
 
   -- Fold over the inner patterns
@@ -648,6 +671,19 @@ pmatchCBV ctxt (_:ps) v = pmatchCBV ctxt ps v
 -- Wrap a value into an expression
 valExpr :: ExprFix2 g ExprF ev () -> ExprFix2 ExprF g ev ()
 valExpr = Val nullSpanNoFile () False
+
+appExpr :: ExprFix2 ExprF g ev () -> ExprFix2 ExprF g ev () -> ExprFix2 ExprF g ev ()
+appExpr e1 e2 = App nullSpanNoFile () False e1 e2
+
+multiAppExpr :: ExprFix2 ExprF g ev () -> [ExprFix2 ExprF g ev ()] ->  ExprFix2 ExprF g ev ()
+multiAppExpr fun args =
+  foldl (\arg rest -> appExpr arg rest) fun args
+
+promoteExpr :: ExprFix2 ExprF ValueF ev () -> ExprFix2 ExprF ValueF ev ()
+promoteExpr e = valExpr $ Promote () e
+
+varExpr :: Prelude.String -> ExprFix2 ExprF ValueF ev ()
+varExpr var = valExpr $ Var () $ mkId var
 
 builtIns :: (?globals :: Globals) => Ctxt RValue
 {-# NOINLINE builtIns #-}
@@ -688,6 +724,7 @@ builtIns =
   , (mkId "pure",       Ext () $ Primitive $ \v -> return $ Pure () (Val nullSpan () False v))
   , (mkId "fromPure",   Ext () $ Primitive $ \(Pure () (Val nullSpan () False v)) -> return v)
   , (mkId "tick",       Pure () (Val nullSpan () False (Constr () (mkId "()") [])))
+  , (mkId "throw",      Ext () $ PureWrapper (do error "Granule `throw` exception raised, and not caught. Bye!"))
   , (mkId "intToFloat", Ext () $ Primitive $ \(NumInt n) -> return $ NumFloat $ RT.intToFloat n)
   , (mkId "showInt",    Ext () $ Primitive $ \case
                               NumInt n -> return $ StringLiteral . RT.showInt $ n
@@ -716,8 +753,8 @@ builtIns =
           Ext () $ Primitive $ \(StringLiteral t) -> return $ StringLiteral $ s `RT.stringAppend` t)
   , ( mkId "stringUncons"
     , Ext () $ Primitive $ \(StringLiteral s) -> return $ case uncons s of
-        Just (c, s) -> Constr () (mkId "Some") [Constr () (mkId ",") [CharLiteral c, StringLiteral s]]
-        Nothing     -> Constr () (mkId "None") []
+        Just (c, s) -> Constr () (mkId "Just") [Constr () (mkId ",") [CharLiteral c, StringLiteral s]]
+        Nothing     -> Constr () (mkId "Nothing") []
     )
   , ( mkId "stringCons"
     , Ext () $ Primitive $ \(CharLiteral c) -> return $
@@ -725,8 +762,8 @@ builtIns =
     )
   , ( mkId "stringUnsnoc"
     , Ext () $ Primitive $ \(StringLiteral s) -> return $ case unsnoc s of
-        Just (s, c) -> Constr () (mkId "Some") [Constr () (mkId ",") [StringLiteral s, CharLiteral c]]
-        Nothing     -> Constr () (mkId "None") []
+        Just (s, c) -> Constr () (mkId "Just") [Constr () (mkId ",") [StringLiteral s, CharLiteral c]]
+        Nothing     -> Constr () (mkId "Nothing") []
     )
   , ( mkId "stringSnoc"
     , Ext () $ Primitive $ \(StringLiteral s) -> return $
@@ -738,7 +775,6 @@ builtIns =
              if b then Constr () (mkId "True") [] else Constr () (mkId "False") []
         return . Val nullSpan () False $ Constr () (mkId ",") [Ext () $ Handle h, boolflag])
   , (mkId "forkLinear", Ext () $ PrimitiveClosure forkLinear)
-  , (mkId "forkLinear'", Ext () $ PrimitiveClosure forkLinear')
   , (mkId "forkNonLinear", Ext () $ PrimitiveClosure forkNonLinear)
   , (mkId "forkReplicate", Ext () $ PrimitiveClosure forkReplicate)
   , (mkId "forkReplicateExactly", Ext () $ PrimitiveClosure forkReplicateExactly)
@@ -754,6 +790,11 @@ builtIns =
   , (mkId "gsend",    Ext () $ Primitive gsend)
   , (mkId "gclose",   Ext () $ Primitive gclose)
   -- , (mkId "trace",   Ext () $ Primitive $ \(StringLiteral s) -> diamondConstr $ do { Text.putStr s; hFlush stdout; return $ Val nullSpan () False (Constr () (mkId "()") []) })
+  -- , (mkId "trace",   Ext () $ Primitive $ \(StringLiteral s) -> do
+  --                         return $ Ext () $ Primitive $ \e -> do
+  --                                               putStrLn $ "TRACE<" <> unpack s <> ">: " <> pretty e <> "\n"
+  --                                               return e )
+
   -- , (mkId "newPtr", malloc)
   -- , (mkId "swapPtr", peek poke castPtr) -- hmm probably don't need to cast the Ptr
   -- , (mkId "freePtr", free)
@@ -776,22 +817,93 @@ builtIns =
   , (mkId "with", Ext () $ Primitive $ \v -> return $ Ext () $ Primitive $ \w -> return $ Constr () (mkId "&") [v, w])
   , (mkId "projL", Ext () $ Primitive $ \(Constr () (Id "&" "&") [v, w]) -> return $ v)
   , (mkId "projR", Ext () $ Primitive $ \(Constr () (Id "&" "&") [v, w]) -> return $ w)
+  -- free graded monad
+  -- call op x = Impure (op x (\o -> Pure o))
+  , (mkId "call", Ext () $ Primitive $ \op ->
+                            return $ Ext () $ Primitive $ \inp ->
+                              return $ Ext () $ FreeMonadImpure $
+                                  App nullSpan () False
+                                    (App nullSpan () False (valExpr op) (valExpr inp))
+                                     (valExpr $ Promote () $ valExpr $ Ext () $
+                                       Primitive $ \o ->
+                                         return (Ext () $ PureWrapper $ return $ (valExpr o))))
+  , (mkId "handle", Ext () $ PrimitiveClosure handlePrim)
+  , (mkId "handleGr", Ext () $ PrimitiveClosure handlePrim)
   ]
   where
+
+    -- Based on the catamorphism of a free monad
+    handlePrim :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
+    handlePrim ctxt fmap@(Promote _ (Val _ _ _ (TyAbs _ _ fmap_inner))) = do
+      -- evaluate the fmap expression down to an abstraction
+      fmap_fun <- evalIn ctxt fmap_inner
+      return $ Ext () $ Primitive $ \alg ->
+        return $ Ext () $ Primitive $ \ret_handler ->
+          return $ Ext () $ Primitive $ \computation ->
+            case computation of
+
+              -- handler alg f (Pure x) = f x
+              Ext _ (PureWrapper comp) -> do
+                -- run the IO in here (should be none)
+                comp' <- comp
+                -- force evaluation of the expression
+                val <- evalIn ctxt comp'
+                -- now apply the rethandler
+                evalIn ctxt (appExpr (valExpr ret_handler) (valExpr val))
+
+              Pure _ comp -> do
+                -- force evaluation of the expression
+                val <- evalIn ctxt comp
+                -- now apply the rethandler
+                evalIn ctxt (appExpr (valExpr ret_handler) (valExpr val))
+
+
+              -- handler alg f (Impure k) = alg (fmap (handler alg f) k)
+              Ext _ (FreeMonadImpure comp) -> do
+                -- evaluate the inner continatuon to a value (should be a function)
+                cont_val <- evalIn ctxt comp
+                -- unwrap algebra argument
+                case alg of
+                  (Promote _ alg_inner0) -> do
+                    alg_inner' <- evalIn ctxt alg_inner0
+                    case alg_inner' of
+                      (TyAbs _ _ alg_inner) -> do
+                        alg_fun <- evalIn ctxt alg_inner
+                        --
+                        evalIn ctxt
+                          (appExpr (valExpr alg_fun)
+                            (multiAppExpr (valExpr fmap_fun) [promoteExpr (multiAppExpr (varExpr "handle") [valExpr fmap, valExpr alg, valExpr ret_handler])
+                                              , valExpr cont_val ]))
+                      alg_expr -> error $ "Internal bug: handle expecting algebra argument to be a function, got " <> pretty alg_expr
+                  alg_inner0 -> error $ "Internal bug: handle expecting algebra argument in a box, got " <> pretty alg_inner0
+
+              -- Bind case
+              --   (Impure x) >>= k = Impure $ fmap (\freefa -> freefa >>= k) x
+
+              Ext _ (FreeMonadBind comp p rest) -> do
+
+                evalIn ctxt $
+                  multiAppExpr (varExpr "handle")
+                    [ valExpr fmap
+                    , valExpr alg
+                    , valExpr ret_handler
+                    , valExpr $ Ext () (FreeMonadImpure $
+                      multiAppExpr
+                          (valExpr fmap_fun)
+                          [promoteExpr $ valExpr $ Ext ()
+                              (Primitive (\freefa -> evalIn ctxt (LetDiamond nullSpanNoFile () False p Nothing (valExpr freefa) rest)))
+                          , valExpr $ comp])]
+
+              r -> error $ "Interal bug: handle expecting a free monad but got " <> pretty r
+
+
+    handlePrim ctxt t = error $ "Internal bug: expecting a promoted function as first input to 'handle', got " <> pretty t
+
     forkLinear :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
     forkLinear ctxt e = case e of
       Abs{} -> do c <- newChan
                   _ <- C.forkIO $ void $ evalIn ctxt (App nullSpan () False (valExpr e)
                                                        (valExpr $ Ext () $ Chan c))
-                  return $ Ext () $ Chan (dualEndpoint c)
-      _oth -> error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
-
-    forkLinear' :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
-    forkLinear' ctxt e = case e of
-      Abs{} -> do c <- newChan
-                  _ <- C.forkIO $ void $ evalIn ctxt (App nullSpan () False
-                                                      (valExpr e)
-                                                      (valExpr $ Promote () $ valExpr $ Ext () $ Chan c))
                   return $ Ext () $ Chan (dualEndpoint c)
       _oth -> error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
@@ -1083,7 +1195,13 @@ evalDefs ctxt (Def _ var _ _ (EquationList _ _ _ [Equation _ _ _ rf [] e]) _ : d
     val <- evalIn ctxt e
     case extend ctxt var val of
       Just ctxt -> evalDefs ctxt defs
-      Nothing -> error $ "Name clash: `" <> sourceName var <> "` was already in the context."
+      Nothing ->
+        if '@' `elem` (internalName var)
+          -- ignore name clashes for derived operations
+          -- TODO: this is somewhat a hack- we should be able to make sure we don't
+          -- regenerated derived operations, but at least they should all be equivalent...
+          then evalDefs ctxt defs
+          else error $ "Name clash: `" <> sourceName var <> "` was already in the context."
 evalDefs ctxt (d : defs) = do
     let d' = desugar d
     evalDefs ctxt (d' : defs)
@@ -1126,6 +1244,7 @@ instance RuntimeRep Value where
   toRuntimeRep (NumInt x) = NumInt x
   toRuntimeRep (NumFloat x) = NumFloat x
   toRuntimeRep (Pack s a ty e var k ty') = Pack s a ty (toRuntimeRep e) var k ty'
+  toRuntimeRep (TyAbs a vart e) = TyAbs a vart (toRuntimeRep e)
 
 eval :: (?globals :: Globals) => AST () () -> IO (Maybe RValue)
 eval = evalAtEntryPoint (mkId entryPoint)

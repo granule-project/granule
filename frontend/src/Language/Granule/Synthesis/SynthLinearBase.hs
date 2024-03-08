@@ -713,7 +713,7 @@ constrElimHelper gamma (Focused left) (Focused (var@(x, assumption):right)) mode
   where
 
   makePattern :: Id -> [Id] -> Maybe Type -> Pattern ()
-  makePattern conId vars _ = PConstr ns () False conId (map (PVar ns () False) vars)
+  makePattern conId vars _ = PConstr ns () False conId [] (map (PVar ns () False) vars)
 
   bindAssumptions ::
     Bool
@@ -824,9 +824,9 @@ constrElimHelper gamma (Focused left) (Focused (var@(x, assumption):right)) mode
     -> Pattern ()
     -> Ctxt SAssumption
     -> Maybe (Pattern Type, Ctxt (Id, Type))
-  transformPattern bindings adt ctxt (PConstr s () b id pats) unboxed = do
+  transformPattern bindings adt ctxt (PConstr s () b id names pats) unboxed = do
     (pats', bindings') <- transformPatterns bindings adt ctxt pats unboxed
-    Just (PConstr s adt b id pats', bindings)
+    Just (PConstr s adt b id names pats', bindings)
   transformPattern bindings adt ctxt (PVar s () b name) unboxed =
     let (pat, name', bindings') = case lookup name unboxed of
           Just (SVar (Discharged ty _) _ _) -> (PBox s ty False, name, bindings)

@@ -445,3 +445,10 @@ m <.*> n = do
   x <- m
   y <- n
   return (x, y)
+
+unzip4 :: [(a, b, c, d)] -> ([a], [b], [c], [d])
+unzip4 [] = ([], [], [], [])
+unzip4 ((a, b, c, d):xs) =
+    (a:as, b:bs, c:cs, d:ds)
+  where
+    (as, bs, cs, ds) = unzip4 xs

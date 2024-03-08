@@ -10,8 +10,7 @@ two =
 -- Prove (map f) in O(|f|n)
 
 mapLinear : forall {a b : Type, n : Nat, f : Nat}
-          . (a -> b <f>) [] -> Vec n a -> (Vec n b) <n*f>
-
+          . (a -> b <f>) [n] -> Vec n a -> (Vec n b) <n*f>
 mapLinear [_] Nil = pure Nil;
 mapLinear [f] (Cons x xs) =
  let y <- f x;

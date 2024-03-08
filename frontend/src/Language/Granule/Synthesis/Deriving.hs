@@ -26,6 +26,8 @@ import Language.Granule.Utils
 import Control.Monad.State.Strict (modify, get)
 import Control.Monad (zipWithM, forM)
 
+import Data.List (nub)
+
   {-
   Module for automatically deriving graded linear logical
   operations based on types.
@@ -54,17 +56,21 @@ derivePush s ty = do
 
   -- Give a name to the input
   z <- freshIdentifierBase "z" >>= (return . mkId)
-  (returnTy, bodyExpr, isPoly) <-
+  (returnTy, bodyExpr, isPoly, needsHsup) <-
     derivePush' s True (TyVar cVar) [] tyVars baseTy (makeVarUntyped z)
 
   -- Build derived type scheme
-  let constraints =
+  let constraints' =
         if isPoly
           then [TyInfix TyOpLesserEq (TyGrade (Just (TyVar kVar)) 1) (TyVar cVar)]
           else []
+  let constraints =
+        if needsHsup
+          then [TyInfix TyOpHsup (TyVar cVar) (TyVar cVar)]
+          else []
   let tyS = Forall s
               ([(kVar, kcoeffect), (cVar, (TyVar kVar))] ++ tyVars)
-              constraints
+              (constraints <> constraints')
               (FunTy Nothing Nothing argTy returnTy)
   -- Build the expression
   let expr = Val s () True $ Abs () (PVar s () True z) Nothing bodyExpr
@@ -93,38 +99,39 @@ derivePush s ty = do
 --   * the return type: F ([] r a1) .. ([] r an)
 --   * the and the expression of this type
 --   * whether this is polyshaped or not
+--   * whether hsup is needed or not due to tensors
 derivePush' :: (?globals :: Globals)
             => Span
             -> Bool
-            -> Type -> Ctxt Id -> Ctxt Kind -> Type -> Expr () () -> Checker (Type, Expr () (), Bool)
+            -> Type -> Ctxt Id -> Ctxt Kind -> Type -> Expr () () -> Checker (Type, Expr () (), Bool, Bool)
 
 -- Type variable case: push_alpha arg = arg
 derivePush' topLevel s c _sigma gamma argTy@(TyVar n) arg = do
   case lookup n gamma of
-    Just _ -> return (Box c argTy, arg, False)
+    Just _ -> return (Box c argTy, arg, False, False)
     Nothing -> do
       -- For arguments which are type variables but not parameters
       -- to this type constructor, then we need to do an unboxing
       x <- freshIdentifierBase "x" >>= (return . mkId)
       let expr = makeUnboxUntyped x arg (makeVarUntyped x)
-      return (argTy, expr, False)
+      return (argTy, expr, False, False)
 
 -- Unit case:  push_() arg = (case arg of () -> ()) : ())
 derivePush' s topLevel c _sigma gamma argTy@(TyCon (internalName -> "()")) arg = do
   let ty  = argTy
-  return (ty, makeUnitElimPUntyped pbox arg makeUnitIntroUntyped, False)
+  return (ty, makeUnitElimPUntyped pbox arg makeUnitIntroUntyped, False, False)
 
 -- Pair case: push_(t1,t2) arg = (case arg of (x, y) -> (push_t1 [x], push_t2 [y])
 derivePush' s topLevel c _sigma gamma argTy@(ProdTy t1 t2) arg = do
   x <- freshIdentifierBase "x" >>= (return . mkId)
   y <- freshIdentifierBase "y" >>= (return . mkId)
   -- Induction
-  (leftTy, leftExpr, lisPoly)   <- derivePush' s topLevel c _sigma gamma t1 (makeBoxUntyped (makeVarUntyped x))
-  (rightTy, rightExpr, risPoly) <- derivePush' s topLevel c _sigma gamma t2 (makeBoxUntyped (makeVarUntyped y))
+  (leftTy, leftExpr, lisPoly, _lhsup)   <- derivePush' s topLevel c _sigma gamma t1 (makeBoxUntyped (makeVarUntyped x))
+  (rightTy, rightExpr, risPoly, _rhsup) <- derivePush' s topLevel c _sigma gamma t2 (makeBoxUntyped (makeVarUntyped y))
   -- Build eliminator
   let returnTy = ProdTy leftTy rightTy
   return (returnTy, makePairElimPUntyped pbox arg x y
-                     (makePairUntyped leftExpr rightExpr), lisPoly || risPoly)
+                     (makePairUntyped leftExpr rightExpr), lisPoly || risPoly, True)
 
 -- General type constructor case:
 derivePush' s topLevel c _sigma gamma argTy@(leftmostOfApplication -> TyCon name) arg = do
@@ -164,7 +171,11 @@ derivePush' s topLevel c _sigma gamma argTy@(leftmostOfApplication -> TyCon name
             case mConstructors of
                Just xs | length xs > 1 -> True
                _                       -> False
-      return (pushResTy, pushExpr, isPoly)
+      let pushable =
+           case mConstructors of
+               Just xs -> any (isMultiArity . fst3 . snd) xs
+               _       -> True
+      return (pushResTy, pushExpr, isPoly, pushable)
     Nothing ->
       -- Not already defined...
       -- Get the kind of this type constructor
@@ -185,9 +196,6 @@ derivePush' s topLevel c _sigma gamma argTy@(leftmostOfApplication -> TyCon name
                 (dataConstructorTypeFresh, freshTyVarsCtxt, _constraint, coercions') <-
                       freshPolymorphicInstance InstanceQ True tySch coercions []
 
-                -- [Note: this does not register the constraints associated with the data constrcutor]
-                dataConstructorTypeFresh <- substitute (flipSubstitution coercions') dataConstructorTypeFresh
-
                 debugM "deriv-push - dataConstructorTypeFresh" (pretty dataConstructorTypeFresh)
                 debugM "deriv-push - eq with" (pretty (resultType dataConstructorTypeFresh) ++ " = " ++ pretty argTy)
                 -- Perform an equality between the result type of the data constructor and the argument type here
@@ -201,7 +209,7 @@ derivePush' s topLevel c _sigma gamma argTy@(leftmostOfApplication -> TyCon name
                     debugM "deriv-push unifiers" (show unifiers)
 
                     -- Unify and specialise the data constructor type
-                    dataConsType <- substitute (flipSubstitution unifiers) dataConstructorTypeFresh
+                    dataConsType <- substitute unifiers dataConstructorTypeFresh
                     debugM "deriv-push dataConsType" (pretty dataConsType)
 
 
@@ -211,7 +219,7 @@ derivePush' s topLevel c _sigma gamma argTy@(leftmostOfApplication -> TyCon name
 
                     -- Build the pattern for this case
                     let consPattern =
-                          PConstr s () True dataConsName (zipWith (\ty var -> PVar s () True var) consParamsTypes consParamsVars)
+                          PConstr s () True dataConsName [] (zipWith (\ty var -> PVar s () True var) consParamsTypes consParamsVars)
                     let consPatternBoxed =
                           PBox s () True consPattern
 
@@ -220,15 +228,15 @@ derivePush' s topLevel c _sigma gamma argTy@(leftmostOfApplication -> TyCon name
                             debugM "derive-push" ("Deriving argument of case for " <> pretty dataConsName <> " at type " <> pretty ty)
                             derivePush' s False c _sigma gamma ty (makeBoxUntyped (makeVarUntyped var)))
                               consParamsTypes consParamsVars
-                    let (_retTys, exprs, isPolys) = unzip3 retTysAndExprs
+                    let (_retTys, exprs, isPolys, needsHsups) = unzip4 retTysAndExprs
 
                     let bodyExpr = mkConstructorApplication s dataConsName dataConsType (reverse exprs) dataConsType
                     let isPoly = (length constructors > 1) || or isPolys
-                    return ((consPatternBoxed, bodyExpr), isPoly))
+                    return ((consPatternBoxed, bodyExpr), (isPoly, or needsHsups)))
 
               -- Got all the branches to make the following case now
               case objectMappingWithBox argTy kind c of
-                Just returnTy -> return (returnTy, Case s () True arg (map fst cases), or (map snd cases))
+                Just returnTy -> return (returnTy, Case s () True arg (map fst cases), or (map (fst . snd) cases), or (map (snd . snd) cases))
                 Nothing -> error $ "Cannot push derive for type " ++ pretty argTy ++ " due to typing"
 
 derivePush' s _ _ _ _ ty _ = do
@@ -419,7 +427,7 @@ derivePull' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
 
                     -- Build the pattern for this case
                     let consPattern =
-                          PConstr s () True dataConsName (zipWith (\ty var -> PBox s () True (PVar s () True var)) consParamsTypes consParamsVars)
+                          PConstr s () True dataConsName [] (zipWith (\ty var -> PBox s () True (PVar s () True var)) consParamsTypes consParamsVars)
                     debugM "derive-pull" ("consPattern " <> pretty consPattern )
                     -- Push on all the parameters of a the constructor
                     retTysAndExprs <- zipWithM (\ty var -> do
@@ -543,35 +551,29 @@ deleteVar' x ((y, b) : m) | x == y = deleteVar' x m
 deriveCopyShape :: (?globals :: Globals) => Span -> Type -> Checker (TypeScheme, Maybe (Def () ()))
 deriveCopyShape s ty = do
 
-  -- Create fresh variables for the grades
-  kVar <- freshIdentifierBase "k" >>= (return . mkId)
-  cVar <- freshIdentifierBase "r" >>= (return . mkId)
+  -- Create fresh variables for the type parameter
+  tvar <- freshIdentifierBase "a" >>= (return . mkId)
 
   -- Get kind of type constructor
   (kind, _, _) <- synthKind nullSpanNoFile ty
+
   -- Generate fresh type variables and apply them to the kind constructor
-  (localTyVarContext, baseTy, returnTy') <- fullyApplyType kind (TyVar cVar) ty
-  let tyVars = map (\(id, (t, _)) -> (id, t)) localTyVarContext
+  let argTy    = TyApp ty (TyVar tvar)
+  let returnTy = ProdTy (TyApp ty (TyCon $ mkId "()")) argTy
+  let tyVars = [(tvar, Type 0)]
+
+  let tyS = Forall nullSpan tyVars [] (FunTy Nothing Nothing argTy returnTy)
+
+  let localTyVarContext = [(tvar, (Type 0, ForallQ))]
   st0 <- get
   modify (\st -> st { derivedDefinitions =
-                        ((mkId "copyShape", ty), (trivialScheme $ FunTy Nothing Nothing ty returnTy', undefined))
+                        ((mkId "copyShape", ty), (tyS, undefined))
                          : derivedDefinitions st,
                     tyVarContext = tyVarContext st ++ localTyVarContext })
 
-  debugM  "copyShape: " (show returnTy')
-  debugM  "copyShape - BaseTy " (show baseTy)
-  debugM  "copyShape - local tyVasr " (show localTyVarContext)
-
- -- st0 <- get
- -- modify (\st -> st {
-    --  tyVarContext = tyVarContext st ++ [(kVar, (KCoeffect, ForallQ)), (cVar, (KPromote (TyVar kVar), ForallQ))] ++ localTyVarContext })
   z <- freshIdentifierBase "z" >>= (return . mkId)
-  ((shapeTy, returnTy), bodyExpr, primitive) <- deriveCopyShape' s True tyVars baseTy (makeVarUntyped z)
-  let tyS = Forall s
-              --([(kVar, KCoeffect), (cVar, KPromote (TyVar kVar))] ++ tyVars)
-              tyVars
-              []
-              (FunTy Nothing Nothing baseTy (ProdTy shapeTy returnTy))
+  ((shapeTy, returnTy), bodyExpr, primitive) <- deriveCopyShape' s True tyVars argTy (makeVarUntyped z)
+
   let expr = Val s () True $ Abs () (PVar s () True z) Nothing bodyExpr
   let name = mkId $ "copyShape@" ++ pretty ty
   let def = Def s name True Nothing (EquationList s name True [Equation s name () True [] expr]) tyS
@@ -625,16 +627,16 @@ deriveCopyShape' s topLevel gamma argTy@(ProdTy t1 t2) arg = do
            (makeVarUntyped x') (makeVarUntyped y')))))
   return ((ProdTy lShapeTy rShapeTy, ProdTy lTy rTy), expr, False)
 
-deriveCopyShape' _ _ _ argTy@(leftmostOfApplication -> TyCon (internalName -> id)) arg |
-  id == "Int" || id == "Char" || id == "Float" || id == "String "= do
-  return ((unitType, argTy), makePairUntyped makeUnitIntroUntyped arg, False)
+deriveCopyShape' _ _ _ argTy@(leftmostOfApplication -> TyCon (internalName -> id)) arg
+  | id == "Int" || id == "Char" || id == "Float" || id == "String "= do
+    return ((unitType, argTy), makePairUntyped arg arg, False)
 
 deriveCopyShape' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = do
   st <- get
   alreadyDefined <-
     if topLevel
       then return Nothing
-      else
+      else do
         case lookup (mkId "copyShape", TyCon name) (derivedDefinitions st) of
           -- We have it in context, so now we need to apply its type
           Just (tyScheme, _) -> do
@@ -648,7 +650,7 @@ deriveCopyShape' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) ar
                     -- Success!
                     then do
                       t3' <- substitute subst t3
-                      return (Just ((t2, t3'), App s () True (makeVarUntyped (mkId $ "copyShapea@" <> pretty name)) arg))
+                      return (Just ((t2, t3'), App s () True (makeVarUntyped (mkId $ "copyShape@" <> pretty name)) arg))
                     else do
                       -- Couldn't do the equality.
                       return Nothing
@@ -692,30 +694,34 @@ deriveCopyShape' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) ar
                     -- Create a variable for each parameter
                     let consParamsTypes = parameterTypes dataConsType
                     debugM "deriveCopyShape cons param types: " (show consParamsTypes)
-                    consParamsVars <- forM consParamsTypes (\_ -> freshIdentifierBase "y" >>= (return . mkId))
+                    -- variables for each constructor parameter
+                    consParamsVars <- forM consParamsTypes (\_ -> freshIdentifierBase "x" >>= (return . mkId))
+                    -- variables for their result and shape
+                    consResVars    <- forM consParamsTypes (\_ -> freshIdentifierBase "y" >>= (return . mkId))
+                    consShapeVars <- forM consParamsTypes (\_ -> freshIdentifierBase "s" >>= (return . mkId))
 
                     -- Build the pattern for this case
                     let consPattern =
-                          PConstr s () True dataConsName (zipWith (\ty var -> PVar s () True var) consParamsTypes consParamsVars)
+                          PConstr s () True dataConsName [] (zipWith (\ty var -> PVar s () True var) consParamsTypes consParamsVars)
 
-                    -- Push on all the parameters of a the constructor
+                    -- Recursively applying copyShape
                     retTysAndExprs <- zipWithM (\ty var -> do
                             deriveCopyShape' s False gamma ty (makeVarUntyped var))
                               consParamsTypes consParamsVars
                     let (_, exprs, _) = unzip3 retTysAndExprs
---                    let (shapeTys, retTys') = unzip _retTys
-                    s' <- freshIdentifierBase "s" >>= (return . mkId)
-                    x' <- freshIdentifierBase "x" >>= (return . mkId)
-                    let bodyExpr = mkConstructorApplication s dataConsName dataConsType  exprs dataConsType
+--                  -- Build a constructor over the results
+                    let bodyExpr = mkConstructorApplication s dataConsName dataConsType exprs dataConsType
 
-                    let resExpr = mkConstructorApplication s dataConsName dataConsType  [makeVarUntyped x'] dataConsType
-                    let shapeExpr = mkConstructorApplication s dataConsName dataConsType [makeVarUntyped s'] dataConsType
+                    -- Build a pair of the shape expression and preserved result expression
+                    let resExpr = mkConstructorApplication s dataConsName dataConsType (map makeVarUntyped (reverse consParamsVars)) dataConsType
+                    let shapeExpr = mkConstructorApplication s dataConsName dataConsType (map makeVarUntyped consShapeVars) dataConsType
                     let resPair = makePairUntyped shapeExpr resExpr
 
-                    -- Case (Constr x1,..xn) of (s', x') -> Constr s', Constr x'
-                    let caseExpr = Case s () True bodyExpr [(PConstr s () True dataConsName [PConstr s () True (mkId ",") [(PVar s () True s'), (PVar s () True x')]], resPair)]
+                    -- Match on body expression to
+                    let resAndShapePats = map (\(svar, yvar) -> PConstr s () True (mkId ",") [] [PVar s () True svar, PVar s () True yvar]) (zip consShapeVars consResVars)
+                    let caseExpr =
+                          Case s () True bodyExpr [(PConstr s () True dataConsName [] resAndShapePats, resPair)]
 
-              --      let returnTy = mkTypeApplication dataConsName shapeTys
                     return (consPattern, caseExpr))
 
               debugM "copyShape retTys:" (show $ exprs)
@@ -741,32 +747,42 @@ deriveDrop s ty = do
 
   -- Get kind of type constructor
   (kind, _, _) <- synthKind nullSpanNoFile ty
-  -- Generate fresh type variables and apply them to the kind constructor
-  (localTyVarContext, baseTy, returnTy') <- fullyApplyType kind (TyVar cVar) ty
-  let tyVars = map (\(id, (t, _)) -> (id, t)) localTyVarContext
-  st0 <- get
-  modify (\st -> st { derivedDefinitions =
-                        ((mkId "drop", ty), (trivialScheme $ FunTy Nothing Nothing ty returnTy', undefined))
-                         : derivedDefinitions st,
-                    tyVarContext = tyVarContext st ++ localTyVarContext })
+  case kind of
+    Type _ -> do
+      -- Generate fresh type variables and apply them to the kind constructor
+      let baseTy = ty
+      let returnTy = TyCon $ mkId "()"
 
-  z <- freshIdentifierBase "z" >>= (return . mkId)
-  (returnTy, bodyExpr, primitive) <- deriveDrop' s True tyVars baseTy (makeVarUntyped z)
-  let tyS = Forall s
-              tyVars
-              []
-              (FunTy Nothing Nothing baseTy returnTy)
-  let expr = Val s () True $ Abs () (PVar s () True z) Nothing bodyExpr
-  let name = mkId $ "drop@" ++ pretty ty
-  let def = Def s name True Nothing (EquationList s name True [Equation s name () True [] expr]) tyS
-  modify (\st -> st { derivedDefinitions = deleteVar' (mkId "drop", ty) (derivedDefinitions st)
-                    -- Restore type variables and predicate stack
-                    , tyVarContext = tyVarContext st0
-                    , predicateStack = predicateStack st0 } )
-  if primitive
-    then return (tyS, Nothing)
-    else return (tyS, Just def)
+      -- For the purposes of recursive types, temporarily 'register' a dummy definition
+      st0 <- get
+      modify (\st -> st { derivedDefinitions =
+                            ((mkId "drop", ty), (trivialScheme $ FunTy Nothing Nothing baseTy returnTy, undefined))
+                            : derivedDefinitions st })
 
+      z <- freshIdentifierBase "z" >>= (return . mkId)
+      (returnTy, bodyExpr, primitive, constraints) <- deriveDrop' s True [] baseTy (makeVarUntyped z)
+      let tyS = Forall s
+                  []
+                  (nub constraints)
+                  (FunTy Nothing Nothing baseTy returnTy)
+      let expr = Val s () True $ Abs () (PVar s () True z) Nothing bodyExpr
+      let name = mkId $ "drop@" ++ pretty ty
+      let def = Def s name True Nothing (EquationList s name True [Equation s name () True [] expr]) tyS
+      modify (\st -> st { derivedDefinitions = deleteVar' (mkId "drop", ty) (derivedDefinitions st)
+                        -- Restore type variables and predicate stack
+                        , tyVarContext = tyVarContext st0
+                        , predicateStack = predicateStack st0 } )
+      if primitive
+        then return (tyS, Nothing)
+        else return (tyS, Just def)
+    _ ->
+      throw $ KindMismatch { errLoc = s
+                           , kExpected = Type 0
+                           , kActual = kind
+                           , tyActualK = Nothing }
+
+dropableConstr :: Type -> Type
+dropableConstr t = TyApp (TyCon $ mkId "Dropable") t
 
 deriveDrop' :: (?globals :: Globals)
   => Span
@@ -774,39 +790,39 @@ deriveDrop' :: (?globals :: Globals)
   -> Ctxt Kind
   -> Type
   -> Expr () ()
-  -> Checker (Type, Expr () (), Bool)
+  -> Checker (Type, Expr () (), Bool, [Type])
 deriveDrop' _ _ _ argTy@(leftmostOfApplication -> TyCon (Id "()" "()")) arg = do
-  return (TyCon $ mkId "()", makeUnitIntroUntyped, False)
+  return (TyCon $ mkId "()", makeUnitIntroUntyped, False, [])
 
 deriveDrop' _ _ _ argTy@(leftmostOfApplication -> TyCon (Id "Int" "Int")) arg = do
-  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@Int")) arg), True)
+  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@Int")) arg), True, [])
 
 deriveDrop' _ _ _ argTy@(leftmostOfApplication -> TyCon (Id "Char" "Char")) arg = do
-  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@Char")) arg), True)
+  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@Char")) arg), True, [])
 
 deriveDrop' _ _ _ argTy@(leftmostOfApplication -> TyCon (Id "Float" "Float")) arg = do
-  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@Float")) arg), True)
+  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@Float")) arg), True, [])
 
 deriveDrop' _ _ _ argTy@(leftmostOfApplication -> TyCon (Id "FloatArray" "FloatArray")) arg = do
-  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@FloatArray")) arg), True)
+  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@FloatArray")) arg), True, [])
 
 deriveDrop' _ _ _ argTy@(leftmostOfApplication -> TyCon (Id "String" "String")) arg = do
-  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@String")) arg), True)
+  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@String")) arg), True, [])
 
 deriveDrop' _ _ _ argTy@(TyVar name) arg = do
-  return (TyCon $ mkId "()", makeUnitIntroUntyped, False)
+  return (TyCon $ mkId "()", makeUnitIntroUntyped, False, [dropableConstr argTy])
 
 deriveDrop' s topLevel gamma argTy@(ProdTy t1 t2) arg = do
   x <- freshIdentifierBase "x" >>= (return . mkId)
   y <- freshIdentifierBase "y" >>= (return . mkId)
 
-  (lTy, lExpr, _) <- deriveDrop' s topLevel gamma t1 (makeVarUntyped x)
-  (rTy, rExpr, _) <- deriveDrop' s topLevel gamma t2 (makeVarUntyped y)
+  (lTy, lExpr, _, lConstraints) <- deriveDrop' s topLevel gamma t1 (makeVarUntyped x)
+  (rTy, rExpr, _, rConstraints) <- deriveDrop' s topLevel gamma t2 (makeVarUntyped y)
 
   let expr = makePairElimPUntyped id arg x y (makeUnitElimPUntyped id lExpr (makeUnitElimPUntyped id rExpr makeUnitIntroUntyped))
   debugM "expr: " (pretty expr)
 
-  return (TyCon $ mkId "()", expr, False)
+  return (TyCon $ mkId "()", expr, False, lConstraints <> rConstraints)
 
 
 deriveDrop' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = do
@@ -815,7 +831,7 @@ deriveDrop' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
     if topLevel
       then return Nothing
       else
-        case lookup (mkId "drop", TyCon name) (derivedDefinitions st) of
+        case lookup (mkId "drop", argTy) (derivedDefinitions st) of
           -- We have it in context, so now we need to apply its type
           Just (tyScheme, _) -> do
             -- freshen the type
@@ -834,7 +850,7 @@ deriveDrop' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
               _ -> return Nothing
           Nothing -> return Nothing
   case alreadyDefined of
-    Just (dropTy, dropExpr) -> return (dropTy, dropExpr, False)
+    Just (dropTy, dropExpr) -> return (dropTy, dropExpr, False, [])
     Nothing ->
       -- Not already defined...
       -- Get the kind of this type constructor
@@ -849,13 +865,12 @@ deriveDrop' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
             Just constructors -> do
 
               -- For each constructor, build a pattern match and an introduction:
-              exprs <- forM constructors (\(dataConsName, (tySch@(Forall _ _ _ dataConsType), coercions, _)) -> do
+              exprsAndConstraints <- forM constructors (\(dataConsName, (tySch@(Forall _ _ _ dataConsType), coercions, _)) -> do
 
                 -- Instantiate the data constructor
                 (dataConstructorTypeFresh, _, _constraint, coercions') <-
                       freshPolymorphicInstance InstanceQ True tySch coercions []
                 -- [Note: this does not register the constraints associated with the data constrcutor]
-                dataConstructorTypeFresh <- substitute (flipSubstitution coercions') dataConstructorTypeFresh
                 debugM "deriveDrop dataConstructorTypeFresh: " (show dataConstructorTypeFresh)
                 -- Perform an equality between the result type of the data constructor and the argument type here
                 areEq <- equalTypesRelatedCoeffectsAndUnify s Eq PatternCtxt  argTy (resultType dataConstructorTypeFresh)
@@ -874,7 +889,7 @@ deriveDrop' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
 
                     -- Build the pattern for this case
                     let consPattern =
-                          PConstr s () True dataConsName (zipWith (\ty var -> PVar s () True var) consParamsTypes consParamsVars)
+                          PConstr s () True dataConsName [] (zipWith (\ty var -> PVar s () True var) consParamsTypes consParamsVars)
 
                     -- Drop on all the parameters of the constructor
                     retTysAndExprs <- zipWithM (\ty var -> do
@@ -884,9 +899,11 @@ deriveDrop' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
                             deriveDrop' s False gamma ty (makeVarUntyped var))
                               consParamsTypes consParamsVars
                     x <- freshIdentifierBase "x" >>= (return . mkId)
-                    return (consPattern, makeUnitIntroUntyped))
+                    let (_, _, _, constraints) = unzip4 retTysAndExprs
+                    return ((consPattern, makeUnitIntroUntyped), concat constraints))
 
               -- Got all the branches to make the following case now
-              return (TyCon $ mkId "()", Case s () True arg exprs, False)
+              let (exprs, constraints) = unzip exprsAndConstraints
+              return (TyCon $ mkId "()", Case s () True arg exprs, False, dropableConstr argTy : concat constraints)
 
 deriveDrop' s topLevel gamma argTy arg = error (show argTy <> "not implemented yet")

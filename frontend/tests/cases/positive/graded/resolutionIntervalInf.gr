@@ -1,5 +1,5 @@
 extract : forall {a : Type} . a [0..∞] -> a
 extract [x] = x
 
-drop : forall {a : Type} . a [0..∞] -> ()
-drop [x] = ()
+dropper : forall {a : Type} . a [0..∞] -> ()
+dropper [x] = ()

@@ -303,6 +303,19 @@ equalTypesRelatedCoeffectsInner s rel a@(TyExists x1 k1 t1) b@(TyExists x2 k2 t2
       substFinal <- combineSubstitutions s subst1 subst2
       return (eqK && eqT, substFinal)
 
+-- Equality on rank-N forall types
+equalTypesRelatedCoeffectsInner s rel a@(TyForall x1 k1 t1) b@(TyForall x2 k2 t2) ind sp mode = do
+  debugM "Compare foralls for equality" (pretty a <> " = " <> pretty b)
+  -- check kinds
+  (eqK, subst1) <- equalTypesRelatedCoeffectsInner s rel k1 k2 ind sp mode
+  -- replace x2 with x1 in t2, i.e. do renaming
+  t2' <- substitute [(x2, SubstT $ TyVar x1)] t2
+  registerTyVarInContextWith' x1 k1 ForallQ $ do
+      (eqT, subst2) <- equalTypesRelatedCoeffectsInner s rel t1 t2' ind sp mode
+      substFinal <- combineSubstitutions s subst1 subst2
+      return (eqK && eqT, substFinal)
+
+
 -- Equality on type application
 equalTypesRelatedCoeffectsInner s rel (TyApp t1 t2) (TyApp t1' t2') _ sp mode = do
   debugM "equalTypesRelatedCoeffectsInner (tyAp leftp)" (pretty t1 <> " = " <> pretty t1')
@@ -375,7 +388,9 @@ equalTypesRelatedCoeffectsInner s rel t1 t2 k sp mode = do
           if handleBySolver then do
             -- Go to SMT
             debugM ("equality on types of kind: " <> pretty k) (pretty t1 ++ " =? " ++ pretty t2)
-            addConstraint $ Eq s t1 t2 k
+            case isSet k of
+              Nothing -> addConstraint $ Eq s t1 t2 k
+              Just _  -> addConstraint $ ApproximatedBy s t1 t2 k
             return (True, [])
           else
             -- No other way to do equality so bail
@@ -599,7 +614,8 @@ isIndexedType t = do
       , tfSet = \_ _ -> return $ Const False
       , tfTyCase = \_ _ -> return $ Const False
       , tfTySig = \(Const b) _ _ -> return $ Const b
-      , tfTyExists = \_ _ (Const a) -> return $ Const a } t
+      , tfTyExists = \_ _ (Const a) -> return $ Const a
+      , tfTyForall = \_ _ (Const a) -> return $ Const a } t
   return $ getConst b
 
 -- Given a type term, works out if its kind is actually an effect type
@@ -632,7 +648,7 @@ refineBinderQuantification ctxt ty = mapM computeQuantifier ctxt
     aux id (Box _ t)       = aux id t
     aux id (Diamond _ t)   = aux id t
     aux id (Star _ t)      = aux id t
-    aux id t@(TyApp _ _)   =
+    aux id t@(TyApp _ t2)   =
       case leftmostOfApplication t of
         TyCon tyConId -> do
           st <- get
@@ -641,11 +657,12 @@ refineBinderQuantification ctxt ty = mapM computeQuantifier ctxt
               -- For this type constructor `tyConId`
               -- if any of its argument positions `i` is an index
               -- then check if the `id` here is in the term for that argument
-              return $ any (\i ->
+              onRight <- aux id t2
+              return $ onRight || any (\i ->
                  if i < length (typeArguments t)
                   then id `elem` freeVars (typeArguments t !! i)
                   else False) indices
-            Nothing -> throw UnboundVariableError { errLoc = nullSpan , errId = id }
+            Nothing -> throw UnboundVariableError { errLoc = nullSpan , errId = tyConId }
         -- unusual- put possible (e.g., `f t`) give up and go for ForallQ
         _ -> return False
     aux id (TyInfix _ t1 t2) = liftM2 (||) (aux id t1) (aux id t2)

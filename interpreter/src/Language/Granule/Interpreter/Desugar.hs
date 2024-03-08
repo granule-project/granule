@@ -59,11 +59,11 @@ desugar (Def s var rf spec eqs tys@(Forall _ _ _ ty)) =
       where
         numArgs =
           case eqs of
-            ((Equation _ _ _ _ ps _):_) -> length ps
+            ((Equation s _ _ _ ps _):_) -> length ps
             _                         -> 0
 
-        -- List of variables to represent each argument
-        vars = [mkId (" internal" ++ show i) | i <- [1..numArgs]]
+        -- List of variables (uniquely named via the span) to represent each argument
+        vars = [mkId (" internal" ++ show (startPos s) ++ show i) | i <- [1..numArgs]]
 
         -- Guard expression
         guard = foldl pair unitVal guardVars

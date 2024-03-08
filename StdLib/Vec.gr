@@ -74,13 +74,19 @@ append
 append Nil ys = ys;
 append (Cons x xs) ys = Cons x (append xs ys)
 
+--- Concatenate a vector of vectors
+concat : forall {a : Type, m n : Nat} .
+        Vec n (Vec m a) -> Vec (n * m) a
+concat Nil = Nil;
+concat (Cons xs xss) = append xs (concat xss)
+
 --- Drop the first `m` elements
-drop
+dropElems
   : forall {a : Type, m n : Nat}
   . N m -> (Vec n a) [0..1] -> Vec (n - m) a
-drop Z [xs] = xs;
-drop (S n) [Nil] = drop n [Nil];
-drop (S n) [Cons _ xs] = drop n [xs]
+dropElems Z [xs] = xs;
+dropElems (S n) [Nil] = dropElems n [Nil];
+dropElems (S n) [Cons _ xs] = dropElems n [xs]
 
 --- Take the first `m` elements
 take
@@ -170,7 +176,7 @@ pullVec : forall {a : Type, s : Semiring, k : s, n : Nat}
 pullVec = pull @Vec
 
 --- pushVec pushes in non linearity of vector into the elements
-pushVec : ∀ {a : Type, s : Semiring, k : s, n : Nat} . {(1 : s) <= k}
+pushVec : ∀ {a : Type, s : Semiring, k : s, n : Nat} . {(1 : s) <= k, Pushable k}
       => (Vec n a) [k] → Vec n (a [k])
 pushVec = push @Vec
 

@@ -1,0 +1,5 @@
+pushPair : forall {a : Type, b : Type, k : Coeffect, c : k} . (a × b) [c] -> a [c] × b [c]
+pushPair = push @(,)
+
+pushPair' : forall {a : Type, b : Type, k : Coeffect, c : k} . (a × b) [c] -> a [c] × b [c]
+pushPair' [(x, y)] = ([x], [y])

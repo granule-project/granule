@@ -64,6 +64,7 @@ data Type where
 
     TySig   :: Type -> Kind -> Type           -- ^ Kind signature
     TyExists :: Id -> Kind -> Type -> Type    -- ^ Exists
+    TyForall :: Id -> Kind -> Type -> Type    -- ^ RankNForall
 
 deriving instance Show Type
 deriving instance Eq Type
@@ -111,6 +112,12 @@ trivialScheme = Forall nullSpanNoFile [] []
 
 unforall :: TypeScheme -> Type
 unforall (Forall _ _ _ t) = t
+
+isMultiArity :: TypeScheme -> Bool
+isMultiArity (Forall _ _ _ t) = isMultiArity' t
+  where
+    isMultiArity' (FunTy _ _ x (FunTy _ _ y t)) = True
+    isMultiArity' _ = False
 
 ----------------------------------------------------------------------
 -- # Smart constructors
@@ -227,7 +234,8 @@ containsTypeSig =
       , tfSet = \_ _ -> return  False
       , tfTyCase = \_ _ -> return False
       , tfTySig = \_ _ _ -> return True
-      , tfTyExists = \_ _ x -> return x})
+      , tfTyExists = \_ _ x -> return x
+      , tfTyForall = \_ _ x -> return x})
 
 -- | Compute the arity of a function type
 arity :: Type -> Int
@@ -238,6 +246,8 @@ arity _               = 0
 -- the result type is @Pair a b@
 resultType :: Type -> Type
 resultType (FunTy _ _ _ t) = resultType t
+-- jump over type abstractions
+resultType (TyForall _ _ t) = resultType t
 resultType t = t
 
 -- Given a function type, return a list of the parameter tpes
@@ -308,6 +318,8 @@ mTySig   :: Monad m => Type -> Type -> Type -> m Type
 mTySig t _ k      = return (TySig t k)
 mTyExists :: Monad m => Id -> Kind -> Type -> m Type
 mTyExists v k t   = return (TyExists v k t)
+mTyForall :: Monad m => Id -> Kind -> Type -> m Type
+mTyForall v k t   = return (TyForall v k t)
 
 -- Monadic algebra for types
 data TypeFold m a = TypeFold
@@ -327,12 +339,13 @@ data TypeFold m a = TypeFold
   , tfTyCase  :: a -> [(a, a)]      -> m a
   , tfTySig   :: a -> Type -> (a -> m a)
   , tfTyExists :: Id -> a -> a      -> m a
+  , tfTyForall :: Id -> a -> a      -> m a
   }
 
 -- Base monadic algebra
 baseTypeFold :: Monad m => TypeFold m Type --Type
 baseTypeFold =
-  TypeFold mTy mFunTy mTyCon mBox mDiamond mStar mTyVar mTyApp mTyInt mTyRational mTyGrade mTyInfix mTySet mTyCase mTySig mTyExists
+  TypeFold mTy mFunTy mTyCon mBox mDiamond mStar mTyVar mTyApp mTyInt mTyRational mTyGrade mTyInfix mTySet mTyCase mTySig mTyExists mTyForall
 
 -- | Monadic fold on a `Type` value
 typeFoldM :: forall m a . Monad m => TypeFold m a -> Type -> m a
@@ -395,6 +408,10 @@ typeFoldM algebra = go
     k' <- go k
     t' <- go t
     (tfTyExists algebra) var k' t'
+   go (TyForall var k t) = do
+    k' <- go k
+    t' <- go t
+    (tfTyForall algebra) var k' t'
 
 ----------------------------------------------------------------------
 -- # Types are terms
@@ -417,6 +434,7 @@ instance Term Type where
       , tfTyCase  = \(Const t) cs -> return . Const $ t <> (concat . concat) [[a,b] | (Const a, Const b) <- cs]
       , tfTySig   = \(Const t) _ (Const k) -> return $ Const (t <> k)
       , tfTyExists = \v _ (Const fvs) -> return $ Const [v' | v' <- fvs, v /= v']
+      , tfTyForall = \v _ (Const fvs) -> return $ Const [v' | v' <- fvs, v /= v']
       }
 
     isLexicallyAtomic TyInt{} = True
@@ -425,6 +443,7 @@ instance Term Type where
     isLexicallyAtomic TyVar{} = True
     isLexicallyAtomic TySet{} = True
     isLexicallyAtomic TyCon{} = True
+    isLexicallyAtomic (Type 0) = True
     isLexicallyAtomic (TyApp (TyApp (TyCon (sourceName -> ",")) _) _) = True
     isLexicallyAtomic _ = False
 
@@ -452,13 +471,27 @@ instance Freshenable m Type where
   freshen =
     typeFoldM (baseTypeFold { tfTyVar = freshenTyVar,
                               tfBox = freshenTyBox,
-                              tfTySig = freshenTySig })
+                              tfTySig = freshenTySig,
+                              tfTyExists = freshenTyExists,
+                              tfTyForall = freshenTyForall })
     where
 
       freshenTyBox c t = do
         c' <- freshen c
         t' <- freshen t
         return $ Box c' t'
+
+      freshenTyExists v k t =
+        freshIdentifierBaseInScope TypeL v (\v' -> do
+            k' <- freshen k
+            t' <- freshen t
+            return $ TyExists v' k' t')
+
+      freshenTyForall v k t =
+        freshIdentifierBaseInScope TypeL v (\v' -> do
+            k' <- freshen k
+            t' <- freshen t
+            return $ TyForall v' k' t')
 
       freshenTySig t' _ k = do
         k' <- freshen k

@@ -16,7 +16,7 @@ import System.Directory
 import System.FilePath
 import Data.Text hiding
    (map, concatMap, filter, lines, take, takeWhile, dropWhile
-   , drop, break, isPrefixOf, reverse, splitAt, all)
+   , drop, break, isPrefixOf, reverse, splitAt, all, length)
 import qualified Data.Text as Text
 
 import Data.Char (isAlpha)
@@ -24,6 +24,7 @@ import Data.Maybe (catMaybes, mapMaybe)
 import Data.List (isPrefixOf, sort, sortOn, partition)
 import Data.Version (showVersion)
 import Paths_granule_interpreter (version)
+import qualified Data.Map as M
 
 import Control.Monad (when)
 
@@ -81,6 +82,8 @@ generateModulePage' modName title input ast =
            <> (if modName == "Primitives" then anchor "Built-in Types" else "")
            <> Text.concat contentDefs))
     preamble = parsePreamble inputLines
+          <> if M.keys (hiddenNames ast) == [] then ""
+             else (tag "strong" "Module does not export: ") <> Text.intercalate ", " (map (pack . prettyDoc) $ M.keys (hiddenNames ast))
     (headings, contentDefs) = unzip (map prettyDef topLevelDefs)
     headings' =
       if modName == "Primitives"
@@ -104,8 +107,15 @@ generateModulePage' modName title input ast =
       let (docs, heading) = scrapeDoc inputLines (defSpan d)
       in  (heading
           , (maybe "" anchor heading)
-         <> (codeDiv $ pack $ prettyDoc (defId d) <> " : " <> prettyDoc (defTypeScheme d))
+         <> (codeDiv $ breakLine (internalName (defId d)) $ pack $ prettyDoc (defId d) <> " : " <> prettyDoc (defTypeScheme d))
          <> (if strip docs == "" then miniBreak else descDiv docs))
+
+    breakLine id xs =
+      if Text.length xs >= 65 && (Text.isInfixOf "forall" xs || Text.isInfixOf "exists" xs) then
+        case Text.break (== '.') xs of
+          (before, after) ->
+            before <> "\n" <> (Data.Text.replicate (length id + 1) " ") <> after
+      else xs
 
     anchor :: Text -> Text
     anchor x = tagWithAttributes "a"

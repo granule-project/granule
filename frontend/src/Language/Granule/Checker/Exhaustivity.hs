@@ -26,12 +26,12 @@ isIrrefutable s t (PBox _ _ p) = isIrrefutable s t p
 
 -- TODO: Get rid of types and lookup cardinality through the
 -- environment based on the constructor name
-isIrrefutable s (TyCon c) (PConstr _ _ _ ps) = do
+isIrrefutable s (TyCon c) (PConstr _ _ _ _ ps) = do
   irrefutables <- mapM (isIrrefutable s (TyCon c)) ps
   singleton <- checkCardinality c
   return $ singleton && and irrefutables
 
-isIrrefutable s t (PConstr _ _ (internalName -> ",") [p1, p2]) = do
+isIrrefutable s t (PConstr _ _ _ (internalName -> ",") [p1, p2]) = do
   i1 <- isIrrefutable s t p1
   i2 <- isIrrefutable s t p2
   return (i1 && i2)

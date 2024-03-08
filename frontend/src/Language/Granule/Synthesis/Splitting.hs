@@ -238,6 +238,7 @@ getAssumConstr a =
     getTypeConstr (TyInfix _ _ _) = Nothing
     getTypeConstr (TySet _ _) = Nothing
     getTypeConstr (TyExists _ _ t) = getTypeConstr t
+    getTypeConstr (TyForall _ _ t) = getTypeConstr t
     getTypeConstr (TyCase _ cases) =
       if allSame (map snd cases)
         then getTypeConstr . snd . head $ cases
@@ -279,7 +280,7 @@ buildConstructorPatterns span id constructors = do
     mkPat :: (Id, [Maybe Id]) -> Checker (Pattern ())
     mkPat (name, ids) = do
       vars <- genFresh ids
-      return $ PConstr span () False name (map (PVar span () False) vars)
+      return $ PConstr span () False name [] (map (PVar span () False) vars)
 
     -- Generates a list of fresh identifiers, using the potential ids where
     -- possible, and defaulting to a freshening of the id paramter to

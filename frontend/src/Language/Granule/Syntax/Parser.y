@@ -307,7 +307,7 @@ PAtom :: { Pattern () }
        {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ let TokenFloat _ x = $1 in PFloat sp () False $ read x }
 
   | CONSTR
-       {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ let TokenConstr _ x = $1 in PConstr sp () False (mkId x) [] }
+       {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ let TokenConstr _ x = $1 in PConstr sp () False (mkId x) [] [] }
 
   | '(' NAryConstr ')'        { $2 }
 
@@ -321,16 +321,20 @@ PAtom :: { Pattern () }
        {% (mkSpan (getPos $1, getPos $3)) >>= \sp -> return $ PBox sp () False $2 }
 
   | '(' PMolecule ',' PMolecule ')'
-       {% (mkSpan (getPos $1, getPos $5)) >>= \sp -> return $ PConstr sp () False (mkId ",") [$2, $4] }
+       {% (mkSpan (getPos $1, getPos $5)) >>= \sp -> return $ PConstr sp () False (mkId ",") [] [$2, $4] }
 
 PMolecule :: { Pattern () }
   : NAryConstr                { $1 }
   | PAtom                     { $1 }
 
+TyVarBinds :: { [Id] }
+  : {- EMPTY -}                  { [] }
+  | '{' VAR '}' TyVarBinds       { (mkId $ symString $2) : $4 }
+
 NAryConstr :: { Pattern () }
-  : CONSTR Pats               {% let TokenConstr _ x = $1
-                                in (mkSpan (getPos $1, getEnd $ last $2)) >>=
-                                       \sp -> return $ PConstr sp () False (mkId x) $2 }
+  : CONSTR TyVarBinds Pats               {% let TokenConstr _ x = $1
+                                in (mkSpan (getPos $1, getEnd $ last $3)) >>=
+                                       \sp -> return $ PConstr sp () False (mkId x) $2 $3 }
 
 ForallSig :: { [(Id, Kind)] }
  : '{' VarSigs '}' { $2 }
@@ -456,6 +460,7 @@ TyAtom :: { Type }
   | FLOAT                     { let TokenFloat _ x = $1 in TyRational $ myReadFloat x }
   -- | '.' INT                   { let TokenInt _ x = $2 in TyInt x }
   | '(' Type ')'              { $2 }
+  | '(' forall '{' VAR ':' Type '}' '.' Type ')' { TyForall (mkId $ symString $4) $6 $9 }
   | '(' Type ',' Type ')'     { TyApp (TyApp (TyCon $ mkId ",") $2) $4 }
   | TyAtom ':' Kind           { TySig $1 $3 }
   | '{' CoeffSet '}'              { TySet Normal $2 }
@@ -517,6 +522,18 @@ Eff :: { Type }
 Guarantee :: { Type }
   : CONSTR                  { TyCon $ mkId $ constrString $1 }
 
+TyAbsInputs :: { Either [(Id, Type)] [Id] }
+  : '(' TyAbsNamed ')'  '->'   { Left $2 }
+  | '{' TyAbsImplicit '}' '.' { Right $2 }
+
+TyAbsNamed :: { [(Id, Type)] }
+  : VAR ':' Type ',' TyAbsNamed  { (mkId $ symString $1, $3) : $5 }
+  | VAR ':' Type                 { [ (mkId $ symString $1, $3) ] }
+
+TyAbsImplicit :: { [Id] }
+  : VAR ',' TyAbsImplicit       { (mkId $ symString $1) : $3 }
+  | VAR                         { [mkId $ symString $1] }
+
 Expr :: { Expr () () }
   : let LetBind MultiLet
       {% let (_, pat, mt, expr) = $2
@@ -524,6 +541,15 @@ Expr :: { Expr () () }
            \sp -> return $ App sp () False
                    (Val (getSpan $3) () False (Abs () pat mt $3)) expr
       }
+
+  | "/\\" TyAbsInputs Expr
+      {% (mkSpan (getPos $1, getEnd $3)) >>=
+             \sp -> return $
+                      (case $2 of
+                        Left varids ->
+                          foldl (\e (var, k) -> Val sp () False (TyAbs () (Left (var, k)) e)) $3 varids
+                        Right ids ->
+                           Val sp () False (TyAbs () (Right ids) $3)) }
 
   | '\\' '(' PAtom ':' Type ')' '->' Expr
       {% (mkSpan (getPos $1, getEnd $8)) >>=
@@ -557,8 +583,8 @@ Expr :: { Expr () () }
         span2 <- mkSpan $ getPosToSpan $3
         span3 <- mkSpan $ getPosToSpan $3
         return $ Case span1 () False $2
-                  [(PConstr span2 () False (mkId "True") [], $4),
-                     (PConstr span3 () False (mkId "False") [], $6)] }
+                  [(PConstr span2 () False (mkId "True") [] [], $4),
+                     (PConstr span3 () False (mkId "False") [] [], $6)] }
 
   | clone Expr as CopyBind in Expr
     {% let t1 = $2; (_, pat, mt) = $4; t2 = $6
@@ -651,6 +677,7 @@ Form :: { Expr () () }
   | Form '/=' Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () False OpNotEq $1 $3 }
   | Form '∘'  Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ App sp () False (App sp () False (Val sp () False (Var () (mkId "compose"))) $1) $3 }
   | Form '.'  Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ App sp () False (App sp () False (Val sp () False (Var () (mkId "compose"))) $1) $3 }
+
   | Juxt           { $1 }
 
 Juxt :: { Expr () () }
@@ -658,6 +685,11 @@ Juxt :: { Expr () () }
   | Juxt Atom                 {% (mkSpan (getStart $1, getEnd $2)) >>= \sp -> return $ App sp () False $1 $2 }
   | Atom                      { $1 }
   | Juxt '@' TyAtom           {% (mkSpan (getStart $1, getEnd $1)) >>= \sp -> return $ AppTy sp () False $1 $3 } -- TODO: span is not very accurate here
+  | Juxt ':' TyAtom
+      {% (mkSpan (getStart $1, getPos $2)) >>=
+           \sp -> return $ App sp () False (Val sp () False (Abs () (PVar sp () False $ mkId "x") (Just $3)
+                                               (Val sp () False (Var () (mkId "x"))))) $1 }
+
 
 Hole :: { Expr () () }
   : '{!' Vars1 '!}'           {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $3)) >>= \sp -> return $ Hole sp () False (map mkId $2) Nothing }
@@ -709,7 +741,7 @@ Atom :: { Expr () () }
                                   return $ Val sp () False $
                                      case $2 of (TokenStringLiteral _ c) -> Nec () (Val sp () False $ StringLiteral c) }
   | Hole                      { $1 }
-  | share Expr              {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ App sp () False (Val sp () False (Var () (mkId "uniqueReturn"))) $2 }
+  | share Expr                {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ App sp () False (Val sp () False (Var () (mkId "uniqueReturn"))) $2 }
 
 {
 

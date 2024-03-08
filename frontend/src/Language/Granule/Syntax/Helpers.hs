@@ -86,6 +86,18 @@ freshIdentifierBase cat var = do
       TypeL  -> put st { counter = (counter st) + 1,  tyMap = (sourceName var, var') :  (tyMap st) }
     return var { internalName = var' }
 
+freshIdentifierBaseInScope :: Monad m => IdSyntacticCategory -> Id -> (Id -> Freshener m b) -> Freshener m b
+freshIdentifierBaseInScope cat var f = do
+  st <- get
+  let var' = sourceName var <> "`" <> show (counter st)
+  case cat of
+    ValueL -> put st { counter = (counter st) + 1, varMap = (sourceName var, var') : (varMap st) }
+    TypeL  -> put st { counter = (counter st) + 1,  tyMap = (sourceName var, var') :  (tyMap st) }
+  y <- f (var { internalName = var' })
+  -- restore old state after the continuation
+  put st
+  return y
+
 -- | Look up a variable in the freshener state.
 -- If @Nothing@ then the variable name shouldn't change
 lookupVar :: Monad m => IdSyntacticCategory -> Id -> Freshener m (Maybe String)

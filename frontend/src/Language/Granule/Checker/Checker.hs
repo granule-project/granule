@@ -70,7 +70,7 @@ check :: (?globals :: Globals)
 check ast@(AST _ _ _ hidden _) = do
   evalChecker (initState { allHiddenNames = hidden }) $ (do
       ast@(AST dataDecls defs imports hidden name) <- return $ replaceTypeAliases ast
-      _    <- checkNameClashes Primitives.typeConstructors Primitives.dataTypes ast
+      _    <- checkNameClashes Primitives.typeConstructors Primitives.dataTypes ast Primitives.builtinsParsed
       debugHeadingM "Register type constructors"
       _    <- runAll registerTypeConstructor  (Primitives.dataTypes <> dataDecls)
       debugHeadingM "Register data constructors"
@@ -90,7 +90,7 @@ synthExprInIsolation :: (?globals :: Globals)
   -> IO (Either (NonEmpty CheckerError) (Either (TypeScheme , [Def () ()]) Type))
 synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
   evalChecker (initState { allHiddenNames = hidden }) $ do
-      _    <- checkNameClashes Primitives.typeConstructors Primitives.dataTypes ast
+      _    <- checkNameClashes Primitives.typeConstructors Primitives.dataTypes ast Primitives.builtinsParsed
       _    <- runAll registerTypeConstructor (Primitives.dataTypes ++ dataDecls)
       _    <- runAll registerDataConstructors (Primitives.dataTypes ++ dataDecls)
       defs <- runAll kindCheckDef defs
@@ -123,12 +123,25 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
 
         -- Otherwise, do synth
         _ -> do
+          modify' $ \st -> st
+            { predicateStack = []
+            , guardPredicates = [[]]
+            , tyVarContext = []
+            , futureFrame = []
+            , uniqueVarIdCounterMap = mempty
+            , wantedTypeConstraints = []
+            }
           (ty, _, subst, _) <- synthExpr defCtxt [] Positive expr
-          --
           -- Solve the generated constraints
           checkerState <- get
           tyVarContext' <- substitute subst (tyVarContext checkerState)
           put $ checkerState { tyVarContext = tyVarContext' }
+
+          -- Deal with additional constraints (due to session mostly)
+          let wantedTcs = wantedTypeConstraints checkerState
+          wantedTcs <- mapM (substitute subst) wantedTcs
+          dischargedTypeConstraints (getSpan expr) [] wantedTcs
+
           let predicate = Conj $ predicateStack checkerState
           predicate <- substitute subst predicate
           solveConstraints predicate (getSpan expr) (mkId "grepl")
@@ -138,7 +151,8 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
 
           -- Apply the outcoming substitution
           ty' <- substitute subst ty
-          return $ Left (Forall nullSpanNoFile [] [] ty', derivedDefs)
+          binders <- tyVarContextToTypeSchemeVars (freeVars ty')
+          return $ Left (Forall nullSpanNoFile binders [] ty', derivedDefs)
 
 
 checkDef :: (?globals :: Globals)
@@ -293,6 +307,8 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ binders
 
   -- The type of the equation, after substitution.
   equationTy' <- substitute subst defTy
+  -- Substitute into the body to handle type annotations
+  expr        <- substitute subst expr
   let splittingTy = calculateSplittingTy patternGam equationTy'
 
   -- Store the equation type in the state in case it is needed when splitting
@@ -378,7 +394,7 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ binders
     -- e.g. Cons x xs --> 2
     patternArity :: Pattern a -> Integer
     patternArity (PBox _ _ _ p) = patternArity p
-    patternArity (PConstr _ _ _ _ ps) = sum (map patternArity ps)
+    patternArity (PConstr _ _ _ _ _ ps) = sum (map patternArity ps)
     patternArity _ = 1
 
     replaceParameters :: [[Type]] -> Type -> Type
@@ -668,6 +684,7 @@ checkExpr defs gam pol topLevel tau (App s a rf e1 e2) | (usingExtension GradedB
 
   return (gam, subst, elab)
 
+-- Graded base application
 checkExpr defs gam pol topLevel tau (App s _ rf e1 e2) | not (usingExtension GradedBase) = do
     debugM "checkExpr[App]" (pretty s <> " : " <> pretty tau)
     (argTy, gam2, subst2, elaboratedR) <- synthExpr defs gam pol e2
@@ -718,6 +735,7 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
     let elaborated = Val s ty rf (Promote tau elaboratedE)
     return (gam'', substFinal, elaborated)
 
+-- Necessitation
 checkExpr defs gam pol _ ty@(Star demand tau) (Val s _ rf (Nec _ e)) = do
     debugM "checkExpr[Star]" (pretty s <> " : " <> pretty ty)
 
@@ -1094,7 +1112,7 @@ synthExpr defs gam pol (LetDiamond s _ rf p optionalTySig e1 e2) = do
 
   -- Check that usage matches the binding grades/linearity
   -- (performs the linearity check)
-  subst0 <- ctxtApprox s (gam2 `intersectCtxts` binders) binders
+  subst0 <- ctxtApprox (getSpan e2) (gam2 `intersectCtxts` binders) binders
 
   gamNew <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
 
@@ -1112,7 +1130,7 @@ synthExpr defs gam pol (LetDiamond s _ rf p optionalTySig e1 e2) = do
   let elaborated = LetDiamond s t rf elaboratedP optionalTySig elaborated1 elaborated2
   return (t, gamNew, subst, elaborated)
 
-
+-- Try catch
 synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
   debugM "synthExpr[TryCatch]" (pretty s)
 
@@ -1582,11 +1600,21 @@ synthExpr defs gam pol e@(AppTy s _ rf e1 ty) = do
               debugM "derived drop:" (pretty def)
               modify (\st -> st { derivedDefinitions = ((mkId "drop", ty), (typScheme, def)) : derivedDefinitions st })
 
-          debugM "derived drop tys:" (show typScheme)
+          debugM "derived drop tys:" (pretty typScheme)
           -- return this variable expression in place here
           freshenTySchemeForVar s rf name typScheme
-    _ -> throw NeedTypeSignature{ errLoc = getSpan e, errExpr = e }
 
+    expr -> do
+      -- Synth expr, expecting it to be a forall now
+      (retTy, gam', subst, elab) <- synthExpr defs gam pol expr
+      case retTy of
+        (TyForall var kind receiverTy) -> do
+          tyA   <- substitute [(var, SubstT ty)] receiverTy
+          elab' <- substitute [(var, SubstT ty)] elab
+          return (tyA, gam', subst, elab')
+
+        _ ->
+          throw LhsOfTyApplicationNotForall{ errLoc = getSpan e, errTy = retTy }
 
 --  G |- e : ty'[ty/x]
 -- ------------------------------------------------
@@ -1598,6 +1626,49 @@ synthExpr defs gam pol (Val s0 _ rf p@(Pack sp a ty e x k ty')) = do
   let retTy = TyExists x k ty'
   let elab = Val s0 retTy rf (Pack sp retTy ty elabE x k ty')
   return (retTy, gam, subst, elab)
+
+
+-- G |- e : A
+-- ------------------------------------------
+-- G |- /\(x : t) . e : forall {x : t} . A
+
+synthExpr defs gam pol (Val s0 _ rf val@(TyAbs a (Left (v, k)) e)) = do
+  debugM "synthExpr [forall]" (pretty val)
+  registerTyVarInContextWith' v k ForallQ $ do
+    (ty, gam, subst, elabE) <- synthExpr defs gam pol e
+    let retTy = TyForall v k ty
+    let elab = Val s0 retTy rf (TyAbs retTy (Left (v, k)) elabE)
+    return (TyForall v k ty, gam, subst, elab)
+
+-- Implicit lifting of type scheme to rankN
+--- G |- var : forall {id : k} . A
+--- -------------------------------------
+-- G |- /\{id} . var : (forall {id : t} . A)
+
+synthExpr defs gam pol (Val s _ rf val@(TyAbs a (Right ids) e)) = do
+    case e of
+      Val _ _ _ (Var _ x) ->
+        case lookup x (defs <> Primitives.builtins) of
+          Just tyScheme@(Forall s0 bindings constraints tyInner)  -> do
+            let (tyRankN, bindings') = build ids bindings tyInner
+            let newTyScheme = Forall s0 bindings' constraints tyRankN
+            (ty', ctxt, subst, elab) <- freshenTySchemeForVar s rf x newTyScheme
+            return (ty', ctxt, subst, elab)
+
+          Nothing -> throw UnboundVariableError{ errLoc = s, errId = x }
+      _ ->
+        error "Can only do implicit lifting of type scheme to rankN types on a variable"
+
+
+  where
+    build [] bindings tyInner = (tyInner, bindings)
+    build (var:vars) bindings tyInner =
+      case lookupAndCutoutBy sourceName var bindings of
+        Nothing -> build vars bindings tyInner
+        Just (rest, (var', ty))  ->
+            let (tyInner', bindings') = build vars rest tyInner
+            in (TyForall var' ty tyInner', bindings')
+
 
 --
 -- G |- e1 : exists {y : k} . A

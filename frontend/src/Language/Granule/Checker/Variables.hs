@@ -8,6 +8,7 @@ import Control.Monad.Trans.Identity
 import Control.Monad.State.Strict
 
 import qualified Data.Map as M
+import Data.Maybe (mapMaybe)
 
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
@@ -72,3 +73,14 @@ registerTyVarInContextWith' ::
   Id -> Type -> Quantifier -> Checker a -> Checker a
 registerTyVarInContextWith' v t q m =
   runIdentityT $ registerTyVarInContextWith v t q (IdentityT m)
+
+tyVarContextToTypeSchemeVars :: [Id] -> Checker [(Id, Kind)]
+tyVarContextToTypeSchemeVars relevantVars = do
+  st <- get
+  return $ flip mapMaybe (tyVarContext st)
+    (\(id, (kind, quant)) ->
+      case quant of
+        ForallQ   | id `elem` relevantVars -> Just (id, kind)
+        BoundQ    | id `elem` relevantVars -> Just (id, kind)
+        InstanceQ -> Nothing
+        _ -> Nothing)

@@ -345,7 +345,7 @@ synthesiseLinearBase hints index unrComps rComps defId ctxt constructors goalTy 
       unannotatePat (PBox s a rf p)          = PBox s () rf $ unannotatePat p
       unannotatePat (PInt s a rf int)        = PInt s () rf int
       unannotatePat (PFloat s a rf doub)     = PFloat s () rf doub
-      unannotatePat (PConstr s a rf nm pats) = PConstr s () rf nm $ map unannotatePat pats
+      unannotatePat (PConstr s a rf nm names pats) = PConstr s () rf nm names $ map unannotatePat pats
 
 
 
@@ -1321,7 +1321,7 @@ casePatternMatchBranchSynth
             if isRecursiveType ty (constructors st) then 1 else 0
 
       let (vars, _) = unzip branchBoundVarsAndGrades
-      let constrPat = PConstr ns () False cName (map (PVar ns () False) $ reverse vars)
+      let constrPat = PConstr ns () False cName [] (map (PVar ns () False) $ reverse vars)
 
       -- Synthesise the body of the branch which produces output context `delta`
 

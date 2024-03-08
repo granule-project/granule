@@ -1,3 +1,18 @@
+  # 0.9.5.0
+   - Rank N typing (see https://github.com/granule-project/granule/blob/dev-minor/examples/rankN.gr)
+   - Algebraic effects and handlers. See e.g.,
+     * https://github.com/granule-project/granule/blob/dev-minor/examples/effects_nondet.gr
+     * https://github.com/granule-project/granule/blob/dev-minor/examples/effects_state.gr
+   - Updated standard docs
+   - Fixes to deriving copyShape and drop combinators
+   - push deriving combinators now have Pushable constraint, e.g.
+
+             pushList : forall {s : Semiring, r : s, a : Type}
+                       . {(1 : s) <= r, Pushable r} => (List a) [r] -> List (a [r])
+             pushList = push @List
+
+   - Minor tweaks to the Granule Language Server to improve vscode interaction (no longer complains on the entire file about 'Premature end of file' whilst typing).
+
   # 0.9.4.0
   - Advanced synthesis algorithm for `language GradeBase` mode.
   - Better standard library documentation

@@ -111,26 +111,33 @@ checkKind s t k | t == k = do
 -- KChk_funk
 checkKind s (FunTy name mCoeff t1 t2) k = do
   (subst1, t1') <- checkKind s t1 k
+  case name of Just name -> registerTyVarInContext name t1 ForallQ; Nothing -> return ()
   (subst2, t2') <- checkKind s t2 k
   substFinal <- combineSubstitutions s subst1 subst2
   return (substFinal, FunTy name mCoeff t1 t2)
 
 -- KChk_SetKind
-checkKind s (TyApp (TyCon (internalName -> "Set")) t) (TyCon (internalName -> "Coeffect")) =
+checkKind s (TyApp (TyCon (internalName -> "Set")) t) (TyCon (internalName -> "Coeffect")) = do
   -- Sets as coeffects can be themselves over a coeffect type or some other type
-  (checkKind s t kcoeffect) <|> (checkKind s t ktype)
+  (subst, t') <- (checkKind s t kcoeffect) <|> (checkKind s t ktype)
+  return (subst, TyApp (TyCon $ mkId "Set") t')
 
-checkKind s (TyApp (TyCon (internalName -> "Set")) t) (TyCon (internalName -> "Effect")) =
+checkKind s (TyApp (TyCon (internalName -> "Set")) t) (TyCon (internalName -> "Effect")) = do
   -- Sets as effects can be themselves over an effect type or some other type
-  (checkKind s t keffect) <|> (checkKind s t ktype)
+  (subst, t') <- (checkKind s t keffect) <|> (checkKind s t ktype)
+  return (subst, TyApp (TyCon $ mkId "Set") t')
 
-checkKind s (TyApp (TyCon (internalName -> "SetOp")) t) (TyCon (internalName -> "Coeffect")) =
+
+checkKind s (TyApp (TyCon (internalName -> "SetOp")) t) (TyCon (internalName -> "Coeffect")) = do
   -- Sets as coeffects can be themselves over a coeffect type or some other type
-  (checkKind s t kcoeffect) <|> (checkKind s t ktype)
+  (subst, t') <- (checkKind s t kcoeffect) <|> (checkKind s t ktype)
+  return (subst, TyApp (TyCon $ mkId "SetOp") t')
 
-checkKind s (TyApp (TyCon (internalName -> "SetOp")) t) (TyCon (internalName -> "Effect")) =
+
+checkKind s (TyApp (TyCon (internalName -> "SetOp")) t) (TyCon (internalName -> "Effect")) = do
   -- Sets as effects can be themselves over an effect type or some other type
-  (checkKind s t keffect) <|> (checkKind s t ktype)
+  (subst, t') <- (checkKind s t keffect) <|> (checkKind s t ktype)
+  return (subst, TyApp (TyCon $ mkId "SetOp") t')
 
 -- KChk_app
 checkKind s (TyApp t1 t2) k2 = do
@@ -273,7 +280,8 @@ synthKindWithConfiguration s config t@(TyVar x) = do
   st <- get
   case lookup x (tyVarContext st) of
     Just (k, _) -> return (k, [], t)
-    Nothing     -> throw UnboundTypeVariable { errLoc = s, errId = x }
+    Nothing     ->  do
+      throw UnboundTypeVariable { errLoc = s, errId = x }
 
 -- -- KChkS_fun
 --
@@ -283,6 +291,7 @@ synthKindWithConfiguration s config t@(TyVar x) = do
 
 synthKindWithConfiguration s config (FunTy name mCoeff t1 t2) = do
   (k, subst1, t1') <- synthKindWithConfiguration s config t1
+  case name of Just name -> registerTyVarInContext name t1 ForallQ; Nothing -> return ()
   (subst2   , t2') <- checkKind s t2 k
   subst <- combineSubstitutions s subst1 subst2
   return (k, subst, FunTy name mCoeff t1' t2')
@@ -307,9 +316,9 @@ synthKindWithConfiguration s config (TyApp (TyCon (internalName -> "Set")) t) = 
 --
 --      t1 => k1 -> k2    t2 <= k1
 --   ------------------------------ Fun
---        t1 t2 => k
+--        t1 t2 => k2
 --
-synthKindWithConfiguration s config (TyApp t1 t2) = do
+synthKindWithConfiguration s config t@(TyApp t1 t2) = do
   (funK, subst1, t1') <- synthKindWithConfiguration s config t1
   case funK of
     (FunTy name _ k1 k2) -> do
@@ -476,9 +485,16 @@ synthKindWithConfiguration s config (Type i) = do
 
 -- Existentials
 synthKindWithConfiguration s config t@(TyExists x k ty) = do
+  -- TODO: check if this should be InstanceQ instead?
   registerTyVarInContextWith' x k ForallQ $ do
        (kind, subst, elabTy) <- synthKindWithConfiguration s config ty
        return (kind, subst, TyExists x k elabTy)
+
+-- RankN quantifiers
+synthKindWithConfiguration s config t@(TyForall x k ty) = do
+  registerTyVarInContextWith' x k ForallQ $ do
+       (kind, subst, elabTy) <- synthKindWithConfiguration s config ty
+       return (kind, subst, TyForall x k elabTy)
 
 synthKindWithConfiguration s _ t =
   throw ImpossibleKindSynthesis { errLoc = s, errTy = t }
@@ -945,8 +961,8 @@ flattenable t1 t2
     t1 | t1 == extendedNat -> return $ Just (TyInfix TyOpTimes, [], t1)
 
     TyCon (internalName -> "Nat")   -> return $ Just (TyInfix TyOpTimes, [], t1)
-    TyCon (internalName -> "Level") -> return $ Just (TyInfix TyOpMeet, [], t1)
-    TyCon (internalName -> "Sec") -> return $ Just (TyInfix TyOpMeet, [], t1)
+    TyCon (internalName -> "Level") | SecurityLevels `elem` globalsExtensions ?globals -> return $ Just (TyInfix TyOpMeet, [], t1)
+    TyCon (internalName -> "Sec") -> return $ Just (TyInfix TyOpTimes, [], t1)
 
     TyApp (TyCon (internalName -> "Interval")) t ->  flattenable t t
 
@@ -1213,7 +1229,13 @@ requiresSolver s ty = do
   case result of
     -- Checking as coeffect or effect caused an error so ignore
     Left _  -> return False
-    Right _ -> putChecker >> return True
+    Right _ ->
+      -- avoid putting sets into the solver as the solver is weak on this
+      -- TODO: consider something better here
+      case isSet ty of
+       Just _ ->  putChecker >> return False
+       Nothing ->
+        putChecker >> return True
 
 instance Unifiable Substitutors where
     unify' (SubstT t) (SubstT t') = unify' t t'

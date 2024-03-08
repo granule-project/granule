@@ -13,7 +13,8 @@ module Language.Granule.Checker.Substitution(
   Substitutable(..),
   freshPolymorphicInstance,
   updateTyVar,
-  substituteInSignatures) where
+  substituteInSignatures,
+  substituteExpr) where
 
 import Control.Monad.State.Strict
 import Data.Bifunctor.Foldable (bicataM)
@@ -44,6 +45,8 @@ class Substitutable t where
              => Substitution -> t -> Checker t
 
 -- Instances for the main representation of things in the types
+instance Substitutable () where
+  substitute ctxt () = return ()
 
 instance Substitutable Substitutors where
 
@@ -338,10 +341,10 @@ instance Substitutable (Equation () Type) where
          expr' <- substitute ctxt expr
          return $ Equation sp name ty' rf pat' expr'
 
-substituteValue :: (?globals::Globals)
+substituteValue :: (?globals::Globals, Substitutable a)
                 => Substitution
-                -> ValueF ev Type (Value ev Type) (Expr ev Type)
-                -> Checker (Value ev Type)
+                -> ValueF ev a (Value ev a) (Expr ev a)
+                -> Checker (Value ev a)
 substituteValue ctxt (AbsF ty arg mty expr) =
     do  ty' <- substitute ctxt ty
         arg' <- substitute ctxt arg
@@ -368,10 +371,10 @@ substituteValue ctxt (PackF s a ty e1 var k ty') = do
     return (Pack s a ty e1 var k ty')
 substituteValue _ other = return (ExprFix2 other)
 
-substituteExpr :: (?globals::Globals)
+substituteExpr :: (?globals::Globals, Substitutable a)
                => Substitution
-               -> ExprF ev Type (Expr ev Type) (Value ev Type)
-               -> Checker (Expr ev Type)
+               -> ExprF ev a (Expr ev a) (Value ev a)
+               -> Checker (Expr ev a)
 substituteExpr ctxt (AppF sp ty rf fn arg) =
     do  ty' <- substitute ctxt ty
         return $ App sp ty' rf fn arg
@@ -409,13 +412,13 @@ mapFstM fn (f, r) = do
     f' <- fn f
     return (f', r)
 
-instance Substitutable (Expr () Type) where
+instance Substitutable a => Substitutable (Expr () a) where
   substitute ctxt = bicataM (substituteExpr ctxt) (substituteValue ctxt)
 
-instance Substitutable (Value () Type) where
+instance Substitutable a => Substitutable (Value () a) where
   substitute ctxt = bicataM (substituteValue ctxt) (substituteExpr ctxt)
 
-instance Substitutable (Pattern Type) where
+instance Substitutable a => Substitutable (Pattern a) where
   substitute ctxt = patternFoldM
       (\sp ann rf nm -> do
           ann' <- substitute ctxt ann
@@ -432,9 +435,9 @@ instance Substitutable (Pattern Type) where
       (\sp ann rf doub -> do
           ann' <- substitute ctxt ann
           return $ PFloat sp ann' rf doub)
-      (\sp ann rf nm pats -> do
+      (\sp ann rf nm tyVarBindsRequested pats -> do
           ann' <- substitute ctxt ann
-          return $ PConstr sp ann' rf nm pats)
+          return $ PConstr sp ann' rf nm tyVarBindsRequested pats)
 
 updateTyVar :: (?globals :: Globals) => Span -> Id -> Kind -> Checker ()
 updateTyVar s tyVar k = do

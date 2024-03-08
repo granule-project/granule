@@ -200,7 +200,7 @@ data CheckerState = CS
             , addedConstraints :: Bool
             , predicateContext :: PredContext
             , partialSynthExpr  :: Zipper (Expr () ())
-            , synthesisPath :: [String] 
+            , synthesisPath :: [String]
             }
   deriving (Eq, Show)
 
@@ -581,7 +581,7 @@ data CheckerError
   | PatternTypingMismatch
     { errLoc :: Span, errPat :: Pattern (), tyExpected :: Type, tyActual :: Type }
   | PatternArityError
-    { errLoc :: Span, errId :: Id }
+    { errLoc :: Span, errId :: Id, expectedArgs :: Int, actualArgs :: Int }
   | UnboundVariableError
     { errLoc :: Span, errId :: Id }
   | UnboundTypeVariable
@@ -639,6 +639,8 @@ data CheckerError
   | LhsOfApplicationNotAFunction
     { errLoc :: Span, errTy :: Type }
   | LhsOfUnpackNotAnExistential
+    { errLoc :: Span, errTy :: Type }
+  | LhsOfTyApplicationNotForall
     { errLoc :: Span, errTy :: Type }
   | FailedOperatorResolution
     { errLoc :: Span, errOp :: Operator, errTy :: Type }
@@ -741,6 +743,7 @@ instance UserMsg CheckerError where
   title ExpectedOptionalEffectType{} = "Type error"
   title LhsOfApplicationNotAFunction{} = "Type error"
   title LhsOfUnpackNotAnExistential{} = "Type error"
+  title LhsOfTyApplicationNotForall{} = "Type error"
   title FailedOperatorResolution{} = "Operator resolution failed"
   title NeedTypeSignature{} = "Type signature needed"
   title SolverErrorCounterExample{} = "Counter example"
@@ -883,7 +886,9 @@ instance UserMsg CheckerError where
   msg PatternArityError{..}
     = "Data constructor `"
       <> pretty errId
-      <> "` is applied to too many arguments."
+      <> "` is applied to wrong number of arguments. Expecting "
+      <> show expectedArgs <> " but pattern match has "
+      <> show actualArgs <> " patterns."
 
   msg UnboundVariableError{..} = "`" <> pretty errId <> "`"
 
@@ -1004,6 +1009,10 @@ instance UserMsg CheckerError where
 
   msg LhsOfUnpackNotAnExistential{..}
     = "Expcted an existential type on the left-hand side of unpack, but got `"
+    <> pretty errTy <> "`"
+
+  msg LhsOfTyApplicationNotForall{..}
+    = "Expected a (rank-N quantified) forall type on the left-hand side of a type application, but got `"
     <> pretty errTy <> "`"
 
   msg FailedOperatorResolution{..}

@@ -24,3 +24,8 @@ sneaky_fun [c] x =
 --    let (x, c) = recv c in
 --    let () = close c in x
 
+-- Could be defined as builtin if we needed it
+forkLinear'
+  : forall {p : Protocol, s : Semiring}
+  . ((LChan p) [1] -> ()) -> LChan (Dual p)
+forkLinear' = forkLinear'

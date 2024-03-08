@@ -1,0 +1,8 @@
+data Simple (b : Type) where
+  Id : forall {a : Type} . Int -> Simple a
+
+foo : forall {a : Type} . (forall {k : Type} . k -> k) -> Simple a -> (a -> a)
+foo in_id (Id {a'} i) = let () = drop @Int i in in_id @ a'
+
+main : Int
+main = foo (/\(k : Type) -> \(x : k) -> x) (Id 42) 42

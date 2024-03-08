@@ -27,9 +27,15 @@ typeAliases :: [(Id, ([Id], Type))]
 typeAliases =
     -- IO = {p | p in IOElem}
     [(mkId "IO", ([], TySet Normal (map tyCon ioElems)))
-    ,(mkId "Inverse", ([mkId "a"], FunTy Nothing Nothing (TyVar $ mkId "a") (TyCon $ mkId "()")))]
+    ,(mkId "Inverse", ([mkId "a"], FunTy Nothing Nothing (TyVar $ mkId "a") (TyCon $ mkId "()")))
+    ,(mkId "Pushable", ([mkId "a"], TyInfix TyOpHsup (tyVar "a") (tyVar "a")))
+    ]
   where
     ioElems = ["Stdout", "Stdin", "Stderr", "Open", "Read", "Write", "IOExcept", "Close"]
+
+-- List of those things which are 'physical' resource (i.e., not dropable)
+nonDropable :: [Id]
+nonDropable = [mkId "Handle", mkId "LChan", mkId "Chan"]
 
 capabilities :: [(Id, Type)]
 capabilities =
@@ -37,7 +43,8 @@ capabilities =
   , (mkId "TimeDate", funTy (tyCon "()") (tyCon "String"))]
 
 overlapsAllowed :: [Id]
-overlapsAllowed = [mkId "One", mkId "Private", mkId "Public", mkId "Unused"]
+overlapsAllowed =
+  [mkId "One", mkId "Private", mkId "Public", mkId "Unused", mkId "Set", mkId "SetOp"]
 
 -- Associates type constuctors names to their:
 --    * kind
@@ -61,8 +68,13 @@ typeConstructors =
     , (mkId "Float",  (Type 0, [], []))
     , (mkId "DFloat",  (Type 0, [], [])) -- special floats that can be tracked for sensitivty
     , (mkId "Char",   (Type 0, [], []))
+    , (mkId "Void",   (Type 0, [], []))
     , (mkId "String", (Type 0, [], []))
     , (mkId "Inverse", ((funTy (Type 0) (Type 0)), [], []))
+    -- Predicates on deriving operations:x
+    , (mkId "Dropable", (funTy (Type 0) kpredicate, [], [0]))
+    -- TODO: add deriving for this
+    -- , (mkId "Moveable", (funTy (Type 0) kpredicate, [], [0]))
     -- Session type related things
     , (mkId "ExactSemiring", (funTy (tyCon "Semiring") (tyCon "Predicate"), [], []))
     , (mkId "Protocol", (Type 0, [], []))
@@ -76,6 +88,8 @@ typeConstructors =
     , (mkId "Q",        (kcoeffect, [], [])) -- Rationals
     , (mkId "OOZ",      (kcoeffect, [], [])) -- 1 + 1 = 0
     , (mkId "LNL",      (kcoeffect, [], [])) -- Linear vs Non-linear semiring
+    , (mkId "Set",      (funTy (Type 0) kcoeffect, [], [0]))
+    , (mkId "SetOp",    (funTy (Type 0) kcoeffect, [], [0]))
     -- LNL members
     , (mkId "Zero",     (tyCon "LNL", [], []))
     , (mkId "One",      (tyCon "LNL", [], []))
@@ -123,6 +137,14 @@ typeConstructors =
     , (mkId "Exception", (keffect, [], []))
     , (mkId "Success", (tyCon "Exception", [], []))
     , (mkId "MayFail", (tyCon "Exception", [], []))
+
+     -- Free : (e : Type) -> Effect
+    , (mkId "GradedFree", (FunTy (Just $ mkId "eff") Nothing keffect
+                       (FunTy Nothing Nothing (funTy (tyVar "eff") (funTy (Type 0) (Type 0))) keffect), [], [0]))
+    , (mkId "Eff",
+         (FunTy (Just $ mkId "eff") Nothing keffect
+            (FunTy (Just $ mkId "sig") Nothing (funTy (tyVar "eff") (funTy (Type 0) (Type 0)))
+              (funTy (tyVar "eff") (TyApp (TyApp (tyCon "GradedFree") (tyVar "eff")) (tyVar "sig")))), [], [0,1]))
 
     -- Arrays
     , (mkId "FloatArray", (Type 0, [], []))
@@ -296,6 +318,38 @@ fromPure
   . a <Pure> -> a
 fromPure = BUILTIN
 
+
+-------------------------------------
+--- # Algebraic effects and handlers
+--------------------------------------
+
+--- Lift a CPS-style effect operation to direct-style, also called the "generic effect" operation
+call : forall {eff : Effect, s : Semiring, grd : s, i : Type, o : Type, r : Type, sig : eff -> Type -> Type, e : eff}
+     . (i -> (o -> r) [grd] -> sig e r) -> i -> o <Eff eff sig e>
+call = BUILTIN
+
+--- Deploy an effect handler on a computation tree
+handle : forall {eff : Effect, sig : eff -> Type -> Type, a b : Type, e : eff}
+       . (fmap : (forall {a : Type} . (forall {b : Type} . (forall {l : eff} . (a -> b) [0..Inf] -> sig l a -> sig l b))) [0..Inf])
+       --- ^ functoriality of sig
+       -> (forall {l : eff} . sig l b -> b) [0..Inf]
+       -> (a -> b)
+       --- ^ (a * sig) - algebra
+       -> a <Eff eff sig e>
+       -> b
+handle = BUILTIN
+
+--- Deploy an effect handler on a computation tree for a graded algebra
+handleGr : forall {eff : Effect, sig : eff -> Type -> Type, a : Type, b : eff -> Type, e : eff}
+       . (fmap : (forall {a : Type} . (forall {b : Type} . (forall {l : eff} . (a -> b) [0..Inf] -> sig l a -> sig l b))) [0..Inf])
+       --- ^ functoriality of sig
+       -> (forall {l : eff} . (forall {j : eff} . sig l (b j) -> b (l * j)) [0..Inf])
+       -> (a -> b (1 : eff))
+       --- ^ (a * sig) - graded algebra
+       -> a <Eff eff sig e>
+       -> b e
+handleGr = BUILTIN
+
 --------------------------------------------------------------------------------
 --- # I/O
 --------------------------------------------------------------------------------
@@ -346,20 +400,11 @@ readInt = BUILTIN
 --- # Concurrency and Session Types
 --------------------------------------------------------------------------------
 
-fork
-  : forall {s : Protocol, k : Coeffect, c : k}
-  . {SingleAction s, ExactSemiring k} => ((Chan s) [c] -> () <Session>) -> ((Chan (Dual s)) [c]) <Session>
-fork = BUILTIN
 
 forkLinear
   : forall {s : Protocol}
   . (LChan s -> ()) -> LChan (Dual s)
 forkLinear = BUILTIN
-
-forkLinear'
-  : forall {p : Protocol, s : Semiring}
-  . ((LChan p) [1 : s] -> ()) -> LChan (Dual p)
-forkLinear' = BUILTIN
 
 send
   : forall {a : Type, s : Protocol}
@@ -386,8 +431,9 @@ offer : forall {p1 p2 : Protocol, a : Type}
       . (LChan p1 -> a) -> (LChan p2 -> a) -> LChan (Offer p1 p2) -> a
 offer = BUILTIN
 
--- trace : String -> () <>
--- trace = BUILTIN
+--------------------------------------------------------------------------------
+--- # Non-linear communication and concurrency patterns
+--------------------------------------------------------------------------------
 
 forkNonLinear : forall {p : Protocol, s : Semiring, r : s}
               . {SingleAction p, ExactSemiring s} => ((LChan p) [r] -> ()) -> (LChan (Dual p)) [r]
@@ -409,6 +455,11 @@ forkReplicateExactly = BUILTIN
 --- # Concurrency primitives using side effects
 ----------------------------------
 
+fork
+  : forall {s : Protocol, k : Coeffect, c : k}
+  . {SingleAction s, ExactSemiring k} => ((Chan s) [c] -> () <Session>) -> ((Chan (Dual s)) [c]) <Session>
+fork = BUILTIN
+
 gsend
   : forall {a : Type, s : Protocol}
   . Chan (Send a s) -> a -> (Chan s) <Session>
@@ -421,8 +472,6 @@ grecv = BUILTIN
 
 gclose : Chan End -> () <Session>
 gclose = BUILTIN
-
-
 
 --------------------------------------------------------------------------------
 --- # File Handles
@@ -705,22 +754,43 @@ cap = BUILTIN
 -- projR : forall {a b : Type} . a & b -> b
 -- projR = BUILTIN
 
+-- trace : String -> () <>
+-- trace = BUILTIN
+
+------------------------------
+-- Debugging routines
+------------------------------
+-- debug : forall {a : Type} . String -> a -> a
+-- debug = BUILTIN
+
+------------------------------
+-- Derivable operations
+------------------------------
+
+drop : forall {a : Type} . {Dropable a} => a -> ()
+drop = BUILTIN
+
+copyShape : forall {a : Type, f : Type -> Type} . f a -> (f (), f a)
+copyShape = BUILTIN
 |]
 
+
+builtinsParsed :: AST () ()
+builtinsParsed = case parseDefs "builtins" builtinSrc of
+        Right (ast, _) -> freshenAST ast
+        Left err -> error err
 
 builtinDataTypesParsed :: [DataDecl]
 builtins :: [(Id, TypeScheme)]
 (builtinDataTypesParsed, builtins) =
   (types, map unDef defs)
     where
-      AST types defs _ _ _ = case parseDefs "builtins" builtinSrc of
-        Right (ast, _) -> ast
-        Left err -> error err
+      AST types defs _ _ _ = builtinsParsed
 
       unDef :: Def () () -> (Id, TypeScheme)
       unDef (Def _ name _ _ _ (Forall _ bs cs t)) = (name, Forall nullSpanBuiltin bs cs t)
 
 -- List of primitives that can't be promoted in CBV
 unpromotables :: [String]
-unpromotables = ["newFloatArray", "forkLinear", "forkLinear'", "forkMulticast", "forkReplicate", "forkReplicateExactly"]
+unpromotables = ["newFloatArray", "forkLinear", "forkMulticast", "forkReplicate", "forkReplicateExactly"]
 

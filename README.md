@@ -184,6 +184,7 @@ the most recent copy of the input file with `.bak` appended.
 | ASCII | Unicode |
 |:---:|:---:|
 | `forall` | `∀` |
+| `exists` | `∃` |
 | `Inf` | `∞` |
 | `->` | `→` |
 | `=>` | `⇒` |

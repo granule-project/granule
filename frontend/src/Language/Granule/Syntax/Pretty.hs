@@ -110,14 +110,10 @@ instance Pretty Type where
       docSpan "constName" ("Type " <> pretty l)
 
     pretty (FunTy Nothing Nothing t1 t2)  =
-      case t1 of
-        FunTy{} -> "(" <> pretty t1 <> ") -> " <> pretty t2
-        _ -> pretty t1 <> " -> " <> pretty t2
+      prettyNested t1 <> " -> " <> pretty t2
 
     pretty (FunTy Nothing (Just coeffect) t1 t2)  =
-      case t1 of
-        FunTy{} -> "(" <> pretty t1 <> ") -> " <> pretty t2
-        _ -> pretty t1 <> " % " <> docSpan "coeff" (pretty coeffect) <>  " -> " <> pretty t2
+      prettyNested t1 <> " % " <> docSpan "coeff" (pretty coeffect) <>  " -> " <> pretty t2
 
     pretty (FunTy (Just id) Nothing t1 t2)  =
       let pt1 = case t1 of FunTy{} -> "(" <> pretty t1 <> ")"; _ -> pretty t1
@@ -174,7 +170,10 @@ instance Pretty Type where
                     <> " : " <> pretty t') ps) <> ")"
 
     pretty (TyExists var k t) =
-      docSpan "keyword" "exists" <> " {" <> pretty var <> ":" <> pretty k <> "} . " <> pretty t
+      docSpan "keyword" "exists" <> " {" <> pretty var <> " : " <> pretty k <> "} . " <> pretty t
+
+    pretty (TyForall var k t) =
+      docSpan "keyword" "forall" <> " {" <> pretty var <> " : " <> pretty k <> "} . " <> pretty t
 
 instance Pretty TypeOperator where
   pretty = \case
@@ -247,7 +246,7 @@ instance Pretty DataDecl where
           where indent = maximum (map (length . internalName . dataConstrId) dataConstrs)
         pretty' col (DataConstrIndexed _ name typeScheme) =
           pretty name <> (replicate (col - (length $ pretty name)) ' ') <> " : " <> pretty typeScheme
-        pretty' _   (DataConstrNonIndexed _ name params) = pretty name <> " " <> (intercalate " " $ map pretty params)
+        pretty' _   (DataConstrNonIndexed _ name params) = pretty name <> " " <> (intercalate " " $ map prettyNested params)
 
 
 instance Pretty [DataConstr] where
@@ -263,8 +262,10 @@ instance Pretty (Pattern a) where
     pretty (PBox _ _ _ p)     = "[" <> prettyNested p <> "]"
     pretty (PInt _ _ _ n)     = show n
     pretty (PFloat _ _ _ n)   = show n
-    pretty (PConstr _ _ _ name args) | internalName name == "," = "(" <> intercalate ", " (map prettyNested args) <> ")"
-    pretty (PConstr _ _ _ name args) = unwords (pretty name : map prettyNested args)
+    pretty (PConstr _ _ _ name _ args) | internalName name == "," = "(" <> intercalate ", " (map prettyNested args) <> ")"
+    pretty (PConstr _ _ _ name tyVarBindsRequested args) =
+      unwords (pretty name : (map tyvarbinds tyVarBindsRequested ++ map prettyNested args))
+        where tyvarbinds x = "{" <> pretty x <> "}"
 
 instance {-# OVERLAPS #-} Pretty [Pattern a] where
     pretty [] = ""
@@ -294,6 +295,11 @@ instance Pretty v => Pretty (Value v a) where
     pretty (Pack s a ty e1 var k ty') =
       "pack <" <> pretty ty <> ", " <> pretty e1 <> "> "
       <> "as exists {" <> pretty var <> " : " <> pretty k <> "} . " <> pretty ty'
+    pretty (TyAbs _ (Left (v, k)) e) =
+      "/\\(" <> pretty v <> " : " <> pretty k <> ") -> " <> pretty e
+    pretty (TyAbs _ (Right ids) e) =
+      "/\\{" <> intercalate ", " (map pretty ids) <> "}"
+
 
 instance Pretty Id where
   pretty
