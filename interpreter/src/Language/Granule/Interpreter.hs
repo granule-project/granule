@@ -66,7 +66,15 @@ main :: IO ()
 main = do
     (globPatterns, config) <- getGrConfig
     if grShowVersion config
-      then putStrLn $ "Granule version " <> showVersion version
+      then
+        putStrLn $ unlines
+          [ "The Granule Interpreter"
+          , "version: "     <> showVersion version
+          , "branch: "      <> $(gitBranch)
+          , "commit hash: " <> $(gitHash)
+          , "commit date: " <> $(gitCommitDate)
+          , if $(gitDirty) then "(uncommitted files present)" else ""
+          ]
       else
         if null globPatterns
           then runGrOnStdIn config
