@@ -1502,10 +1502,20 @@ synthExpr defs gam pol (Val s _ rf (Abs _ p Nothing e)) = do
 
   newConjunct
 
+  -- if graded base
+  scrutinee <-
+    if usingExtension GradedBase
+      then do
+        s <- freshTyVarInContext (mkId "s") kcoeffect
+        r <- freshTyVarInContext (mkId "scrutinee") (TyVar s)
+        return (Just (TyVar r, TyVar s))
+      else
+        return Nothing
+
   tyVar <- freshTyVarInContext (mkId "t") (Type 0)
   let sig = (TyVar tyVar)
 
-  (bindings, localVars, substP, elaboratedP, _) <- ctxtFromTypedPattern s InCase sig p NotFull
+  (bindings, localVars, substP, elaboratedP, _) <- ctxtFromTypedPattern' scrutinee s InCase sig p NotFull
 
   newConjunct
 
@@ -1514,9 +1524,10 @@ synthExpr defs gam pol (Val s _ rf (Abs _ p Nothing e)) = do
      (tau, gam'', subst, elaboratedE) <- synthExpr defs (bindings <> gam) pol e
 
      -- Locally we should have this property (as we are under a binder)
+     debugM "abs-inner-check:" (pretty (gam'' `intersectCtxts` bindings) <> "<: " <> pretty bindings)
      subst0 <- ctxtApprox s (gam'' `intersectCtxts` bindings) bindings
 
-     let finalTy = FunTy Nothing Nothing sig tau
+     let finalTy = FunTy Nothing (fmap fst scrutinee) sig tau
      let elaborated = Val s finalTy rf (Abs finalTy elaboratedP (Just sig) elaboratedE)
      finalTy' <- substitute substP finalTy
      substFinal <- combineManySubstitutions s [subst0, substP, subst]
