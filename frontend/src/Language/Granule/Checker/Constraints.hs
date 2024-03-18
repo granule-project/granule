@@ -258,7 +258,7 @@ freshSolverVarScoped quant name (isExt -> Just t) q k =
 freshSolverVarScoped quant name (TyVar v) q k =
   quant q name (\solverVar -> k (sTrue, SUnknown $ SynLeaf $ Just solverVar))
 
-freshSolverVarScoped quant name (Language.Granule.Syntax.Type.isSet -> Just (elemTy, polarity)) q k =
+freshSolverVarScoped quant name (isSet -> Just (elemTy, polarity)) q k =
       quant q name (\solverVar -> k (inUniverse solverVar, SSet polarity solverVar))
     where
 
@@ -458,8 +458,8 @@ compileCoeffect (TyGrade k' n) k _ | k == extendedNat && (k' == Nothing || k' ==
 compileCoeffect (TyRational r) (TyCon k) _ | internalName k == "Q" =
   return (SFloat  . fromRational $ r, sTrue)
 
-compileCoeffect (TySet _ xs) (Language.Granule.Syntax.Type.isSet -> Just (elemTy, polarity)) _ =
-    return ((SSet polarity) . S.fromList $ mapMaybe justTyConNames xs, sTrue)
+compileCoeffect (TySet _ xs) (isSet -> Just (elemTy, polarity)) _ =
+    return (SSet polarity . S.fromList $ mapMaybe justTyConNames xs, sTrue)
   where
     justTyConNames (TyCon x) = Just (internalName x)
     justTyConNames t = error $ "Cannot have a type " ++ show t ++ " in a symbolic list"
@@ -538,8 +538,8 @@ compileCoeffect (TyGrade k' 0) k vars = do
 
     (isSet -> Just (elemTy, polarity)) ->
       case polarity of
-        Normal   -> setEmpty polarity
-        Opposite -> setUniverse polarity elemTy
+        Normal   -> setUniverse polarity elemTy
+        Opposite -> setEmpty polarity
 
     (TyVar _) -> return (SUnknown (SynLeaf (Just 0)), sTrue)
 
@@ -578,8 +578,8 @@ compileCoeffect (TyGrade k' 1) k vars = do
 
     (isSet -> Just (elemTy, polarity)) ->
       case polarity of
-        Normal   -> setUniverse polarity elemTy
-        Opposite -> setEmpty polarity
+        Normal   -> setEmpty polarity
+        Opposite -> setUniverse polarity elemTy
 
     (TyVar _) -> return (SUnknown (SynLeaf (Just 1)), sTrue)
 
@@ -632,10 +632,10 @@ approximatedByOrEqualConstraint (SFloat n) (SFloat m)  = return $ n .<= m
 approximatedByOrEqualConstraint SPoint SPoint          = return $ sTrue
 approximatedByOrEqualConstraint (SOOZ s) (SOOZ r) = pure $ s .== r
 approximatedByOrEqualConstraint (SSet Normal s) (SSet Normal t) =
-  pure $ s `S.isSubsetOf` t
+  pure $ t `S.isSubsetOf` s
 
 approximatedByOrEqualConstraint (SSet Opposite s) (SSet Opposite t) =
-  pure $ t `S.isSubsetOf` s
+  pure $ s `S.isSubsetOf` t
 
 
 approximatedByOrEqualConstraint (SLevel l) (SLevel k) =

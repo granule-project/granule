@@ -1,0 +1,23 @@
+language GradedBase
+
+data List a = Cons a (List a) | Nil
+
+data Privilege = Camera | Contacts | Location | Microphone
+
+getLocation : String [{Location}]
+getLocation = ["051.28°N 001.08°E"]
+
+getContacts : (List String) [{Contacts}]
+getContacts = [Cons "Alice" (Cons "Bob" (Cons "Carol" Nil))]
+
+example : (List String) [{Contacts, Location}]
+example =
+  let [location] : String [{Location}] = getLocation;
+      [contacts] : (List String) [{Contacts}] = getContacts
+  in [Cons location contacts]
+
+non-example : (List String) [{Contacts}]
+non-example =
+  let [location] : String [{Location}] = getLocation;
+      [contacts] : (List String) [{Contacts}] = getContacts
+  in [Cons location contacts]

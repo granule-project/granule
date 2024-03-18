@@ -298,8 +298,8 @@ symGradeEq s t = solverError $ cannotDo ".==" s t
 -- | Meet operation on symbolic grades
 symGradeMeet :: SGrade -> SGrade -> Symbolic SGrade
 symGradeMeet (SNat n1) (SNat n2)     = return $ SNat $ n1 `smin` n2
-symGradeMeet (SSet Normal s) (SSet Normal t) = return $ SSet Normal $ S.union s t
-symGradeMeet (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.intersection s t
+symGradeMeet (SSet Normal s) (SSet Normal t)     = return $ SSet Normal $ S.intersection s t
+symGradeMeet (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.union s t
 symGradeMeet (SLevel s) (SLevel t) =
   -- Using the join (!) from the Agda code (by cases)
   return $ SLevel $ ite (s .== literal unusedRepresentation) t -- join Unused x = x
@@ -334,8 +334,8 @@ symGradeMeet s t = solverError $ cannotDo "meet" s t
 -- | Join operation on symbolic grades
 symGradeJoin :: SGrade -> SGrade -> Symbolic SGrade
 symGradeJoin (SNat n1) (SNat n2) = return $ SNat (n1 `smax` n2)
-symGradeJoin (SSet Normal s) (SSet Normal t)   = return $ SSet Normal $ S.intersection s t
-symGradeJoin (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.union s t
+symGradeJoin (SSet Normal s) (SSet Normal t)     = return $ SSet Normal $ S.union s t
+symGradeJoin (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.intersection s t
 symGradeJoin (SLevel s) (SLevel t) =
   -- Using the meet (!) from the Agda code (by cases)
   return $ SLevel $ ite (s .== literal unusedRepresentation) t -- meet Unused x = x
@@ -383,8 +383,8 @@ symGradeJoin s t = solverError $ cannotDo "join" s t
 -- | Plus operation on symbolic grades
 symGradePlus :: SGrade -> SGrade -> Symbolic SGrade
 symGradePlus (SNat n1) (SNat n2) = return $ SNat (n1 + n2)
-symGradePlus (SSet Normal s) (SSet Normal t) = return $ SSet Normal $ S.union s t
-symGradePlus (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.intersection s t
+symGradePlus (SSet Normal s) (SSet Normal t) = return $ SSet Normal $ S.intersection s t
+symGradePlus (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.union s t
 symGradePlus (SLevel lev1) (SLevel lev2) = symGradeJoin (SLevel lev1) (SLevel lev2)
 symGradePlus (SFloat n1) (SFloat n2) = return $ SFloat $ n1 + n2
 symGradePlus (SExtNat x) (SExtNat y) = return $ SExtNat (x + y)
@@ -432,8 +432,8 @@ symGradeTimes :: SGrade -> SGrade -> Symbolic SGrade
 symGradeTimes (SNat n1) (SNat n2) = return $ SNat (n1 * n2)
 symGradeTimes (SNat n1) (SExtNat (SNatX n2)) = return $ SExtNat $ SNatX (n1 * n2)
 symGradeTimes (SExtNat (SNatX n1)) (SNat n2) = return $ SExtNat $ SNatX (n1 * n2)
-symGradeTimes (SSet Normal s) (SSet Normal t) = return $ SSet Normal $ S.intersection s t
-symGradeTimes (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.union s t
+symGradeTimes (SSet Normal s) (SSet Normal t) = return $ SSet Normal $ S.union s t
+symGradeTimes (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.intersection s t
 symGradeTimes (SLevel lev1) (SLevel lev2) = symGradeJoin (SLevel lev1) (SLevel lev2)
 symGradeTimes (SFloat n1) (SFloat n2) = return $ SFloat $ n1 * n2
 symGradeTimes (SExtNat x) (SExtNat y) = return $ SExtNat (x * y)

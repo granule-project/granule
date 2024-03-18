@@ -371,7 +371,7 @@ ctxtFromTypedPattern' _ s _ t p _ = do
   debugM "dataConstructors in checker state" $ show $ dataConstructors st
   case t of
     (Star _ t') -> throw $ UniquenessError { errLoc = s, uniquenessMismatch = UniquePromotion t'}
-    otherwise -> throw $ PatternTypingError { errLoc = s, errPat = p, tyExpected = t }
+    _ -> throw PatternTypingError { errLoc = s, errPat = p, tyExpected = t }
 
 flattenCoeffects :: (?globals :: Globals) => Span -> Maybe (Coeffect, Type) -> Maybe (Coeffect, Type) -> Checker (Maybe (Coeffect, Type), Substitution)
 flattenCoeffects s Nothing Nothing | usingExtension GradedBase = do
