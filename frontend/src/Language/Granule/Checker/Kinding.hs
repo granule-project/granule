@@ -955,7 +955,7 @@ cProduct x y = TyApp (TyApp (TyCon (mkId ",,")) x) y
 -- | Find out whether a coeffect if flattenable, and if so get the operation
 -- | used to represent flattening on the grades
 flattenable :: (?globals :: Globals)
-            => Type -> Type -> Checker (Maybe ((Coeffect -> Coeffect -> Coeffect), Substitution, Type))
+            => Type -> Type -> Checker (Maybe (Coeffect -> Coeffect -> Coeffect, Substitution, Type))
 flattenable t1 t2
  | t1 == t2 = case t1 of
     t1 | t1 == extendedNat -> return $ Just (TyInfix TyOpTimes, [], t1)
@@ -969,7 +969,7 @@ flattenable t1 t2
     -- Sets can use multiply to fold two levels
     (isSet -> Just (elemType, polarity)) -> return $ Just (TyInfix TyOpTimes, [], t1)
 
-    _ -> return $ Nothing
+    _ -> return Nothing
  | otherwise =
       case (t1, t2) of
         (isInterval -> Just t, TyCon (internalName -> "LNL")) | t == extendedNat ->
@@ -1301,4 +1301,3 @@ instance Unifiable t => Unifiable (Maybe t) where
     unify' Nothing _ = return []
     unify' _ Nothing = return []
     unify' (Just x) (Just y) = unify' x y
-
