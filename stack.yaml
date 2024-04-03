@@ -1,4 +1,4 @@
-resolver: lts-20.0
+resolver: lts-20.26
 packages:
 - frontend/
 - interpreter/
@@ -9,17 +9,11 @@ packages:
 - benchmark/
 
 # Dependency packages to be pulled from upstream that are not in the resolver
-# (e.g., acme-missiles-0.3)
 extra-deps:
-- ConfigFile-1.1.4
-- text-replace-0.1.0.2
-- syz-0.2.0.0@sha256:7307acb8f6ae7720e7e235c974281ecee912703c1394ebcac19caf83d70bb492,2345
-- clock-0.8.3
-# Dependencies for language server
-- lsp-1.6.0.0
-- co-log-core-0.3.1.0
+- text-replace-0.1.0.3
+- syz-0.2.0.0
 - git: https://github.com/jackohughes/haskell-src-exts
-  commit: 5c2647fa0746bdac046897f5a6b7e4f5ef3afa79 
+  commit: 5c2647fa0746bdac046897f5a6b7e4f5ef3afa79
 
 # Override default flag values for local packages and extra-deps
 flags: {}
@@ -40,8 +34,9 @@ extra-package-dbs: []
 #
 # Extra directories used by stack for building
 
-extra-include-dirs:
-- /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/ffi
+## Superfluous?
+# extra-include-dirs:
+# - /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/ffi
 
 # extra-lib-dirs: [/path/to/dir]
 
