@@ -262,11 +262,15 @@ instance Monad m => Freshenable m (Def v a) where
 instance Term (EquationList v a) where
   freeVars (EquationList _ name _ eqs) =
     delete name (concatMap freeVars eqs)
+  hasHole (EquationList _ name _ eqs) = any hasHole eqs
 
 instance Term (Equation v a) where
   freeVars (Equation s _ a _ binders body) =
       freeVars body \\ concatMap boundVars binders
+  hasHole (Equation _ _ _ _ _ body) = hasHole body
 
 instance Term (Def v a) where
   freeVars (Def _ name _ _ equations _) =
     delete name (freeVars equations)
+  hasHole (Def _ name _ _ equations _) =
+    hasHole equations

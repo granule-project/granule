@@ -16,6 +16,7 @@ import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Identifiers
 -- import Control.Monad.Logic
+import Language.Granule.Syntax.Helpers hiding (freshIdentifierBase)
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Span
@@ -513,7 +514,11 @@ runExamples eval ast@(AST decls defs imports hidden mod) examples defId = do
           map (\(Example input output _) -> makeEquality input output) examples'
     -- remove the existing main function (should probably keep the main function so we can stitch it back in after)
 
-    let defsWithoutMain = filter (\(Def _ mIdent _ _ _ _) -> mIdent /= mkId entryPoint) defs
+    let defsWithoutMain =
+         filter (\(Def _ mIdent _ _ defs _) ->
+                       mIdent /= mkId entryPoint
+                       -- filter out any definitions that have a hole
+                    && not (hasHole defs)) defs
 
     let foundBoolDecl = find (\(DataDecl _ dIdent _ _ _) ->  dIdent == mkId "Bool") decls
     let declsWithBool = case foundBoolDecl of
