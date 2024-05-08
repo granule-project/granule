@@ -27,7 +27,7 @@ data N (n : Nat) where
 -- We can then define the standard kinds of functions on size-indexed
 -- vectors, e.g., append
 
-append : forall {t : Type, n : Nat, m : Nat} . Vec n t -> Vec m t -> Vec (n + m) t
+append : forall {t : Type, m : Nat, n : Nat} . Vec n t -> Vec m t -> Vec (n + m) t
 append Nil ys = ys;
 append (Cons x xs) ys = Cons x (append xs ys)
 
@@ -82,7 +82,7 @@ replicate (S n) [c] = Cons c (replicate n [c])
 -- We can now define left pad with one further helper combinator
 -- that subtracts two indexed naturals:
 
-sub : forall {m : Nat, n : Nat} . {m >= n} => N m -> N n -> N (m - n)
+sub : forall {m : Nat, n : Nat} . {m .>= n} => N m -> N n -> N (m - n)
 sub m Z = m;
 sub (S m') (S n') = sub m' n'
 
