@@ -2,9 +2,9 @@ name: Stack CI
 
 on:
   push:
-    branches: [ "main", "dev-minor" ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ "main", "dev-minor" ]
+    branches: [ "main" ]
 
 permissions:
   contents: read
