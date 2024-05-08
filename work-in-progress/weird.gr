@@ -1,0 +1,27 @@
+data Vec (n : Nat) (a : Type) where
+  Nil : Vec 0 a;
+  Cons : a -> Vec n a -> Vec (n + 1) a
+
+
+
+
+append : forall {t : Type, m : Nat, n : Nat} . Vec n t -> Vec m t -> Vec (n + m) t
+append Nil ys = ys;
+append (Cons x xs) ys = Cons x (append xs ys)
+
+-- [u]n.2 : Nat, [u]n.1 : Nat, [u]m.0 : Nat, Πm`1 : Nat, Πn`2 : Nat . ∀ {n.0 : Nat} .
+-- (((n`2 = n.0 + 1)) -> (n.2 + 1 = n`2 + m`1)
+-- ∧ (n.2 = n.1 + m.0)
+-- ∧ (m`1 = m.0) ∧ (n.0 = n.1))
+
+
+
+
+append' : forall {t : Type, n : Nat, m : Nat} . Vec n t -> Vec m t -> Vec (n + m) t
+append' Nil ys = ys;
+append' (Cons x xs) ys = Cons x (append' xs ys)
+
+-- [u]n.2 : Nat, [u]m.0 : Nat, [u]n.1 : Nat, Πn`1 : Nat, Πm`2 : Nat . ∀ {n.0 : Nat} .
+-- (((n`1 = n.0 + 1)) -> (n.2 + 1 = n`1 + m`2)
+-- ∧ (n.2 = n.1 + m.0)
+-- ∧ (m`2 = m.0) ∧ (n.0 = n.1))
