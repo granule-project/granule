@@ -76,7 +76,7 @@ rest of the stack `xs` we use it once. An alternate definition of
 non-linearity on the elements:
 
 ~~~ granule
-peek' : forall m : Ext Nat, a, n . Vec (n+1) (a [m..m+1]) -> (a, Vec (n+1) (a [m..m]))
+peek' : forall {m : Ext Nat, a, n} . Vec (n+1) (a [m..m+1]) -> (a, Vec (n+1) (a [m..m]))
 peek' (Cons [x] xs) = (x, Cons [x] xs)
 ~~~
 
