@@ -555,7 +555,7 @@ leak = hash secret
 (`gr examples/intro.gr.md --literate-env-name grill7`)
 
 ~~~ granule
-hash : forall {l : Level} . Int [l] -> Int [l]
+hash : forall {l : Sec} . Int [l] -> Int [l]
 hash [x] = [x*x*x]
 ~~~
 
