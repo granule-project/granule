@@ -15,7 +15,7 @@ import Control.Monad.Reader (ReaderT, ask, runReaderT)
 import Control.Monad.Trans.Class
 import Data.Default (Default(..))
 import Data.Foldable (toList)
-import Data.List (isInfixOf)
+import Data.List (isInfixOf,isPrefixOf)
 import Data.List.NonEmpty (NonEmpty)
 import Data.List.Split
 import Data.Maybe (fromMaybe)
@@ -46,7 +46,7 @@ import qualified Language.Granule.Syntax.Parser as Parser
 data LsState = LsState { currentDefns :: M.Map String (Def () ()),
                          currentADTs :: M.Map String DataDecl }
 
-instance Default LsState where 
+instance Default LsState where
   def = LsState { currentDefns = M.empty,
                   currentADTs = M.empty }
 
@@ -128,7 +128,7 @@ noRange :: Range
 noRange = Range (Position 0 0) (Position 100000 0)
 
 getParseErrorRange :: String -> Range
-getParseErrorRange s = if isInfixOf "parse error" s then 
+getParseErrorRange s = if isInfixOf "parse error" s then
     let _:xs = splitOn ".gr:" s
         line:col:_ = numsFromString (concat xs)
         (l, c) = ((read line - 1), (read col - 1))
@@ -161,11 +161,14 @@ validateGranuleCode doc version content = let ?globals = ?globals {globalsSource
                 declIds = map (\x -> (pretty $ dataDeclId x, x)) dd
             putADTs (M.fromList declIds)
           Left errs -> checkerDiagnostics doc version errs
-    Left e -> parserDiagnostic doc version e
+    Left e ->
+      if "Premature" `isPrefixOf` e
+        then return ()
+        else parserDiagnostic doc version e
 
 parserDiagnostic :: NormalizedUri -> TextDocumentVersion -> String -> LspS ()
 parserDiagnostic doc version message = do
-  let diags = 
+  let diags =
         [ Diagnostic
             (getParseErrorRange message)
             (Just DsError)
@@ -203,7 +206,7 @@ objectToSymbol objSpan objId obj = let loc = objSpan obj in SymbolInformation
   (SkUnknown 0)
   (Nothing)
   (Nothing)
-  (Location 
+  (Location
       (filePathToUri $ filename loc)
       (Range
         (let (x, y) = startPos loc in Position (fromIntegral x-1) (fromIntegral y-1))
@@ -235,7 +238,7 @@ getWordFromString :: String -> Int -> String -> String
 getWordFromString [] _ acc = acc
 getWordFromString (x:xs) 0 acc = if x == ' ' then acc else getWordFromString xs 0 (acc ++ [x])
 getWordFromString (x:xs) n acc = if x == ' ' then getWordFromString xs (n-1) [] else getWordFromString xs (n-1) (acc ++ [x])
-    
+
 handlers :: (?globals :: Globals) => Handlers LspS
 handlers = mconcat
   [ notificationHandler SInitialized $ \msg -> do
@@ -319,10 +322,10 @@ main = do
     , doInitialize = const . pure . Right
     , staticHandlers = (let ?globals = globals in handlers)
     , interpretHandler = \env -> Iso (\lsps -> runLspS lsps state env) liftIO
-    , options = 
+    , options =
       defaultOptions
         {
-          textDocumentSync = 
+          textDocumentSync =
             Just
               ( TextDocumentSyncOptions
                 (Just True)

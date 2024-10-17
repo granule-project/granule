@@ -1,0 +1,69 @@
+name: Stack CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install required libraries
+      run: >-
+        sudo apt install
+        z3
+
+    # Use preinstalled Stack.  Should Stack fail to be installed, use the setup action:
+    # - name: Setup Haskell
+    #   uses: haskell-actions/setup@v2
+    #   with:
+    #     enable-stack: true
+    #     stack-no-global: true
+
+    - name: Restore Stack build artifacts (user + project)
+      uses: actions/cache/restore@v4
+      id: cache
+      with:
+        path: |
+          ~/.stack
+          .stack-work
+        # Write a fresh cache each time
+        key: ${{ runner.os }}-stack-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-stack
+
+    - name: Setup Stack
+      run: stack setup
+
+    - name: Build dependencies
+      run: stack test --only-dependencies
+
+    # This step only consumes an extra minute without gains.
+    # - name: Build w/o tests
+    #   run: stack build
+
+    - name: Build w/ tests
+      run: stack test --no-run-tests
+
+    - name: Run tests
+      run: stack test
+
+    # Always cache dependencies.
+    # This makes esp. sense now that some tests are broken.
+    - name: Cache Stack build artifacts (user + project)
+      uses: actions/cache/save@v4
+      if:   always() && steps.cache.outputs.cache-hit != 'true'
+      with:
+        path: |
+          ~/.stack
+          .stack-work
+        key: ${{ steps.cache.outputs.cache-primary-key }}

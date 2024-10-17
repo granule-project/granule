@@ -81,12 +81,12 @@ concat Nil = Nil;
 concat (Cons xs xss) = append xs (concat xss)
 
 --- Drop the first `m` elements
-drop
+dropElems
   : forall {a : Type, m n : Nat}
   . N m -> (Vec n a) [0..1] -> Vec (n - m) a
-drop Z [xs] = xs;
-drop (S n) [Nil] = drop n [Nil];
-drop (S n) [Cons _ xs] = drop n [xs]
+dropElems Z [xs] = xs;
+dropElems (S n) [Nil] = dropElems n [Nil];
+dropElems (S n) [Cons _ xs] = dropElems n [xs]
 
 --- Take the first `m` elements
 take

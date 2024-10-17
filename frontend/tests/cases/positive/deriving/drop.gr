@@ -8,7 +8,7 @@ data Store a b =
   One a | Two a b
 
 dropStore : forall {b : Type} . {Dropable b} => Store Int b -> ()
-dropStore = drop @Store
+dropStore = drop @(Store Int b)
 
 main : ((), ())
 main = let x : (Store Int Int) = (One 42)

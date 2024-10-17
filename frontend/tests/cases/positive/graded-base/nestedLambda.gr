@@ -1,0 +1,4 @@
+-- gr --no-eval
+language GradedBase
+quad' : forall {a : Type}. a % 4 -> ((a, a), (a, a))
+quad' = \x -> (\y -> (y, y)) (x, x)

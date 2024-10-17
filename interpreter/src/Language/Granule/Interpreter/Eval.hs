@@ -1274,7 +1274,13 @@ evalDefs ctxt (Def _ var _ _ (EquationList _ _ _ [Equation _ _ _ rf [] e]) _ : d
     val <- evalIn ctxt e
     case extend ctxt var val of
       Just ctxt -> evalDefs ctxt defs
-      Nothing -> error $ "Name clash: `" <> sourceName var <> "` was already in the context."
+      Nothing ->
+        if '@' `elem` (internalName var)
+          -- ignore name clashes for derived operations
+          -- TODO: this is somewhat a hack- we should be able to make sure we don't
+          -- regenerated derived operations, but at least they should all be equivalent...
+          then evalDefs ctxt defs
+          else error $ "Name clash: `" <> sourceName var <> "` was already in the context."
 evalDefs ctxt (d : defs) = do
     let d' = desugar d
     evalDefs ctxt (d' : defs)

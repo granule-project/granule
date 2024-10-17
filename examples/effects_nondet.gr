@@ -11,18 +11,18 @@ import List
 data Labels = Toss | Drop
 
 -- Operations
-data GameOps (r : Type) : Set Labels -> Type where
-  FlipCoin : () -> (Bool -> r) [2] -> GameOps r {Toss};
-  Fumble   : () -> (Void -> r) [0] -> GameOps r {Drop}
+data GameOps : Set Labels -> Type -> Type where
+  FlipCoin : forall {r : Type} . () -> (Bool -> r) [2] -> GameOps {Toss} r;
+  Fumble   : forall {r : Type} . () -> (Void -> r) [0] -> GameOps {Drop} r
 
 -- -- Functoriality of operations
 fmap_gameops : forall {a b : Type, l : Set Labels}
-             . (a -> b) [0..Inf] -> GameOps a l -> GameOps b l
+             . (a -> b) [0..Inf] -> GameOps l a -> GameOps l b
 fmap_gameops [f] (FlipCoin () [k]) = FlipCoin () [f . k];
 fmap_gameops [f] (Fumble () [k]) = Fumble () [f . k]
 
 -- -- Handler to list monad
-handler : forall {a : Type, l : Set Labels} . GameOps (List a) l -> List a
+handler : forall {a : Type, l : Set Labels} . GameOps l (List a) -> List a
 handler (FlipCoin () [k]) = join_list (Next (k True) (Next (k False) Empty));
 handler (Fumble ()   [k]) = Empty
 

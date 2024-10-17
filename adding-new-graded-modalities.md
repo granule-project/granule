@@ -38,12 +38,12 @@ You need to add a new primitive type for this "coeffect".
 Built-in (primitive) type constructors are given in
 Language.Granule.Primitives (Checker/Primitives.hs).
 Add a line to `typeConstructors` for the type, e.g.,
-`(mkId "Fruit", (kcoeffect, [], False))`
+`(mkId "Fruit", (kcoeffect, [], []))`
 There is a section for this labelled `-- Coeffect types`.
 
 If the members of your semiring are also type constructors
 then also add these here, e.g.,
-`(mkId "Apple", (tyCon "Fruit", [], False))`
+`(mkId "Apple", (tyCon "Fruit", [], []))`
 
 If you have other operations you want to define on the
 semiring, then you might want to add these here as type-level

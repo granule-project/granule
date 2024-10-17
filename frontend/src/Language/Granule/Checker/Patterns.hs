@@ -184,7 +184,12 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC tyVarBindsRequ
   mConstructor <- lookupDataConstructor s dataC
   case mConstructor of
     Nothing -> throw UnboundDataConstructor{ errLoc = s, errId = dataC }
-    Just (tySch@(Forall _ tyVarBinders _ _), coercions, indices) -> do
+    Just (tySch@(Forall _ tyVarBinders _ innerType), coercions, indices) -> do
+
+      -- Check pattern arity
+      if (arity innerType /= length ps)
+        then throw $ PatternArityError s dataC (arity innerType) (length ps)
+        else return ()
 
       case outerBoxTy of
         -- Hsup if you only have more than one premise (and have an enclosing grade)
@@ -366,7 +371,7 @@ ctxtFromTypedPattern' _ s _ t p _ = do
   debugM "dataConstructors in checker state" $ show $ dataConstructors st
   case t of
     (Star _ t') -> throw $ UniquenessError { errLoc = s, uniquenessMismatch = UniquePromotion t'}
-    otherwise -> throw $ PatternTypingError { errLoc = s, errPat = p, tyExpected = t }
+    _ -> throw PatternTypingError { errLoc = s, errPat = p, tyExpected = t }
 
 flattenCoeffects :: (?globals :: Globals) => Span -> Maybe (Coeffect, Type) -> Maybe (Coeffect, Type) -> Checker (Maybe (Coeffect, Type), Substitution)
 flattenCoeffects s Nothing Nothing | usingExtension GradedBase = do
