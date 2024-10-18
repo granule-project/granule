@@ -58,10 +58,11 @@ typeConstructors =
                                        , (mkId "Dunno",    (tyCon "Level", [], []))])] []
  ++
   -- Everything else is always in scope
-    [ (mkId "Coeffect",  (Type 2, [], []))
-    , (mkId "Effect",    (Type 2, [], []))
-    , (mkId "Guarantee", (Type 2, [], []))
-    , (mkId "Predicate", (Type 2, [], []))
+    [ (mkId "Coeffect",  (Type 0, [], []))
+    , (mkId "Effect",    (Type 0, [], []))
+    , (mkId "Guarantee", (Type 0, [], []))
+    , (mkId "Permission", (Type 0, [], []))
+    , (mkId "Predicate", (Type 0, [], []))
     , (mkId "->",     (funTy (Type 0) (funTy (Type 0) (Type 0)), [], []))
     , (mkId ",,",     (funTy kcoeffect (funTy kcoeffect kcoeffect), [mkId ",,"], []))
     , (mkId "Int",    (Type 0, [], []))
@@ -75,15 +76,17 @@ typeConstructors =
     , (mkId "Dropable", (funTy (Type 0) kpredicate, [], [0]))
     -- TODO: add deriving for this
     -- , (mkId "Moveable", (funTy (Type 0) kpredicate, [], [0]))
+    , (mkId "Cloneable", (funTy (Type 0) kpredicate, [], [0]))
     -- Session type related things
     , (mkId "ExactSemiring", (funTy (tyCon "Semiring") (tyCon "Predicate"), [], []))
+    , (mkId "Mutable", (funTy (tyCon "Fraction") (tyCon "Predicate"), [], []))
     , (mkId "NonInterfering", (funTy (tyCon "Coeffect") (tyCon "Predicate"), [], []))
     , (mkId "Protocol", (Type 0, [], []))
     , (mkId "SingleAction", (funTy (tyCon "Protocol") (tyCon "Predicate"), [], [0]))
     , (mkId "ReceivePrefix", (funTy (tyCon "Protocol") (tyCon "Predicate"), [], [0]))
     , (mkId "Sends", (funTy (tyCon "Nat") (funTy (tyCon "Protocol") (tyCon "Predicate")), [], [0]))
     , (mkId "Graded", (funTy (tyCon "Nat") (funTy (tyCon "Protocol") (tyCon "Protocol")), [], [0]))
-
+    , (mkId "Rename", (funTy (tyCon "Name") (funTy (Type 0) (Type 0)), [], [0]))
     -- # Coeffect types
     , (mkId "Nat",      (kcoeffect, [], []))
     , (mkId "Q",        (kcoeffect, [], [])) -- Rationals
@@ -112,6 +115,8 @@ typeConstructors =
     -- Uniqueness
     , (mkId "Uniqueness", (kguarantee, [], []))
     , (mkId "Unique", (tyCon "Uniqueness", [], []))
+    , (mkId "Fraction", (tyCon "Permission", [], []))
+    , (mkId "Star", (tyCon "Fraction", [], []))
     -- Integrity
     , (mkId "Integrity", (kguarantee, [], []))
     , (mkId "Trusted", (tyCon "Integrity", [], []))
@@ -147,8 +152,10 @@ typeConstructors =
             (FunTy (Just $ mkId "sig") Nothing (funTy (tyVar "eff") (funTy (Type 0) (Type 0)))
               (funTy (tyVar "eff") (TyApp (TyApp (tyCon "GradedFree") (tyVar "eff")) (tyVar "sig")))), [], [0,1]))
 
-    -- Arrays
-    , (mkId "FloatArray", (Type 0, [], []))
+    -- Reference types
+    , (mkId "Name", (FunTy Nothing Nothing (Type 0) (Type 0), [], []))
+    , (mkId "FloatArray", (FunTy Nothing Nothing (TyCon $ mkId "Name") (Type 0), [], []))
+    , (mkId "Ref",  (FunTy Nothing Nothing (TyCon $ mkId "Name") (FunTy Nothing Nothing (Type 0) (Type 0)), [], []))
 
     -- Capability related things
     , (mkId "CapabilityType", (funTy (tyCon "Capability") (Type 0), [], [0]))
@@ -200,6 +207,7 @@ tyOps = \case
     TyOpConverge -> (kNat, kNat, kNat)
     TyOpImpl    -> (kpredicate, kpredicate, kpredicate)
     TyOpHsup    -> (tyVar "k", tyVar "k", kpredicate)
+    TyOpMutable    -> (tyVar "k", tyVar "k", kpredicate)
 
 dataTypes :: [DataDecl]
 dataTypes =
@@ -653,24 +661,17 @@ tick = BUILTIN
 --------------------------------------------------------------------------------
 
 uniqueReturn
-  : forall {a : Type}
-  . *a -> !a
+  : forall {a : Type, s : Semiring, r : s}
+  . *a -> a [r]
 uniqueReturn = BUILTIN
 
-uniqueBind
-  : forall {a b : Type}
-  . (*a -> !b) -> !a -> !b
-uniqueBind = BUILTIN
+-- Provided by clone
 
-uniquePush
-  : forall {a b : Type}
-  . *(a, b)  -> (*a, *b)
-uniquePush = BUILTIN
-
-uniquePull
-  : forall {a b : Type}
-  . (*a, *b) -> *(a, b)
-uniquePull = BUILTIN
+-- uniqueBind
+--   : forall {a b : Type, s : Semiring, r : s}
+--   . {(1 : s) <= r, Cloneable a}
+--  => ((exists {id : Name} . *(Rename id a)) -> b) -> a [r] -> b
+-- uniqueBind = BUILTIN
 
 reveal
   : forall {a : Type}
@@ -682,39 +683,76 @@ trustedBind
   . (a *{Trusted} -> b [Lo]) -> a [Lo] -> b [Lo]
 trustedBind = BUILTIN
 
+withBorrow
+  : forall {a b : Type}
+  . (& 1 a -> & 1 b) -> *a -> *b
+withBorrow = BUILTIN
+
+split
+  : forall {a : Type, f : Fraction}
+  . {f /= Star} => & f a -> (& (f * 1/2) a, & (f * 1/2) a)
+split = BUILTIN
+
+join
+  : forall {a : Type, f g : Fraction}
+  . {f /= Star, g /= Star} => (& f a, & g a) -> & (f+g) a
+join = BUILTIN
+
+borrowPush
+  : forall {a b : Type, p : Permission, f : p}
+  . & f (a, b) -> (& f a, & f b)
+borrowPush = BUILTIN
+
+borrowPull
+  : forall {a b : Type, p : Permission, f : p}
+  . (& f a, & f b) -> & f (a, b)
+borrowPull = BUILTIN
+
 --------------------------------------------------------------------------------
 --- # Mutable array operations
 --------------------------------------------------------------------------------
 
-newFloatArray : Int -> *FloatArray
+newFloatArray : Int -> exists {id : Name} . *(FloatArray id)
 newFloatArray = BUILTIN
 
-readFloatArray : *FloatArray -> Int -> (Float, *FloatArray)
+readFloatArray : forall {p : Permission, f : p, id : Name} . & f (FloatArray id) -> Int -> (Float, & f (FloatArray id))
 readFloatArray = BUILTIN
 
-writeFloatArray : *FloatArray -> Int -> Float -> *FloatArray
+writeFloatArray : forall {id : Name, f : Fraction} . {mut f} => & f (FloatArray id) -> Int -> Float -> & f (FloatArray id)
 writeFloatArray = BUILTIN
 
-lengthFloatArray : *FloatArray -> (Int, *FloatArray)
+lengthFloatArray : forall {p : Permission, f : p, id : Name} . & f (FloatArray id) -> (!Int, & f (FloatArray id))
 lengthFloatArray = BUILTIN
 
-deleteFloatArray : *FloatArray -> ()
+deleteFloatArray : forall {id : Name} . *(FloatArray id) -> ()
 deleteFloatArray = BUILTIN
+
+newRef : forall {a : Type} . a -> exists {id : Name} . *(Ref id a)
+newRef = BUILTIN
+
+swapRef : forall {a : Type, f : Fraction, id : Name} . {mut f} => & f (Ref id a) -> a -> (a, & f (Ref id a))
+swapRef = BUILTIN
+
+freezeRef : forall {a : Type, id : Name} . *(Ref id a) -> a
+freezeRef = BUILTIN
+
+readRef : forall {a : Type, s : Semiring, q r : s, p : Permission, f : p, id : Name} . & f (Ref id (a [q+r])) -> (a [q], & f (Ref id (a [r])))
+readRef = BUILTIN
 
 --------------------------------------------------------------------------------
 --- # Imuutable array operations
 --------------------------------------------------------------------------------
 
-newFloatArrayI : Int -> FloatArray
+newFloatArrayI : forall {id : Name} . Int -> (FloatArray id)
 newFloatArrayI = BUILTIN
 
-readFloatArrayI : FloatArray -> Int -> (Float, FloatArray)
+readFloatArrayI : forall {id : Name} . (FloatArray id) -> Int -> (Float, (FloatArray id))
 readFloatArrayI = BUILTIN
 
-writeFloatArrayI : FloatArray -> Int -> Float -> FloatArray
+writeFloatArrayI : forall {id : Name} . (FloatArray id) -> Int -> Float -> (FloatArray id)
 writeFloatArrayI = BUILTIN
 
-lengthFloatArrayI : FloatArray -> (Int, FloatArray)
+lengthFloatArrayI : forall {id : Name} . (FloatArray id) -> (Int, (FloatArray id))
 lengthFloatArrayI = BUILTIN
 
 --------------------------------------------------------------------------------
@@ -773,6 +811,7 @@ drop = BUILTIN
 
 copyShape : forall {a : Type, f : Type -> Type} . f a -> (f (), f a)
 copyShape = BUILTIN
+
 |]
 
 
@@ -793,4 +832,4 @@ builtins :: [(Id, TypeScheme)]
 
 -- List of primitives that can't be promoted in CBV
 unpromotables :: [String]
-unpromotables = ["newFloatArray", "forkLinear", "forkMulticast", "forkReplicate", "forkReplicateExactly"]
+unpromotables = ["newFloatArray", "newRef", "forkLinear", "forkMulticast", "forkReplicate", "forkReplicateExactly"]

@@ -22,6 +22,7 @@ import Language.Granule.Context (Ctxt)
 
 import Language.Granule.Checker.Constraints.SymbolicGrades
 import qualified Language.Granule.Checker.Constraints.SNatX as SNatX
+import qualified Language.Granule.Checker.Constraints.SFrac as SFrac
 
 import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.Identifiers
@@ -226,22 +227,32 @@ freshSolverVarScoped quant name (TyCon (internalName -> "Q")) q k =
 freshSolverVarScoped quant name (TyCon (internalName -> "Sec")) q k =
     quant q name (\solverVar -> k (sTrue, SSec solverVar))
 
+freshSolverVarScoped quant name (TyCon (internalName -> "Fraction")) q k = do
+   quant q name (\solverVar ->
+    k (SFrac.fractionConstraint solverVar
+     , SFraction (SFrac.SFrac solverVar)))
+
+freshSolverVarScoped quant name (TyCon (internalName -> "Star")) q k = do
+   quant q name (\solverVar ->
+    k (SFrac.fractionConstraint solverVar
+     , SFraction (SFrac.SFrac solverVar)))
+
 freshSolverVarScoped quant name (TyCon conName) q k =
-    -- Integer based
-    quant q name (\solverVar ->
-      case internalName conName of
-        "Nat"    -> k (solverVar .>= 0, SNat solverVar)
-        "Level"  -> k (solverVar .== literal privateRepresentation
-                  .|| solverVar .== literal publicRepresentation
-                  .|| solverVar .== literal unusedRepresentation
-                    , SLevel solverVar)
-        "LNL"    -> k (solverVar .== literal zeroRep
-                  .|| solverVar .== literal oneRep
-                  .|| solverVar .== literal manyRep
-                    , SLNL solverVar)
-        "OOZ"    -> k (solverVar .== 0 .|| solverVar .== 1, SOOZ (ite (solverVar .== 0) sFalse sTrue))
-        "Cartesian" -> k (sTrue, SPoint)
-        k -> solverError $ "I don't know how to make a fresh solver variable of type " <> show conName)
+      -- Integer based
+      quant q name (\solverVar ->
+        case internalName conName of
+          "Nat"    -> k (solverVar .>= 0, SNat solverVar)
+          "Level"  -> k (solverVar .== literal privateRepresentation
+                    .|| solverVar .== literal publicRepresentation
+                    .|| solverVar .== literal unusedRepresentation
+                      , SLevel solverVar)
+          "LNL"    -> k (solverVar .== literal zeroRep
+                    .|| solverVar .== literal oneRep
+                    .|| solverVar .== literal manyRep
+                      , SLNL solverVar)
+          "OOZ"    -> k (solverVar .== 0 .|| solverVar .== 1, SOOZ (ite (solverVar .== 0) sFalse sTrue))
+          "Cartesian" -> k (sTrue, SPoint)
+          k -> solverError $ "I don't know how to make a fresh solver variable of type " <> show conName)
 
 freshSolverVarScoped quant name t q k | t == extendedNat = do
    quant q name (\solverVar ->
@@ -291,6 +302,10 @@ class QuantifiableScoped a where
   existentialScoped :: String -> (SBV a -> Symbolic SBool) -> Symbolic SBool
 
 instance QuantifiableScoped Integer where
+  universalScoped v = universal [v]
+  existentialScoped v = existential [v]
+
+instance QuantifiableScoped Rational where
   universalScoped v = universal [v]
   existentialScoped v = existential [v]
 
@@ -458,6 +473,12 @@ compileCoeffect (TyGrade k' n) k _ | k == extendedNat && (k' == Nothing || k' ==
 compileCoeffect (TyRational r) (TyCon k) _ | internalName k == "Q" =
   return (SFloat  . fromRational $ r, sTrue)
 
+compileCoeffect (TyFraction f) (TyCon k) _ | internalName k == "Fraction" =
+  return (SFraction (SFrac.SFrac $ fromInteger (numerator f) / fromInteger (denominator f)), sTrue)
+
+compileCoeffect (TyCon (internalName -> "Star")) (TyCon (internalName -> "Fraction")) _ = do
+  return (SFraction (SFrac.star), sTrue)
+
 compileCoeffect (TySet _ xs) (isSet -> Just (elemTy, polarity)) _ =
     return (SSet polarity . S.fromList $ mapMaybe justTyConNames xs, sTrue)
   where
@@ -557,6 +578,7 @@ compileCoeffect (TyGrade k' 1) k vars = do
         "OOZ"       -> return (SOOZ sTrue, sTrue)
         "LNL"       -> return (SLNL (literal oneRep), sTrue)
         "Cartesian" -> return (SPoint, sTrue)
+        "Fraction"  -> return (SFraction (SFrac.SFrac 1), sTrue)
         _           -> solverError $ "I don't know how to compile a 1 for " <> pretty k
 
     otherK | otherK == extendedNat ->
@@ -615,6 +637,7 @@ eqConstraint (SLevel l) (SLevel k) = return $ l .== k
 eqConstraint u@(SUnknown{}) u'@(SUnknown{}) = symGradeEq u u'
 eqConstraint (SExtNat x) (SExtNat y) = return $ x .== y
 eqConstraint SPoint SPoint           = return sTrue
+eqConstraint (SFraction f) (SFraction f') = return $ f .== f'
 
 eqConstraint (SInterval lb1 ub1) (SInterval lb2 ub2) =
   liftM2 (.&&) (eqConstraint lb1 lb2) (eqConstraint ub1 ub2)
@@ -629,6 +652,7 @@ eqConstraint x y =
 approximatedByOrEqualConstraint :: SGrade -> SGrade -> Symbolic SBool
 approximatedByOrEqualConstraint (SNat n) (SNat m)      = return $ n .== m
 approximatedByOrEqualConstraint (SFloat n) (SFloat m)  = return $ n .<= m
+approximatedByOrEqualConstraint (SFraction f) (SFraction f') = return $ f .== f'
 approximatedByOrEqualConstraint SPoint SPoint          = return $ sTrue
 approximatedByOrEqualConstraint (SOOZ s) (SOOZ r) = pure $ s .== r
 approximatedByOrEqualConstraint (SSet Normal s) (SSet Normal t) =
@@ -772,6 +796,7 @@ trivialUnsatisfiableConstraints
     neqC :: Type -> Type -> Bool
     neqC (TyInt n) (TyInt m) = n /= m
     neqC (TyRational n) (TyRational m) = n /= m
+    neqC (TyFraction f) (TyFraction f') = f /= f'
     --neqC (CInterval lb1 ub1) (CInterval lb2 ub2) =
     --   neqC lb1 lb2 || neqC ub1 ub2
     neqC (TySig r t) (TySig r' t') | t == t' = neqC r r'

@@ -37,6 +37,7 @@ Example: `List n Int` in Granule
 type Coeffect = Type
 type Effect   = Type
 type Guarantee = Type
+type Permission = Type
 type Kind     = Type
 
 -- Represents polairty information for lattices
@@ -52,10 +53,12 @@ data Type where
     Box     :: Coeffect -> Type -> Type             -- ^ Graded modal necessity
     Diamond :: Effect   -> Type -> Type             -- ^ Graded modal possibility
     Star    :: Guarantee -> Type -> Type
+    Borrow  :: Permission -> Type -> Type
     TyVar   :: Id -> Type                           -- ^ Type variable
     TyApp   :: Type -> Type -> Type                 -- ^ Type application
     TyInt   :: Int -> Type                          -- ^ Type-level Int
     TyRational :: Rational -> Type                  -- ^ Type-level Rational
+    TyFraction :: Rational -> Type
     TyGrade :: Maybe Type -> Int -> Type            -- ^ Graded element
     TyInfix :: TypeOperator -> Type -> Type -> Type -- ^ Infix type operator
 
@@ -65,6 +68,7 @@ data Type where
     TySig   :: Type -> Kind -> Type           -- ^ Kind signature
     TyExists :: Id -> Kind -> Type -> Type    -- ^ Exists
     TyForall :: Id -> Kind -> Type -> Type    -- ^ RankNForall
+    TyName :: Int -> Type
 
 deriving instance Show Type
 deriving instance Eq Type
@@ -92,6 +96,7 @@ data TypeOperator
   | TyOpConverge
   | TyOpImpl
   | TyOpHsup
+  | TyOpMutable
   deriving (Eq, Ord, Show, Data)
 
 -- ## Type schemes
@@ -155,6 +160,9 @@ keffect = tyCon "Effect"
 
 kguarantee :: Type
 kguarantee = tyCon "Guarantee"
+
+kpermission :: Type
+kpermission = tyCon "Permission"
 
 kpredicate :: Type
 kpredicate = tyCon "Predicate"
@@ -225,17 +233,20 @@ containsTypeSig =
       , tfBox = \x y -> return (x || y)
       , tfDiamond = \x y -> return $ (x || y)
       , tfStar = \x y -> return $ (x || y)
+      , tfBorrow = \x y -> return $ (x || y)
       , tfTyVar = \_ -> return False
       , tfTyApp = \x y -> return (x || y)
       , tfTyInt = \_ -> return False
       , tfTyRational = \_ -> return False
+      , tfTyFraction = \_ -> return False
       , tfTyGrade = \_ _ -> return False
       , tfTyInfix = \_ x y -> return (x || y)
       , tfSet = \_ _ -> return  False
       , tfTyCase = \_ _ -> return False
       , tfTySig = \_ _ _ -> return True
       , tfTyExists = \_ _ x -> return x
-      , tfTyForall = \_ _ x -> return x})
+      , tfTyForall = \_ _ x -> return x
+      , tfTyName = \_ -> return False})
 
 -- | Compute the arity of a function type
 arity :: Type -> Int
@@ -298,6 +309,8 @@ mDiamond :: Monad m => Type -> Type -> m Type
 mDiamond e y = return (Diamond e y)
 mStar :: Monad m => Guarantee -> Type -> m Type
 mStar g y    = return (Star g y)
+mBorrow :: Monad m => Permission -> Type -> m Type
+mBorrow p y = return (Borrow p y)
 mTyVar :: Monad m => Id -> m Type
 mTyVar       = return . TyVar
 mTyApp :: Monad m => Type -> Type -> m Type
@@ -306,6 +319,8 @@ mTyInt :: Monad m => Int -> m Type
 mTyInt       = return . TyInt
 mTyRational :: Monad m => Rational -> m Type
 mTyRational          = return . TyRational
+mTyFraction :: Monad m => Rational -> m Type
+mTyFraction  = return . TyFraction
 mTyGrade :: Monad m => Maybe Type -> Int -> m Type
 mTyGrade t c = return $ TyGrade t c
 mTyInfix :: Monad m => TypeOperator -> Type -> Type -> m Type
@@ -320,6 +335,8 @@ mTyExists :: Monad m => Id -> Kind -> Type -> m Type
 mTyExists v k t   = return (TyExists v k t)
 mTyForall :: Monad m => Id -> Kind -> Type -> m Type
 mTyForall v k t   = return (TyForall v k t)
+mTyName :: Monad m => Int -> m Type
+mTyName = return . TyName
 
 -- Monadic algebra for types
 data TypeFold m a = TypeFold
@@ -329,10 +346,12 @@ data TypeFold m a = TypeFold
   , tfBox     :: a -> a             -> m a
   , tfDiamond :: a -> a             -> m a
   , tfStar    :: a -> a             -> m a
+  , tfBorrow  :: a -> a             -> m a
   , tfTyVar   :: Id                 -> m a
   , tfTyApp   :: a -> a             -> m a
   , tfTyInt   :: Int                -> m a
   , tfTyRational :: Rational        -> m a
+  , tfTyFraction :: Rational        -> m a
   , tfTyGrade :: Maybe a   -> Int  -> m a
   , tfTyInfix :: TypeOperator -> a -> a -> m a
   , tfSet     :: Polarity -> [a]    -> m a
@@ -340,12 +359,13 @@ data TypeFold m a = TypeFold
   , tfTySig   :: a -> Type -> (a -> m a)
   , tfTyExists :: Id -> a -> a      -> m a
   , tfTyForall :: Id -> a -> a      -> m a
+  , tfTyName :: Int -> m a
   }
 
 -- Base monadic algebra
 baseTypeFold :: Monad m => TypeFold m Type --Type
 baseTypeFold =
-  TypeFold mTy mFunTy mTyCon mBox mDiamond mStar mTyVar mTyApp mTyInt mTyRational mTyGrade mTyInfix mTySet mTyCase mTySig mTyExists mTyForall
+  TypeFold mTy mFunTy mTyCon mBox mDiamond mStar mBorrow mTyVar mTyApp mTyInt mTyRational mTyFraction mTyGrade mTyInfix mTySet mTyCase mTySig mTyExists mTyForall mTyName
 
 -- | Monadic fold on a `Type` value
 typeFoldM :: forall m a . Monad m => TypeFold m a -> Type -> m a
@@ -371,6 +391,10 @@ typeFoldM algebra = go
      t' <- go t
      g' <- go g
      (tfStar algebra) g' t'
+   go (Borrow p t) = do
+     t' <- go t
+     p' <- go p
+     (tfBorrow algebra) p' t'
    go (TyVar v) = (tfTyVar algebra) v
    go (TyApp t1 t2) = do
      t1' <- go t1
@@ -378,6 +402,7 @@ typeFoldM algebra = go
      (tfTyApp algebra) t1' t2'
    go (TyInt i) = (tfTyInt algebra) i
    go (TyRational i) = (tfTyRational algebra) i
+   go (TyFraction i) = (tfTyFraction algebra) i
    go (TyGrade Nothing i) = (tfTyGrade algebra) Nothing i
    go (TyGrade (Just t) i) = do
      t' <- go t
@@ -412,6 +437,7 @@ typeFoldM algebra = go
     k' <- go k
     t' <- go t
     (tfTyForall algebra) var k' t'
+   go (TyName i) = (tfTyName algebra) i
 
 ----------------------------------------------------------------------
 -- # Types are terms
@@ -424,10 +450,12 @@ instance Term Type where
       , tfBox     = \(Const c) (Const t) -> return $ Const (c <> t)
       , tfDiamond = \(Const e) (Const t) -> return $ Const (e <> t)
       , tfStar    = \(Const g) (Const t) -> return $ Const (g <> t)
+      , tfBorrow  = \(Const p) (Const t) -> return $ Const (p <> t)
       , tfTyVar   = \v -> return $ Const [v] -- or: return . return
       , tfTyApp   = \(Const x) (Const y) -> return $ Const (x <> y)
       , tfTyInt   = \_ -> return (Const [])
       , tfTyRational  = \_ -> return (Const [])
+      , tfTyFraction = \_ -> return (Const [])
       , tfTyGrade     = \_ _ -> return (Const [])
       , tfTyInfix = \_ (Const y) (Const z) -> return $ Const (y <> z)
       , tfSet     = \_ -> return . Const . concat . map getConst
@@ -435,16 +463,19 @@ instance Term Type where
       , tfTySig   = \(Const t) _ (Const k) -> return $ Const (t <> k)
       , tfTyExists = \v _ (Const fvs) -> return $ Const [v' | v' <- fvs, v /= v']
       , tfTyForall = \v _ (Const fvs) -> return $ Const [v' | v' <- fvs, v /= v']
+      , tfTyName = \_ -> return (Const [])
       }
 
     isLexicallyAtomic TyInt{} = True
     isLexicallyAtomic TyRational{} = True
+    isLexicallyAtomic TyFraction{} = True
     isLexicallyAtomic TyGrade{} = True
     isLexicallyAtomic TyVar{} = True
     isLexicallyAtomic TySet{} = True
     isLexicallyAtomic TyCon{} = True
     isLexicallyAtomic (Type 0) = True
     isLexicallyAtomic (TyApp (TyApp (TyCon (sourceName -> ",")) _) _) = True
+    isLexicallyAtomic TyName{} = True
     isLexicallyAtomic _ = False
 
 substType :: Type -> Id -> Type -> Type
@@ -511,10 +542,13 @@ instance Freshenable m Type where
 --   local evaluation of natural numbers
 --   There is plenty more scope to make this more comprehensive
 --   None of this is stricly necessary but it improves type errors
---   and speeds up some constarint solving.
+--   and speeds up some constraint solving.
 normalise :: Type -> Type
 normalise (TyInfix TyOpPlus (TyRational n) (TyRational m)) = TyRational (n + m)
 normalise (TyInfix TyOpTimes (TyRational n) (TyRational m)) = TyRational (n * m)
+
+normalise (TyInfix TyOpPlus (TyFraction n) (TyFraction m)) = TyFraction (n + m)
+normalise (TyInfix TyOpTimes (TyFraction n) (TyFraction m)) = TyFraction (n * m)
 
 -- exempt Uniquness from multiplicative unit
 normalise g@(TyInfix TyOpTimes r (TyGrade (Just (TyCon (internalName -> "Uniqueness"))) 1)) = g

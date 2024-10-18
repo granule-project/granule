@@ -57,7 +57,7 @@ equalTypes s = equalTypesRelatedCoeffectsAndUnify s Eq SndIsSpec
 data SpecIndicator = FstIsSpec | SndIsSpec | PatternCtxt
   deriving (Eq, Show)
 
-data Mode = Types | Effects deriving Show
+data Mode = Types | Effects | Permissions deriving Show
 
 -- Abstracted equality/relation on grades
 relGrades :: (?globals :: Globals)
@@ -228,6 +228,38 @@ equalTypesRelatedCoeffectsInner s rel x@(Box c t) y@(Box c' t') k sp Types = do
   substU <- combineManySubstitutions s [subst, subst']
   return (eq, substU)
 
+-- ## UNIQUENESS TYPES
+
+equalTypesRelatedCoeffectsInner s rel (Star g1 t1) (Star g2 t2) _ sp mode = do
+  debugM "equalTypesRelatedCoeffectsInner (star)" $ "grades " <> show g1 <> " and " <> show g2
+  (eq, unif)      <- equalTypesRelatedCoeffects s rel t1 t2 sp mode
+  (eq', _, unif') <- equalTypes s g1 g2
+  u <- combineSubstitutions s unif unif'
+  return (eq && eq', u)
+
+equalTypesRelatedCoeffectsInner s rel (Borrow p1 t1) (Borrow p2 t2) _ sp Types = do
+  debugM "equalTypesRelatedCoeffectsInner (borrow)" $ "grades " <> show p1 <> " and " <> show p2
+  (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 sp Types
+  debugM "equalTypesRelatedCoeffectsInner (borrow)" $ "unif = " <> pretty unif
+  (eq', unif') <- equalTypesRelatedCoeffects s rel (normalise p1) (normalise p2) sp Permissions
+  u <- combineSubstitutions s unif unif'
+  return (eq && eq', u)
+
+
+equalTypesRelatedCoeffectsInner s rel t0@(TyApp (TyApp (TyCon d) name) t) t' ind sp mode
+  | internalName d == "Rename" = do
+    debugM "RenameL" (pretty t <> " = " <> pretty t')
+    eqRenameFunction s rel name t t' sp
+
+equalTypesRelatedCoeffectsInner s rel t' t0@(TyApp (TyApp (TyCon d) name) t) ind sp mode
+  | internalName d == "Rename" = do
+    debugM "RenameR" (pretty t <> " = " <> pretty t')
+    eqRenameFunction s rel name t t' sp
+
+-- ## GENERAL EQUALITY
+
+-- Equality with variables
+
 equalTypesRelatedCoeffectsInner s rel ty1@(TyVar var1) ty2 kind _ _ = do
   useSolver <- requiresSolver s kind
   reportM ("Equality between " <> pretty ty1 <> " and " <> pretty ty2)
@@ -245,24 +277,7 @@ equalTypesRelatedCoeffectsInner s rel ty1 (TyVar var2) kind sp mode =
   -- Use the case above since it is symmetric
   equalTypesRelatedCoeffectsInner s rel (TyVar var2) ty1 kind sp mode
 
--- ## UNIQUNESS TYPES
-
-equalTypesRelatedCoeffectsInner s rel (Star g1 t1) (Star g2 t2) _ sp mode = do
-  (eq, unif)      <- equalTypesRelatedCoeffects s rel t1 t2 sp mode
-  (eq', _, unif') <- equalTypes s g1 g2
-  u <- combineSubstitutions s unif unif'
-  return (eq && eq', u)
-
-equalTypesRelatedCoeffectsInner s rel (Star g1 t1) t2 _ sp mode
-  | t1 == t2 = throw $ UniquenessError { errLoc = s, uniquenessMismatch = NonUniqueUsedUniquely t2}
-  | otherwise = do
-    (g, _, u) <- equalTypes s t1 t2
-    return (g, u)
-
-equalTypesRelatedCoeffectsInner s rel t1 (Star g2 t2) k sp mode =
-  equalTypesRelatedCoeffectsInner s rel (Star g2 t2) t1 k (flipIndicator sp) mode
-
--- ## SESSION TYPES
+-- -- ## SESSION TYPES
 -- Duality is idempotent (left)
 equalTypesRelatedCoeffectsInner s rel (TyApp (TyCon d') (TyApp (TyCon d) t)) t' k sp mode
   | internalName d == "Dual" && internalName d' == "Dual" =
@@ -289,8 +304,6 @@ equalTypesRelatedCoeffectsInner s rel t' t0@(TyApp (TyApp (TyCon d) grd) t) ind 
   | internalName d == "Graded" = do
     eqGradedProtocolFunction s rel grd t t' sp
 
--- ## GENERAL EQUALITY
-
 -- Equality on existential types
 equalTypesRelatedCoeffectsInner s rel a@(TyExists x1 k1 t1) b@(TyExists x2 k2 t2) ind sp mode = do
   debugM "Compare existentials for equality" (pretty a <> " = " <> pretty b)
@@ -301,7 +314,9 @@ equalTypesRelatedCoeffectsInner s rel a@(TyExists x1 k1 t1) b@(TyExists x2 k2 t2
   registerTyVarInContextWith' x1 k1 ForallQ $ do
       (eqT, subst2) <- equalTypesRelatedCoeffectsInner s rel t1 t2' ind sp mode
       substFinal <- combineSubstitutions s subst1 subst2
-      return (eqK && eqT, substFinal)
+      -- remove from substFinal any substitutions which contain a use of x1 in their substituted type
+      let substFinal' = filter (\(x, SubstT t) -> not $ x1 `elem` freeVars t) substFinal
+      return (eqK && eqT, substFinal')
 
 -- Equality on rank-N forall types
 equalTypesRelatedCoeffectsInner s rel a@(TyForall x1 k1 t1) b@(TyForall x2 k2 t2) ind sp mode = do
@@ -376,6 +391,15 @@ equalTypesRelatedCoeffectsInner s rel t1 t2 k sp mode = do
           eq <- effApproximates s k t1 t2
           return (eq, [])
         Left _ -> throw $ KindMismatch s Nothing keffect k
+
+    Permissions -> do
+      (result, putChecker) <- peekChecker (checkKind s k kpermission)
+      case result of
+        Right res -> do
+          putChecker
+          eq <- permEquals s k t1 t2
+          return (eq, [])
+        Left _ -> throw $ KindMismatch s Nothing kpermission k
 
     Types ->
       case k of
@@ -533,6 +557,105 @@ eqGradedProtocolFunction sp rel grad (TyVar v) t ind = do
 eqGradedProtocolFunction sp _ grad t1 t2 _ = throw
   TypeError{ errLoc = sp, tyExpected = (TyApp (TyApp (TyCon $ mkId "Graded") grad) t1), tyActual = t2 }
 
+-- Compute the behaviour of `Rename id a` on a type `A`
+renameBeta :: (?globals :: Globals)
+  => Type -- name
+  -> Type -- type
+  -> Checker Type
+renameBeta name (TyApp (TyApp (TyCon c) t) s)
+  | internalName c == "Ref" = do
+    s' <- renameBeta name s
+    return $ (TyApp (TyApp (TyCon c) name) s')
+
+renameBeta name (TyApp (TyCon c) t)
+  | internalName c == "FloatArray" = do
+    return $ (TyApp (TyCon c) name)
+
+renameBeta name (TyApp (TyApp (TyCon c) t1) t2)
+  | internalName c == "," = do
+  t1' <- renameBeta name t1
+  t2' <- renameBeta name t2
+  return $ (TyApp (TyApp (TyCon c) t1') t2')
+
+renameBeta name (Star g t) = do
+  t' <- renameBeta name t
+  return $ (Star g t')
+
+renameBeta name (Borrow p t) = do
+  t' <- renameBeta name t
+  return $ (Borrow p t')
+
+renameBeta name t = return t
+
+renameBetaInvert :: (?globals :: Globals)
+  => Span
+  -- Explain how coeffects should be related by a solver constraint
+  -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
+  -> Type -- name
+  -> Type -- type
+  -- Indicates whether the first type or second type is a specification
+  -> SpecIndicator
+  -- Flag to say whether this type is actually an effect or not
+  -> Mode
+  -> Checker (Type, Substitution)
+
+-- Ref case
+-- i.e., Rename id a = Ref id' a'
+-- therefore check `id ~ id'` and then recurse
+renameBetaInvert sp rel name (TyApp (TyApp (TyCon c) name') s) spec mode
+  | internalName c == "Ref" = do
+    -- Compute equality on names
+    (_, subst) <- equalTypesRelatedCoeffects sp rel name name' spec mode
+    (s, subst') <- renameBetaInvert sp rel name s spec mode
+    substFinal <- combineSubstitutions sp subst subst'
+    return (TyApp (TyApp (TyCon c) name') s, substFinal)
+
+renameBetaInvert sp rel name (TyApp (TyCon c) name') spec mode
+  | internalName c == "FloatArray" = do
+    -- Compute equality on names
+    (_, subst) <- equalTypesRelatedCoeffects sp rel name name' spec mode
+    return (TyApp (TyCon c) name', subst)
+
+renameBetaInvert sp rel name (TyApp (TyApp (TyCon c) t1) t2) spec mode
+  | internalName c == "," = do
+    (t1', subst1) <- renameBetaInvert sp rel name t1 spec mode
+    (t2', subst2) <- renameBetaInvert sp rel name t2 spec mode
+    substFinal <- combineSubstitutions sp subst1 subst2
+    return (TyApp (TyApp (TyCon c) t1') t2', substFinal)
+
+renameBetaInvert _ _ name t _ _ = return (t, [])
+
+-- Check if `Rename id a ~ a'` which may involve some normalisation in the
+-- case where `a'` is a variable
+eqRenameFunction :: (?globals :: Globals)
+  => Span
+  -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
+  -- These two arguments are the arguments to `Rename id a`
+  -> Type -- name
+  -> Type -- type
+  -- This is the argument of the type which we are trying to see if it equal to `Rename id a`
+  -> Type -- compared against
+  -> SpecIndicator
+  -> Checker (Bool, Substitution)
+
+eqRenameFunction sp rel name t (TyApp (TyApp (TyCon d) name') t') ind
+  | internalName d == "Rename" = do
+  (_, subst) <- equalTypesRelatedCoeffects sp rel name name' ind Types
+  (eq, subst') <- eqRenameFunction sp rel name t t' ind
+  substFinal <- combineSubstitutions sp subst subst'
+  return (eq, substFinal)
+
+eqRenameFunction sp rel name (TyVar v) t ind = do
+  (t', subst) <- renameBetaInvert sp rel name t ind Types
+  (eq, subst') <- equalTypesRelatedCoeffects sp rel t' (TyVar v) ind Types
+  substFinal <- combineSubstitutions sp subst subst'
+  return (eq, substFinal)
+
+eqRenameFunction sp rel name t t' ind = do
+  t'' <- renameBeta name t
+  (eq, u) <- equalTypesRelatedCoeffects sp rel t'' t' ind Types
+  return (eq, u)
+
 -- | Is this protocol dual to the other?
 isDualSession :: (?globals :: Globals)
     => Span
@@ -593,6 +716,23 @@ twoEqualEffectTypes s ef1 ef2 = do
           Left k -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = ef2 , errK = k }
       Left k -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = ef1 , errK = k }
 
+permEquals :: (?globals :: Globals) => Span -> Type -> Type -> Type -> Checker Bool
+permEquals s _ p1 p2 = do
+    mpTy1 <- isPermission s p1
+    mpTy2 <- isPermission s p2
+    case mpTy1 of
+      Right pTy1 ->
+        case mpTy2 of
+          Right pTy2 -> do
+            -- Check that the types of the effect terms match
+            (eq, _, u) <- equalTypes s pTy1 pTy2
+            if eq then do
+              addConstraint (Eq s p1 p2 pTy1)
+              return True
+            else throw $ KindMismatch { errLoc = s, tyActualK = Just p1, kExpected = pTy1, kActual = pTy2 }
+          Left k -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = p2 , errK = k }
+      Left k -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = p1 , errK = k }
+
 -- | Find out if a type is indexed overall (i.e., is a GADT)
 isIndexedType :: Type -> Checker Bool
 isIndexedType t = do
@@ -605,17 +745,20 @@ isIndexedType t = do
       , tfBox = \_ (Const x) -> return $ Const x
       , tfDiamond = \_ (Const x) -> return $ Const x
       , tfStar = \_ (Const x) -> return $ Const x
+      , tfBorrow = \_ (Const x) -> return $ Const x
       , tfTyVar = \_ -> return $ Const False
       , tfTyApp = \(Const x) (Const y) -> return $ Const (x || y)
       , tfTyInt = \_ -> return $ Const False
       , tfTyRational = \_ -> return $ Const False
+      , tfTyFraction = \_ -> return $ Const False
       , tfTyGrade = \_ _ -> return $ Const False
       , tfTyInfix = \_ (Const x) (Const y) -> return $ Const (x || y)
       , tfSet = \_ _ -> return $ Const False
       , tfTyCase = \_ _ -> return $ Const False
       , tfTySig = \(Const b) _ _ -> return $ Const b
       , tfTyExists = \_ _ (Const a) -> return $ Const a
-      , tfTyForall = \_ _ (Const a) -> return $ Const a } t
+      , tfTyForall = \_ _ (Const a) -> return $ Const a
+      , tfTyName = \_ -> return $ Const False } t
   return $ getConst b
 
 -- Given a type term, works out if its kind is actually an effect type
@@ -648,6 +791,7 @@ refineBinderQuantification ctxt ty = mapM computeQuantifier ctxt
     aux id (Box _ t)       = aux id t
     aux id (Diamond _ t)   = aux id t
     aux id (Star _ t)      = aux id t
+    aux id (Borrow _ t)      = aux id t
     aux id t@(TyApp _ t2)   =
       case leftmostOfApplication t of
         TyCon tyConId -> do
@@ -671,3 +815,13 @@ refineBinderQuantification ctxt ty = mapM computeQuantifier ctxt
       where
         anyM f xs = mapM f xs >>= (return . or)
     aux id _ = return False
+
+isPermission :: (?globals :: Globals) => Span -> Type -> Checker (Either Kind Type)
+isPermission s ty = do
+  (pTy, _, _) <- synthKind s ty
+  (result, putChecker) <- peekChecker (checkKind s pTy kpermission)
+  case result of
+    Right res -> do
+      putChecker
+      return $ Right pTy
+    Left err -> return $ Left pTy

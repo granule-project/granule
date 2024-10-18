@@ -1,8 +1,8 @@
 leak : forall {a : Type} . a [Private] -> a [Public]
-leak x = join (split x)
+leak x = joiner (spliter x)
 
-split : forall {a : Type} . a [Private] -> (a [Private]) [Public]
-split [x] = [[x]]
+spliter : forall {a : Type} . a [Private] -> (a [Private]) [Public]
+spliter [x] = [[x]]
 
-join : forall {a : Type} . (a [Private]) [Public] -> a [Public]
-join [[x]] = [x]
+joiner : forall {a : Type} . (a [Private]) [Public] -> a [Public]
+joiner [[x]] = [x]
