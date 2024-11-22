@@ -2,8 +2,8 @@
    - Graded uniqueness for borrowing and lifetimes as described in our OOPSLA 2024 paper: https://dl.acm.org/doi/10.1145/3649848. Examples in:
       * examples/parallelWithMutation.gr
       * examples/simple-clone.gr
-   - This comes with a new graded uniquness interface: https://granule-project.github.io/docs/modules/Primitives.html#mutablearrayoperations
-   - And a new set of mutable array primitives: 
+   - This comes with a new graded uniqueness interface https://granule-project.github.io/docs/modules/Primitives.html#uniquenessmodality
+   - A new set of mutable array primitives https://granule-project.github.io/docs/modules/Primitives.html#mutablearrayoperations and mutable reference cells  https://granule-project.github.io/docs/modules/Primitives.html#uniquenessmodality
 
   # 0.9.5.0
    - Rank N typing (see https://github.com/granule-project/granule/blob/dev-minor/examples/rankN.gr)
