@@ -10,7 +10,7 @@ import List
 
 data Labels = Toss | Drop
 
--- Operations
+-- (Sigma functor) - Signature of operations
 data GameOps : Set Labels -> Type -> Type where
   FlipCoin : forall {r : Type} . () -> (Bool -> r) [2] -> GameOps {Toss} r;
   Fumble   : forall {r : Type} . () -> (Void -> r) [0] -> GameOps {Drop} r
@@ -33,7 +33,7 @@ foo = call FlipCoin ()
 
 -- Two coin flips, all good
 example1 : (Bool, Bool) <Eff (Set Labels) GameOps {Toss}>
-example1 = let
+example1 = let  -- do x <- ...
   x <- call FlipCoin ();
   y <- call FlipCoin ()
   in pure (x, y)

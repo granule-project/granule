@@ -8,7 +8,7 @@ module Language.Granule.Context where
 
 import Data.Maybe (isJust)
 import Data.List (sortBy)
-import Language.Granule.Syntax.Identifiers (Id)
+import Language.Granule.Syntax.Identifiers (Id, sourceName)
 
 -- | Type of contexts
 type Ctxt t = [(Id, t)]
@@ -92,3 +92,10 @@ lookupAndCutoutBy f v ((v', t'):ctxt) = do
 
 getCtxtIds :: Ctxt t -> [Id]
 getCtxtIds = map fst
+
+nubContext :: Ctxt t -> Ctxt t
+nubContext = aux []
+  where
+    aux seen [] = []
+    aux seen ((x, t) : ctxt) | sourceName x `elem` seen = aux seen ctxt
+                             | otherwise = (x, t) : aux (sourceName x : seen) ctxt

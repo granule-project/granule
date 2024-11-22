@@ -16,6 +16,7 @@ import Data.Foldable (toList)
 import Data.List (intercalate, nub, stripPrefix)
 import Data.Maybe (mapMaybe)
 import Data.Set (Set, (\\), fromList, insert, empty, singleton)
+import Data.Ratio ((%))
 import qualified Data.Map as M
 import Numeric
 import System.FilePath ((</>), takeBaseName)
@@ -75,6 +76,7 @@ import Language.Granule.Utils hiding (mkSpan)
     CHAR   { TokenCharLiteral _ _ }
     STRING { TokenStringLiteral _ _ }
     forall { TokenForall _ }
+    mutable { TokenMutable _ }
     '∞'   { TokenInfinity _ }
     '\\'  { TokenLambda _ }
     '/'  { TokenForwardSlash _ }
@@ -390,13 +392,14 @@ Type :: { Type }
   | '(' VAR ':' Type ')' '%' Coeffect '->' Type { FunTy (Just . mkId . symString $ $2) (Just $7) $4 $9 }
   | TyJuxt                         { $1 }
   | '!' TyAtom                     { Box (TyCon $ mkId "Many") $2 }
-  | '*' TyAtom                     { Star (TyCon $ mkId "Unique") $2 }
+  | '*' TyAtom                     { Borrow (TyCon $ mkId "Star") $2 }
   | Type '->' Type                 { FunTy Nothing Nothing $1 $3 }
   | Type '%' Coeffect '->' Type    { FunTy Nothing (Just $3) $1 $5 }
   | Type '×' Type                  { TyApp (TyApp (TyCon $ mkId ",") $1) $3 }
   | Type '&' Type                  { TyApp (TyApp (TyCon $ mkId "&") $1) $3 }
   | TyAtom '[' Coeffect ']'        { Box $3 $1 }
   | TyAtom '*{' Guarantee '}'      { Star $3 $1 }
+  | '&' Permission TyAtom          { Borrow $2 $3 }
   | TyAtom '[' ']'                 { Box (TyInfix TyOpInterval (TyGrade (Just extendedNat) 0) infinity) $1 }
   | TyAtom '<' Effect '>'          { Diamond $3 $1 }
   | case Type of TyCases { TyCase $2 $4 }
@@ -438,6 +441,7 @@ TyCase :: { (Type, Type) }
 
 Constraint :: { Type }
   : TyJuxt TyAtom             { TyApp $1 $2 }
+  | mutable TyAtom          { TyInfix TyOpMutable $2 $2}
   | TyAtom '>' TyAtom         { TyInfix TyOpGreaterNat $1 $3 }
   | TyAtom '<' TyAtom         { TyInfix TyOpLesserNat $1 $3 }
   | TyAtom '<=' TyAtom        { TyInfix TyOpLesserEq $1 $3 }
@@ -533,6 +537,14 @@ TyAbsNamed :: { [(Id, Type)] }
 TyAbsImplicit :: { [Id] }
   : VAR ',' TyAbsImplicit       { (mkId $ symString $1) : $3 }
   | VAR                         { [mkId $ symString $1] }
+Permission :: { Type }
+  : CONSTR                  { TyCon $ mkId $ constrString $1 }
+  | VAR                     { TyVar (mkId $ symString $1) }
+  | INT '/' INT             { TyFraction $ let TokenInt _ n = $1 in let TokenInt _ d = $3 in (toInteger n) % (toInteger d) }
+  | INT                     { TyFraction $ let TokenInt _ n = $1 in (toInteger n) % 1}
+  | Permission '+' Permission         { TyInfix TyOpPlus $1 $3 }
+  | Permission '*' Permission         { TyInfix TyOpTimes $1 $3 }
+  | '(' Permission ')'              { $2 }
 
 Expr :: { Expr () () }
   : let LetBind MultiLet

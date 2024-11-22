@@ -229,11 +229,13 @@ getAssumConstr a =
     getTypeConstr (Box _ t) = getTypeConstr t
     getTypeConstr (Diamond t1 _) = getTypeConstr t1
     getTypeConstr (Star _ t) = getTypeConstr t
+    getTypeConstr (Borrow _ t) = getTypeConstr t
     getTypeConstr (TyApp t1 t2) = getTypeConstr t1
     getTypeConstr (TySig t _) = getTypeConstr t
     getTypeConstr (TyVar _) = Nothing
     getTypeConstr (TyInt _) = Nothing
     getTypeConstr (TyRational _) = Nothing
+    getTypeConstr (TyFraction _) = Nothing
     getTypeConstr (TyGrade _ _) = Nothing
     getTypeConstr (TyInfix _ _ _) = Nothing
     getTypeConstr (TySet _ _) = Nothing
@@ -248,6 +250,7 @@ getAssumConstr a =
        allSame [x] = True
        allSame (x:(y:xs)) =
          if x == y then allSame xs else False
+    getTypeConstr (TyName _) = Nothing
 
 -- Given a function type, expand grades on parameters to be more permissive,
 -- for the purpose of generating theorems. Exact natural number grades greater

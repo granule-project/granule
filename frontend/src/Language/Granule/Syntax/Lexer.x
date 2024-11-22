@@ -63,6 +63,7 @@ tokens :-
   pack                          { \p s -> TokenPack p }
   unpack                        { \p s -> TokenUnpack p }
   exists                        { \p s -> TokenExists p }
+  mut                       { \p s -> TokenMutable p }
   "∃"                           { \p s -> TokenExists p }
   ∞                             { \p s -> TokenInfinity p }
   @float                        { \p s -> TokenFloat p s }
@@ -204,6 +205,7 @@ data Token
   | TokenPack AlexPosn
   | TokenUnpack AlexPosn
   | TokenExists AlexPosn
+  | TokenMutable AlexPosn
   | TokenHash AlexPosn
   | TokenPercent AlexPosn
   | TokenStar AlexPosn

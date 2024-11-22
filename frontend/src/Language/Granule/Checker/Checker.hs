@@ -663,6 +663,22 @@ checkExpr defs gam pol topLevel tau
       else
         throw $ TypeError { errLoc = s, tyExpected = TyCon $ mkId "DFloat", tyActual = tau }
 
+-- Clone
+-- Pattern match on an applicable of `uniqueBind fun e`
+checkExpr defs gam pol topLevel tau
+   expr@(App s a rf
+     (App _ _ _
+       (Val _ _ _ (Var _ (internalName -> "uniqueBind")))
+       (Val _ _ _ (Abs _ (PVar _ _ _ var) _ body)))
+     e) = do
+  debugM "checkExpr[Clone]" (pretty s <> " : " <> pretty tau)
+  (tau', gam, subst, elab) <- synthExpr defs gam pol expr
+  -- Check the return types match
+  (eqT, _, substTy) <- equalTypes s tau tau'
+  unless eqT $ throw TypeError{ errLoc = s, tyExpected = tau, tyActual = tau' }
+  substF <- combineSubstitutions s subst substTy
+  return (gam, subst, elab)
+
 -- Application checking
 checkExpr defs gam pol topLevel tau (App s a rf e1 e2) | (usingExtension GradedBase) = do
   debugM "checkExpr[App]-gradedBase" (pretty s <> " : " <> pretty tau)
@@ -743,6 +759,15 @@ checkExpr defs gam pol _ ty@(Star demand tau) (Val s _ rf (Nec _ e)) = do
     (gam', subst, elaboratedE) <- checkExpr defs gam pol False tau e
 
     let elaborated = Val s ty rf (Nec tau elaboratedE)
+    return (gam', subst, elaborated)
+
+checkExpr defs gam pol _ ty@(Borrow demand tau) (Val s _ rf (Ref _ e)) = do
+    debugM "checkExpr[Borrow]" (pretty s <> " : " <> pretty ty)
+
+    -- Checker the expression being borrowed
+    (gam', subst, elaboratedE) <- checkExpr defs gam pol False tau e
+
+    let elaborated = Val s ty rf (Ref tau elaboratedE)
     return (gam', subst, elaborated)
 
 -- Check a case expression
@@ -888,8 +913,9 @@ synthExpr :: (?globals :: Globals)
 
 -- Hit an unfilled hole
 synthExpr _ ctxt _ (Hole s _ _ _ _) = do
+  st <- get
   debugM "synthExpr[Hole]" (pretty s)
-  throw $ InvalidHolePosition s
+  throw $ InvalidHolePosition s ctxt (tyVarContext st)
 
 -- Literals can have their type easily synthesised
 synthExpr _ _ _ (Val s _ rf (NumInt n))  = do
@@ -911,6 +937,51 @@ synthExpr _ _ _ (Val s _ rf (StringLiteral c)) = do
   debugM "synthExpr[String]" (pretty s)
   let t = TyCon $ mkId "String"
   return (t, usedGhostVariableContext, [], Val s t rf (StringLiteral c))
+
+-- Clone
+-- Pattern match on an applicable of `uniqueBind fun e`
+synthExpr defs gam pol
+   expr@(App s a rf
+     (App _ _ _
+       (Val _ _ _ (Var _ (internalName -> "uniqueBind")))
+       (Val _ _ _ (Abs _ (PVar _ _ _ var) _ body)))
+     e) = do
+  debugM "synthExpr[uniqueBind]" (pretty s <> pretty expr)
+  -- Infer the type of e (the boxed argument)
+  (ty, ghostVarCtxt, subst0, elabE) <- synthExpr defs gam pol e
+  -- Check that ty is actually a boxed type
+  case ty of
+    Box r tyA -> do
+      -- existential type for the cloned var ((exists {id : Name} . *(Rename id a))
+      idVar <- mkId <$> freshIdentifierBase "id"
+      let clonedInputTy =
+            TyExists idVar (TyCon $ mkId "Name")
+              (Borrow (TyCon $ mkId "Star") (TyApp (TyApp (TyCon $ mkId "Rename") (TyVar idVar)) tyA))
+      let clonedAssumption = (var, Linear clonedInputTy)
+
+      debugM "synthExpr[uniqueBind]body" (pretty clonedAssumption)
+      -- synthesise the type of the body for the clone
+      (tyB, ghostVarCtxt', subst1, elabBody) <- synthExpr defs (clonedAssumption : gam) pol body
+
+      let contType = FunTy Nothing Nothing (Box r tyA) tyB
+      let funType  = FunTy Nothing Nothing clonedInputTy tyB
+      let cloneType = FunTy Nothing Nothing contType funType
+      let elab = App s tyB rf
+                  (App s contType rf (Val s cloneType rf (Var cloneType $ mkId "uniqueBind"))
+                     (Val s funType rf (Abs funType (PVar s clonedInputTy rf var) Nothing elabBody))) elabE
+
+      -- Add constraints of `clone`
+      -- Constraint that 1 : s <= r
+      (semiring, subst2, _) <- synthKind s r
+      let constraint = ApproximatedBy s (TyGrade (Just semiring) 1) r semiring
+      addConstraint constraint
+      -- Cloneable constraint
+      otherTypeConstraints <- enforceConstraints s [TyApp (TyCon $ mkId "Cloneable") tyA]
+      registerWantedTypeConstraints otherTypeConstraints
+
+      substFinal <- combineSubstitutions s subst0 subst1
+      return (tyB, ghostVarCtxt <> (deleteVar var ghostVarCtxt'), substFinal, elab)
+    _ -> throw TypeError{ errLoc = s, tyExpected = Box (TyVar $ mkId "a") (TyVar $ mkId "b"), tyActual = ty }
 
 -- Secret syntactic weakening
 synthExpr defs gam pol
@@ -1195,7 +1266,7 @@ synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
 
 -- Variables
 synthExpr defs gam _ (Val s _ rf (Var _ x)) = do
-   debugM "synthExpr[Var]" (pretty s)
+   debugM ("synthExpr[Var] - " <> pretty x) (pretty s)
 
    -- Try the local context
    case lookup x gam of
@@ -1385,6 +1456,25 @@ synthExpr defs gam pol (Val s _ rf (Nec _ e)) = do
 
   let finalTy = Star (TyVar var) t
   let elaborated = Val s finalTy rf (Nec t elaboratedE)
+  return (finalTy, gam', subst, elaborated)
+
+-- Infer type for references
+synthExpr defs gam pol (Val s _ rf (Ref _ e)) = do
+  debugM "synthExpr[Ref]" (pretty s)
+
+   -- Create a fresh kind variable for this permission
+  vark <- freshIdentifierBase $ "kref_[" <> pretty (startPos s) <> "]"
+   -- remember this new kind variable in the kind environment
+  modify (\st -> st { tyVarContext = (mkId vark, (kguarantee, InstanceQ)) : tyVarContext st })
+
+   -- Create a fresh permission variable for the permission of the borrowed expression
+  var <- freshTyVarInContext (mkId $ "ref_[" <> pretty (startPos s) <> "]") (tyVar vark)
+
+  -- Synth type of necessitated expression
+  (t, gam', subst, elaboratedE) <- synthExpr defs gam pol e
+
+  let finalTy = Borrow (TyVar var) t
+  let elaborated = Val s finalTy rf (Ref t elaboratedE)
   return (finalTy, gam', subst, elaborated)
 
 -- BinOp

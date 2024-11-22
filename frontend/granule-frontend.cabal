@@ -71,6 +71,7 @@ library
   other-modules:
       Language.Granule.Checker.CoeffectsTypeConverter
       Language.Granule.Checker.Constraints.Compile
+      Language.Granule.Checker.Constraints.SFrac
       Language.Granule.Checker.Constraints.SymbolicGrades
       Language.Granule.Checker.Effects
       Language.Granule.Checker.Exhaustivity

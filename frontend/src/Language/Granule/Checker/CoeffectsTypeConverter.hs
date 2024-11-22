@@ -1,13 +1,12 @@
 {-# LANGUAGE GADTs #-}
 module Language.Granule.Checker.CoeffectsTypeConverter(includeOnlyGradeVariables, tyVarContextExistential) where
 
-import Control.Monad.Except (catchError)
 import Control.Monad.State.Strict
 import Data.Maybe(catMaybes, mapMaybe)
 
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
-import Language.Granule.Checker.Kinding (checkKind)
+import Language.Granule.Checker.Kinding (requiresSolver)
 
 import Language.Granule.Context
 
@@ -22,9 +21,11 @@ includeOnlyGradeVariables :: (?globals :: Globals)
   => Span -> Ctxt (Type, b) -> Checker (Ctxt (Type, b))
 includeOnlyGradeVariables s xs = mapM convert xs >>= (return . catMaybes)
   where
-    convert (var, (t, q)) = (do
-      k <- checkKind s t kcoeffect <|> checkKind s t keffect
-      return $ Just (var, (t, q))) `catchError` const (return Nothing)
+    convert (var, (t, q)) = do
+      reqSolver <- requiresSolver s t
+      return $ if reqSolver
+        then Just (var, (t, q))
+        else Nothing
 
 tyVarContextExistential :: Checker (Ctxt (Type, Quantifier))
 tyVarContextExistential = do

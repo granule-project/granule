@@ -173,6 +173,11 @@ checkKind s t@(TyInt n) k =
     -- Not valid
     _ -> throw $ NaturalNumberAtWrongKind s t k
 
+checkKind s t@(TyName n) k =
+  case k of
+    TyCon (internalName -> "Name") -> return ([], t)
+    _ -> throw $ NaturalNumberAtWrongKind s t k
+
 -- KChk_effOne
 checkKind s t@(TyGrade mk n) k = do
   let k' = fromMaybe k mk
@@ -361,6 +366,9 @@ synthKindWithConfiguration s config t@(TyInfix op t1 t2) =
 synthKindWithConfiguration s _ t@(TyInt n) = do
   return (TyCon (Id "Nat" "Nat"), [], t)
 
+synthKindWithConfiguration s _ t@(TyName n) = do
+  return (TyCon (Id "Name" "Name"), [], t)
+
 -- KChkS_grade [with type already resolved]
 synthKindWithConfiguration s config t@(TyGrade (Just k) n) =
   return (k, [], t)
@@ -401,6 +409,13 @@ synthKindWithConfiguration s _ (Star g t) = do
   (subst2, t') <- checkKind s t ktype
   subst <- combineManySubstitutions s [subst0, subst1, subst2]
   return (ktype, subst, Star g' t')
+
+synthKindWithConfiguration s _ (Borrow p t) = do
+  (permissionTy, subst0, p') <- synthKindWithConfiguration s (defaultResolutionBehaviour p) p
+  (subst1, _) <- checkKind s permissionTy kpermission
+  (subst2, t') <- checkKind s t ktype
+  subst <- combineManySubstitutions s [subst0, subst1, subst2]
+  return (ktype, subst, Borrow p' t')
 
 synthKindWithConfiguration s _ t@(TyCon (internalName -> "Pure")) = do
   -- Create a fresh type variable
@@ -495,6 +510,8 @@ synthKindWithConfiguration s config t@(TyForall x k ty) = do
   registerTyVarInContextWith' x k ForallQ $ do
        (kind, subst, elabTy) <- synthKindWithConfiguration s config ty
        return (kind, subst, TyForall x k elabTy)
+synthKindWithConfiguration s config t@(TyFraction _) = do
+  return (TyCon $ mkId "Fraction", [], t)
 
 synthKindWithConfiguration s _ t =
   throw ImpossibleKindSynthesis { errLoc = s, errTy = t }
@@ -562,9 +579,37 @@ closedOperatorAtKind s TyOpTimes t = do
       -- If not, see if the type is an effect
       (result', putChecker') <- peekChecker (checkKind s t keffect)
       case result' of
-        -- Not a closed operator at this kind
-        Left  _ -> return Nothing
+        -- If not, see if the type is a permission
+        Left _ -> do
+          (result'', putChecker'') <- peekChecker (checkKind s t kpermission)
+          case result'' of
+            -- Not a closed operator at this kind
+            Left _ -> return Nothing
+            -- Yes it is a permission
+            Right (subst, _) -> do
+              putChecker''
+              return $ Just subst
         -- Yes it is an effect type
+        Right (subst, _) -> do
+          putChecker'
+          return $ Just subst
+    -- Yes it is a coeffect type
+    Right (subst, _) -> do
+      putChecker
+      return $ Just subst
+
+-- + case
+closedOperatorAtKind s TyOpPlus t = do
+  -- See if the type is a coeffect
+  (result, putChecker) <- peekChecker (checkKind s t kcoeffect)
+  case result of
+    Left _ -> do
+      -- If not, see if the type is a permission
+      (result', putChecker') <- peekChecker (checkKind s t kpermission)
+      case result' of
+        -- Not a closed operator at this kind
+        Left _ -> return Nothing
+        -- Yes it is a permission
         Right (subst, _) -> do
           putChecker'
           return $ Just subst
@@ -596,7 +641,13 @@ predicateOperatorAtKind :: (?globals :: Globals) =>
 predicateOperatorAtKind s op t | predicateOperation op = do
   (result, putChecker) <- peekChecker (checkKind s t kcoeffect)
   case result of
-    Left _ -> return Nothing
+    Left _ -> do
+      (result', putChecker') <- peekChecker (checkKind s t kpermission)
+      case result' of
+        Left _ -> return Nothing
+        Right (subst', _) -> do
+          putChecker
+          return $ Just subst'
     Right (subst, _) -> do
       putChecker
       return $ Just subst
@@ -1225,7 +1276,7 @@ unify x y = runMaybeT $ unify' x y
 
 requiresSolver :: (?globals :: Globals) => Span -> Type -> Checker Bool
 requiresSolver s ty = do
-  (result, putChecker) <- peekChecker (checkKind s ty kcoeffect <|> checkKind s ty keffect)
+  (result, putChecker) <- peekChecker (checkKind s ty kcoeffect <|> checkKind s ty keffect <|> checkKind s ty kpermission)
   case result of
     -- Checking as coeffect or effect caused an error so ignore
     Left _  -> return False
@@ -1280,6 +1331,16 @@ instance Unifiable Type where
     unify' (TySig t k) (TySig t' k') = do
       u  <- unify' t t'
       u' <- unify' k k'
+      lift $ combineSubstitutionsHere u u'
+
+    unify' (Borrow p t) (Borrow p' t') = do
+      u  <- unify' p p'
+      u' <- unify' t t'
+      lift $ combineSubstitutionsHere u u'
+
+    unify' (Star g t) (Star g' t') = do
+      u  <- unify' g g'
+      u' <- unify' t t'
       lift $ combineSubstitutionsHere u u'
 
     -- No unification

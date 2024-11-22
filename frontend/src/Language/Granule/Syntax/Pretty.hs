@@ -14,6 +14,7 @@ module Language.Granule.Syntax.Pretty where
 
 import Data.Foldable (toList)
 import Data.List (intercalate)
+import Data.Ratio (numerator, denominator)
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Pattern
@@ -102,6 +103,11 @@ instance Pretty Type where
     pretty (TyGrade Nothing n)  = show n
     pretty (TyGrade (Just t) n)  = "(" <> show n <> " : " <> pretty t <> ")"
     pretty (TyRational n) = show n
+    pretty (TyFraction f) = let (n, d) = (numerator f, denominator f) in
+      if d == 1 then
+        show n
+      else
+        show n <> "/" <> show d
 
     -- Non atoms
     pretty (Type 0) = docSpan "constName" "Type"
@@ -136,6 +142,11 @@ instance Pretty Type where
         (TyCon (Id "Unique" "Unique")) -> docSpan "uniq" ("*" <> prettyNested t)
         otherwise -> prettyNested t <> " *" <> docSpan "uniq" (pretty g)
 
+    pretty (Borrow p t) =
+      case p of
+        (TyCon (Id "Star" "Star")) -> docSpan "uniq" ("*" <> prettyNested t)
+        otherwise -> docSpan "perm" ("& " <> prettyNested p <> " " <> prettyNested t)
+
     pretty (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "," =
       "(" <> pretty t1 <> ", " <> pretty t2 <> ")"
 
@@ -153,6 +164,9 @@ instance Pretty Type where
 
     pretty (TyInfix TyOpInterval t1 t2) =
       prettyNested t1 <> pretty TyOpInterval <> prettyNested t2
+
+    pretty (TyInfix TyOpMutable t1 _) =
+      pretty TyOpMutable <> " " <> prettyNested t1
 
     pretty (TyInfix op t1 t2) =
       prettyNested t1 <> " " <> pretty op <> " " <> prettyNested t2
@@ -174,6 +188,8 @@ instance Pretty Type where
 
     pretty (TyForall var k t) =
       docSpan "keyword" "forall" <> " {" <> pretty var <> " : " <> pretty k <> "} . " <> pretty t
+    
+    pretty (TyName n) = "id" ++ show n
 
 instance Pretty TypeOperator where
   pretty = \case
@@ -195,6 +211,7 @@ instance Pretty TypeOperator where
    TyOpConverge        -> "#"
    TyOpImpl            -> "=>"
    TyOpHsup            -> "⨱"
+   TyOpMutable         -> "mut"
 
 instance Pretty v => Pretty (AST v a) where
   pretty (AST dataDecls defs imprts hidden name) =
@@ -282,6 +299,7 @@ instance Pretty v => Pretty (Value v a) where
     pretty (Promote _ e) = "[" <> pretty e <> "]"
     pretty (Pure _ e)    = "<" <> pretty e <> ">"
     pretty (Nec _ e)     = "*" <> pretty e
+    pretty (Ref _ e)     = "&" <> pretty e
     pretty (Var _ x)     = pretty x
     pretty (NumInt n)    = show n
     pretty (NumFloat n)  = show n

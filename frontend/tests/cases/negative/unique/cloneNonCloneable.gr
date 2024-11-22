@@ -1,0 +1,4 @@
+example : Int [1]
+example =
+  clone [42] as x
+    in (unpack <id' , a'> = x in (share a'))

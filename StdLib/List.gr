@@ -14,7 +14,7 @@ import Result
 import Maybe
 import Bool
 
-data List a where Empty; Next a (List a)
+data List a where Empty | Next a (List a)
 
 --- Append two lists
 append_list : forall {a : Type} . List a -> List a -> List a
