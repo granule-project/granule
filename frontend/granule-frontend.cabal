@@ -5,7 +5,7 @@ cabal-version: 1.12
 -- see: https://github.com/sol/hpack
 
 name:           granule-frontend
-version:        0.9.5.0
+version:        0.9.6.0
 synopsis:       The Granule abstract-syntax-tree, parser and type checker libraries
 homepage:       https://github.com/granule-project/granule#readme
 bug-reports:    https://github.com/granule-project/granule/issues

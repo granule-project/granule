@@ -727,6 +727,10 @@ lengthFloatArray = BUILTIN
 deleteFloatArray : forall {id : Name} . *(FloatArray id) -> ()
 deleteFloatArray = BUILTIN
 
+--------------------------------------------------------------------------------
+--- # Mutable reference cells
+--------------------------------------------------------------------------------
+
 newRef : forall {a : Type} . a -> exists {id : Name} . *(Ref id a)
 newRef = BUILTIN
 
@@ -740,7 +744,7 @@ readRef : forall {a : Type, s : Semiring, q r : s, p : Permission, f : p, id : N
 readRef = BUILTIN
 
 --------------------------------------------------------------------------------
---- # Imuutable array operations
+--- # Immutable array operations
 --------------------------------------------------------------------------------
 
 newFloatArrayI : forall {id : Name} . Int -> (FloatArray id)
