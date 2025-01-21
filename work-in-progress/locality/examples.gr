@@ -1,0 +1,34 @@
+g2g : Int [Global] -> Int [Global]
+g2g x = x
+
+g2l : Int [Global] -> Int [Local]
+g2l x = x
+
+l2l : Int [Local] -> Int [Local]
+l2l x = x
+
+a2l : Int [Arb] -> Int [Local]
+a2l x = x
+
+a2g : Int [Arb] -> Int [Global]
+a2g x = x
+
+-- these should be ok 
+
+-- (+') : Int [Local] -> Int [Local] -> Int
+-- (+') : Int [Arb] -> Int [Arb] -> Int [Global]
+
+-- BUILTIN
+-- moveToHeap : forall (a : Type) . a -> a [Global]
+
+-- these are not ok!
+
+-- l2g : Int [Local] -> Int [Global]
+-- l2g x = x
+
+-- l2a : Int [Local] -> Int [Arb]
+-- l2a x = x
+
+-- -- this is fine on Jane Street
+-- g2a : Int [Global] -> Int [Arb]
+-- g2a x = x

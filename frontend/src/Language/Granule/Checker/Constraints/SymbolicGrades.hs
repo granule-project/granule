@@ -29,6 +29,7 @@ data SGrade =
      | SFraction { sFraction :: SFrac }
      | SFloat    SFloat
      | SLevel    SInteger
+     | SLocality SInteger
      | SSec      SBool -- Hi = True, Lo = False
      | SSet      Polarity (SSet SSetElem)
      | SExtNat   { sExtNat :: SNatX }
@@ -60,6 +61,11 @@ privateRepresentation = 1
 publicRepresentation  = 3
 unusedRepresentation  = 0
 dunnoRepresentation   = 2
+
+localRep, globalRep, arbitraryRep :: Integer
+localRep     = 0
+globalRep    = 1
+arbitraryRep = 2
 
 -- Representation for `Sec`
 hiRepresentation, loRepresentation :: SBool
@@ -139,6 +145,7 @@ match (SNat _) (SNat _) = True
 match (SFloat _) (SFloat _) = True
 match (SFraction _) (SFraction _) = True
 match (SLevel _) (SLevel _) = True
+match (SLocality _) (SLocality _) = True
 match (SSet p _) (SSet p' _) | p == p' = True
 match (SExtNat _) (SExtNat _) = True
 match (SInterval s1 s2) (SInterval t1 t2) = match s1 t1 && match s2 t2
@@ -189,6 +196,7 @@ instance Mergeable SGrade where
   symbolicMerge s sb (SFloat n) (SFloat n') = SFloat (symbolicMerge s sb n n')
   symbolicMerge s sb (SFraction f) (SFraction f') = SFraction (symbolicMerge s sb f f')
   symbolicMerge s sb (SLevel n) (SLevel n') = SLevel (symbolicMerge s sb n n')
+  symbolicMerge s sb (SLocality n) (SLocality n') = SLocality (symbolicMerge s sb n n')
   symbolicMerge s sb (SSet _ n) (SSet _ n') = error "Can't symbolic merge sets yet"
   symbolicMerge s sb (SExtNat n) (SExtNat n') = SExtNat (symbolicMerge s sb n n')
   symbolicMerge s sb (SInterval lb1 ub1) (SInterval lb2 ub2) =
@@ -228,6 +236,16 @@ symGradeLess (SLevel n) (SLevel n') =
          $ ite (n .== n') sTrue                               -- Refl
          sFalse
   where ltCase a b = ite ((n .== literal a) .&& (n' .== literal b)) sTrue
+
+symGradeLess (SLocality l) (SLocality k) =
+    return $ ltCase localRep  globalRep
+           $ ltCase localRep  arbitraryRep
+           $ ltCase globalRep arbitraryRep
+           $ ite (l .== k) sTrue
+           sFalse
+    where ltCase a b = ite ((l .== literal a) .&& (k .== literal b)) sTrue
+
+
 symGradeLess (SSet _ n) (SSet _ n')  = solverError "Can't do < on sets"
 symGradeLess (SExtNat n) (SExtNat n') = return $ n .< n'
 symGradeLess SPoint SPoint            = return sTrue
@@ -276,6 +294,7 @@ symGradeEq (SFloat n) (SFloat n') = return $ n .== n'
 symGradeEq (SFraction f) (SFraction f') = return $ f .== f'
 
 symGradeEq (SLevel n) (SLevel n') = return $ n .== n'
+symGradeEq (SLocality n) (SLocality n') = return $ n .== n'
 symGradeEq (SSet p n) (SSet p' n') | p == p' = return $ n .== n'
 
 symGradeEq (SExtNat n@(SNatX ni)) (SNat n') =
@@ -319,6 +338,14 @@ symGradeMeet (SLevel s) (SLevel t) =
                         (s .== literal dunnoRepresentation))     -- join x Dunno = Dunno
                         (literal dunnoRepresentation)
                   $ literal publicRepresentation -- join Public Public = Public
+symGradeMeet (SLocality s) (SLocality t) = do
+    return $ SLocality
+        $ ite (s .== literal localRep)  (literal localRep)  -- meet Local  x       = Local
+        $ ite (t .== literal localRep)  (literal localRep)  -- meet x      Local   = Local
+        $ ite (s .== literal globalRep) (literal globalRep) -- meet Global x       = Global
+        $ ite (t .== literal globalRep) (literal globalRep) -- meet x      Global  = Global
+        $ literal arbitraryRep                              -- meet Arb    Arb     = Arb
+
 symGradeMeet (SFloat n1) (SFloat n2) = return $ SFloat $ n1 `smin` n2
 symGradeMeet (SFraction f) (SFraction f') = return $ SFraction $
   ite (isUniq f) f' (ite (isUniq f') f (SFrac (fVal f `smin` fVal f')))
@@ -357,6 +384,13 @@ symGradeJoin (SLevel s) (SLevel t) =
                         (s .== literal privateRepresentation))
                         (literal privateRepresentation)
                   $ literal dunnoRepresentation -- meet Dunno Private = meet Private Dunno = meet Dunno Dunno = Dunno
+symGradeJoin (SLocality s) (SLocality t) =
+    return $ SLocality
+        $ ite (s .== literal arbitraryRep) (literal arbitraryRep) -- join Arb    x       = Arb
+        $ ite (t .== literal arbitraryRep) (literal arbitraryRep) -- join x      Arb     = Arb
+        $ ite (s .== literal globalRep) (literal globalRep)       -- join Global x       = Global
+        $ ite (t .== literal globalRep) (literal globalRep)       -- join x      Global  = Global
+        $ literal localRep                                        -- join Local  Local   = Local
 symGradeJoin (SFloat n1) (SFloat n2) = return $ SFloat (n1 `smax` n2)
 symGradeJoin (SFraction f) (SFraction f') = return $ SFraction $
   ite (isUniq f .|| isUniq f') star (SFrac (fVal f `smax` fVal f'))
@@ -398,6 +432,7 @@ symGradePlus (SNat n1) (SNat n2) = return $ SNat (n1 + n2)
 symGradePlus (SSet Normal s) (SSet Normal t) = return $ SSet Normal $ S.intersection s t
 symGradePlus (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.union s t
 symGradePlus (SLevel lev1) (SLevel lev2) = symGradeJoin (SLevel lev1) (SLevel lev2)
+symGradePlus (SLocality s) (SLocality t) = symGradeJoin (SLocality s) (SLocality t)
 symGradePlus (SFloat n1) (SFloat n2) = return $ SFloat $ n1 + n2
 symGradePlus (SFraction f) (SFraction f') = return $ SFraction (f + f')
 symGradePlus (SExtNat x) (SExtNat y) = return $ SExtNat (x + y)
@@ -448,6 +483,7 @@ symGradeTimes (SExtNat (SNatX n1)) (SNat n2) = return $ SExtNat $ SNatX (n1 * n2
 symGradeTimes (SSet Normal s) (SSet Normal t) = return $ SSet Normal $ S.union s t
 symGradeTimes (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.intersection s t
 symGradeTimes (SLevel lev1) (SLevel lev2) = symGradeJoin (SLevel lev1) (SLevel lev2)
+symGradeTimes (SLocality s) (SLocality t) = symGradeMeet (SLocality s) (SLocality t)
 symGradeTimes (SFloat n1) (SFloat n2) = return $ SFloat $ n1 * n2
 symGradeTimes (SFraction f) (SFraction f') = return $ SFraction (f * f')
 symGradeTimes (SExtNat x) (SExtNat y) = return $ SExtNat (x * y)

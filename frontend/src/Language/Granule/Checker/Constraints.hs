@@ -246,6 +246,10 @@ freshSolverVarScoped quant name (TyCon conName) q k =
                     .|| solverVar .== literal publicRepresentation
                     .|| solverVar .== literal unusedRepresentation
                       , SLevel solverVar)
+          "Locality" -> k (solverVar .== literal arbitraryRep
+                      .|| solverVar .== literal globalRep
+                      .|| solverVar .== literal localRep
+                        , SLocality solverVar)
           "LNL"    -> k (solverVar .== literal zeroRep
                     .|| solverVar .== literal oneRep
                     .|| solverVar .== literal manyRep
@@ -408,6 +412,15 @@ compileCoeffect (TyCon name) (TyCon (internalName -> "Level")) _ = do
 
   return (SLevel . fromInteger . toInteger $ n, sTrue)
 
+compileCoeffect (TyCon name) (TyCon (internalName -> "Locality")) _ = do
+  let n = case internalName name of
+            "Arb"    -> arbitraryRep
+            "Global" -> globalRep
+            "Local"  -> localRep
+            c        -> error $ "Cannot compile " <> show c
+
+  return (SLocality . fromInteger . toInteger $ n, sTrue)
+
 compileCoeffect (TyCon name) (TyCon (internalName -> "LNL")) _ = do
   let n = case internalName name of
             "Zero"    -> zeroRep
@@ -533,6 +546,7 @@ compileCoeffect (TyGrade k' 0) k vars = do
     (TyCon k') ->
       case internalName k' of
         "Level"     -> return (SLevel (literal unusedRepresentation), sTrue)
+        "Locality"  -> return (SLocality (literal localRep), sTrue)
         "Sec"       -> return (SSec hiRepresentation, sTrue)
         "Nat"       -> return (SNat 0, sTrue)
         "Q"         -> return (SFloat (fromRational 0), sTrue)
@@ -572,6 +586,7 @@ compileCoeffect (TyGrade k' 1) k vars = do
     TyCon k ->
       case internalName k of
         "Level"     -> return (SLevel (literal privateRepresentation), sTrue)
+        "Locality"  -> return (SLocality (literal globalRep), sTrue)
         "Sec"       -> return (SSec loRepresentation, sTrue)
         "Nat"       -> return (SNat 1, sTrue)
         "Q"         -> return (SFloat (fromRational 1), sTrue)
@@ -634,6 +649,7 @@ eqConstraint :: SGrade -> SGrade -> Symbolic SBool
 eqConstraint (SNat n) (SNat m)     = return $ n .== m
 eqConstraint (SFloat n) (SFloat m) = return $ n .== m
 eqConstraint (SLevel l) (SLevel k) = return $ l .== k
+eqConstraint (SLocality s) (SLocality t) = return $ s .== t
 eqConstraint u@(SUnknown{}) u'@(SUnknown{}) = symGradeEq u u'
 eqConstraint (SExtNat x) (SExtNat y) = return $ x .== y
 eqConstraint SPoint SPoint           = return sTrue
@@ -682,6 +698,14 @@ approximatedByOrEqualConstraint (SLevel l) (SLevel k) =
   --        $ ite ((l .== literal dunnoRepresentation) .|| (k .== literal dunnoRepresentation)) sFalse
   --        $ ite (l .== literal privateRepresentation) sTrue
   --        $ ite (k .== literal publicRepresentation) sTrue sFalse
+
+approximatedByOrEqualConstraint (SLocality l) (SLocality k) =
+  return $ ltCase localRep  globalRep
+         $ ltCase localRep  arbitraryRep
+         $ ltCase globalRep arbitraryRep
+         $ ite (l .== k) sTrue
+         sFalse
+  where ltCase a b = ite ((l .== literal a) .&& (k .== literal b)) sTrue
 
 approximatedByOrEqualConstraint (SSec a) (SSec b) =
   -- Lo <= Lo   (False <= False)

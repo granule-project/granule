@@ -112,6 +112,11 @@ typeConstructors =
     , (mkId "Sec",  (kcoeffect, [], []))
     , (mkId "Hi",    (tyCon "Sec", [], []))
     , (mkId "Lo",    (tyCon "Sec", [], []))
+    -- Locality
+    , (mkId "Locality", (kcoeffect, [], []))
+    , (mkId "Arb", (tyCon "Locality", [], []))
+    , (mkId "Local", (tyCon "Locality", [], []))
+    , (mkId "Global", (tyCon "Locality", [], []))
     -- Uniqueness
     , (mkId "Uniqueness", (kguarantee, [], []))
     , (mkId "Unique", (tyCon "Uniqueness", [], []))
