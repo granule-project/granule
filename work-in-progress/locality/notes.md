@@ -39,8 +39,15 @@ Some behavioural similarity here with Private / Public - i.e. private does not e
 
 Should we drop Arb? Do we need it? Global as default. For formalisation do we need Unused as in Locality1?
 
-ok:    (a : Global, b : Global) : Local
+ok: (a : Global, b : Global) : Local
 notok: (a : Local, b : Local) : Global
+
+why is this useful?
+
+- intensive computations without GC pause
+- non-leaky (withFile : io -> path -> (handle : Local -> a) -> a)
+
+how much of the desired behaviour could we achieve with linearity/reuse bounds + uniqueness?
 
 ## Locality2
 
