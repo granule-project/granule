@@ -39,6 +39,9 @@ Some behavioural similarity here with Private / Public - i.e. private does not e
 
 Should we drop Arb? Do we need it? Global as default. For formalisation do we need Unused as in Locality1?
 
+ok:    (a : Global, b : Global) : Local
+notok: (a : Local, b : Local) : Global
+
 ## Locality2
 
 This is the implementation in frontend, expected behaviour in simple cases (see examples) - order is reverse of what I expect and not clear on route to formalisation - 0 is Local and 1 is Arb.
