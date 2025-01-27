@@ -13,6 +13,26 @@ a2l x = x
 a2g : Int [Arb] -> Int [Global]
 a2g x = x
 
+-- this should be okay
+fine1 : forall {a : Type} . a [Global] -> a [Global]
+fine1 [x] = [x]
+
+-- bad1 : forall {a : Type} . a [Local] -> a [Global]
+-- bad1 [x] = [x]
+
+-- Disallowed by Agda
+-- 
+--    ---------------------- :: var
+--    x : Local a |- x : a
+--    --------------------- :: box_i
+--    x : Local a |- [x] : a [Local]
+--    ---------------------- :: box_i
+--    x : Global x |- [[x]] : a [Global]
+
+bad2 : forall {a : Type} . a [Local] -> (a [Local]) [Global]
+bad2 [x] = [[x]]
+
+
 -- these should be ok 
 
 -- (+') : Int [Local] -> Int [Local] -> Int
