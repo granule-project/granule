@@ -546,7 +546,7 @@ compileCoeffect (TyGrade k' 0) k vars = do
     (TyCon k') ->
       case internalName k' of
         "Level"     -> return (SLevel (literal unusedRepresentation), sTrue)
-        "Locality"  -> return (SLocality (literal localRep), sTrue)
+        "Locality"  -> return (SLocality (literal arbitraryRep), sTrue) -- ???
         "Sec"       -> return (SSec hiRepresentation, sTrue)
         "Nat"       -> return (SNat 0, sTrue)
         "Q"         -> return (SFloat (fromRational 0), sTrue)
@@ -586,7 +586,7 @@ compileCoeffect (TyGrade k' 1) k vars = do
     TyCon k ->
       case internalName k of
         "Level"     -> return (SLevel (literal privateRepresentation), sTrue)
-        "Locality"  -> return (SLocality (literal globalRep), sTrue)
+        "Locality"  -> return (SLocality (literal localRep), sTrue) -- ???
         "Sec"       -> return (SSec loRepresentation, sTrue)
         "Nat"       -> return (SNat 1, sTrue)
         "Q"         -> return (SFloat (fromRational 1), sTrue)
@@ -699,6 +699,7 @@ approximatedByOrEqualConstraint (SLevel l) (SLevel k) =
   --        $ ite (l .== literal privateRepresentation) sTrue
   --        $ ite (k .== literal publicRepresentation) sTrue sFalse
 
+-- TODO: ???
 approximatedByOrEqualConstraint (SLocality l) (SLocality k) =
   return $ ltCase localRep  globalRep
          $ ltCase localRep  arbitraryRep
