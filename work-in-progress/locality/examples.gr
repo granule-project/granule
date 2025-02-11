@@ -21,7 +21,7 @@ fine1 [x] = [x]
 -- bad1 [x] = [x]
 
 -- Disallowed by Agda
--- 
+--
 --    ---------------------- :: var
 --    x : Local a |- x : a
 --    --------------------- :: box_i
@@ -29,11 +29,20 @@ fine1 [x] = [x]
 --    ---------------------- :: box_i
 --    x : Global x |- [[x]] : a [Global]
 
-bad2 : forall {a : Type} . a [Local] -> (a [Local]) [Global]
-bad2 [x] = [[x]]
+-- bad2 : forall {a : Type} . a [Local] -> (a [Local]) [Global]
+-- bad2 [x] = [[x]]
+
+local : Int [Local]
+local = [42]
+
+bad3 : ∀ {a : Type} . a [Local] -> (a, a [Global])
+bad3 [x] = (x, [x])
+
+main : (Int, Int [Global])
+main = bad3 local
 
 
--- these should be ok 
+-- these should be ok
 
 -- (+') : Int [Local] -> Int [Local] -> Int
 -- (+') : Int [Arb] -> Int [Arb] -> Int [Global]
