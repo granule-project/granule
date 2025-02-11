@@ -62,10 +62,11 @@ publicRepresentation  = 3
 unusedRepresentation  = 0
 dunnoRepresentation   = 2
 
-localRep, globalRep, arbitraryRep :: Integer
+localRep, globalRep, arbitraryRep, unusedRep :: Integer
 localRep     = 0
 globalRep    = 1
 arbitraryRep = 2
+unusedRep    = 3
 
 -- Representation for `Sec`
 hiRepresentation, loRepresentation :: SBool
@@ -420,11 +421,15 @@ symGradePlus (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.un
 symGradePlus (SLevel lev1) (SLevel lev2) = symGradeJoin (SLevel lev1) (SLevel lev2)
 symGradePlus (SLocality s) (SLocality t) =
     return $ SLocality
-        $ ite (s .== literal arbitraryRep) t                -- Unused +l y      = y
-        $ ite (t .== literal arbitraryRep) s                -- y      +l Unused = y
-        $ ite (s .== literal globalRep) (literal globalRep) -- Global +l y      = Global
-        $ ite (t .== literal globalRep) (literal globalRep) -- x      +l Global = Global
-        $ literal localRep                                  -- Local  +l Local  = Local
+        $ ite (s .== literal unusedRep) t                           -- Unused + y      = y
+        $ ite (t .== literal unusedRep) s                           -- y      + Unused = y
+        $ ite ((s .== literal localRep) .&&                         -- Local
+                (t .== literal localRep)) (literal localRep)        --        + Local  = Local
+        $ ite (s .== literal arbitraryRep) (literal arbitraryRep)   -- Arb    + y      = Arb
+        $ ite (t .== literal arbitraryRep) (literal arbitraryRep)   -- y      + Arb    = Arb
+        $ ite (s .== literal globalRep) (literal globalRep)         -- Global + y      = Global
+        $ ite (t .== literal globalRep) (literal globalRep)         -- y      + Global = Global
+        $ literal unusedRep                                         -- ?      + ?      = ?
 
 symGradePlus (SFloat n1) (SFloat n2) = return $ SFloat $ n1 + n2
 symGradePlus (SFraction f) (SFraction f') = return $ SFraction (f + f')
@@ -478,11 +483,15 @@ symGradeTimes (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.i
 symGradeTimes (SLevel lev1) (SLevel lev2) = symGradeJoin (SLevel lev1) (SLevel lev2)
 symGradeTimes (SLocality s) (SLocality t) =
     return $ SLocality
-        $ ite (s .== literal arbitraryRep) (literal arbitraryRep) -- Unused *l y      = Unused
-        $ ite (t .== literal arbitraryRep) (literal arbitraryRep) -- y      *l Unused = Unused
-        $ ite (s .== literal globalRep) (literal globalRep)       -- Global *l y      = Global
-        $ ite (t .== literal globalRep) (literal globalRep)       -- x      *l Global = Global
-        $ literal localRep                                        -- Local  *l Local  = Local
+        $ ite (s .== literal unusedRep) (literal unusedRep)       -- Unused * y      = Unused
+        $ ite (t .== literal unusedRep) (literal unusedRep)       -- y      * Unused = Unused
+        $ ite ((s .== literal localRep) .&&                       -- Local
+                (t .== literal localRep)) (literal localRep)      --        * Local  = Local
+        $ ite (s .== literal arbitraryRep) (literal arbitraryRep) -- Arb    * y      = Arb
+        $ ite (t .== literal arbitraryRep) (literal arbitraryRep) -- y      * Arb    = Arb
+        $ ite (s .== literal globalRep) (literal globalRep)       -- Global * y      = Global
+        $ ite (t .== literal globalRep) (literal globalRep)       -- y      * Global = Global
+        $ literal unusedRep                                       -- ?      * ?      = ?
 
 symGradeTimes (SFloat n1) (SFloat n2) = return $ SFloat $ n1 * n2
 symGradeTimes (SFraction f) (SFraction f') = return $ SFraction (f * f')

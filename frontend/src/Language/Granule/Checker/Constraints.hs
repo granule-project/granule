@@ -249,6 +249,7 @@ freshSolverVarScoped quant name (TyCon conName) q k =
           "Locality" -> k (solverVar .== literal arbitraryRep
                       .|| solverVar .== literal globalRep
                       .|| solverVar .== literal localRep
+                      .|| solverVar .== literal unusedRep
                         , SLocality solverVar)
           "LNL"    -> k (solverVar .== literal zeroRep
                     .|| solverVar .== literal oneRep
@@ -546,7 +547,7 @@ compileCoeffect (TyGrade k' 0) k vars = do
     (TyCon k') ->
       case internalName k' of
         "Level"     -> return (SLevel (literal unusedRepresentation), sTrue)
-        "Locality"  -> return (SLocality (literal arbitraryRep), sTrue) -- ???
+        "Locality"  -> return (SLocality (literal unusedRep), sTrue) -- ???
         "Sec"       -> return (SSec hiRepresentation, sTrue)
         "Nat"       -> return (SNat 0, sTrue)
         "Q"         -> return (SFloat (fromRational 0), sTrue)
