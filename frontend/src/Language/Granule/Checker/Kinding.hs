@@ -937,6 +937,20 @@ mguCoeffectTypes' s t (TyCon (internalName -> "Nat")) | t == extendedNat =
 mguCoeffectTypes' s (TyCon (internalName -> "Nat")) t | t == extendedNat =
   return $ Just (extendedNat, [], (id, id))
 
+-- Unifying two products
+mguCoeffectTypes' s coeffTy1@(isProduct -> Just (t1, t2)) coeffTy2@(isProduct -> Just (t1', t2')) = do
+  upper1 <- mguCoeffectTypes' s t1 t1'
+  upper2 <- mguCoeffectTypes' s t2 t2'
+  case upper1 of
+    Just (upperTy1, subst1, (inj11, inj21)) ->
+      case upper2 of
+        Just (upperTy2, subst2, (inj12, inj22)) -> do
+          substF <- combineSubstitutions s subst1 subst2
+          return $ Just ((TyApp (TyApp (tyCon ",,") upperTy1) upperTy2), substF,
+                      ((inj11 . inj12), (inj21 . inj22)))
+        Nothing -> return Nothing
+    Nothing -> return Nothing
+
 -- Unifying a product of (t, t') with t yields (t, t') [and the symmetric versions]
 mguCoeffectTypes' s coeffTy1@(isProduct -> Just (t1, t2)) coeffTy2 | t1 == coeffTy2 =
   return $ Just (coeffTy1, [], (id, \x -> cProduct x (TyGrade (Just t2) 1)))
