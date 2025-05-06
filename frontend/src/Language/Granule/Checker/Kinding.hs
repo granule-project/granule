@@ -1056,8 +1056,9 @@ flattenable t1 t2
             Just (t, subst, (inj1, inj2)) -> do
               flatM <- flattenable t t
               case flatM of
-                Just (op, subst', t) ->
-                  return $ Just (\c1 c2 -> op (inj1 c1) (inj2 c2), subst', t)
+                Just (op, subst', t) -> do
+                  substFinal <- combineSubstitutions nullSpan subst subst'
+                  return $ Just (\c1 c2 -> op (inj1 c1) (inj2 c2), substFinal, t)
                 Nothing      -> return $ Just (cProduct, subst, TyCon (mkId ",,") .@ t1 .@ t2)
             Nothing        -> return $ Just (cProduct, [], TyCon (mkId ",,") .@ t1 .@ t2)
 
