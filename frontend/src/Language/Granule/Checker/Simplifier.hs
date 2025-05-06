@@ -59,7 +59,9 @@ simplifyPred' c@(Impl ids p1 p2) = do
   p2' <- simpl subst p2
   let subst' = collectSubst p2'
   p2'' <- simpl subst' p2'
-  return $ removeTrivialImpls . removeTrivialIds $ (Impl ids p1' p2'')
+  p1'' <- simplifyPred' p1
+  p2'' <- simplifyPred' p2''
+  return $ removeTrivialImpls . removeTrivialIds $ Impl ids p1'' p2''
 
 simplifyPred' c@(Exists id k p) = do
   p' <- simplifyPred' p
@@ -71,7 +73,36 @@ simplifyPred' c@(Exists id k p) = do
 simplifyPred' c@(NegPred p) =
   simplifyPred' p >>= return . NegPred
 
-simplifyPred' (Con c) = return (Con c)
+simplifyPred' (Con c) = 
+  case simplifyConstraint c of
+    Nothing -> return (Conj [])
+    Just c' -> return (Con c')
+
+-- simplify a constraint, returning Nothing if it is trivial
+-- (e.g. x == x) or Just the simplified constraint (which could)
+-- be the same as the original constraint if simplifications cannot be applied
+simplifyConstraint :: Constraint -> Maybe Constraint
+simplifyConstraint (Eq t c1 c2 k) =
+  if c1 == c2
+    then Nothing
+    else Just (Eq t c1 c2 k)
+simplifyConstraint cc@(ApproximatedBy t c1 c2 k) =
+  if c1 == c2
+    then Nothing
+    else Just (ApproximatedBy t c1 c2 k)
+simplifyConstraint (Neq t c1 c2 k) =
+  if c1 == c2
+    then Nothing
+    else Just (Neq t c1 c2 k)
+simplifyConstraint (LtEq t c1 c2) =
+  if c1 == c2
+    then Nothing
+    else Just (LtEq t c1 c2)
+simplifyConstraint (GtEq t c1 c2) =
+  if c1 == c2
+    then Nothing
+    else Just (GtEq t c1 c2)
+simplifyConstraint c = Just c
 
 flatten :: Pred -> Pred
 flatten (Conj []) = Conj []
