@@ -11,7 +11,7 @@
 module Language.Granule.Checker.Constraints where
 
 --import Data.Foldable (foldrM)
-import Data.SBV hiding (kindOf, name, symbolic, isSet)
+import Data.SBV hiding (kindOf, name, symbolic, isSet, Exists)
 import qualified Data.SBV.Set as S
 import Data.Maybe (mapMaybe)
 import Control.Monad (liftM2)
@@ -302,24 +302,24 @@ class QuantifiableScoped a where
   existentialScoped :: String -> (SBV a -> Symbolic SBool) -> Symbolic SBool
 
 instance QuantifiableScoped Integer where
-  universalScoped v = universal [v]
-  existentialScoped v = existential [v]
+  universalScoped v = undefined --universal [v]
+  existentialScoped v = undefined -- existential [v]
 
 instance QuantifiableScoped Rational where
-  universalScoped v = universal [v]
-  existentialScoped v = existential [v]
+  universalScoped v = undefined -- universal [v]
+  existentialScoped v = undefined -- existential [v]
 
 instance QuantifiableScoped Bool where
-  universalScoped v = universal [v]
-  existentialScoped v = existential [v]
+  universalScoped v = undefined -- universal [v]
+  existentialScoped v = undefined -- existential [v]
 
 instance QuantifiableScoped Float where
-  universalScoped v = universal [v]
-  existentialScoped v = existential [v]
+  universalScoped v = undefined -- universal [v]
+  existentialScoped v = undefined -- existential [v]
 
 instance QuantifiableScoped (RCSet SSetElem) where
-  universalScoped v = universal [v]
-  existentialScoped v = existential [v]
+  universalScoped v = undefined -- universal [v]
+  existentialScoped v = undefined -- existential [v]
 
 
 -- Compile a constraint into a symbolic bool (SBV predicate)

@@ -54,12 +54,12 @@ freeSFrac nm = do
 
 existsSFrac :: String -> Symbolic SFrac
 existsSFrac nm = do
-  v <- sbvExists $ nm <> "_fVal"
-  constrain $ fractionConstraint v
+  v <- free $ nm <> "_fVal"
+  constrain $ \(Exists v) -> fractionConstraint v
   return $ SFrac v
 
 forallSFrac :: String -> Symbolic SFrac
 forallSFrac nm = do
-  v <- sbvForall $ nm <> "_fVal"
-  constrain $ fractionConstraint v
+  v <- free $ nm <> "_fVal"
+  constrain $ \(Forall v) -> fractionConstraint v
   return $ SFrac v

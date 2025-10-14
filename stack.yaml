@@ -1,4 +1,4 @@
-resolver: lts-20.26
+resolver: lts-22.44
 packages:
 - frontend/
 - interpreter/
@@ -10,7 +10,10 @@ packages:
 
 # Dependency packages to be pulled from upstream that are not in the resolver
 extra-deps:
-- text-replace-0.1.0.3
+- git: https://github.com/mixphix/text-replace.git
+  commit: 301b45914229f40d715268a825b38524bc05e5d8
+  subdirs:
+  - text-replace
 - syz-0.2.0.0
 - git: https://github.com/jackohughes/haskell-src-exts
   commit: 5c2647fa0746bdac046897f5a6b7e4f5ef3afa79
