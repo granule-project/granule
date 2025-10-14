@@ -1,4 +1,4 @@
-resolver: lts-21.25
+resolver: lts-22.44
 packages:
 - frontend/
 - interpreter/
@@ -10,8 +10,10 @@ packages:
 
 # Dependency packages to be pulled from upstream that are not in the resolver
 extra-deps:
-- text-replace-0.1.0.3
-- sbv-9.2
+- git: https://github.com/mixphix/text-replace.git
+  commit: 301b45914229f40d715268a825b38524bc05e5d8
+  subdirs:
+  - text-replace
 - syz-0.2.0.0
 - lsp-types-2.3.0.1
 - lsp-2.7.0.1

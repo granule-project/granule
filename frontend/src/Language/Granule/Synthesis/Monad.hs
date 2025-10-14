@@ -11,6 +11,7 @@ import Language.Granule.Checker.Monad
 import qualified Data.Generics.Zipper as Z
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.List (isInfixOf)
+import Control.Monad
 import Control.Monad.Except
 import Control.Monad.State.Strict
 import Control.Monad.Logic

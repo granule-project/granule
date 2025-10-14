@@ -3,6 +3,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneKindSignatures #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE TypeOperators #-}
 
@@ -16,6 +17,7 @@ import Control.Monad.Reader (ReaderT, ask, runReaderT)
 import Control.Monad.Trans.Class
 import Data.Default (Default(..))
 import Data.Foldable (toList)
+import Data.Kind (Type)
 import Data.List (isInfixOf,isPrefixOf)
 import Data.List.NonEmpty (NonEmpty)
 import Data.List.Split
@@ -57,6 +59,7 @@ instance Default LsState where
 newLsStateVar :: IO (MVar LsState)
 newLsStateVar = newMVar def
 
+type LspS :: Type -> Type
 type LspS = LspT () (ReaderT (MVar LsState) IO)
 
 getLsState :: LspS LsState
@@ -339,12 +342,10 @@ main = do
             Just
               ( TextDocumentSyncOptions
                 (Just True)
-                (Just syncKind)
+                (Just TextDocumentSyncKind_Full)
                 (Just False)
                 (Just False)
                 (Just $ InR $ SaveOptions $ Just True)
               )
         }
     }
-  where
-    syncKind = TextDocumentSyncKind_Full

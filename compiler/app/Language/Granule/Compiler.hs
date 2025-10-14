@@ -17,7 +17,7 @@ import System.Directory (getAppUserDataDirectory, getCurrentDirectory)
 import System.FilePath (takeFileName)
 import "Glob" System.FilePath.Glob (glob)
 import Options.Applicative
-import Options.Applicative.Help.Pretty (string)
+import qualified Options.Applicative.Help.Pretty as P
 
 import Language.Granule.Checker.Checker
 import Language.Granule.Syntax.Def (extendASTWith)
@@ -177,7 +177,7 @@ getGrCommandLineArgs = customExecParser (prefs disambiguate) parseGrConfig
 
 parseGrConfig :: ParserInfo ([FilePath], GrConfig)
 parseGrConfig = info (go <**> helper) $ briefDesc
-    <> (headerDoc . Just . string . unlines)
+    <> (headerDoc . Just . P.pretty . unlines)
             [ "The Granule Compiler"
             , "version: "     <> showVersion version
             , "branch: "      <> $(gitBranch)

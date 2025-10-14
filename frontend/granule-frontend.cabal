@@ -112,7 +112,7 @@ library
     , monad-memo
     , mtl >=2.2.1
     , raw-strings-qq
-    , sbv >=8.5 && <10
+    , sbv >=8.5
     , split
     , syb >=0.6
     , syz >=0.2.0.0
