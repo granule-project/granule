@@ -1,0 +1,73 @@
+cradle:
+  stack:
+    - path: "benchmark/src/Language/Granule/Main.hs"
+      component: "granule-benchmark:exe:grenchmark"
+
+    - path: "benchmark/src/Language/Granule/Benchmarks.hs"
+      component: "granule-benchmark:exe:grenchmark"
+
+    - path: "benchmark/src/Language/Granule/StdError.hs"
+      component: "granule-benchmark:exe:grenchmark"
+
+    - path: "benchmark/src/Paths_granule_benchmark.hs"
+      component: "granule-benchmark:exe:grenchmark"
+
+    - path: "compiler/src"
+      component: "granule-compiler:lib"
+
+    - path: "compiler/app/Language/Granule/Compiler.hs"
+      component: "granule-compiler:exe:grc"
+
+    - path: "compiler/app/Paths_granule_compiler.hs"
+      component: "granule-compiler:exe:grc"
+
+    - path: "frontend/src"
+      component: "granule-frontend:lib"
+
+    - path: "frontend/tests/hspec"
+      component: "granule-frontend:test:frontend-spec"
+
+    - path: "interpreter/src"
+      component: "granule-interpreter:lib"
+
+    - path: "interpreter/src/Language/Granule/Interpreter.hs"
+      component: "granule-interpreter:exe:gr"
+
+    - path: "interpreter/src/Language/Granule/Doc.hs"
+      component: "granule-interpreter:exe:gr"
+
+    - path: "interpreter/src/Language/Granule/Interpreter/Desugar.hs"
+      component: "granule-interpreter:exe:gr"
+
+    - path: "interpreter/src/Language/Granule/Interpreter/Eval.hs"
+      component: "granule-interpreter:exe:gr"
+
+    - path: "interpreter/src/Paths_granule_interpreter.hs"
+      component: "granule-interpreter:exe:gr"
+
+    - path: "interpreter/tests"
+      component: "granule-interpreter:test:gr-golden"
+
+    - path: "repl/app/Language/Granule/Main.hs"
+      component: "granule-repl:exe:grepl"
+
+    - path: "repl/app/Language/Granule/Queue.hs"
+      component: "granule-repl:exe:grepl"
+
+    - path: "repl/app/Language/Granule/ReplError.hs"
+      component: "granule-repl:exe:grepl"
+
+    - path: "repl/app/Language/Granule/ReplParser.hs"
+      component: "granule-repl:exe:grepl"
+
+    - path: "repl/app/Paths_granule_repl.hs"
+      component: "granule-repl:exe:grepl"
+
+    - path: "runtime/src"
+      component: "granule-runtime:lib"
+
+    - path: "server/app/Language/Granule/Server.hs"
+      component: "granule-language-server:exe:grls"
+
+    - path: "server/app/Paths_granule_language_server.hs"
+      component: "granule-language-server:exe:grls"
