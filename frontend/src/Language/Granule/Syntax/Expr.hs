@@ -66,7 +66,7 @@ data ValueF ev a value expr =
      -- /\(x : k) . t
     -- Extensible part
     | ExtF a ev
-   deriving (Generic, Eq, Rp.Data)
+   deriving (Generic, Eq, Rp.Data, Functor)
 
 deriving instance (Show ev, Show a, Show value, Show expr)
     => Show (ValueF ev a value expr)
@@ -152,7 +152,7 @@ data ExprF ev a expr value =
   | UnpackF Span a Bool Id Id expr expr
      -- unpack <a, x> = e1 in e2
   | HoleF Span a Bool [Id] (Maybe Hints)
-  deriving (Generic, Eq, Rp.Data)
+  deriving (Generic, Eq, Rp.Data, Functor)
 
 data Operator
   = OpLesser

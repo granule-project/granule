@@ -19,6 +19,7 @@ import qualified Data.Map as M
 import qualified Data.List.NonEmpty as NonEmpty (NonEmpty, filter, fromList)
 import qualified Language.Granule.Checker.Monad as Checker
 import Control.Exception (try)
+import Control.Monad
 import Control.Monad.State
 import Control.Monad.Trans.Reader
 import qualified Control.Monad.Except as Ex
@@ -146,7 +147,7 @@ helpMenu = unlines
       ]
 
 handleCMD :: (?globals::Globals) => String -> REPLStateIO ()
-handleCMD "" = Ex.return ()
+handleCMD "" = return ()
 handleCMD s =
    case parseLine s of
     Right l -> handleLine l

@@ -10,6 +10,7 @@
 module Language.Granule.Checker.Types where
 
 import Control.Monad.State.Strict
+import Control.Monad
 import Data.List (sortBy, sort)
 
 import Language.Granule.Checker.Coeffects

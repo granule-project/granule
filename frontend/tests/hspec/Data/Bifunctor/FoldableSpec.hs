@@ -1,5 +1,6 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE DeriveFunctor #-}
 
 {-# options_ghc -Wno-missing-pattern-synonym-signatures #-}
 
@@ -15,6 +16,7 @@ data ExprF expr val =
     | OrF expr expr
     | NotF expr
     | ValF val
+    deriving Functor
 $(deriveBifunctor ''ExprF)
 
 type Expr = Fix2 ExprF ValueF
@@ -35,6 +37,7 @@ data ValueF val expr =
     LitF Bool
     | IgnoreF expr Bool -- `expr` does nothing, it's just here to
                         -- demonstrate mutual recursion.
+    deriving Functor
 $(deriveBifunctor ''ValueF)
 
 type Value = Fix2 ValueF ExprF
