@@ -1,0 +1,13 @@
+-- A dependent-type like example in Granule, using GADTs to capture a 
+-- relation-like constraint, with an explicit proof witness
+data Vec (n : Nat) (a : Type) where
+    Nil : Vec 0 a;
+    Cons : forall {n : Nat} . a -> Vec n a -> Vec (n+1) a
+
+data UseOrNot (n : Nat) (k : Nat) where
+  Use : UseOrNot 0 1;
+  Not : forall {m : Nat} . UseOrNot (m+1) 0
+
+safeHead : forall {a : Type, n k : Nat} . Vec n a -> UseOrNot n k -> a [k] -> (a, Vec (n - 1) a)
+safeHead Nil Use [y]         = (y, Nil);
+safeHead (Cons x xs) Not [_] = (x, xs)
