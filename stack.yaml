@@ -12,6 +12,10 @@ packages:
 extra-deps:
 - text-replace-0.1.0.3
 - syz-0.2.0.0
+- lsp-types-2.3.0.1
+- lsp-2.7.0.1
+- mod-0.2.0.1
+- row-types-1.0.1.2
 - git: https://github.com/jackohughes/haskell-src-exts
   commit: 5c2647fa0746bdac046897f5a6b7e4f5ef3afa79
 
