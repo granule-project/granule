@@ -1,0 +1,42 @@
+------
+--- Module: State
+--- Description: State monad implementation
+--- Authors: Dominic Orchard
+--- License: BSD3
+--- Copyright: (c) Authors 2023
+--- Issue-tracking: https://github.com/dorchard/granule/issues
+--- Repository: https://github.com/dorchard/granule
+------
+
+module State where
+
+--------------------------------------------------------------------------------
+--- # State data type, constructor and deconstructors
+--------------------------------------------------------------------------------
+
+data State s a = State (s [0..∞] -> (a, s [0..∞]))
+
+runState : forall {a s : Type} . State s a -> (s [0..∞] -> (a, s [0..∞]))
+runState (State k) = k
+
+--------------------------------------------------------------------------------
+--- # Functor
+--------------------------------------------------------------------------------
+
+fmap_state : forall {a b s : Type} . (a -> b) -> State s a -> State s b
+fmap_state f (State k) = State (\([s] : s [0..∞]) -> let (x, s') = k [s] in (f x, s'))
+
+--------------------------------------------------------------------------------
+--- # Monad
+--------------------------------------------------------------------------------
+
+return_state : forall {a s : Type} . a -> State s a
+return_state x = State (\s -> (x, s))
+
+bind_state : forall {a b s : Type} . (a -> State s b) -> State s a -> State s b
+bind_state k (State f) = State (\s0 ->
+  let (x, s1) = f s0
+  in runState (k x) s1)
+
+join_state : forall {a b s : Type} . State s (State s a) -> State s a
+join_state = bind_state (\x -> x)
