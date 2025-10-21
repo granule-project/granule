@@ -1,13 +1,5 @@
 import Vec
 
-monus
-  : forall {m n : Nat}
-  . N m -> N n -> N (m - n)
-monus m Z = m;
-monus Z (S n') = monus Z n';
-monus (S m') (S n') = monus m' n'
-
-
 pad_left
   : ∀ {a : Type, m : Nat, n : Nat}
   . a [n - m]
