@@ -1,4 +1,4 @@
 Type checking failed: 
 Falsifiable theorem: frontend/tests/cases/negative/indexed/headAlt2.gr:10:1:
   The following constraint associated with `foo` is false:
-	  (n0 = 0) ∧ (0..1 ≤ 0..1) ∧ (n0 > 0)
+	  (n0 = 0) ∧ (n0 > 0)
