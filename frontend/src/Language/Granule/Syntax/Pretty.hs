@@ -17,6 +17,7 @@ module Language.Granule.Syntax.Pretty (Pretty(..), prettyTrace, prettyNested, ti
 import Data.Foldable (toList)
 import Data.List (intercalate)
 import Data.Ratio (numerator, denominator)
+import qualified Data.Text as T
 import qualified Prettyprinter as P
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Type
@@ -60,6 +61,15 @@ class Pretty t where
 
 data Annotation = Keyword | ConstName | Coeff | Eff | Uniq | Perm
 
+instance Show Annotation where
+  show Keyword = "keyword"
+  show ConstName = "constName"
+  show Coeff = "coeff"
+  show Eff = "eff"
+  show Uniq = "uniq"
+  show Perm = "perm"
+
+
 class PrettyNew a where
   pretty_new :: (?globals :: Globals) => a -> P.Doc Annotation
 
@@ -87,6 +97,15 @@ annUniq = P.annotate Uniq
 
 annPerm :: P.Doc Annotation -> P.Doc Annotation
 annPerm = P.annotate Perm
+
+renderHtml :: P.SimpleDocStream Annotation -> String
+renderHtml P.SFail = error "uncaught fail"
+renderHtml P.SEmpty = ""
+renderHtml (P.SChar c x) = c : renderHtml x
+renderHtml (P.SText _ t x) = T.unpack t <> renderHtml x
+renderHtml (P.SLine i x) = "\n" <> replicate i ' ' <> renderHtml x
+renderHtml (P.SAnnPush a x) = "<span class='" <> show a <> "'>" <> renderHtml x
+renderHtml (P.SAnnPop x) = "</span>" <> renderHtml x
 
 -- Mostly for debugging
 
@@ -711,6 +730,7 @@ instance PrettyNew Hints where
 docSpan :: (?globals :: Globals) => String -> String -> String
 docSpan s x = if docMode then (spanP s x) else x
 
+-- `spanP "keyword" "forall"` = `<span class='keyword'>forall</span>`
 spanP :: String -> String -> String
 spanP name = tagWithAttributesP "span" ("class='" <> name <> "'")
 
