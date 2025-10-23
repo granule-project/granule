@@ -8,13 +8,16 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE InstanceSigs #-}
 
-module Language.Granule.Syntax.Pretty where
+module Language.Granule.Syntax.Pretty (Pretty(..), prettyTrace, prettyNested, ticks, prettyDebug, prettyDoc) where
 
 import Data.Foldable (toList)
 import Data.List (intercalate)
 import Data.Ratio (numerator, denominator)
+import qualified Prettyprinter as P
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Pattern
@@ -52,6 +55,38 @@ prettyNested e =
 class Pretty t where
     -- `pretty` pretty printers something at nesting level `l`
     pretty :: (?globals :: Globals) => t -> String
+
+-- Prettyprinter based functions
+
+data Annotation = Keyword | ConstName | Coeff | Eff | Uniq | Perm
+
+class PrettyNew a where
+  pretty_new :: (?globals :: Globals) => a -> P.Doc Annotation
+
+instance PrettyNew Int where
+  pretty_new n = P.pretty (show n)
+
+prettyNestedNew :: (?globals :: Globals, Term a, PrettyNew a) => a -> P.Doc Annotation
+prettyNestedNew e =
+  if isLexicallyAtomic e then pretty_new e else P.parens $ pretty_new e
+
+annKeyword :: P.Doc Annotation -> P.Doc Annotation
+annKeyword = P.annotate Keyword
+
+annConstName :: P.Doc Annotation -> P.Doc Annotation
+annConstName = P.annotate ConstName
+
+annCoeff :: P.Doc Annotation -> P.Doc Annotation
+annCoeff = P.annotate Coeff
+
+annEff :: P.Doc Annotation -> P.Doc Annotation
+annEff = P.annotate Eff
+
+annUniq :: P.Doc Annotation -> P.Doc Annotation
+annUniq = P.annotate Uniq
+
+annPerm :: P.Doc Annotation -> P.Doc Annotation
+annPerm = P.annotate Perm
 
 -- Mostly for debugging
 
@@ -93,6 +128,15 @@ instance Pretty TypeScheme where
         prettyKindSignatures (var, kind) = pretty var <> " : " <> pretty kind
         constraints [] = ""
         constraints cs = "{" <> intercalate ", " (map pretty cs) <> "} =>\n    "
+
+instance PrettyNew TypeScheme where
+    pretty_new (Forall _ vs cs t) = kVars vs <> constraints cs <> pretty_new t
+      where
+        kVars [] = ""
+        kVars vs = annKeyword "forall " <> P.braces (P.cat (P.punctuate ", " (map prettyKindSignatures vs))) <> " . "
+        prettyKindSignatures (var, kind) = pretty_new var <> " : " <> pretty_new kind
+        constraints [] = ""
+        constraints cs = P.braces (P.cat (P.punctuate ", " (map pretty_new cs))) <> " =>\n    "
 
 instance Pretty Type where
     -- Atoms
@@ -191,8 +235,127 @@ instance Pretty Type where
     
     pretty (TyName n) = "id" ++ show n
 
+instance PrettyNew Type where
+    -- Atoms
+    pretty_new (TyCon s) | internalName s == "Infinity" = annConstName "∞"
+    pretty_new (TyCon s)      = annConstName (pretty_new s)
+    pretty_new (TyVar v)      = pretty_new v
+    pretty_new (TyInt n)      = P.pretty (show n)
+    pretty_new (TyGrade Nothing n)  = P.pretty (show n)
+    pretty_new (TyGrade (Just t) n)  = P.parens $ P.pretty (show n) <> " : " <> pretty_new t 
+    pretty_new (TyRational n) = P.pretty $ show n
+    pretty_new (TyFraction f) = let (n, d) = (numerator f, denominator f) in
+      if d == 1 then
+        P.pretty (show n)
+      else
+        P.pretty (show n) <> "/" <> P.pretty (show d)
+
+    -- Non atoms
+    pretty_new (Type 0) = annConstName "Type"
+
+    pretty_new (Type l) =
+      annConstName ("Type " <> pretty_new l)
+
+    pretty_new (FunTy Nothing Nothing t1 t2)  =
+      prettyNestedNew t1 <> " -> " <> pretty_new t2
+
+    pretty_new (FunTy Nothing (Just coeffect) t1 t2)  =
+      prettyNestedNew t1 <> " % " <> annCoeff (pretty_new coeffect) <>  " -> " <> pretty_new t2
+
+    pretty_new (FunTy (Just id) Nothing t1 t2)  =
+      let pt1 = case t1 of FunTy{} -> P.parens (pretty_new t1); _ -> pretty_new t1
+      in  P.parens (pretty_new id <> " : " <> pt1) <> " -> " <> pretty_new t2
+
+    pretty_new (FunTy (Just id) (Just coeffect) t1 t2)  =
+      let pt1 = case t1 of FunTy{} -> P.parens (pretty_new t1); _ -> pretty_new t1
+      in  P.parens (pretty_new id <> " : " <> pt1) <> " % " <> annCoeff (pretty_new coeffect) <> " -> " <> pretty_new t2
+
+    pretty_new (Box c t) =
+      case c of
+        (TyCon (Id "Many" "Many")) -> annCoeff ("!" <> prettyNestedNew t)
+        _ -> prettyNestedNew t <> P.brackets (annCoeff (pretty_new c))
+
+    pretty_new (Diamond e t) =
+      prettyNestedNew t <> " <" <> annEff (pretty_new e) <> ">"
+
+    pretty_new (Star g t) =
+      case g of
+        (TyCon (Id "Unique" "Unique")) -> annUniq ("*" <> prettyNestedNew t)
+        _ -> prettyNestedNew t <> " *" <> annUniq (pretty_new g)
+
+    pretty_new (Borrow p t) =
+      case p of
+        (TyCon (Id "Star" "Star")) -> annUniq ("*" <> prettyNestedNew t)
+        _ -> annPerm ("& " <> prettyNestedNew p <> " " <> prettyNestedNew t)
+
+    pretty_new (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "," =
+      P.parens $ pretty_new t1 <> ", " <> pretty_new t2
+
+    pretty_new (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "×" =
+      P.parens $ pretty_new t1 <> " × " <> pretty_new t2
+
+    pretty_new (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == ",," =
+      P.parens $ pretty_new t1 <> " × " <> pretty_new t2
+
+    pretty_new (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "&" =
+      pretty_new t1 <> " & " <> pretty_new t2
+
+    pretty_new (TyApp t1 t2)  =
+      pretty_new t1 <> " " <> prettyNestedNew t2
+
+    pretty_new (TyInfix TyOpInterval t1 t2) =
+      prettyNestedNew t1 <> pretty_new TyOpInterval <> prettyNestedNew t2
+
+    pretty_new (TyInfix TyOpMutable t1 _) =
+      pretty_new TyOpMutable <> " " <> prettyNestedNew t1
+
+    pretty_new (TyInfix op t1 t2) =
+      prettyNestedNew t1 <> " " <> pretty_new op <> " " <> prettyNestedNew t2
+
+    pretty_new (TySet polarity ts) =
+      P.braces (P.cat (P.punctuate ", " (map pretty_new ts)))
+      <> (if polarity == Opposite then "." else "")
+
+    pretty_new (TySig t k) =
+      P.parens $ pretty_new t <> " : " <> pretty_new k
+
+    pretty_new (TyCase t ps) =
+     "(case " <> pretty_new t <> " of "
+                    <> P.cat (P.punctuate "; " (map (\(p, t') -> pretty_new p
+                    <> " : " <> pretty_new t') ps)) <> ")"
+
+    pretty_new (TyExists var k t) =
+      annKeyword "exists " <> P.braces (pretty_new var <> " : " <> pretty_new k) <> " . " <> pretty_new t
+
+    pretty_new (TyForall var k t) =
+      annKeyword "forall " <> P.braces (pretty_new var <> " : " <> pretty_new k) <> " . " <> pretty_new t
+    
+    pretty_new (TyName n) = "id" <> P.pretty (show n)
+
 instance Pretty TypeOperator where
   pretty = \case
+   TyOpLesserNat       -> "<"
+   TyOpLesserEq        -> "≤"
+   TyOpLesserEqNat     -> ".≤"
+   TyOpGreaterNat      -> ">"
+   TyOpGreaterEq       -> "≥"
+   TyOpGreaterEqNat    -> ".≥"
+   TyOpEq              -> "≡"
+   TyOpNotEq           -> "≠"
+   TyOpPlus            -> "+"
+   TyOpTimes           -> "*"
+   TyOpMinus           -> "-"
+   TyOpExpon           -> "^"
+   TyOpMeet            -> "∧"
+   TyOpJoin            -> "∨"
+   TyOpInterval        -> ".."
+   TyOpConverge        -> "#"
+   TyOpImpl            -> "=>"
+   TyOpHsup            -> "⨱"
+   TyOpMutable         -> "mut"
+
+instance PrettyNew TypeOperator where
+  pretty_new = \case
    TyOpLesserNat       -> "<"
    TyOpLesserEq        -> "≤"
    TyOpLesserEqNat     -> ".≤"
@@ -271,7 +434,7 @@ instance Pretty [DataConstr] where
 
 instance Pretty DataConstr where
     pretty (DataConstrIndexed _ name typeScheme) = pretty name <> " : " <> pretty typeScheme
-    pretty (DataConstrNonIndexed _ name params) = pretty name <> " " <> (intercalate " " $ map pretty params)
+    pretty (DataConstrNonIndexed _ name params) = pretty name <> " " <> intercalate " " (map pretty params)
 
 instance Pretty (Pattern a) where
     pretty (PVar _ _ _ v)     = pretty v
@@ -324,6 +487,11 @@ instance Pretty Id where
     = if debugging
         then internalName
         else filter (\x -> x /= '.' && x /= '`') . sourceName
+
+instance PrettyNew Id where
+  pretty_new id = if debugging
+        then P.pretty (internalName id)
+        else P.pretty ((filter (\x -> x /= '.' && x /= '`') . sourceName) id)
 
 instance Pretty (Value v a) => Pretty (Expr v a) where
   pretty (App _ _ _ (App _ _ _ (Val _ _ _ (Constr _ x _)) t1) t2) | sourceName x == "," =
