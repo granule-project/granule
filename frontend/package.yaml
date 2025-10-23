@@ -99,6 +99,7 @@ library:
   - Glob
   - filepath
   - bifunctors
+  - prettyprinter
   - haskell-src-exts
   - raw-strings-qq
   - text-replace
