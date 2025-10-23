@@ -93,8 +93,14 @@ annPerm = P.annotate Perm
 instance {-# OVERLAPPABLE #-} (Pretty a, Pretty b) => Pretty (a, b) where
    pretty (a, b) = "(" <> pretty a <> ", " <> pretty b <> ")"
 
+instance {-# OVERLAPPABLE #-} (PrettyNew a, PrettyNew b) => PrettyNew (a, b) where
+   pretty_new (a, b) = "(" <> pretty_new a <> ", " <> pretty_new b <> ")"
+
 instance {-# OVERLAPS #-} Pretty (Id, Type) where
    pretty (a, b) = "(" <> pretty a <> " : " <> pretty b <> ")"
+
+instance {-# OVERLAPS #-} PrettyNew (Id, Type) where
+   pretty_new (a, b) = "(" <> pretty_new a <> " : " <> pretty_new b <> ")"
 
 instance {-# OVERLAPPABLE #-} (Pretty a, Pretty b, Pretty c) => Pretty (a, b,c) where
    pretty (a, b, c) = "(" <> pretty a <> ", " <> pretty b <> "," <> pretty c <> ")"
@@ -429,12 +435,32 @@ instance Pretty DataDecl where
         pretty' _   (DataConstrNonIndexed _ name params) = pretty name <> " " <> (intercalate " " $ map prettyNested params)
 
 
+instance PrettyNew DataDecl where
+    pretty_new (DataDecl _ tyCon tyVars kind dataConstrs) =
+      let tvs = case tyVars of [] -> ""; _ -> P.sep (map pretty_new tyVars) <> " "
+          ki = case kind of Nothing -> ""; Just k -> ": " <> pretty_new k <> " "
+      in annKeyword "data" <> " " <> annConstName (pretty_new tyCon) <> " " <> tvs <> ki <> annKeyword "where" <> "\n    " <> prettyAlign dataConstrs
+      where
+        prettyAlign dataConstrs = P.cat (P.punctuate "\n  ; " (map (pretty' indent) dataConstrs))
+          where indent = maximum (map (length . internalName . dataConstrId) dataConstrs)
+        pretty' col (DataConstrIndexed _ name typeScheme) =
+          pretty_new name <> P.cat (map P.pretty (replicate (col - (length $ pretty name)) ' ')) <> " : " <> pretty_new typeScheme
+        pretty' _   (DataConstrNonIndexed _ name params) = pretty_new name <> " " <> P.cat (P.punctuate " " $ map prettyNestedNew params)
+
 instance Pretty [DataConstr] where
     pretty = intercalate ";\n    " . map pretty
+
+instance PrettyNew [DataConstr] where
+    pretty_new xs = P.cat $ P.punctuate ";\n    " (map pretty_new xs)
+
 
 instance Pretty DataConstr where
     pretty (DataConstrIndexed _ name typeScheme) = pretty name <> " : " <> pretty typeScheme
     pretty (DataConstrNonIndexed _ name params) = pretty name <> " " <> intercalate " " (map pretty params)
+
+instance PrettyNew DataConstr where
+    pretty_new (DataConstrIndexed _ name typeScheme) = pretty_new name <> " : " <> pretty_new typeScheme
+    pretty_new (DataConstrNonIndexed _ name params) = pretty_new name <> " " <> P.cat (P.punctuate " " (map pretty_new params))
 
 instance Pretty (Pattern a) where
     pretty (PVar _ _ _ v)     = pretty v
@@ -447,6 +473,17 @@ instance Pretty (Pattern a) where
       unwords (pretty name : (map tyvarbinds tyVarBindsRequested ++ map prettyNested args))
         where tyvarbinds x = "{" <> pretty x <> "}"
 
+instance PrettyNew (Pattern a) where
+    pretty_new (PVar _ _ _ v)     = pretty_new v
+    pretty_new PWild {}           = "_"
+    pretty_new (PBox _ _ _ p)     = P.brackets $ prettyNestedNew p
+    pretty_new (PInt _ _ _ n)     = P.pretty (show n)
+    pretty_new (PFloat _ _ _ n)   = P.pretty (show n)
+    pretty_new (PConstr _ _ _ name _ args) | internalName name == "," = P.parens $ P.cat $ P.punctuate ", " (map prettyNestedNew args)
+    pretty_new (PConstr _ _ _ name tyVarBindsRequested args) =
+      P.sep (pretty_new name : (map tyvarbinds tyVarBindsRequested ++ map prettyNestedNew args))
+        where tyvarbinds x = P.braces $ pretty_new x
+
 instance {-# OVERLAPS #-} Pretty [Pattern a] where
     pretty [] = ""
     pretty ps = unwords (map pretty ps) <> " "
@@ -454,6 +491,10 @@ instance {-# OVERLAPS #-} Pretty [Pattern a] where
 instance Pretty t => Pretty (Maybe t) where
     pretty Nothing = "unknown"
     pretty (Just x) = pretty x
+
+instance PrettyNew t => PrettyNew (Maybe t) where
+    pretty_new Nothing = "unknown"
+    pretty_new (Just x) = pretty_new x
 
 instance Pretty v => Pretty (Value v a) where
     pretty (Abs _ x Nothing e) = "\\" <> pretty x <> " -> " <> pretty e
@@ -481,6 +522,31 @@ instance Pretty v => Pretty (Value v a) where
     pretty (TyAbs _ (Right ids) e) =
       "/\\{" <> intercalate ", " (map pretty ids) <> "}"
 
+instance PrettyNew v => PrettyNew (Value v a) where
+    pretty_new (Abs _ x Nothing e) = "\\" <> pretty_new x <> " -> " <> pretty_new e
+    pretty_new (Abs _ x t e) = "\\(" <> pretty_new x <> " : " <> pretty_new t
+                                 <> ") -> " <> pretty_new e
+    pretty_new (Promote _ e) = "[" <> pretty_new e <> "]"
+    pretty_new (Pure _ e)    = "<" <> pretty_new e <> ">"
+    pretty_new (Nec _ e)     = "*" <> pretty_new e
+    pretty_new (Ref _ e)     = "&" <> pretty_new e
+    pretty_new (Var _ x)     = pretty_new x
+    pretty_new (NumInt n)    = P.pretty (show n)
+    pretty_new (NumFloat n)  = P.pretty (show n)
+    pretty_new (CharLiteral c) = P.pretty (show c)
+    pretty_new (StringLiteral s) = P.pretty (show s)
+    pretty_new (Constr _ s vs) | internalName s == "," =
+      P.parens $ P.cat $ P.punctuate ", " (map pretty_new vs)
+    pretty_new (Constr _ n []) = pretty_new n
+    pretty_new (Constr _ n vs) = P.sep $ pretty_new n : map prettyNestedNew vs
+    pretty_new (Ext _ v) = pretty_new v
+    pretty_new (Pack s a ty e1 var k ty') =
+      "pack <" <> pretty_new ty <> ", " <> pretty_new e1 <> "> "
+      <> "as exists {" <> pretty_new var <> " : " <> pretty_new k <> "} . " <> pretty_new ty'
+    pretty_new (TyAbs _ (Left (v, k)) e) =
+      "/\\(" <> pretty_new v <> " : " <> pretty_new k <> ") -> " <> pretty_new e
+    pretty_new (TyAbs _ (Right ids) e) =
+      "/\\{" <> P.cat (P.punctuate ", " (map pretty_new ids)) <> "}"
 
 instance Pretty Id where
   pretty
@@ -522,14 +588,62 @@ instance Pretty (Value v a) => Pretty (Expr v a) where
                       <> intercalate ";\n      " (map (\(p, e') -> pretty p
                       <> " -> " <> pretty e') ps) <> ")"
   pretty (Hole _ _ _ [] Nothing) = "?"
-  pretty (Hole _ _ _ [] (Just hints)) = "{!" <> (pretty hints) <> " !}"
+  pretty (Hole _ _ _ [] (Just hints)) = "{!" <> pretty hints <> " !}"
   pretty (Hole _ _ _ vs _) = "{!" <> unwords (map pretty vs) <> "!}"
 
   pretty (Unpack _ _ _ tyVar var e1 e2) =
     "unpack <" <> pretty tyVar <> ", " <> pretty var <> "> = " <> pretty e1 <> " in " <> pretty e2
 
+instance PrettyNew (Value v a) => PrettyNew (Expr v a) where
+  pretty_new (App _ _ _ (App _ _ _ (Val _ _ _ (Constr _ x _)) t1) t2) | sourceName x == "," =
+    "(" <> pretty_new t1 <> ", " <> pretty_new t2 <> ")"
+
+  pretty_new (App _ _ _ (Val _ _ _ (Abs _ x _ e1)) e2) =
+    "let " <> pretty_new x <> " = " <> pretty_new e2 <> " in " <> pretty_new e1
+
+  pretty_new (App _ _ _ e1 e2) =
+    prettyNestedNew e1 <> " " <> prettyNestedNew e2
+
+  pretty_new (AppTy _ _ _ e1 t) =
+    prettyNestedNew e1 <> " @ " <> prettyNestedNew t
+
+  pretty_new (Binop _ _ _ op e1 e2) =
+    pretty_new e1 <> " " <> pretty_new op <> " " <> pretty_new e2
+
+  pretty_new (LetDiamond _ _ _ v t e1 e2) =
+    "let " <> pretty_new v <> " :" <> pretty_new t <> " <- "
+          <> pretty_new e1 <> " in " <> pretty_new e2
+
+  pretty_new (TryCatch _ _ _ e1 v t e2 e3) =
+    "try " <> pretty_new e1 <> " as [" <> pretty_new v <> "] " <> (if t /= Nothing then ":" <> pretty_new t else "")   <> " in "
+          <> pretty_new e2 <> " catch " <> pretty_new e3
+
+  pretty_new (Val _ _ _ v) = pretty_new v
+  pretty_new (Case _ _ _ e ps) = "\n    (case " <> pretty_new e <> " of\n      "
+                      <> P.cat (P.punctuate ";\n      " (map (\(p, e') -> pretty_new p
+                      <> " -> " <> pretty_new e') ps)) <> ")"
+  pretty_new (Hole _ _ _ [] Nothing) = "?"
+  pretty_new (Hole _ _ _ [] (Just hints)) = "{!" <> pretty_new hints <> " !}"
+  pretty_new (Hole _ _ _ vs _) = "{!" <> P.sep (map pretty_new vs) <> "!}"
+
+  pretty_new (Unpack _ _ _ tyVar var e1 e2) =
+    "unpack <" <> pretty_new tyVar <> ", " <> pretty_new var <> "> = " <> pretty_new e1 <> " in " <> pretty_new e2
+
 instance Pretty Operator where
   pretty = \case
+    OpLesser          -> "<"
+    OpLesserEq        -> "≤"
+    OpGreater         -> ">"
+    OpGreaterEq       -> "≥"
+    OpEq              -> "≡"
+    OpNotEq           -> "≠"
+    OpPlus            -> "+"
+    OpTimes           -> "*"
+    OpDiv             -> "/"
+    OpMinus           -> "-"
+
+instance PrettyNew Operator where
+  pretty_new = \case
     OpLesser          -> "<"
     OpLesserEq        -> "≤"
     OpGreater         -> ">"
@@ -559,8 +673,19 @@ instance Pretty Span where
       Span (0,0) _ f  -> f
       Span pos   _ f  -> f <> ":" <> pretty pos
 
+instance PrettyNew Span where
+  pretty_new
+    | testing = const "(location redacted)"
+    | otherwise = \case
+      Span (0,0) _ "" -> "(unknown location)"
+      Span (0,0) _ f  -> P.pretty f
+      Span pos   _ f  -> P.pretty f <> ":" <> pretty_new pos
+
 instance Pretty Pos where
     pretty (l, c) = show l <> ":" <> show c
+
+instance PrettyNew Pos where
+    pretty_new (l, c) = P.pretty (show l) <> ":" <> P.pretty (show c)
 
 instance Pretty Hints where
     pretty (Hints hSub hPrun hNoTime hLin hTime hIndex) = ""
@@ -579,6 +704,9 @@ instance Pretty Hints where
       -- HUseDefs ids      -> " -d " <> (unwords $ map pretty ids)
       -- HUseRec           -> " -r"
       -- HGradeOnRule      -> " -g"
+
+instance PrettyNew Hints where
+  pretty_new (Hints _ _ _ _ _ _)= ""
 
 docSpan :: (?globals :: Globals) => String -> String -> String
 docSpan s x = if docMode then (spanP s x) else x
