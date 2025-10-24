@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Language.Granule.Synthesis.Common where
 
 import Language.Granule.Context
@@ -28,6 +29,7 @@ import Language.Granule.Syntax.Pretty
 import Language.Granule.Synthesis.Monad
 import Language.Granule.Utils
 
+import qualified Prettyprinter as P
 import qualified Data.Map as M
 import qualified System.Clock as Clock
 import Control.Monad.State.Strict(modify,lift,liftIO,get,put)
@@ -110,6 +112,8 @@ data RuleInfo =
   | EmptyRuleInfo
   deriving (Show, Eq)
 
+instance PrettyNew RuleInfo where
+  pretty_new = P.pretty . show
 
 -- An SAssumption is an assumption used for synthesis:
 --  * It is either a standard Granule assumption OR
@@ -135,11 +139,11 @@ increaseDepth :: (Id, SAssumption) -> (Id, SAssumption)
 increaseDepth (x, SVar ty sInfo depth) = (x, SVar ty sInfo (depth+1))
 increaseDepth (x, SDef tyS coeff depth) = (x, SDef tyS coeff (depth+1))
 
-instance Pretty SAssumption where
-  pretty (SVar (Linear ty) _ _) = pretty ty
-  pretty (SVar (Discharged ty g) _ _) = pretty ty <> " % " <> pretty g
-  pretty (SDef tyS _ _) = pretty tyS
-  pretty x = error "undefined"
+instance PrettyNew SAssumption where
+  pretty_new (SVar (Linear ty) _ _) = pretty_new ty
+  pretty_new (SVar (Discharged ty g) _ _) = pretty_new ty <> " % " <> pretty_new g
+  pretty_new (SDef tyS _ _) = pretty_new tyS
+  pretty_new x = error "undefined"
 
 -- Phases of focusing, in brief:
 -- * Right Async: (initial phase) introduction rule abstraction, when abs
