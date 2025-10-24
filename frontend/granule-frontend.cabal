@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.36.0.
+-- This file has been generated from package.yaml by hpack version 0.37.0.
 --
 -- see: https://github.com/sol/hpack
 
@@ -112,7 +112,7 @@ library
     , monad-memo
     , mtl >=2.2.1
     , raw-strings-qq
-    , sbv >=8.5
+    , sbv >=8.5 && <10
     , split
     , syb >=0.6
     , syz >=0.2.0.0
