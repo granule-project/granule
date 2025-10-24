@@ -111,6 +111,7 @@ library
     , logict >=0.7.1.0
     , monad-memo
     , mtl >=2.2.1
+    , prettyprinter
     , raw-strings-qq
     , sbv >=8.5 && <10
     , split

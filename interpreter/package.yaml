@@ -18,6 +18,7 @@ dependencies:
 - granule-runtime
 - mtl >=2.2.1
 - optparse-applicative
+- prettyprinter
 - text
 - logict >= 0.7.1.0
 - clock
