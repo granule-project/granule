@@ -7,6 +7,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 {-# options_ghc -fno-warn-incomplete-uni-patterns #-}
 {-# options_ghc -fno-warn-orphans #-}
@@ -27,6 +28,7 @@ import Control.Monad.Except
 import Control.Monad.Identity
 import System.FilePath (takeBaseName)
 import Data.Generics.Zipper
+import qualified Prettyprinter as P
 
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.LaTeX
@@ -103,13 +105,13 @@ instance Term Assumption where
   freeVars (Discharged t c) = freeVars t ++ freeVars c
   freeVars (Ghost c) = freeVars c
 
-instance Pretty Assumption where
-    pretty (Linear ty) = pretty ty
-    pretty (Discharged t c) = ".[" <> pretty t <> "]. " <> prettyNested c
-    pretty (Ghost c) = "ghost(" <> pretty c <> ")"
+instance PrettyNew Assumption where
+    pretty_new (Linear ty) = pretty_new ty
+    pretty_new (Discharged t c) = ".[" <> pretty_new t <> "]. " <> prettyNestedNew c
+    pretty_new (Ghost c) = "ghost(" <> pretty_new c <> ")"
 
-instance {-# OVERLAPS #-} Pretty (Id, Assumption) where
-   pretty (a, b) = pretty a <> " : " <> pretty b
+instance {-# OVERLAPS #-} PrettyNew (Id, Assumption) where
+   pretty_new (a, b) = pretty_new a <> " : " <> pretty_new b
 
 -- Describes where a pattern is fully consuming, i.e. amounts
 -- to linear use and therefore triggers other patterns to be counted
@@ -800,7 +802,13 @@ instance UserMsg CheckerError where
       relevantVars = map fst (filter snd holeVars)
 
       formatCases :: [[Pattern ()]] -> [String]
-      formatCases = map unwords . transpose . map padToLongest . transpose . map (map prettyNested)
+      formatCases patterns =
+        let ppPatterns :: [[P.Doc Annotation]]
+            ppPatterns = map (map prettyNestedNew) patterns
+            ppPatterns' :: [[String]]
+            ppPatterns' = map (map pretty) ppPatterns
+        in
+        (map unwords . transpose . map padToLongest . transpose) ppPatterns'
 
       -- Pad all strings in a list so they match the length of the longest.
       padToLongest :: [String] -> [String]

@@ -7,7 +7,9 @@ module Language.Granule.Synthesis.Monad where
 
 import Language.Granule.Context
 import Language.Granule.Checker.Monad
+import Language.Granule.Syntax.Pretty
 
+import qualified Prettyprinter as P
 import qualified Data.Generics.Zipper as Z
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.List (isInfixOf)
@@ -39,6 +41,9 @@ data SynthesisData =
   , gradedProgram             :: Maybe (Def () ())
   }
   deriving Show
+
+instance PrettyNew SynthesisData where
+  pretty_new = P.pretty . show
 
 instance Semigroup SynthesisData where
  (SynthesisData c smt t s p st cons def max atps gp) <>
