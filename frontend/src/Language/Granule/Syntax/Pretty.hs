@@ -135,11 +135,11 @@ instance Pretty () where
   pretty_new () = ""
 
 instance {-# OVERLAPPABLE #-} Pretty a => Pretty [a] where
-   pretty_new xs = P.brackets $ P.cat $ P.punctuate "," (map pretty_new xs)
+   pretty_new xs = P.brackets $ mconcat $ P.punctuate "," (map pretty_new xs)
 
 -- Pretty printing for type variable contexts
 instance Pretty q => Pretty [(Id, (Type, q))] where
-  pretty_new = P.cat . P.punctuate ", " . map prettyAssignment
+  pretty_new = mconcat . P.punctuate ", " . map prettyAssignment
     where
       prettyAssignment (v, (ty, qu)) = pretty_new qu <> pretty_new v <> " : " <> pretty_new ty
 
@@ -153,10 +153,10 @@ instance Pretty TypeScheme where
     pretty_new (Forall _ vs cs t) = kVars vs <> constraints cs <> pretty_new t
       where
         kVars [] = ""
-        kVars vs = annKeyword "forall" <+> P.braces (P.cat (P.punctuate ", " (map prettyKindSignatures vs))) <> " . "
+        kVars vs = annKeyword "forall" <+> P.braces (mconcat (P.punctuate ", " (map prettyKindSignatures vs))) <> " . "
         prettyKindSignatures (var, kind) = pretty_new var <+> ":" <+> pretty_new kind
         constraints [] = ""
-        constraints cs = P.braces (P.cat (P.punctuate ", " (map pretty_new cs))) <+> "=>\n    "
+        constraints cs = P.braces (mconcat (P.punctuate ", " (map pretty_new cs))) <+> "=>\n    "
 
 instance Pretty Type where
     -- Atoms
@@ -236,7 +236,7 @@ instance Pretty Type where
       prettyNestedNew t1 <+> pretty_new op <+> prettyNestedNew t2
 
     pretty_new (TySet polarity ts) =
-      P.braces (P.cat (P.punctuate ", " (map pretty_new ts)))
+      P.braces (mconcat (P.punctuate ", " (map pretty_new ts)))
       <> (if polarity == Opposite then "." else "")
 
     pretty_new (TySig t k) =
@@ -244,7 +244,7 @@ instance Pretty Type where
 
     pretty_new (TyCase t ps) =
      "(case" <+> pretty_new t <+> "of"
-                    <+> P.cat (P.punctuate "; " (map (\(p, t') -> pretty_new p
+                    <+> mconcat (P.punctuate "; " (map (\(p, t') -> pretty_new p
                     <+> ":" <+> pretty_new t') ps)) <> ")"
 
     pretty_new (TyExists var k t) =
@@ -285,16 +285,16 @@ instance Pretty v => Pretty (AST v a) where
         Just name -> "module "
                   <> pretty_new name
                   <> " hiding ("
-                  <> P.cat (P.punctuate "," (map pretty_new (toList hidden)))
+                  <> mconcat (P.punctuate "," (map pretty_new (toList hidden)))
                   <> ") where\n\n")
-    <> (P.cat . P.punctuate "\n" . map prettyImport . toList) imprts
+    <> (mconcat . P.punctuate "\n" . map prettyImport . toList) imprts
     <> "\n\n" <> pretty' dataDecls
     <> "\n\n" <> pretty' defs
     where
       prettyImport :: Import -> P.Doc Annotation
       prettyImport x = "import" <+> P.pretty x
       pretty' :: Pretty l => [l] -> P.Doc Annotation
-      pretty' = P.cat . P.punctuate "\n\n" . map pretty_new
+      pretty' = mconcat . P.punctuate "\n\n" . map pretty_new
 
 instance Pretty v => Pretty (Def v a) where
     pretty_new (Def _ v _ (Just spec) eqs (Forall _ [] [] t))
@@ -307,7 +307,7 @@ instance Pretty v => Pretty (Def v a) where
       = pretty_new v <> " : " <> pretty_new tySch <> "\n" <> pretty_new eqs
 
 instance Pretty v => Pretty (Spec v a) where
-    pretty_new (Spec _ _ exs comps) = "spec" <> "\n" <> P.cat (P.punctuate "\n\t" $ map pretty_new exs) <> "\t" <> P.cat (P.punctuate "," $ map prettyCompNew comps)
+    pretty_new (Spec _ _ exs comps) = "spec" <> "\n" <> mconcat (P.punctuate "\n\t" $ map pretty_new exs) <> "\t" <> mconcat (P.punctuate "," $ map prettyCompNew comps)
 
 instance Pretty v => Pretty (Example v a) where
     pretty_new (Example input output _) = pretty_new input <> " = " <> pretty_new output
@@ -326,18 +326,18 @@ instance Pretty DataDecl where
           ki = case kind of Nothing -> ""; Just k -> ": " <> pretty_new k <> " "
       in annKeyword "data" <+> annConstName (pretty_new tyCon) <+> tvs <> ki <> annKeyword "where" <> "\n    " <> prettyAlign dataConstrs
       where
-        prettyAlign dataConstrs = P.cat (P.punctuate "\n  ; " (map (pretty' indent) dataConstrs))
+        prettyAlign dataConstrs = mconcat (P.punctuate "\n  ; " (map (pretty' indent) dataConstrs))
           where indent = maximum (map (length . internalName . dataConstrId) dataConstrs)
         pretty' col (DataConstrIndexed _ name typeScheme) =
-          pretty_new name <> P.cat (map P.pretty (replicate (col - (length $ pretty name)) ' ')) <+> ":" <+> pretty_new typeScheme
-        pretty' _   (DataConstrNonIndexed _ name params) = pretty_new name <+> P.cat (P.punctuate " " $ map prettyNestedNew params)
+          pretty_new name <> mconcat (map P.pretty (replicate (col - (length $ pretty name)) ' ')) <+> ":" <+> pretty_new typeScheme
+        pretty' _   (DataConstrNonIndexed _ name params) = pretty_new name <+> mconcat (P.punctuate " " $ map prettyNestedNew params)
 
 instance Pretty [DataConstr] where
-    pretty_new xs = P.cat $ P.punctuate ";\n    " (map pretty_new xs)
+    pretty_new xs = mconcat $ P.punctuate ";\n    " (map pretty_new xs)
 
 instance Pretty DataConstr where
     pretty_new (DataConstrIndexed _ name typeScheme) = pretty_new name <+> ":" <+> pretty_new typeScheme
-    pretty_new (DataConstrNonIndexed _ name params) = pretty_new name <> " " <> P.cat (P.punctuate " " (map pretty_new params))
+    pretty_new (DataConstrNonIndexed _ name params) = pretty_new name <> " " <> mconcat (P.punctuate " " (map pretty_new params))
 
 instance Pretty (Pattern a) where
     pretty_new (PVar _ _ _ v)     = pretty_new v
@@ -345,7 +345,7 @@ instance Pretty (Pattern a) where
     pretty_new (PBox _ _ _ p)     = P.brackets $ prettyNestedNew p
     pretty_new (PInt _ _ _ n)     = P.pretty (show n)
     pretty_new (PFloat _ _ _ n)   = P.pretty (show n)
-    pretty_new (PConstr _ _ _ name _ args) | internalName name == "," = P.parens $ P.cat $ P.punctuate ", " (map prettyNestedNew args)
+    pretty_new (PConstr _ _ _ name _ args) | internalName name == "," = P.parens $ mconcat $ P.punctuate ", " (map prettyNestedNew args)
     pretty_new (PConstr _ _ _ name tyVarBindsRequested args) =
       P.sep (pretty_new name : (map tyvarbinds tyVarBindsRequested ++ map prettyNestedNew args))
         where tyvarbinds x = P.braces $ pretty_new x
@@ -368,7 +368,7 @@ instance Pretty v => Pretty (Value v a) where
     pretty_new (CharLiteral c) = P.pretty (show c)
     pretty_new (StringLiteral s) = P.pretty (show s)
     pretty_new (Constr _ s vs) | internalName s == "," =
-      P.parens $ P.cat $ P.punctuate ", " (map pretty_new vs)
+      P.parens $ mconcat $ P.punctuate ", " (map pretty_new vs)
     pretty_new (Constr _ n []) = pretty_new n
     pretty_new (Constr _ n vs) = P.sep $ pretty_new n : map prettyNestedNew vs
     pretty_new (Ext _ v) = pretty_new v
@@ -378,7 +378,7 @@ instance Pretty v => Pretty (Value v a) where
     pretty_new (TyAbs _ (Left (v, k)) e) =
       "/\\(" <> pretty_new v <> " : " <> pretty_new k <> ") -> " <> pretty_new e
     pretty_new (TyAbs _ (Right ids) e) =
-      "/\\{" <> P.cat (P.punctuate ", " (map pretty_new ids)) <> "}"
+      "/\\{" <> mconcat (P.punctuate ", " (map pretty_new ids)) <> "}"
 
 
 instance Pretty Id where
@@ -412,7 +412,7 @@ instance Pretty (Value v a) => Pretty (Expr v a) where
 
   pretty_new (Val _ _ _ v) = pretty_new v
   pretty_new (Case _ _ _ e ps) = "\n    (case " <> pretty_new e <> " of\n      "
-                      <> P.cat (P.punctuate ";\n      " (map (\(p, e') -> pretty_new p
+                      <> mconcat (P.punctuate ";\n      " (map (\(p, e') -> pretty_new p
                       <> " -> " <> pretty_new e') ps)) <> ")"
   pretty_new (Hole _ _ _ [] Nothing) = "?"
   pretty_new (Hole _ _ _ [] (Just hints)) = "{!" <> pretty_new hints <> " !}"
