@@ -313,7 +313,7 @@ instance Pretty v => Pretty (Example v a) where
     pretty_new (Example input output _) = pretty_new input <> " = " <> pretty_new output
 
 instance Pretty v => Pretty (EquationList v a) where
-  pretty_new (EquationList _ v _ eqs) = P.cat $ P.punctuate ";\n" $ map pretty_new eqs
+  pretty_new (EquationList _ v _ eqs) = mconcat $ P.punctuate ";\n" $ map pretty_new eqs
 
 
 instance Pretty v => Pretty (Equation v a) where
