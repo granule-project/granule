@@ -159,7 +159,7 @@ instance Show (Runtime a) where
   show (FreeMonadImpure r) = "Impure(" <> show r <> ")"
   show (FreeMonadBind r p k) = "do {... <- " <> show r <> "; ...}"
 
-instance PrettyNew (Runtime a) where
+instance Pretty (Runtime a) where
   pretty_new = P.pretty . show
 
 evalBinOp :: Operator -> RValue -> RValue -> RValue

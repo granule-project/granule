@@ -41,7 +41,7 @@ data Quantifier =
     | BoundQ
   deriving (Show, Eq)
 
-instance PrettyNew Quantifier where
+instance Pretty Quantifier where
   pretty_new ForallQ   = "∀"
   pretty_new InstanceQ = "[u]"
   pretty_new BoundQ    = "Π"
@@ -144,7 +144,7 @@ prettyNegPred defId p =
   <> pretty defId <> "` is false:\n\t  "
   <> pretty p
 
-instance PrettyNew (Neg Constraint) where
+instance Pretty (Neg Constraint) where
     pretty_new (Neg (Neq _ c1 c2 _)) =
       "Trying to prove that " <> pretty_new c1 <> " == " <> pretty_new c2
 
@@ -180,11 +180,11 @@ instance PrettyNew (Neg Constraint) where
       "Cannot split resource requirements into " <> pretty_new c1 <> " and " <> pretty_new c2 <>
       " in a pattern match. \nTrying to prove false statement: (" <> pretty_new c1 <> " ⨱ " <> pretty_new c2 <> ")"
 
-instance PrettyNew [Constraint] where
+instance Pretty [Constraint] where
     pretty_new constr =
       "---\n" <> (P.cat . P.punctuate "\n" . map pretty_new $ constr)
 
-instance PrettyNew Constraint where
+instance Pretty Constraint where
     pretty_new (Eq _ c1 c2 _) =
       "(" <> pretty_new c1 <> " = " <> pretty_new c2 <> ")" -- @" <> show s
 
@@ -365,12 +365,12 @@ predFoldM c d i a n e (NegPred p) =
 predFoldM c d i a n e (Exists x t p) =
   predFoldM c d i a n e p >>= e x t
 
-instance PrettyNew [Pred] where
+instance Pretty [Pred] where
   pretty_new ps =
     "Size = " <> P.pretty (show (length ps)) <> "\n" <>
     P.cat (P.punctuate "\n" (map (\p -> " - " <> pretty_new p) ps))
 
-instance PrettyNew Pred where
+instance Pretty Pred where
   pretty_new =
     (predFold
      (\x -> if null x then "T" else P.cat (P.punctuate " ∧ " x))

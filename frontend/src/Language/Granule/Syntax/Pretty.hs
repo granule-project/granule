@@ -12,7 +12,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE InstanceSigs #-}
 
-module Language.Granule.Syntax.Pretty (PrettyNew(..), Annotation, pretty, prettyTrace, prettyNestedNew, prettyNested, ticks, prettyDebug, prettyDoc) where
+module Language.Granule.Syntax.Pretty (Pretty(..), Annotation, pretty, prettyTrace, prettyNestedNew, prettyNested, ticks, prettyDebug, prettyDoc) where
 
 import Data.Foldable (toList)
 import Data.Ratio (numerator, denominator)
@@ -31,7 +31,7 @@ import Language.Granule.Utils
 
 -- Version of pretty that assumes the default Globals so as not to
 -- propagate globals information around
-prettyTrace :: PrettyNew t => t -> String
+prettyTrace :: Pretty t => t -> String
 prettyTrace x =
   let ?globals = mempty in
   let doc = pretty_new x in
@@ -39,21 +39,21 @@ prettyTrace x =
   renderString docstream
   
 
-prettyDebug :: (?globals :: Globals) => PrettyNew t => t -> String
+prettyDebug :: (?globals :: Globals) => Pretty t => t -> String
 prettyDebug x =
   let ?globals = ?globals { globalsDebugging = Just True } in
   let doc = pretty_new x in
   let docstream = P.layoutPretty P.defaultLayoutOptions doc in
   renderString docstream
 
-prettyDoc :: (?globals :: Globals) => PrettyNew t => t -> String
+prettyDoc :: (?globals :: Globals) => Pretty t => t -> String
 prettyDoc x =
   let ?globals = ?globals { globalsDocMode = Just True } in
   let doc = pretty_new x in
   let docstream = P.layoutPretty P.defaultLayoutOptions doc in
   renderHtml docstream
 
-pretty :: (?globals :: Globals, PrettyNew t) => t -> String
+pretty :: (?globals :: Globals, Pretty t) => t -> String
 pretty x =
   let doc = pretty_new x in
   let docstream = P.layoutPretty P.defaultLayoutOptions doc in
@@ -73,19 +73,19 @@ instance Show Annotation where
   show Perm = "perm"
 
 
-class PrettyNew a where
+class Pretty a where
   pretty_new :: (?globals :: Globals) => a -> P.Doc Annotation
 
-instance PrettyNew (P.Doc Annotation) where
+instance Pretty (P.Doc Annotation) where
   pretty_new = id
 
-instance PrettyNew Int where
+instance Pretty Int where
   pretty_new n = P.pretty (show n)
 
-prettyNested :: (?globals :: Globals, Term a, PrettyNew a) => a -> String
+prettyNested :: (?globals :: Globals, Term a, Pretty a) => a -> String
 prettyNested = pretty . prettyNestedNew
 
-prettyNestedNew :: (?globals :: Globals, Term a, PrettyNew a) => a -> P.Doc Annotation
+prettyNestedNew :: (?globals :: Globals, Term a, Pretty a) => a -> P.Doc Annotation
 prettyNestedNew e =
   if isLexicallyAtomic e then pretty_new e else P.parens $ pretty_new e
 
@@ -118,34 +118,34 @@ renderHtml (P.SAnnPop x) = "</span>" <> renderHtml x
 
 -- Mostly for debugging
 
-instance {-# OVERLAPPABLE #-} (PrettyNew a, PrettyNew b) => PrettyNew (a, b) where
+instance {-# OVERLAPPABLE #-} (Pretty a, Pretty b) => Pretty (a, b) where
    pretty_new (a, b) = "(" <> pretty_new a <> ", " <> pretty_new b <> ")"
 
-instance {-# OVERLAPS #-} PrettyNew (Id, Type) where
+instance {-# OVERLAPS #-} Pretty (Id, Type) where
    pretty_new (a, b) = P.parens $ pretty_new a <> " : " <> pretty_new b
 
-instance {-# OVERLAPPABLE #-} (PrettyNew a, PrettyNew b, PrettyNew c) => PrettyNew (a, b,c) where
+instance {-# OVERLAPPABLE #-} (Pretty a, Pretty b, Pretty c) => Pretty (a, b,c) where
    pretty_new (a, b, c) = P.parens $ pretty_new a <> ", " <> pretty_new b <> "," <> pretty_new c
 
-instance PrettyNew () where
+instance Pretty () where
   pretty_new () = ""
 
-instance {-# OVERLAPPABLE #-} PrettyNew a => PrettyNew [a] where
+instance {-# OVERLAPPABLE #-} Pretty a => Pretty [a] where
    pretty_new xs = P.brackets $ P.cat $ P.punctuate "," (map pretty_new xs)
 
 -- Pretty printing for type variable contexts
-instance PrettyNew q => PrettyNew [(Id, (Type, q))] where
+instance Pretty q => Pretty [(Id, (Type, q))] where
   pretty_new = P.cat . P.punctuate ", " . map prettyAssignment
     where
       prettyAssignment (v, (ty, qu)) = pretty_new qu <> pretty_new v <> " : " <> pretty_new ty
 
-instance (PrettyNew a, PrettyNew b) => PrettyNew (Either a b) where
+instance (Pretty a, Pretty b) => Pretty (Either a b) where
   pretty_new (Left a) = pretty_new a
   pretty_new (Right b) = pretty_new b
 
 -- Core pretty printers
 
-instance PrettyNew TypeScheme where
+instance Pretty TypeScheme where
     pretty_new (Forall _ vs cs t) = kVars vs <> constraints cs <> pretty_new t
       where
         kVars [] = ""
@@ -154,7 +154,7 @@ instance PrettyNew TypeScheme where
         constraints [] = ""
         constraints cs = P.braces (P.cat (P.punctuate ", " (map pretty_new cs))) <+> "=>\n    "
 
-instance PrettyNew Type where
+instance Pretty Type where
     -- Atoms
     pretty_new (TyCon s) | internalName s == "Infinity" = annConstName "∞"
     pretty_new (TyCon s)      = annConstName (pretty_new s)
@@ -251,7 +251,7 @@ instance PrettyNew Type where
     
     pretty_new (TyName n) = "id" <> P.pretty (show n)
 
-instance PrettyNew TypeOperator where
+instance Pretty TypeOperator where
   pretty_new = \case
    TyOpLesserNat       -> "<"
    TyOpLesserEq        -> "≤"
@@ -273,7 +273,7 @@ instance PrettyNew TypeOperator where
    TyOpHsup            -> "⨱"
    TyOpMutable         -> "mut"
 
-instance PrettyNew v => PrettyNew (AST v a) where
+instance Pretty v => Pretty (AST v a) where
   pretty_new (AST dataDecls defs imprts hidden name) =
     -- Module header (if it exists)
     (case name of
@@ -289,10 +289,10 @@ instance PrettyNew v => PrettyNew (AST v a) where
     where
       prettyImport :: Import -> P.Doc Annotation
       prettyImport x = "import" <+> P.pretty x
-      pretty' :: PrettyNew l => [l] -> P.Doc Annotation
+      pretty' :: Pretty l => [l] -> P.Doc Annotation
       pretty' = P.cat . P.punctuate "\n\n" . map pretty_new
 
-instance PrettyNew v => PrettyNew (Def v a) where
+instance Pretty v => Pretty (Def v a) where
     pretty_new (Def _ v _ (Just spec) eqs (Forall _ [] [] t))
       = pretty_new v <> " : " <> pretty_new t <> "\n" <> pretty_new spec <> "\n" <> pretty_new eqs
     pretty_new (Def _ v _ _ eqs (Forall _ [] [] t))
@@ -302,21 +302,21 @@ instance PrettyNew v => PrettyNew (Def v a) where
     pretty_new (Def _ v _ _ eqs tySch)
       = pretty_new v <> " : " <> pretty_new tySch <> "\n" <> pretty_new eqs
 
-instance PrettyNew v => PrettyNew (Spec v a) where
+instance Pretty v => Pretty (Spec v a) where
     pretty_new (Spec _ _ exs comps) = "spec" <> "\n" <> P.cat (P.punctuate "\n\t" $ map pretty_new exs) <> "\t" <> P.cat (P.punctuate "," $ map prettyCompNew comps)
 
-instance PrettyNew v => PrettyNew (Example v a) where
+instance Pretty v => Pretty (Example v a) where
     pretty_new (Example input output _) = pretty_new input <> " = " <> pretty_new output
 
-instance PrettyNew v => PrettyNew (EquationList v a) where
+instance Pretty v => Pretty (EquationList v a) where
   pretty_new (EquationList _ v _ eqs) = P.cat $ P.punctuate ";\n" $ map pretty_new eqs
 
 
-instance PrettyNew v => PrettyNew (Equation v a) where
+instance Pretty v => Pretty (Equation v a) where
   pretty_new (Equation _ v _ _ ps e) =
      pretty_new v <> (if null ps then "" else " ") <> P.sep (map prettyNestedNew ps) <> " = " <> pretty_new e
 
-instance PrettyNew DataDecl where
+instance Pretty DataDecl where
     pretty_new (DataDecl _ tyCon tyVars kind dataConstrs) =
       let tvs = case tyVars of [] -> ""; _ -> P.sep (map pretty_new tyVars) <> " "
           ki = case kind of Nothing -> ""; Just k -> ": " <> pretty_new k <> " "
@@ -328,14 +328,14 @@ instance PrettyNew DataDecl where
           pretty_new name <> P.cat (map P.pretty (replicate (col - (length $ pretty name)) ' ')) <+> ":" <+> pretty_new typeScheme
         pretty' _   (DataConstrNonIndexed _ name params) = pretty_new name <+> P.cat (P.punctuate " " $ map prettyNestedNew params)
 
-instance PrettyNew [DataConstr] where
+instance Pretty [DataConstr] where
     pretty_new xs = P.cat $ P.punctuate ";\n    " (map pretty_new xs)
 
-instance PrettyNew DataConstr where
+instance Pretty DataConstr where
     pretty_new (DataConstrIndexed _ name typeScheme) = pretty_new name <+> ":" <+> pretty_new typeScheme
     pretty_new (DataConstrNonIndexed _ name params) = pretty_new name <> " " <> P.cat (P.punctuate " " (map pretty_new params))
 
-instance PrettyNew (Pattern a) where
+instance Pretty (Pattern a) where
     pretty_new (PVar _ _ _ v)     = pretty_new v
     pretty_new PWild {}           = "_"
     pretty_new (PBox _ _ _ p)     = P.brackets $ prettyNestedNew p
@@ -346,11 +346,11 @@ instance PrettyNew (Pattern a) where
       P.sep (pretty_new name : (map tyvarbinds tyVarBindsRequested ++ map prettyNestedNew args))
         where tyvarbinds x = P.braces $ pretty_new x
 
-instance PrettyNew t => PrettyNew (Maybe t) where
+instance Pretty t => Pretty (Maybe t) where
     pretty_new Nothing = "unknown"
     pretty_new (Just x) = pretty_new x
 
-instance PrettyNew v => PrettyNew (Value v a) where
+instance Pretty v => Pretty (Value v a) where
     pretty_new (Abs _ x Nothing e) = "\\" <> pretty_new x <+> "->" <+> pretty_new e
     pretty_new (Abs _ x t e) = "\\(" <> pretty_new x <+> ":" <+> pretty_new t
                                  <> ") -> " <> pretty_new e
@@ -377,12 +377,12 @@ instance PrettyNew v => PrettyNew (Value v a) where
       "/\\{" <> P.cat (P.punctuate ", " (map pretty_new ids)) <> "}"
 
 
-instance PrettyNew Id where
+instance Pretty Id where
   pretty_new id = if debugging
         then P.pretty (internalName id)
         else P.pretty ((filter (\x -> x /= '.' && x /= '`') . sourceName) id)
 
-instance PrettyNew (Value v a) => PrettyNew (Expr v a) where
+instance Pretty (Value v a) => Pretty (Expr v a) where
   pretty_new (App _ _ _ (App _ _ _ (Val _ _ _ (Constr _ x _)) t1) t2) | sourceName x == "," =
     P.parens $ pretty_new t1 <> "," <+> pretty_new t2
 
@@ -417,7 +417,7 @@ instance PrettyNew (Value v a) => PrettyNew (Expr v a) where
   pretty_new (Unpack _ _ _ tyVar var e1 e2) =
     "unpack <" <> pretty_new tyVar <> ", " <> pretty_new var <> "> = " <> pretty_new e1 <> " in " <> pretty_new e2
 
-instance PrettyNew Operator where
+instance Pretty Operator where
   pretty_new = \case
     OpLesser          -> "<"
     OpLesserEq        -> "≤"
@@ -437,7 +437,7 @@ prettyCompNew :: (?globals :: Globals) => (Id, Maybe Type) -> P.Doc Annotation
 prettyCompNew (var, Just ty) = pretty_new var <> " % " <> pretty_new ty
 prettyCompNew (var, Nothing) = pretty_new var
 
-instance PrettyNew Span where
+instance Pretty Span where
   pretty_new
     | testing = const "(location redacted)"
     | otherwise = \case
@@ -445,10 +445,10 @@ instance PrettyNew Span where
       Span (0,0) _ f  -> P.pretty f
       Span pos   _ f  -> P.pretty f <> ":" <> pretty_new pos
 
-instance PrettyNew Pos where
+instance Pretty Pos where
     pretty_new (l, c) = P.pretty (show l) <> ":" <> P.pretty (show c)
 
-instance PrettyNew Hints where
+instance Pretty Hints where
   pretty_new (Hints _ _ _ _ _ _)= ""
       --  \case
 
