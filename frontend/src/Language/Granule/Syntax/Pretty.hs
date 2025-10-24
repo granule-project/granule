@@ -29,13 +29,17 @@ import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Utils
 
+
+layoutOptions :: P.LayoutOptions
+layoutOptions = P.LayoutOptions P.Unbounded
+
 -- Version of pretty that assumes the default Globals so as not to
 -- propagate globals information around
 prettyTrace :: Pretty t => t -> String
 prettyTrace x =
   let ?globals = mempty in
   let doc = pretty_new x in
-  let docstream = P.layoutPretty P.defaultLayoutOptions doc in
+  let docstream = P.layoutPretty layoutOptions doc in
   renderString docstream
   
 
@@ -43,20 +47,20 @@ prettyDebug :: (?globals :: Globals) => Pretty t => t -> String
 prettyDebug x =
   let ?globals = ?globals { globalsDebugging = Just True } in
   let doc = pretty_new x in
-  let docstream = P.layoutPretty P.defaultLayoutOptions doc in
+  let docstream = P.layoutPretty layoutOptions doc in
   renderString docstream
 
 prettyDoc :: (?globals :: Globals) => Pretty t => t -> String
 prettyDoc x =
   let ?globals = ?globals { globalsDocMode = Just True } in
   let doc = pretty_new x in
-  let docstream = P.layoutPretty P.defaultLayoutOptions doc in
+  let docstream = P.layoutPretty layoutOptions doc in
   renderHtml docstream
 
 pretty :: (?globals :: Globals, Pretty t) => t -> String
 pretty x =
   let doc = pretty_new x in
-  let docstream = P.layoutPretty P.defaultLayoutOptions doc in
+  let docstream = P.layoutPretty layoutOptions doc in
   renderString docstream
 
 
@@ -192,7 +196,7 @@ instance Pretty Type where
     pretty_new (Box c t) =
       case c of
         (TyCon (Id "Many" "Many")) -> annCoeff ("!" <> prettyNestedNew t)
-        _ -> prettyNestedNew t <> P.brackets (annCoeff (pretty_new c))
+        _ -> prettyNestedNew t <+> P.brackets (annCoeff (pretty_new c))
 
     pretty_new (Diamond e t) =
       prettyNestedNew t <+> "<" <> annEff (pretty_new e) <> ">"
