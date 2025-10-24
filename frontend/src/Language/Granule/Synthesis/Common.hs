@@ -112,7 +112,7 @@ data RuleInfo =
   | EmptyRuleInfo
   deriving (Show, Eq)
 
-instance PrettyNew RuleInfo where
+instance Pretty RuleInfo where
   pretty_new = P.pretty . show
 
 -- An SAssumption is an assumption used for synthesis:
@@ -139,7 +139,7 @@ increaseDepth :: (Id, SAssumption) -> (Id, SAssumption)
 increaseDepth (x, SVar ty sInfo depth) = (x, SVar ty sInfo (depth+1))
 increaseDepth (x, SDef tyS coeff depth) = (x, SDef tyS coeff (depth+1))
 
-instance PrettyNew SAssumption where
+instance Pretty SAssumption where
   pretty_new (SVar (Linear ty) _ _) = pretty_new ty
   pretty_new (SVar (Discharged ty g) _ _) = pretty_new ty <> " % " <> pretty_new g
   pretty_new (SDef tyS _ _) = pretty_new tyS

@@ -24,10 +24,10 @@ newtype Substitutors =
     SubstT  Type
   deriving (Eq, Show)
 
-instance PrettyNew Substitutors where
+instance Pretty Substitutors where
   pretty_new (SubstT t) = pretty_new t
 
-instance {-# OVERLAPS #-} PrettyNew (Ctxt Substitutors) where
+instance {-# OVERLAPS #-} Pretty (Ctxt Substitutors) where
   pretty_new = P.cat . (P.punctuate " | ") . (map prettyCoerce)
     where
       prettyCoerce (v, SubstT t) = pretty_new v <> " ~ " <> pretty_new t

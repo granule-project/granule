@@ -42,7 +42,7 @@ data SynthesisData =
   }
   deriving Show
 
-instance PrettyNew SynthesisData where
+instance Pretty SynthesisData where
   pretty_new = P.pretty . show
 
 instance Semigroup SynthesisData where
