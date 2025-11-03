@@ -14,7 +14,6 @@ module Language.Granule.Checker.Constraints where
 import Data.SBV hiding (kindOf, name, symbolic, isSet)
 import qualified Data.SBV.Set as S
 import Data.Maybe (mapMaybe)
-import Control.Monad (liftM2)
 import Control.Monad.IO.Class
 
 import Language.Granule.Checker.Predicates
@@ -208,7 +207,7 @@ freshSolverVarScoped quant name (isInterval -> Just t) q k =
       freshSolverVarScoped quant (name <> ".upper") t q
        (\(predUb, solverVarUb) -> do
           -- Respect the meaning of intervals
-          lessEq <- symGradeLessEq solverVarLb solverVarUb
+          let lessEq = symGradeLessEq solverVarLb solverVarUb
           k ( predLb .&& predUb .&& lessEq
             , SInterval solverVarLb solverVarUb )
           ))
@@ -328,13 +327,13 @@ compile :: (?globals :: Globals, ?constructors :: Ctxt [Id]) =>
   Ctxt SGrade -> Constraint -> Symbolic SBool
 
 compile vars (Eq _ c1 c2 t) =
-  bindM2And' eqConstraint (compileCoeffect (normalise c1) t vars) (compileCoeffect (normalise c2) t vars)
+  bindM2And' (\x y -> pure $ eqConstraint x y) (compileCoeffect (normalise c1) t vars) (compileCoeffect (normalise c2) t vars)
 
 compile vars (Neq _ c1 c2 t) =
-  bindM2And' (\c1' c2' -> fmap sNot (eqConstraint c1' c2')) (compileCoeffect (normalise c1) t vars) (compileCoeffect (normalise c2) t vars)
+  bindM2And' (\c1' c2' -> pure $ sNot (eqConstraint c1' c2')) (compileCoeffect (normalise c1) t vars) (compileCoeffect (normalise c2) t vars)
 
 compile vars (Hsup _ c1 c2 t) =
-  bindM2And' (\c1' c2' -> (symGradeHsup c1' c2')) (compileCoeffect (normalise c1) t vars) (compileCoeffect (normalise c2) t vars)
+  bindM2And' (\c1' c2' -> pure (symGradeHsup c1' c2')) (compileCoeffect (normalise c1) t vars) (compileCoeffect (normalise c2) t vars)
 
 -- Assumes that c3 is already existentially bound
 compile vars (Lub _ c1 c2 c3@(TyVar v) t doLeastCheck) =
@@ -358,15 +357,15 @@ compile vars (Lub _ c1 c2 c3@(TyVar v) t doLeastCheck) =
       (s2, p2) <- compileCoeffect (normalise c2) t vars
       (s3, p3) <- compileCoeffect (normalise c3) t vars
       -- s3 is an upper bound
-      pa1 <- approximatedByOrEqualConstraint s1 s3
-      pb1 <- approximatedByOrEqualConstraint s2 s3
+      let pa1 = approximatedByOrEqualConstraint s1 s3
+      let pb1 = approximatedByOrEqualConstraint s2 s3
       if doLeastCheck then do
            --- and it is the least such upper bound
           pc <- freshSolverVarScoped compileQuantScoped (internalName v <> ".up") t ForallQ
                   (\(py, y) -> do
-                    pc1 <- approximatedByOrEqualConstraint s1 y
-                    pc2 <- approximatedByOrEqualConstraint s2 y
-                    pc3 <- approximatedByOrEqualConstraint s3 y
+                    let pc1 = approximatedByOrEqualConstraint s1 y
+                    let pc2 = approximatedByOrEqualConstraint s2 y
+                    let pc3 = approximatedByOrEqualConstraint s3 y
                     return ((py .&& pc1 .&& pc2) .=> pc3))
           return (p1 .&& p2 .&& p3 .&& pa1 .&& pb1 .&& pc)
         else
@@ -374,19 +373,19 @@ compile vars (Lub _ c1 c2 c3@(TyVar v) t doLeastCheck) =
           return (p1 .&& p2 .&& p3 .&& pa1 .&& pb1)
 
 compile vars (ApproximatedBy _ c1 c2 t) =
-  bindM2And' approximatedByOrEqualConstraint (compileCoeffect (normalise c1) t vars) (compileCoeffect (normalise c2) t vars)
+  bindM2And' (\x y -> pure $ approximatedByOrEqualConstraint x y) (compileCoeffect (normalise c1) t vars) (compileCoeffect (normalise c2) t vars)
 
 compile vars (Lt s c1 c2) =
-  bindM2And' symGradeLess (compileCoeffect c1 (TyCon $ mkId "Nat") vars) (compileCoeffect c2 (TyCon $ mkId "Nat") vars)
+  bindM2And' (\x y -> pure $ symGradeLess x y) (compileCoeffect c1 (TyCon $ mkId "Nat") vars) (compileCoeffect c2 (TyCon $ mkId "Nat") vars)
 
 compile vars (Gt s c1 c2) =
-  bindM2And' symGradeGreater (compileCoeffect c1 (TyCon $ mkId "Nat") vars) (compileCoeffect c2 (TyCon $ mkId "Nat") vars)
+  bindM2And' (\x y -> pure $ symGradeGreater x y) (compileCoeffect c1 (TyCon $ mkId "Nat") vars) (compileCoeffect c2 (TyCon $ mkId "Nat") vars)
 
 compile vars (LtEq s c1 c2) =
-  bindM2And' symGradeLessEq (compileCoeffect c1 (TyCon $ mkId "Nat") vars) (compileCoeffect c2 (TyCon $ mkId "Nat") vars)
+  bindM2And' (\x y -> pure $ symGradeLessEq x y) (compileCoeffect c1 (TyCon $ mkId "Nat") vars) (compileCoeffect c2 (TyCon $ mkId "Nat") vars)
 
 compile vars (GtEq s c1 c2) =
-  bindM2And' symGradeGreaterEq (compileCoeffect c1 (TyCon $ mkId "Nat") vars) (compileCoeffect c2 (TyCon $ mkId "Nat") vars)
+  bindM2And' (\x y -> pure $ symGradeGreaterEq x y) (compileCoeffect c1 (TyCon $ mkId "Nat") vars) (compileCoeffect c2 (TyCon $ mkId "Nat") vars)
 
 compile vars c = error $ "Internal bug: cannot compile " <> show c
 
@@ -492,22 +491,22 @@ compileCoeffect (TyVar v) _ vars =
     _ -> solverError $ "Looking up a variable '" <> show v <> "' in " <> show vars
 
 compileCoeffect c@(TyInfix TyOpMeet n m) k vars =
-  bindM2And symGradeMeet (compileCoeffect n k vars) (compileCoeffect m k vars)
+  bindM2And (\x y -> pure $ symGradeMeet x y) (compileCoeffect n k vars) (compileCoeffect m k vars)
 
 compileCoeffect c@(TyInfix TyOpJoin n m) k vars =
-  bindM2And symGradeJoin (compileCoeffect n k vars) (compileCoeffect m k vars)
+  bindM2And (\x y -> pure $ symGradeJoin x y) (compileCoeffect n k vars) (compileCoeffect m k vars)
 
 compileCoeffect c@(TyInfix TyOpPlus n m) k vars =
-  bindM2And symGradePlus (compileCoeffect n k vars) (compileCoeffect m k vars)
+  bindM2And (\x y -> pure $ symGradePlus x y) (compileCoeffect n k vars) (compileCoeffect m k vars)
 
 compileCoeffect c@(TyInfix TyOpTimes n m) k vars =
-  bindM2And symGradeTimes (compileCoeffect n k vars) (compileCoeffect m k vars)
+  bindM2And (\x y -> pure $ symGradeTimes x y) (compileCoeffect n k vars) (compileCoeffect m k vars)
 
 compileCoeffect c@(TyInfix TyOpMinus n m) k vars =
-  bindM2And symGradeMinus (compileCoeffect n k vars) (compileCoeffect m k vars)
+  bindM2And (\x y -> pure $ symGradeMinus x y) (compileCoeffect n k vars) (compileCoeffect m k vars)
 
 compileCoeffect c@(TyInfix TyOpConverge n m) k vars =
-  bindM2And symGradeConverge (compileCoeffect n k vars) (compileCoeffect m k vars)
+  bindM2And (\x y -> pure $ symGradeConverge x y) (compileCoeffect n k vars) (compileCoeffect m k vars)
 
 compileCoeffect c@(TyInfix TyOpExpon n m) k vars = do
   (g1, p1) <- compileCoeffect n k vars
@@ -519,8 +518,8 @@ compileCoeffect c@(TyInfix TyOpExpon n m) k vars = do
 compileCoeffect c@(TyInfix TyOpInterval lb ub) (isInterval -> Just t) vars = do
   (lower, p1) <- compileCoeffect lb t vars
   (upper, p2) <- compileCoeffect ub t vars
-  intervalConstraint <- symGradeLessEq lower upper
-  return $ (SInterval lower upper, p1 .&& p2 .&& intervalConstraint)
+  let intervalConstraint = symGradeLessEq lower upper
+  return (SInterval lower upper, p1 .&& p2 .&& intervalConstraint)
 
 compileCoeffect (TyCon name) (isInterval -> Just t) vars | t == extendedNat = do
   case internalName name of
@@ -631,41 +630,39 @@ compileCoeffect coeff ckind _ =
         <> " of kind " <> pretty ckind
 
 -- | Generate equality constraints for two symbolic coeffects
-eqConstraint :: SGrade -> SGrade -> Symbolic SBool
-eqConstraint (SNat n) (SNat m)     = return $ n .== m
-eqConstraint (SFloat n) (SFloat m) = return $ n .== m
-eqConstraint (SLevel l) (SLevel k) = return $ l .== k
+eqConstraint :: SGrade -> SGrade -> SBool
+eqConstraint (SNat n) (SNat m)     = n .== m
+eqConstraint (SFloat n) (SFloat m) = n .== m
+eqConstraint (SLevel l) (SLevel k) = l .== k
 eqConstraint u@(SUnknown{}) u'@(SUnknown{}) = symGradeEq u u'
-eqConstraint (SExtNat x) (SExtNat y) = return $ x .== y
-eqConstraint SPoint SPoint           = return sTrue
-eqConstraint (SFraction f) (SFraction f') = return $ f .== f'
+eqConstraint (SExtNat x) (SExtNat y) =  x .== y
+eqConstraint SPoint SPoint           = sTrue
+eqConstraint (SFraction f) (SFraction f') = f .== f'
 
 eqConstraint (SInterval lb1 ub1) (SInterval lb2 ub2) =
-  liftM2 (.&&) (eqConstraint lb1 lb2) (eqConstraint ub1 ub2)
+  (eqConstraint lb1 lb2) .&& (eqConstraint ub1 ub2)
 
 eqConstraint s t | isSProduct s && isSProduct t =
   either solverError id (applyToProducts symGradeEq (.&&) (const sTrue) s t)
-
 eqConstraint x y =
   symGradeEq x y
 
 -- | Generate less-than-equal constraints for two symbolic coeffects
-approximatedByOrEqualConstraint :: SGrade -> SGrade -> Symbolic SBool
-approximatedByOrEqualConstraint (SNat n) (SNat m)      = return $ n .== m
-approximatedByOrEqualConstraint (SFloat n) (SFloat m)  = return $ n .<= m
-approximatedByOrEqualConstraint (SFraction f) (SFraction f') = return $ f .== f'
-approximatedByOrEqualConstraint SPoint SPoint          = return $ sTrue
-approximatedByOrEqualConstraint (SOOZ s) (SOOZ r) = pure $ s .== r
+approximatedByOrEqualConstraint :: SGrade -> SGrade -> SBool
+approximatedByOrEqualConstraint (SNat n) (SNat m)      = n .== m
+approximatedByOrEqualConstraint (SFloat n) (SFloat m)  = n .<= m
+approximatedByOrEqualConstraint (SFraction f) (SFraction f') = f .== f'
+approximatedByOrEqualConstraint SPoint SPoint          = sTrue
+approximatedByOrEqualConstraint (SOOZ s) (SOOZ r) = s .== r
 approximatedByOrEqualConstraint (SSet Normal s) (SSet Normal t) =
-  pure $ t `S.isSubsetOf` s
-
+  t `S.isSubsetOf` s
 approximatedByOrEqualConstraint (SSet Opposite s) (SSet Opposite t) =
-  pure $ s `S.isSubsetOf` t
+  s `S.isSubsetOf` t
 
 
 approximatedByOrEqualConstraint (SLevel l) (SLevel k) =
   -- Using the ordering from the Agda code (by cases)
-  return $ ltCase dunnoRepresentation   publicRepresentation  -- DunnoPub
+           ltCase dunnoRepresentation   publicRepresentation  -- DunnoPub
          $ ltCase privateRepresentation dunnoRepresentation   -- PrivDunno
          $ ltCase unusedRepresentation  dunnoRepresentation   -- 0Dunno
          $ ltCase unusedRepresentation  publicRepresentation  -- 0Pub
@@ -675,26 +672,16 @@ approximatedByOrEqualConstraint (SLevel l) (SLevel k) =
          sFalse
   where ltCase a b = ite ((l .== literal a) .&& (k .== literal b)) sTrue
 
-    -- Private <= Public
-  -- return $ ite (l .== literal unusedRepresentation) sTrue
-  --        $ ite ((l .== literal privateRepresentation) .&& (k .== literal dunnoRepresentation)) sTrue
-  --        $ ite ((l .== literal dunnoRepresentation) .&& (k .== literal dunnoRepresentation)) sTrue
-  --        $ ite ((l .== literal dunnoRepresentation) .&& (k .== literal publicRepresentation)) sTrue
-  --        $ ite ((l .== literal dunnoRepresentation) .|| (k .== literal dunnoRepresentation)) sFalse
-  --        $ ite (l .== literal privateRepresentation) sTrue
-  --        $ ite (k .== literal publicRepresentation) sTrue sFalse
-
 approximatedByOrEqualConstraint (SSec a) (SSec b) =
   -- Lo <= Lo   (False <= False)
   -- Hi <= Hi   (True <= True)
   -- Hi <= Lo   (True <= False)
   -- but not Lo <= Hi   (False  <= True)
   -- So this is flipped implication
-  return (b .=> a)
+  b .=> a
 
 approximatedByOrEqualConstraint (SLNL a) (SLNL b) =
-  return
-    $ ite (a .== literal zeroRep .&& b .== literal oneRep) sFalse
+    ite (a .== literal zeroRep .&& b .== literal oneRep) sFalse
       $ ite (a .<= b) sTrue sFalse
 
 approximatedByOrEqualConstraint s t | isSProduct s && isSProduct t =
@@ -704,13 +691,12 @@ approximatedByOrEqualConstraint s t | isSProduct s && isSProduct t =
 -- e.g. [2..3] <= [0..10]  iff (0 <= 2 and 3 <= 10)
 approximatedByOrEqualConstraint (SInterval lb1 ub1) (SInterval lb2 ub2)
     | natLike lb1 || natLike lb2 || natLike ub1 || natLike ub2 =
-  liftM2 (.&&) (symGradeLessEq lb2 lb1) (symGradeLessEq ub1 ub2)
+  symGradeLessEq lb2 lb1 .&& symGradeLessEq ub1 ub2
 
 -- if intervals are not nat-like then use the notion of approximation
 -- given here
 approximatedByOrEqualConstraint (SInterval lb1 ub1) (SInterval lb2 ub2) =
-  liftM2 (.&&) (approximatedByOrEqualConstraint lb2 lb1)
-                (approximatedByOrEqualConstraint ub1 ub2)
+  approximatedByOrEqualConstraint lb2 lb1 .&& approximatedByOrEqualConstraint ub1 ub2
 
 approximatedByOrEqualConstraint s1 s2@(SInterval _ _) =
   approximatedByOrEqualConstraint (SInterval s1 s1) s2
@@ -721,12 +707,11 @@ approximatedByOrEqualConstraint s1@(SInterval _ _) s2 =
 approximatedByOrEqualConstraint u@(SUnknown{}) u'@(SUnknown{}) =
   lazyOrSymbolicM (symGradeEq u u') (symGradeLess u u')
 
-approximatedByOrEqualConstraint (SExtNat x) (SExtNat y) = return $ x .== y
+approximatedByOrEqualConstraint (SExtNat x) (SExtNat y) = x .== y
 approximatedByOrEqualConstraint (SExt r isInf) (SExt r' isInf') = do
-  approx <- approximatedByOrEqualConstraint r r'
-  return $
-    -- ∞ <= ∞
-    ite (isInf .&& isInf') sTrue
+  let approx = approximatedByOrEqualConstraint r r'
+  -- ∞ <= ∞
+  ite (isInf .&& isInf') sTrue
       -- otherwise we cannot guarantee r <= ∞ or ∞ <= r in general
       -- otherwise fall back on underlying approximation
       (ite (isInf .|| isInf') sFalse approx)
