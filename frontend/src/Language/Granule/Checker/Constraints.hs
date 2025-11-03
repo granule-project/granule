@@ -559,8 +559,8 @@ compileCoeffect (TyGrade k' 0) k vars = do
 
     (isSet -> Just (elemTy, polarity)) ->
       case polarity of
-        Normal   -> setUniverse polarity elemTy
-        Opposite -> setEmpty polarity
+        Normal   -> pure $ setUniverse polarity elemTy
+        Opposite -> pure $ setEmpty polarity
 
     (TyVar _) -> return (SUnknown (SynLeaf (Just 0)), sTrue)
 
@@ -600,8 +600,8 @@ compileCoeffect (TyGrade k' 1) k vars = do
 
     (isSet -> Just (elemTy, polarity)) ->
       case polarity of
-        Normal   -> setEmpty polarity
-        Opposite -> setUniverse polarity elemTy
+        Normal   -> pure $ setEmpty polarity
+        Opposite -> pure $ setUniverse polarity elemTy
 
     (TyVar _) -> return (SUnknown (SynLeaf (Just 1)), sTrue)
 
@@ -818,15 +818,15 @@ matchTypes t (Just t') = solverError $ "I have conflicting kinds of " ++ pretty 
 
 -- Get universe set for the parameter ttpe
 setUniverse :: (?globals :: Globals, ?constructors :: Ctxt [Id])
-            => Polarity -> Type -> Symbolic (SGrade, SBool)
+            => Polarity -> Type -> (SGrade, SBool)
 setUniverse polarity elemTy =
   case elemTy of
     TyCon tyConName ->
       case lookup tyConName ?constructors of
         Just constructorNames ->
-          return (SSet polarity (S.fromList $ map internalName constructorNames), sTrue)
+          (SSet polarity (S.fromList $ map internalName constructorNames), sTrue)
         _ -> solverError $ "I can't find the data constructors of " <> pretty elemTy
     _ -> solverError $ "I can't find the data constructors of " <> pretty elemTy
 
-setEmpty :: Polarity -> Symbolic (SGrade, SBool)
-setEmpty polarity = return (SSet polarity $ S.fromList [], sTrue)
+setEmpty :: Polarity -> (SGrade, SBool)
+setEmpty polarity = (SSet polarity $ S.fromList [], sTrue)
