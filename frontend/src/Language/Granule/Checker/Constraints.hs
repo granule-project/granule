@@ -125,7 +125,7 @@ compileToSBV predicate tyVarContext constructors =
         then
 
           let ?constructors = constructors
-          in freshSolverVarScoped compileQuantScoped (internalName v) t q
+          in freshSolverVarScoped (internalName v) t q
               (\(varPred, solverVar) -> do
                   pred <- buildTheoremNew ctxt ((v, solverVar) : solverVars)
                   case q of
@@ -162,7 +162,7 @@ compileToSBV predicate tyVarContext constructors =
       if v `elem` freeVars p
         -- optimisation
         then
-          freshSolverVarScoped compileQuantScoped (internalName v) k InstanceQ
+          freshSolverVarScoped (internalName v) k InstanceQ
             (\(varPred, solverVar) -> do
               pred' <- buildTheorem' ((v, solverVar) : solverVars) p
               return (varPred .&& pred'))
@@ -174,7 +174,7 @@ compileToSBV predicate tyVarContext constructors =
       if v `elem` (freeVars p <> freeVars p')
         -- If the quantified variable appears in the theorem
         then
-          freshSolverVarScoped compileQuantScoped (internalName v) k ForallQ
+          freshSolverVarScoped (internalName v) k ForallQ
                 (\(varPred, solverVar) -> do
                   pred' <- buildTheorem' ((v, solverVar) : solverVars) (Impl vs p p')
                   return (varPred .=> pred'))
@@ -192,17 +192,16 @@ zeroToInfinity :: SGrade
 zeroToInfinity = SInterval (SExtNat $ SNatX.SNatX 0) (SExtNat SNatX.inf)
 
 freshSolverVarScoped :: (?constructors :: Ctxt [Id]) =>
-    (forall a . QuantifiableScoped a => Quantifier -> String -> (SBV a -> Symbolic SBool) -> Symbolic SBool)
-  -> String
+     String
   -> Type
   -> Quantifier
   -> ((SBool, SGrade) -> Symbolic SBool)
   -> Symbolic SBool
-freshSolverVarScoped quant name (isInterval -> Just t) q k =
+freshSolverVarScoped name (isInterval -> Just t) q k =
 
-  freshSolverVarScoped quant (name <> ".lower") t q
+  freshSolverVarScoped (name <> ".lower") t q
    (\(predLb, solverVarLb) ->
-      freshSolverVarScoped quant (name <> ".upper") t q
+      freshSolverVarScoped (name <> ".upper") t q
        (\(predUb, solverVarUb) -> do
           -- Respect the meaning of intervals
           let lessEq = symGradeLessEq solverVarLb solverVarUb
@@ -210,34 +209,34 @@ freshSolverVarScoped quant name (isInterval -> Just t) q k =
             , SInterval solverVarLb solverVarUb )
           ))
 
-freshSolverVarScoped quant name (isProduct -> Just (t1, t2)) q k =
+freshSolverVarScoped name (isProduct -> Just (t1, t2)) q k =
 
-  freshSolverVarScoped quant (name <> ".fst") t1 q
+  freshSolverVarScoped (name <> ".fst") t1 q
     (\(predFst, solverVarFst) ->
-      freshSolverVarScoped quant (name <> ".snd") t2 q
+      freshSolverVarScoped (name <> ".snd") t2 q
         (\(predSnd, solverVarSnd) ->
           k (predFst .&& predSnd, SProduct solverVarFst solverVarSnd)))
 
-freshSolverVarScoped quant name (TyCon (internalName -> "Q")) q k =
+freshSolverVarScoped name (TyCon (internalName -> "Q")) q k =
   -- Floats (rationals)
-    quant q name (\solverVar -> k (sNot (fpIsNaN solverVar), SFloat solverVar))
+    compileQuantScoped q name (\solverVar -> k (sNot (fpIsNaN solverVar), SFloat solverVar))
 
-freshSolverVarScoped quant name (TyCon (internalName -> "Sec")) q k =
-    quant q name (\solverVar -> k (sTrue, SSec solverVar))
+freshSolverVarScoped name (TyCon (internalName -> "Sec")) q k =
+    compileQuantScoped q name (\solverVar -> k (sTrue, SSec solverVar))
 
-freshSolverVarScoped quant name (TyCon (internalName -> "Fraction")) q k = do
-   quant q name (\solverVar ->
+freshSolverVarScoped name (TyCon (internalName -> "Fraction")) q k = do
+   compileQuantScoped q name (\solverVar ->
     k (SFrac.fractionConstraint solverVar
      , SFraction (SFrac.SFrac solverVar)))
 
-freshSolverVarScoped quant name (TyCon (internalName -> "Star")) q k = do
-   quant q name (\solverVar ->
+freshSolverVarScoped name (TyCon (internalName -> "Star")) q k = do
+   compileQuantScoped q name (\solverVar ->
     k (SFrac.fractionConstraint solverVar
      , SFraction (SFrac.SFrac solverVar)))
 
-freshSolverVarScoped quant name (TyCon conName) q k =
+freshSolverVarScoped name (TyCon conName) q k =
       -- Integer based
-      quant q name (\solverVar ->
+      compileQuantScoped q name (\solverVar ->
         case internalName conName of
           "Nat"    -> k (solverVar .>= 0, SNat solverVar)
           "Level"  -> k (solverVar .== literal privateRepresentation
@@ -252,23 +251,23 @@ freshSolverVarScoped quant name (TyCon conName) q k =
           "Cartesian" -> k (sTrue, SPoint)
           k -> solverError $ "I don't know how to make a fresh solver variable of type " <> show conName)
 
-freshSolverVarScoped quant name t q k | t == extendedNat = do
-   quant q name (\solverVar ->
+freshSolverVarScoped name t q k | t == extendedNat = do
+   compileQuantScoped q name (\solverVar ->
     k (SNatX.representationConstraint solverVar
      , SExtNat (SNatX.SNatX solverVar)))
 
 -- Ext
-freshSolverVarScoped quant name (isExt -> Just t) q k =
-  freshSolverVarScoped quant (name <> ".grade") t q
+freshSolverVarScoped name (isExt -> Just t) q k =
+  freshSolverVarScoped (name <> ".grade") t q
     (\(predGrade, solverVarGrade) ->
-       quant q name (\solverVarInf ->
+       compileQuantScoped q name (\solverVarInf ->
           k (predGrade, SExt solverVarGrade solverVarInf)))
 
-freshSolverVarScoped quant name (TyVar v) q k =
-  quant q name (\solverVar -> k (sTrue, SUnknown $ SynLeaf $ Just solverVar))
+freshSolverVarScoped name (TyVar v) q k =
+  compileQuantScoped q name (\solverVar -> k (sTrue, SUnknown $ SynLeaf $ Just solverVar))
 
-freshSolverVarScoped quant name (isSet -> Just (elemTy, polarity)) q k =
-      quant q name (\solverVar -> k (inUniverse solverVar, SSet polarity solverVar))
+freshSolverVarScoped name (isSet -> Just (elemTy, polarity)) q k =
+      compileQuantScoped q name (\solverVar -> k (inUniverse solverVar, SSet polarity solverVar))
     where
 
       inUniverse solverVar =
@@ -282,7 +281,7 @@ freshSolverVarScoped quant name (isSet -> Just (elemTy, polarity)) q k =
           _ -> sTrue
 
 
-freshSolverVarScoped _ _ t _ _ =
+freshSolverVarScoped _ t _ _ =
    solverError $ "Trying to make a fresh solver variable for a grade of type: "
        <> show t <> " but I don't know how."
 
@@ -357,7 +356,7 @@ compile vars (Lub _ c1 c2 c3@(TyVar v) t doLeastCheck) = do
       let pb1 = approximatedByOrEqualConstraint s2 s3
       if doLeastCheck then do
            --- and it is the least such upper bound
-          pc <- freshSolverVarScoped compileQuantScoped (internalName v <> ".up") t ForallQ
+          pc <- freshSolverVarScoped (internalName v <> ".up") t ForallQ
                   (\(py, y) -> do
                     let pc1 = approximatedByOrEqualConstraint s1 y
                     let pc2 = approximatedByOrEqualConstraint s2 y
