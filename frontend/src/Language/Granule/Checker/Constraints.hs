@@ -286,38 +286,10 @@ freshSolverVarScoped _ t _ _ =
        <> show t <> " but I don't know how."
 
 -- | What is the SBV representation of a quantifier
-compileQuantScoped :: QuantifiableScoped a => Quantifier -> String -> (SBV a -> Symbolic SBool) -> Symbolic SBool
-compileQuantScoped ForallQ   = universalScoped
-compileQuantScoped BoundQ    = universalScoped
-compileQuantScoped _ = existentialScoped
-
--- | Represents symbolic values which can be quantified over inside the solver
--- | Mostly this just overrides to SBV's in-built quantification, but sometimes
--- | we want some custom things to happen when we quantify
-class QuantifiableScoped a where
-  universalScoped :: String -> (SBV a -> Symbolic SBool) -> Symbolic SBool
-  existentialScoped :: String -> (SBV a -> Symbolic SBool) -> Symbolic SBool
-
-instance QuantifiableScoped Integer where
-  universalScoped v = universal [v]
-  existentialScoped v = existential [v]
-
-instance QuantifiableScoped Rational where
-  universalScoped v = universal [v]
-  existentialScoped v = existential [v]
-
-instance QuantifiableScoped Bool where
-  universalScoped v = universal [v]
-  existentialScoped v = existential [v]
-
-instance QuantifiableScoped Float where
-  universalScoped v = universal [v]
-  existentialScoped v = existential [v]
-
-instance QuantifiableScoped (RCSet SSetElem) where
-  universalScoped v = universal [v]
-  existentialScoped v = existential [v]
-
+compileQuantScoped :: SymVal a => Quantifier -> String -> (SBV a -> Symbolic SBool) -> Symbolic SBool
+compileQuantScoped ForallQ  s = universal [s]
+compileQuantScoped BoundQ   s = universal [s]
+compileQuantScoped _ s = existential [s]
 
 -- Compile a constraint into a symbolic bool (SBV predicate)
 compile :: (?globals :: Globals, ?constructors :: Ctxt [Id]) =>
