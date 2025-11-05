@@ -45,21 +45,3 @@ instance OrdSymbolic SFrac where
 
 fractionConstraint :: SFloat -> SBool
 fractionConstraint v = v .== v .&& v .<= 1 .&& v .>= 0
-
-freeSFrac :: String -> Symbolic SFrac
-freeSFrac nm = do
-  v <- sFloat $ nm <> "_fVal"
-  constrain $ fractionConstraint v
-  return $ SFrac v
-
-existsSFrac :: String -> Symbolic SFrac
-existsSFrac nm = do
-  v <- sbvExists $ nm <> "_fVal"
-  constrain $ fractionConstraint v
-  return $ SFrac v
-
-forallSFrac :: String -> Symbolic SFrac
-forallSFrac nm = do
-  v <- sbvForall $ nm <> "_fVal"
-  constrain $ fractionConstraint v
-  return $ SFrac v
