@@ -58,7 +58,8 @@ provePredicate predicate vars constructors
       -- Benchmarking start
       start  <- if benchmarking then Clock.getTime Clock.Monotonic else return 0
       -- Prove -----------
-      ThmResult thmRes <- proveWith defaultSMTCfg $ do --  -- proveWith cvc4 {verbose=True}
+      let cfg = if debugging then defaultSMTCfg { verbose = True } else defaultSMTCfg
+      ThmResult thmRes <- proveWith cfg $ do
         case solverTimeoutMillis of
           n | n <= 0 -> return ()
           n -> setTimeOut n
