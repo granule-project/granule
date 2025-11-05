@@ -1,13 +1,17 @@
-fill : *FloatArray -> !Int -> *FloatArray
+fill : forall {id : Name} . *(FloatArray id) -> !Int -> *(FloatArray id)
 fill arr [0] = arr;
 fill arr [i] =
   let f = intToFloat i;
       arr' = writeFloatArray arr i f
   in fill arr' [i - 1]
 
-main : (Float, FloatArray)
+main : Float
 main =
-  let x = fill (newFloatArray 10) [9] in
-  let [y] = share x in
-  let [()] = clone [y] as y' in (let () = deleteFloatArray y' in [()]) in
-  readFloatArrayI y 9
+  unpack <id , x> = newFloatArray 10 in
+    let x = fill x [9] in
+    let [y] : (FloatArray id) [2] = share x in
+    let [()] : (() [0]) = (clone [y] as y' in
+                            (unpack <id', y''> = y' in
+                               let () = deleteFloatArray y'' in [()])) in
+    let (f, y) = readFloatArrayI y 9 in
+    let () = drop @(FloatArray id) y in f
