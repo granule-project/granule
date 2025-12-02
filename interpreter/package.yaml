@@ -17,7 +17,7 @@ dependencies:
 - granule-frontend
 - granule-runtime
 - mtl >=2.2.1
-- optparse-applicative
+- optparse-applicative >=0.18.0.0
 - text
 - logict >= 0.7.1.0
 - clock
