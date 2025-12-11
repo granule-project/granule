@@ -1,12 +1,14 @@
-cabal-version: 3.4
+cabal-version:  3.4
 name:           granule
 version:        0.9.6.0
 
 synopsis:       The Granule Language
+description:    A research language based on graded modal types
 homepage:       https://github.com/granule-project/granule#readme
 bug-reports:    https://github.com/granule-project/granule/issues
 author:         Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Jack Hughes, Preston Keel, Danielle Marshall, Michael Vollmer
 maintainer:     Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Jack Hughes, Preston Keel, Danielle Marshall, Michael Vollmer
+category:       Compiler
 copyright:      2018-22 authors
 license:        BSD-3-Clause
 build-type:     Simple
@@ -43,9 +45,24 @@ common granule-dependencies
     , time
     , transformers >=0.5
 
+common granule-ghc-warnings
+  ghc-options:
+    -Wall
+    -Werror
+    -Wcompat
+    -Wincomplete-record-updates
+    -Wincomplete-uni-patterns
+    -Wredundant-constraints
+    -Wno-unused-matches
+    -Wno-name-shadowing
+    -Wno-type-defaults
+    -fno-warn-unticked-promoted-constructors
+    -fno-warn-partial-type-signatures
+
 library frontend
   import: granule-default-lang
   import: granule-dependencies
+  import: granule-ghc-warnings
   exposed-modules:
       Data.Bifunctor.Foldable
       Language.Granule.Checker.Checker
@@ -110,7 +127,6 @@ library frontend
       Text.Reprinter
   hs-source-dirs:
       frontend/src
-  ghc-options: -O0 -Wall -Werror -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -Wno-unused-matches -Wno-name-shadowing -Wno-type-defaults -fno-warn-unticked-promoted-constructors
   build-tool-depends:
       alex:alex
     , happy:happy
@@ -132,6 +148,7 @@ library frontend
 test-suite frontend-spec
   import: granule-default-lang
   import: granule-dependencies
+  import: granule-ghc-warnings
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
@@ -146,7 +163,6 @@ test-suite frontend-spec
       Language.Granule.Synthesis.SynthSpec
   hs-source-dirs:
       frontend/tests/hspec
-  ghc-options: -O0 -Wall -Werror -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -Wno-unused-matches -Wno-name-shadowing -Wno-type-defaults -fno-warn-unticked-promoted-constructors -fno-warn-partial-type-signatures
   build-depends:
       QuickCheck
     , granule:frontend
@@ -156,6 +172,7 @@ test-suite frontend-spec
 library interpreter
   import: granule-default-lang
   import: granule-dependencies
+  import: granule-ghc-warnings
   exposed-modules:
       Language.Granule.Interpreter
       Language.Granule.Interpreter.Eval
@@ -167,7 +184,6 @@ library interpreter
       Paths_granule
   hs-source-dirs:
       interpreter/src
-  ghc-options: -O0 -Wall -Werror -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -Wno-unused-matches -Wno-name-shadowing -Wno-type-defaults
   build-depends:
       Glob
     , concurrent-extra
@@ -181,6 +197,7 @@ library interpreter
 executable gr
   import: granule-default-lang
   import: granule-dependencies
+  import: granule-ghc-warnings
   main-is: Language/Granule/Interpreter.hs
   other-modules:
       Language.Granule.Doc
@@ -191,7 +208,6 @@ executable gr
       Paths_granule
   hs-source-dirs:
       interpreter/src
-  ghc-options: -O0 -Wall -Werror -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -Wno-unused-matches -Wno-name-shadowing -Wno-type-defaults -main-is Language.Granule.Interpreter
   build-depends:
       Glob
     , concurrent-extra
@@ -206,10 +222,10 @@ executable gr
 executable grls
   import: granule-default-lang
   import: granule-dependencies
+  import: granule-ghc-warnings
   main-is: Language/Granule/Server.hs
   hs-source-dirs:
       server/app
-  ghc-options: -O3 -W -Werror -Wno-unused-matches -main-is Language.Granule.Server
   build-depends:
       Glob
     , data-default
@@ -222,11 +238,11 @@ executable grls
 test-suite gr-golden
   import: granule-default-lang
   import: granule-dependencies
+  import: granule-ghc-warnings
   type: exitcode-stdio-1.0
   main-is: Golden.hs
   hs-source-dirs:
       interpreter/tests
-  ghc-options: -O0 -Wall -Werror -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -Wno-unused-matches -Wno-name-shadowing -Wno-type-defaults
   build-depends:
       Diff
     , Glob
@@ -245,6 +261,7 @@ test-suite gr-golden
 executable grepl
   import: granule-default-lang
   import: granule-dependencies
+  import: granule-ghc-warnings
   main-is: Language/Granule/Main.hs
   other-modules:
       Language.Granule.Queue
@@ -255,7 +272,6 @@ executable grepl
       Paths_granule
   hs-source-dirs:
       repl/app
-  ghc-options: -O3 -W -Werror -Wno-unused-matches
   build-depends:
       Glob
     , filemanip
@@ -267,11 +283,11 @@ executable grepl
 library runtime
   import: granule-default-lang
   import: granule-dependencies
+  import: granule-ghc-warnings
   exposed-modules:
       Language.Granule.Runtime
   hs-source-dirs:
       runtime/src
-  ghc-options: -Wall -Werror -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -Wno-unused-matches -Wno-name-shadowing -Wno-type-defaults
   build-depends:
       Glob
     , criterion
@@ -286,13 +302,13 @@ library runtime
 library compiler
   import: granule-default-lang
   import: granule-dependencies
+  import: granule-ghc-warnings
   exposed-modules:
       Language.Granule.Compiler.Error
       Language.Granule.Compiler.HSCodegen
       Language.Granule.Compiler.Util
   hs-source-dirs:
       compiler/src
-  ghc-options: -Wall -Werror -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -Wno-unused-matches -Wno-name-shadowing -Wno-type-defaults
   build-depends:
       Glob
     , criterion
@@ -309,6 +325,7 @@ library compiler
 executable grc
   import: granule-default-lang
   import: granule-dependencies
+  import: granule-ghc-warnings
   main-is: Language/Granule/Compiler.hs
   other-modules:
       Paths_granule
@@ -316,7 +333,6 @@ executable grc
       Paths_granule
   hs-source-dirs:
       compiler/app
-  ghc-options: -Wall -Werror -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -Wno-unused-matches -Wno-name-shadowing -Wno-type-defaults -main-is Language.Granule.Compiler
   build-depends:
       Glob
     , criterion
@@ -333,13 +349,13 @@ executable grc
 executable grenchmark
   import: granule-default-lang
   import: granule-dependencies
+  import: granule-ghc-warnings
   main-is: Language/Granule/Main.hs
   other-modules:
       Language.Granule.Benchmarks
       Language.Granule.StdError
   hs-source-dirs:
       benchmark/src
-  ghc-options: -O2 -main-is Language.Granule.Main
   build-depends:
       granule:frontend
     , granule:interpreter

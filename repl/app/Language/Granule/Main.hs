@@ -75,6 +75,7 @@ initialState = ReplState 0 [] [] M.empty [] True []
 type REPLStateIO a = StateT ReplState (Ex.ExceptT ReplError IO) a
 
 -- A span used for top-level inputs
+nullSpanInteractive :: Span
 nullSpanInteractive = Span (0,0) (0,0) "interactive"
 
 main :: IO ()
@@ -172,7 +173,7 @@ handleCMD s =
 
             Left err -> do
               st <- get
-              Ex.throwError (ParseError err (files st))
+              _ <- Ex.throwError (ParseError err (files st))
               Ex.throwError (ParseError e (files st))
 
     handleLine (RunLexer str) =
@@ -259,7 +260,7 @@ handleCMD s =
         -- If this was actually just a type, return it as is
         Right kind -> liftIO $ putStrLn exprString
 
-parseExpression :: (?globals::Globals) => String -> REPLStateIO (Expr () ())
+parseExpression :: String -> REPLStateIO (Expr () ())
 parseExpression exprString = do
   -- Check that the expression is well-typed first
   case runReaderT (evalStateT (expr $ scanTokens exprString) []) "interactive" of
