@@ -1,0 +1,453 @@
+cabal-version: 3.4
+name:           granule
+version:        0.9.6.0
+
+synopsis:       The Granule Language
+homepage:       https://github.com/granule-project/granule#readme
+bug-reports:    https://github.com/granule-project/granule/issues
+author:         Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Jack Hughes, Preston Keel, Danielle Marshall, Michael Vollmer
+maintainer:     Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Jack Hughes, Preston Keel, Danielle Marshall, Michael Vollmer
+copyright:      2018-22 authors
+license:        BSD-3-Clause
+build-type:     Simple
+
+source-repository head
+  type: git
+  location: https://github.com/granule-project/granule
+
+
+library frontend
+  exposed-modules:
+      Data.Bifunctor.Foldable
+      Language.Granule.Checker.Checker
+      Language.Granule.Checker.Coeffects
+      Language.Granule.Checker.Constraints
+      Language.Granule.Checker.Constraints.SNatX
+      Language.Granule.Checker.DataTypes
+      Language.Granule.Checker.Flatten
+      Language.Granule.Checker.Ghost
+      Language.Granule.Checker.LaTeX
+      Language.Granule.Checker.Monad
+      Language.Granule.Checker.Patterns
+      Language.Granule.Checker.Predicates
+      Language.Granule.Checker.Primitives
+      Language.Granule.Checker.Kinding
+      Language.Granule.Checker.Substitution
+      Language.Granule.Checker.SubstitutionContexts
+      Language.Granule.Checker.TypeAliases
+      Language.Granule.Checker.Types
+      Language.Granule.Checker.Variables
+      Language.Granule.Syntax.Def
+      Language.Granule.Syntax.Expr
+      Language.Granule.Syntax.Helpers
+      Language.Granule.Syntax.FirstParameter
+      Language.Granule.Syntax.Annotated
+      Language.Granule.Syntax.Identifiers
+      Language.Granule.Syntax.Lexer
+      Language.Granule.Syntax.Parser
+      Language.Granule.Syntax.Pattern
+      Language.Granule.Syntax.Pretty
+      Language.Granule.Syntax.Preprocessor
+      Language.Granule.Syntax.Preprocessor.Ascii
+      Language.Granule.Syntax.Preprocessor.Latex
+      Language.Granule.Syntax.Preprocessor.Markdown
+      Language.Granule.Syntax.Span
+      Language.Granule.Syntax.Type
+      Language.Granule.Synthesis.Builders
+      Language.Granule.Synthesis.Contexts
+      Language.Granule.Synthesis.DebugTree
+      Language.Granule.Synthesis.LinearHaskell
+      Language.Granule.Synthesis.Monad
+      Language.Granule.Synthesis.Splitting
+      Language.Granule.Synthesis.Common
+      Language.Granule.Synthesis.SynthLinearBase
+      Language.Granule.Synthesis.Synth
+      Language.Granule.Synthesis.RewriteHoles
+      Language.Granule.Context
+      Language.Granule.Utils
+  other-modules:
+      Language.Granule.Checker.CoeffectsTypeConverter
+      Language.Granule.Checker.Constraints.Compile
+      Language.Granule.Checker.Constraints.SFrac
+      Language.Granule.Checker.Constraints.SymbolicGrades
+      Language.Granule.Checker.Effects
+      Language.Granule.Checker.Exhaustivity
+      Language.Granule.Checker.NameClash
+      Language.Granule.Checker.Normalise
+      Language.Granule.Checker.Simplifier
+      Language.Granule.Syntax.SecondParameter
+      Language.Granule.Synthesis.Deriving
+      Language.Granule.Synthesis.Refactor
+      Text.Reprinter
+  hs-source-dirs:
+      frontend/src
+  default-extensions:
+      ImplicitParams
+      ViewPatterns
+      LambdaCase
+      TupleSections
+      NamedFieldPuns
+  ghc-options: -O0 -Wall -Werror -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -Wno-unused-matches -Wno-name-shadowing -Wno-type-defaults -fno-warn-unticked-promoted-constructors
+  build-tool-depends:
+      alex:alex
+    , happy:happy
+  build-depends:
+      Glob
+    , array
+    , base >=4.10 && <5
+    , bifunctors
+    , blaze-html
+    , clock
+    , containers
+    , control-monad-omega
+    , data-ordlist
+    , directory
+    , filepath
+    , haskell-src-exts
+    , logict >=0.7.1.0
+    , monad-memo
+    , mtl >=2.2.1
+    , raw-strings-qq
+    , sbv >=8.5 && <10
+    , split
+    , syb >=0.6
+    , syz >=0.2.0.0
+    , text >=1.1.2
+    , text-replace
+    , time
+    , transformers >=0.5
+  default-language: Haskell2010
+
+test-suite frontend-spec
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Data.Bifunctor.FoldableSpec
+      Language.Granule.Checker.CheckerSpec
+      Language.Granule.Checker.MonadSpec
+      Language.Granule.Checker.SubstitutionsSpec
+      Language.Granule.Checker.TypesSpec
+      Language.Granule.Syntax.ExprSpec
+      Language.Granule.Synthesis.CommonSpec
+      Language.Granule.Synthesis.SplittingSpec
+      Language.Granule.Synthesis.SynthSpec
+  hs-source-dirs:
+      frontend/tests/hspec
+  default-extensions:
+      ImplicitParams
+      ViewPatterns
+      LambdaCase
+      TupleSections
+      NamedFieldPuns
+  ghc-options: -O0 -Wall -Werror -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -Wno-unused-matches -Wno-name-shadowing -Wno-type-defaults -fno-warn-unticked-promoted-constructors -fno-warn-partial-type-signatures
+  build-depends:
+      QuickCheck
+    , base >=4.10 && <5
+    , bifunctors
+    , containers
+    , granule:frontend
+    , hspec
+    , mtl
+    , syz
+    , transformers >=0.5
+  default-language: Haskell2010
+
+library interpreter
+  exposed-modules:
+      Language.Granule.Interpreter
+      Language.Granule.Interpreter.Eval
+      Language.Granule.Interpreter.Desugar
+  other-modules:
+      Language.Granule.Doc
+      Paths_granule
+  autogen-modules:
+      Paths_granule
+  hs-source-dirs:
+      interpreter/src
+  default-extensions:
+      LambdaCase
+      RecordWildCards
+      ImplicitParams
+      ScopedTypeVariables
+      OverloadedStrings
+  ghc-options: -O0 -Wall -Werror -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -Wno-unused-matches -Wno-name-shadowing -Wno-type-defaults
+  build-depends:
+      Glob
+    , array
+    , base >=4.10 && <5
+    , clock
+    , concurrent-extra
+    , containers
+    , directory
+    , extra
+    , filepath
+    , gitrev
+    , granule:frontend
+    , granule:runtime
+    , logict >=0.7.1.0
+    , mtl >=2.2.1
+    , optparse-applicative
+    , text
+    , time
+  default-language: Haskell2010
+
+executable gr
+  main-is: Language/Granule/Interpreter.hs
+  other-modules:
+      Language.Granule.Doc
+      Language.Granule.Interpreter.Desugar
+      Language.Granule.Interpreter.Eval
+      Paths_granule
+  autogen-modules:
+      Paths_granule
+  hs-source-dirs:
+      interpreter/src
+  default-extensions:
+      LambdaCase
+      RecordWildCards
+      ImplicitParams
+      ScopedTypeVariables
+      OverloadedStrings
+  ghc-options: -O0 -Wall -Werror -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -Wno-unused-matches -Wno-name-shadowing -Wno-type-defaults -main-is Language.Granule.Interpreter
+  build-depends:
+      Glob
+    , array
+    , base >=4.10 && <5
+    , clock
+    , concurrent-extra
+    , containers
+    , directory
+    , extra
+    , filepath
+    , gitrev
+    , granule:frontend
+    , granule:interpreter
+    , granule:runtime
+    , logict >=0.7.1.0
+    , mtl >=2.2.1
+    , optparse-applicative
+    , text
+    , time
+  default-language: Haskell2010
+
+executable grls
+  main-is: Language/Granule/Server.hs
+  hs-source-dirs:
+      server/app
+  ghc-options: -O3 -W -Werror -Wno-unused-matches -main-is Language.Granule.Server
+  build-depends:
+      Glob
+    , base
+    , clock >=0.8
+    , containers
+    , data-default
+    , directory
+    , filepath
+    , granule:frontend
+    , granule:interpreter
+    , lens
+    , lsp
+    , mtl >=2.2.1
+    , split
+    , text
+    , transformers
+  default-language: Haskell2010
+
+test-suite gr-golden
+  type: exitcode-stdio-1.0
+  main-is: Golden.hs
+  hs-source-dirs:
+      interpreter/tests
+  default-extensions:
+      LambdaCase
+      RecordWildCards
+      ImplicitParams
+      ScopedTypeVariables
+      OverloadedStrings
+  ghc-options: -O0 -Wall -Werror -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -Wno-unused-matches -Wno-name-shadowing -Wno-type-defaults
+  build-depends:
+      Diff
+    , Glob
+    , array
+    , base >=4.10 && <5
+    , clock
+    , concurrent-extra
+    , containers
+    , directory
+    , extra
+    , filepath
+    , gitrev
+    , granule:frontend
+    , granule:interpreter
+    , granule:runtime
+    , logict >=0.7.1.0
+    , mtl >=2.2.1
+    , optparse-applicative
+    , strict
+    , tasty
+    , tasty-golden
+    , text
+    , time
+  default-language: Haskell2010
+
+executable grepl
+  main-is: Language/Granule/Main.hs
+  other-modules:
+      Language.Granule.Queue
+      Language.Granule.ReplError
+      Language.Granule.ReplParser
+      Paths_granule
+  autogen-modules:
+      Paths_granule
+  hs-source-dirs:
+      repl/app
+  ghc-options: -O3 -W -Werror -Wno-unused-matches
+  build-depends:
+      Glob
+    , base >=4.10 && <5
+    , clock >=0.8
+    , containers
+    , directory
+    , filemanip
+    , filepath
+    , granule:frontend
+    , granule:interpreter
+    , haskeline
+    , mtl >=2.2.1
+    , parsec
+    , text
+    , transformers >=0.5
+  default-language: Haskell2010
+
+library runtime
+  exposed-modules:
+      Language.Granule.Runtime
+  hs-source-dirs:
+      runtime/src
+  default-extensions:
+      LambdaCase
+      RecordWildCards
+      ImplicitParams
+      ScopedTypeVariables
+      OverloadedStrings
+      FlexibleContexts
+      ConstraintKinds
+  ghc-options: -Wall -Werror -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -Wno-unused-matches -Wno-name-shadowing -Wno-type-defaults
+  build-depends:
+      Glob
+    , array
+    , base >=4.10 && <5
+    , clock
+    , containers
+    , criterion
+    , directory
+    , extra
+    , filepath
+    , gitrev
+    , granule:frontend
+    , haskell-src-exts
+    , logict >=0.7.1.0
+    , mtl >=2.2.1
+    , optparse-applicative
+    , silently
+    , text
+    , time
+  default-language: Haskell2010
+
+library compiler
+  exposed-modules:
+      Language.Granule.Compiler.Error
+      Language.Granule.Compiler.HSCodegen
+      Language.Granule.Compiler.Util
+  hs-source-dirs:
+      compiler/src
+  default-extensions:
+      LambdaCase
+      RecordWildCards
+      ImplicitParams
+      ScopedTypeVariables
+      OverloadedStrings
+      FlexibleContexts
+      ConstraintKinds
+  ghc-options: -Wall -Werror -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -Wno-unused-matches -Wno-name-shadowing -Wno-type-defaults
+  build-depends:
+      Glob
+    , array
+    , base >=4.10 && <5
+    , clock
+    , containers
+    , criterion
+    , directory
+    , extra
+    , filepath
+    , gitrev
+    , granule:frontend
+    , granule:runtime
+    , haskell-src-exts
+    , logict >=0.7.1.0
+    , mtl >=2.2.1
+    , optparse-applicative
+    , silently
+    , text
+    , time
+  default-language: Haskell2010
+
+executable grc
+  main-is: Language/Granule/Compiler.hs
+  other-modules:
+      Paths_granule
+  autogen-modules:
+      Paths_granule
+  hs-source-dirs:
+      compiler/app
+  default-extensions:
+      LambdaCase
+      RecordWildCards
+      ImplicitParams
+      ScopedTypeVariables
+      OverloadedStrings
+      FlexibleContexts
+      ConstraintKinds
+  ghc-options: -Wall -Werror -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -Wno-unused-matches -Wno-name-shadowing -Wno-type-defaults -main-is Language.Granule.Compiler
+  build-depends:
+      Glob
+    , array
+    , base >=4.10 && <5
+    , clock
+    , containers
+    , criterion
+    , directory
+    , extra
+    , filepath
+    , gitrev
+    , granule:compiler
+    , granule:frontend
+    , granule:runtime
+    , haskell-src-exts
+    , logict >=0.7.1.0
+    , mtl >=2.2.1
+    , optparse-applicative
+    , silently
+    , text
+    , time
+  default-language: Haskell2010
+
+executable grenchmark
+  main-is: Language/Granule/Main.hs
+  other-modules:
+      Language.Granule.Benchmarks
+      Language.Granule.StdError
+  hs-source-dirs:
+      benchmark/src
+  ghc-options: -O2 -main-is Language.Granule.Main
+  build-depends:
+      base >=4.10 && <5
+    , directory
+    , filepath
+    , granule:frontend
+    , granule:interpreter
+    , process
+    , strict
+    , text
+    , time
+  default-language: Haskell2010

@@ -61,7 +61,7 @@ import Language.Granule.Synthesis.Monad (Measurement)
 import Language.Granule.Synthesis.LinearHaskell
 import Language.Granule.Utils
 import Language.Granule.Doc
-import Paths_granule_interpreter (version)
+import Paths_granule (version)
 
 main :: IO ()
 main = do

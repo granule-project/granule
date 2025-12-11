@@ -45,7 +45,7 @@ import Language.Granule.ReplError
 import Language.Granule.ReplParser
 
 import Data.Version (showVersion)
-import Paths_granule_repl (version)
+import Paths_granule (version)
 
 -- Types used in the REPL
 type ADT = [DataDecl]
