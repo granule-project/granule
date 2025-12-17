@@ -13,6 +13,9 @@ copyright:      2018-22 authors
 license:        BSD-3-Clause
 build-type:     Simple
 
+tested-with:
+  , GHC == 9.4.8
+
 source-repository head
   type: git
   location: https://github.com/granule-project/granule
@@ -33,17 +36,18 @@ common granule-default-lang
 
 common granule-dependencies
   build-depends:
-      array
-    , base >=4.10 && <5
-    , bifunctors
-    , clock >= 0.8
-    , containers
-    , directory
-    , filepath
-    , mtl >=2.2.1
-    , text >=1.1.2
-    , time
-    , transformers >=0.5
+      Glob         ==0.10.2
+    , array        ==0.5.4.0
+    , base         ==4.17.2.1
+    , bifunctors   ==5.5.15
+    , clock        ==0.8.4
+    , containers   ==0.6.7
+    , directory    ==1.3.7.1
+    , filepath     ==1.4.2.2
+    , mtl          ==2.2.2
+    , text         ==2.0.2
+    , time         ==1.12.2
+    , transformers ==0.5.6.2
 
 common granule-ghc-warnings
   ghc-options:
@@ -131,7 +135,6 @@ library frontend
       alex:alex
     , happy:happy
   build-depends:
-      Glob
     , blaze-html
     , control-monad-omega
     , data-ordlist
@@ -139,11 +142,11 @@ library frontend
     , logict >=0.7.1.0
     , monad-memo
     , raw-strings-qq
-    , sbv >=8.5 && <10
+    , sbv ==9.2
     , split
     , syb >=0.6
-    , syz >=0.2.0.0
-    , text-replace
+    , syz ==0.2.0.0
+    , text-replace ==0.1.0.3
 
 test-suite frontend-spec
   import: granule-default-lang
@@ -185,7 +188,6 @@ library interpreter
   hs-source-dirs:
       interpreter/src
   build-depends:
-      Glob
     , concurrent-extra
     , extra
     , gitrev
@@ -209,7 +211,6 @@ executable gr
   hs-source-dirs:
       interpreter/src
   build-depends:
-      Glob
     , concurrent-extra
     , extra
     , gitrev
@@ -227,12 +228,11 @@ executable grls
   hs-source-dirs:
       server/app
   build-depends:
-      Glob
     , data-default
     , granule:frontend
     , granule:interpreter
     , lens
-    , lsp
+    , lsp ==2.7.0.1
     , split
 
 test-suite gr-golden
@@ -245,7 +245,6 @@ test-suite gr-golden
       interpreter/tests
   build-depends:
       Diff
-    , Glob
     , concurrent-extra
     , extra
     , gitrev
@@ -273,12 +272,11 @@ executable grepl
   hs-source-dirs:
       repl/app
   build-depends:
-      Glob
-    , filemanip
+    , filemanip           ==0.3.6.3
     , granule:frontend
-    , granule:interpreter
-    , haskeline
-    , parsec
+    , granule:interpreter 
+    , haskeline           ==0.8.2
+    , parsec              ==3.1.16.1
 
 library runtime
   import: granule-default-lang
@@ -289,7 +287,6 @@ library runtime
   hs-source-dirs:
       runtime/src
   build-depends:
-      Glob
     , criterion
     , extra
     , gitrev
@@ -310,7 +307,6 @@ library compiler
   hs-source-dirs:
       compiler/src
   build-depends:
-      Glob
     , criterion
     , extra
     , gitrev
@@ -334,7 +330,6 @@ executable grc
   hs-source-dirs:
       compiler/app
   build-depends:
-      Glob
     , criterion
     , extra
     , gitrev
