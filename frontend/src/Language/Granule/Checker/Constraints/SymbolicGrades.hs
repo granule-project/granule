@@ -7,9 +7,9 @@ module Language.Granule.Checker.Constraints.SymbolicGrades where
 
 import Language.Granule.Checker.Constraints.SNatX
 import Language.Granule.Checker.Constraints.SFrac
+import Language.Granule.Checker.Constraints.SynTree
 import Language.Granule.Syntax.Type
 
-import qualified Data.Text as T
 import GHC.Generics (Generic)
 import Data.SBV hiding (kindOf, name, symbolic)
 import qualified Data.SBV.Set as S
@@ -64,55 +64,6 @@ zeroRep, oneRep, manyRep :: Integer
 zeroRep = 0
 oneRep  = 1
 manyRep = 2
-
--- Representation of semiring terms as a `SynTree`
-data SynTree =
-    SynPlus SynTree SynTree
-  | SynTimes SynTree SynTree
-  | SynMeet SynTree SynTree
-  | SynJoin SynTree SynTree
-  | SynLeaf (Maybe SInteger)  -- Just 0 and Just 1 can be identified
-  | SynMerge SBool SynTree SynTree
-
-instance Show SynTree where
-  show (SynPlus s t) = "(" ++ show s ++ " + " ++ show t ++ ")"
-  show (SynTimes s t) = show s ++ " * " ++ show t
-  show (SynJoin s t) = "(" ++ show s ++ " \\/ " ++ show t ++ ")"
-  show (SynMeet s t) = "(" ++ show s ++ " /\\ " ++ show t ++ ")"
-  show (SynLeaf Nothing) = "?"
-  show (SynLeaf (Just n)) = T.unpack $
-    T.replace (T.pack " :: SInteger") (T.pack "") (T.pack $ show n)
-  show (SynMerge sb s t) = "(if " ++ show sb ++ " (" ++ show s ++ ") (" ++ show t ++ "))"
-
-sEqTree :: SynTree -> SynTree -> SBool
-sEqTree (SynPlus s s') (SynPlus t t') =
-   -- + is commutative
-  (sEqTree s t .&& sEqTree s' t') .|| (sEqTree s' t .&& sEqTree s t')
-sEqTree (SynTimes s s') (SynTimes t t') = sEqTree s t .&& sEqTree s' t'
-sEqTree (SynMeet s s') (SynMeet t t')   =
-  -- /\ is commutative
-  (sEqTree s t .&& sEqTree s' t') .|| (sEqTree s t' .&& sEqTree s' t)
-sEqTree (SynJoin s s') (SynJoin t t')   =
-  -- \/ is commutative
-  (sEqTree s t .&& sEqTree s' t') .|| (sEqTree s t' .&& sEqTree s' t)
-sEqTree (SynMerge sb s s') (SynMerge sb' t t')  =
-    ((sEqTree s t .&& sEqTree s' t') .&& (sb .== sb')) .||
-    -- Flipped branching
-    ((sEqTree s t' .&& sEqTree s t) .&& (sb .== sNot sb'))
-sEqTree (SynLeaf Nothing) (SynLeaf Nothing) = sFalse
-sEqTree (SynLeaf (Just n)) (SynLeaf (Just n')) = n .=== n'
-sEqTree s t = sFalse
-
-sLtTree :: SynTree -> SynTree -> SBool
-sLtTree (SynPlus s s') (SynPlus t t')   = sLtTree s t .&& sLtTree s' t'
-sLtTree (SynTimes s s') (SynTimes t t') = sLtTree s t .&& sLtTree s' t'
-sLtTree (SynMeet s s') (SynMeet t t')   = sLtTree s t .&& sLtTree s' t'
-sLtTree (SynJoin s s') (SynJoin t t')   = sLtTree s t .&& sLtTree s' t'
-sLtTree (SynMerge sb s s') (SynMerge sb' t t') =
-  (sb .== sb') .&& (sLtTree s t .&& sLtTree s' t')
-sLtTree (SynLeaf Nothing) (SynLeaf Nothing) = sFalse
-sLtTree (SynLeaf (Just n)) (SynLeaf (Just n')) = sFalse
-sLtTree _ _ = sFalse
 
 ---- SGrade operations
 
@@ -212,7 +163,7 @@ symGradeLess (SLevel n) (SLevel n') =
 symGradeLess (SSet _ n) (SSet _ n')  = solverError "Can't do < on sets"
 symGradeLess (SExtNat n) (SExtNat n') = n .< n'
 symGradeLess SPoint SPoint            = sTrue
-symGradeLess (SUnknown s) (SUnknown t) = sLtTree s t
+symGradeLess (SUnknown s) (SUnknown t) = synTreeApproxEq (normaliseSynTree s) (normaliseSynTree t)
 symGradeLess (SExtNat n@(SNatX ni)) (SNat n') =
   ite (isInf n) sFalse (ni .< n')
 symGradeLess (SNat n) (SExtNat n'@(SNatX ni')) =
@@ -259,7 +210,7 @@ symGradeEq SPoint SPoint          = sTrue
 symGradeEq (SOOZ s) (SOOZ r)      = s .== r
 symGradeEq s t | isSProduct s || isSProduct t =
     either solverError id (applyToProducts symGradeEq (.&&) (const sTrue) s t)
-symGradeEq (SUnknown t) (SUnknown t') = sEqTree t t'
+symGradeEq (SUnknown t) (SUnknown t') = synTreeApproxEq (normaliseSynTree t) (normaliseSynTree t')
 symGradeEq (SSec n) (SSec n') = n .== n'
 symGradeEq (SLNL n) (SLNL m) = n .== m
 symGradeEq (SExt r sInf) (SExt r' sInf') = do

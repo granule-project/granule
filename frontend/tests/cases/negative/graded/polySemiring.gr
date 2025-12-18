@@ -1,0 +1,2 @@
+foo : forall {s : Semiring, r : s, a : Type} . a [r] -> (a, a)
+foo [x] = (x, x)

@@ -20,6 +20,7 @@ import Language.Granule.Checker.Predicates
 import Language.Granule.Context (Ctxt)
 
 import Language.Granule.Checker.Constraints.SymbolicGrades
+import Language.Granule.Checker.Constraints.SynTree
 import qualified Language.Granule.Checker.Constraints.SNatX as SNatX
 import qualified Language.Granule.Checker.Constraints.SFrac as SFrac
 
@@ -289,7 +290,7 @@ freshSolverVarScoped _ t _ _ =
 compileQuantScoped :: SymVal a => Quantifier -> String -> (SBV a -> Symbolic SBool) -> Symbolic SBool
 compileQuantScoped ForallQ  s = universal [s]
 compileQuantScoped BoundQ   s = universal [s]
-compileQuantScoped _ s = existential [s]
+compileQuantScoped _ s       = existential [s]
 
 -- Compile a constraint into a symbolic bool (SBV predicate)
 compile :: (?globals :: Globals, ?constructors :: Ctxt [Id]) =>
@@ -306,7 +307,7 @@ compile vars (Hsup _ c1 c2 t) =
 
 -- Assumes that c3 is already existentially bound
 compile vars (Lub _ c1 c2 c3@(TyVar v) t doLeastCheck) = do
-  
+
     {-
     -- An alternate procedure for computing least-upper bounds
     -- I was experimenting with this to see if it could speed up solving.
@@ -671,8 +672,8 @@ approximatedByOrEqualConstraint s1 s2@(SInterval _ _) =
 approximatedByOrEqualConstraint s1@(SInterval _ _) s2 =
   approximatedByOrEqualConstraint s1 (SInterval s2 s2)
 
-approximatedByOrEqualConstraint u@(SUnknown{}) u'@(SUnknown{}) =
-  lazyOrSymbolicM (symGradeEq u u') (symGradeLess u u')
+approximatedByOrEqualConstraint (SUnknown synTree) (SUnknown synTree') =
+  synTreeApproxEq synTree synTree'
 
 approximatedByOrEqualConstraint (SExtNat x) (SExtNat y) = x .== y
 approximatedByOrEqualConstraint (SExt r isInf) (SExt r' isInf') = do

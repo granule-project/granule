@@ -1,0 +1,7 @@
+-- Contraction is allowed for unrestricted values...
+dup : forall {p : Type} . *p -> (p, p)
+dup a = let !u = share a in (u, u)
+
+-- -- ...and so is weakening!
+fst : forall {p q : Type} . (p, *q) -> p
+fst (a, b) = let !u = share b in a
