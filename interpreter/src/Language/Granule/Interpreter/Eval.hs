@@ -22,23 +22,21 @@ import Language.Granule.Syntax.Type
 import Language.Granule.Context
 import Language.Granule.Utils (nullSpan, Globals, globalsExtensions, entryPoint, Extension(..))
 import Language.Granule.Runtime as RT
-
 import Language.Granule.Synthesis.Deriving (makeDerivedName)
 
 import Data.Text (cons, uncons, unpack, snoc, unsnoc)
-import Control.Monad (foldM)
 import qualified Prettyprinter as P
+import Data.Functor((<&>))
+import Control.Monad (foldM, forM_)
+
 
 import System.IO.Unsafe (unsafePerformIO)
---import Control.Exception (catch, throwIO, IOException)
 import Control.Exception (catch, IOException)
---import GHC.IO.Exception (IOErrorType( OtherError ))
 import qualified Control.Concurrent as C (forkIO)
 import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, dupChan, Chan)
 import qualified Control.Concurrent.MVar as MV
 import qualified System.IO as SIO
 
---import System.IO.Error (mkIOError)
 import Data.Bifunctor
 import Control.Monad.Extra (void)
 import Data.Unique
@@ -111,27 +109,27 @@ readChan (BChan _ bwd _ bwdMV tag pol) = do
   flag <- MV.isEmptyMVar bwdMV
   if flag
     then do
-      debugComms tag pol $ "Read Normal"
+      debugComms tag pol "Read Normal"
       x <- CC.readChan bwd
       debugComms tag pol $ "READ " ++ show x
       return x
     -- short-circuit the channel because a value was read and has been memo
     else do
-      debugComms tag pol $ "Read Putback"
+      debugComms tag pol "Read Putback"
       x <- MV.takeMVar bwdMV
       debugComms tag pol $ "READ from put back: " ++ show x
       return x
 
-putbackChan :: BinaryChannel a -> (Value (Runtime a) a) -> IO ()
+putbackChan :: BinaryChannel a -> Value (Runtime a) a -> IO ()
 putbackChan (BChan _ _ _ bwdMV tag pol) x = do
   debugComms tag pol "Putback"
   MV.putMVar bwdMV x
 
-writeChan :: Show a => BinaryChannel a -> (Value (Runtime a) a) -> IO ()
+writeChan :: Show a => BinaryChannel a -> Value (Runtime a) a -> IO ()
 writeChan (BChan fwd _ _ _ tag pol) v = do
   debugComms tag pol $ "Try to write " ++ show v
   CC.writeChan fwd v
-  debugComms tag pol $ "written"
+  debugComms tag pol "written"
 
 dupChan :: BinaryChannel a -> IO (BinaryChannel a)
 dupChan (BChan fwd bwd m n t p) = do
@@ -221,8 +219,8 @@ evalInCBNdeep ctxt (App s a b e1 e2) = do
         -- (cf. APP_R)
         -- Force eval of the parameter for primitives
         v2 <- evalInCBNdeep ctxt e2
-        vRes <- k v2
-        return vRes
+        k v2
+
 
       (Abs _ p _ e3) -> do
         -- (cf. P_BETA CBN)
@@ -316,7 +314,7 @@ evalInWHNF ctxt (LetDiamond s _ _ p _ e1 e2) = do
 evalInWHNF ctxt (Val s a b (Var _ x)) =
     case lookup x ctxt of
       Just val@(Ext _ (PrimitiveClosure f)) -> return $ Val s a b $ Ext () $ Primitive (f ctxt)
-      Just val -> return $ Val s a b $ val
+      Just val -> return $ Val s a b val
       Nothing  -> fail $ "Variable '" <> sourceName x <> "' is undefined in context."
 
 evalInWHNF _ e@(Val _ _ _ v) = return e
@@ -355,8 +353,8 @@ evalIn ctxt e =
     then do
       e' <- evalInCBNdeep ctxt e
       -- finally eagerly evaluate
-      e'' <- evalInCBV ctxt (valExpr e')
-      return e''
+      evalInCBV ctxt (valExpr e')
+
 
     else evalInCBV ctxt e
 
@@ -679,11 +677,10 @@ valExpr :: ExprFix2 g ExprF ev () -> ExprFix2 ExprF g ev ()
 valExpr = Val nullSpanNoFile () False
 
 appExpr :: ExprFix2 ExprF g ev () -> ExprFix2 ExprF g ev () -> ExprFix2 ExprF g ev ()
-appExpr e1 e2 = App nullSpanNoFile () False e1 e2
+appExpr = App nullSpanNoFile () False
 
 multiAppExpr :: ExprFix2 ExprF g ev () -> [ExprFix2 ExprF g ev ()] ->  ExprFix2 ExprF g ev ()
-multiAppExpr fun args =
-  foldl (\arg rest -> appExpr arg rest) fun args
+multiAppExpr = foldl appExpr
 
 promoteExpr :: ExprFix2 ExprF ValueF ev () -> ExprFix2 ExprF ValueF ev ()
 promoteExpr e = valExpr $ Promote () e
@@ -712,16 +709,15 @@ builtIns =
   , (mkId "cap", Ext () $ Primitive $ \(Constr () name _) -> return $ Ext () $ Primitive $ \_ ->
        case internalName name of
          "Console" -> return $ Ext () $ Primitive $ \(StringLiteral s) -> toStdout s >>
-                          (return $ (Constr () (mkId "()") []))
-         "TimeDate" -> return $ Ext () $ Primitive $ \(Constr () (internalName -> "()") []) -> RT.timeDate () >>=
-                          (\s -> return $ (StringLiteral s))
+                          return (Constr () (mkId "()") [])
+         "TimeDate" -> return $ Ext () $ Primitive $ \(Constr () (internalName -> "()") []) -> RT.timeDate () <&> StringLiteral
          _ -> error "Unknown capability")
   -- substrctural combinators
   , (mkId "moveChar", Ext () $ Primitive $ \(CharLiteral c) -> return $ Promote () (Val nullSpan () False (CharLiteral c)))
   , (mkId "moveInt", Ext () $ Primitive $ \(NumInt c) -> return $ Promote () (Val nullSpan () False (NumInt c)))
   , ( mkId "moveString"
     , Ext () $ Primitive $ \(StringLiteral s) -> return $
-        Promote () $ valExpr $ (StringLiteral s))
+        Promote () $ valExpr $ StringLiteral s)
   , (mkId "drop@Int", Ext () $ Primitive $ const $ return $ Constr () (mkId "()") [])
   , (mkId "drop@Char", Ext () $ Primitive $ const $ return $ Constr () (mkId "()") [])
   , (mkId "drop@Float", Ext () $ Primitive $ const $ return $ Constr () (mkId "()") [])
@@ -740,10 +736,10 @@ builtIns =
                               n        -> error $ show n)
   , (mkId "readInt",    Ext () $ Primitive $ \(StringLiteral s) -> return $ NumInt $ RT.readInt s)
   , (mkId "fromStdin", diamondConstr $ RT.fromStdin >>= \val -> return $ Val nullSpan () False $ StringLiteral val)
-  , (mkId "toStdout",  Ext () $ Primitive $ \(StringLiteral s) -> return $ diamondConstr $ (toStdout s) >>
-      (return $ Val nullSpan () False (Constr () (mkId "()") [])))
-  , (mkId "toStderr", Ext () $ Primitive $ \(StringLiteral s) -> return $ diamondConstr $ (toStderr s) >>
-      (return $ Val nullSpan () False (Constr () (mkId "()") [])))
+  , (mkId "toStdout",  Ext () $ Primitive $ \(StringLiteral s) -> return $ diamondConstr $ toStdout s >>
+      return (Val nullSpan () False (Constr () (mkId "()") [])))
+  , (mkId "toStderr", Ext () $ Primitive $ \(StringLiteral s) -> return $ diamondConstr $ toStderr s >>
+      return (Val nullSpan () False (Constr () (mkId "()") [])))
   , (mkId "openHandle", Ext () $ Primitive openHandle)
   , (mkId "readChar", Ext () $ Primitive readChar)
   , (mkId "writeChar", Ext () $ Primitive writeChar)
@@ -828,8 +824,8 @@ builtIns =
   , (mkId "readRef", Ext () $ Primitive readRef)
   -- Additive conjunction (linear logic)
   , (mkId "with", Ext () $ Primitive $ \v -> return $ Ext () $ Primitive $ \w -> return $ Constr () (mkId "&") [v, w])
-  , (mkId "projL", Ext () $ Primitive $ \(Constr () (Id "&" "&") [v, w]) -> return $ v)
-  , (mkId "projR", Ext () $ Primitive $ \(Constr () (Id "&" "&") [v, w]) -> return $ w)
+  , (mkId "projL", Ext () $ Primitive $ \(Constr () (Id "&" "&") [v, w]) -> return v)
+  , (mkId "projR", Ext () $ Primitive $ \(Constr () (Id "&" "&") [v, w]) -> return w)
   -- free graded monad
   -- call op x = Impure (op x (\o -> Pure o))
   , (mkId "call", Ext () $ Primitive $ \op ->
@@ -839,7 +835,7 @@ builtIns =
                                     (App nullSpan () False (valExpr op) (valExpr inp))
                                      (valExpr $ Promote () $ valExpr $ Ext () $
                                        Primitive $ \o ->
-                                         return (Ext () $ PureWrapper $ return $ (valExpr o))))
+                                         return (Ext () $ PureWrapper $ return $ valExpr o)))
   , (mkId "handle", Ext () $ PrimitiveClosure handlePrim)
   , (mkId "handleGr", Ext () $ PrimitiveClosure handlePrim)
   ]
@@ -852,9 +848,7 @@ builtIns =
       fmap_fun <- evalIn ctxt fmap_inner
       return $ Ext () $ Primitive $ \alg ->
         return $ Ext () $ Primitive $ \ret_handler ->
-          return $ Ext () $ Primitive $ \computation ->
-            case computation of
-
+          return $ Ext () $ Primitive $ \case
               -- handler alg f (Pure x) = f x
               Ext _ (PureWrapper comp) -> do
                 -- run the IO in here (should be none)
@@ -905,7 +899,7 @@ builtIns =
                           (valExpr fmap_fun)
                           [promoteExpr $ valExpr $ Ext ()
                               (Primitive (\freefa -> evalIn ctxt (LetDiamond nullSpanNoFile () False p Nothing (valExpr freefa) rest)))
-                          , valExpr $ comp])]
+                          , valExpr comp])]
 
               r -> error $ "Interal bug: handle expecting a free monad but got " <> pretty r
 
@@ -964,7 +958,7 @@ builtIns =
         -- make the chans
         receiverChans <- mapM (const newChan) [1..(natToInt n)]
         -- fork the waiters which then fork the servers
-        _ <- flip mapM receiverChans
+        forM_ receiverChans
               (\receiverChan -> C.forkIO $ void $ do
                 -- wait to receive on the main channel
                 x <- readChan receiverChan
@@ -1046,7 +1040,7 @@ builtIns =
       let (Ref () v') = unsafePerformIO $ evalIn ctxt
             (App nullSpan () False
              (Val nullSpan () False f)
-             (Val nullSpan () False (Ref () v))) in (Nec () v')
+             (Val nullSpan () False (Ref () v))) in Nec () v'
 
     split :: RValue -> IO RValue
     split v = return $ Constr () (mkId ",") [v, v]
@@ -1154,8 +1148,8 @@ builtIns =
           (CharLiteral c) -> do
             SIO.hPutChar h c
             return $ valExpr $ Ext () $ Handle h
-          _ -> error $ "Runtime exception: trying to put a non character value"))
-    writeChar _ = error $ "Runtime exception: trying to put from a non handle value"
+          _ -> error "Runtime exception: trying to put a non character value"))
+    writeChar _ = error "Runtime exception: trying to put from a non handle value"
 
     readChar :: RValue -> IO RValue
     readChar (Ext _ (Handle h)) = return $ diamondConstr $ do
@@ -1176,7 +1170,7 @@ builtIns =
       return $ Pack nullSpan () (TyName (hashUnique name)) (valExpr $ Nec () $ Val nullSpan () False $ Ext () $ Runtime (RT.FA arr)) (mkId ("id" ++ show (hashUnique name))) (TyCon (mkId "Name")) (Borrow (TyCon $ mkId "Star") (TyCon $ mkId "FloatArray"))
 
     newRef :: RValue -> IO RValue
-    newRef = \v -> do
+    newRef v = do
       ref <- RT.newRefSafe v
       name <- newUnique
       return $ Pack nullSpan () (TyName (hashUnique name)) (valExpr $ Nec () $ Val nullSpan () False $ Ext () $ Runtime (RT.PR ref)) (mkId ("id" ++ show (hashUnique name))) (TyCon (mkId "Name")) (Borrow (TyCon $ mkId "Star") (TyCon $ mkId "Ref"))
@@ -1221,16 +1215,16 @@ builtIns =
     lengthFloatArray :: RValue -> IO RValue
     lengthFloatArray (Nec () (Val _ _ _ (Ext () (Runtime (RT.FA fa))))) =
       let (e,fa') = RT.lengthFloatArray fa
-      in return $ Constr () (mkId ",") [Promote () (Val nullSpan () False $ (NumInt e)), Nec () (Val nullSpan () False $ Ext () $ Runtime (RT.FA fa'))]
+      in return $ Constr () (mkId ",") [Promote () (Val nullSpan () False (NumInt e)), Nec () (Val nullSpan () False $ Ext () $ Runtime (RT.FA fa'))]
     lengthFloatArray (Ref () (Val _ _ _ (Ext () (Runtime (RT.FA fa))))) =
       let (e,fa') = RT.lengthFloatArray fa
-      in return $ Constr () (mkId ",") [Promote () (Val nullSpan () False $ (NumInt e)), Ref () (Val nullSpan () False $ Ext () $ Runtime (RT.FA fa'))]
+      in return $ Constr () (mkId ",") [Promote () (Val nullSpan () False (NumInt e)), Ref () (Val nullSpan () False $ Ext () $ Runtime (RT.FA fa'))]
     lengthFloatArray _ = error "Runtime exception: trying to take the length of a non-array value"
 
     lengthFloatArrayI :: RValue -> IO RValue
     lengthFloatArrayI = \(Ext () (Runtime (RT.FA fa))) ->
       let (e,fa') = RT.lengthFloatArray fa
-      in return $ Constr () (mkId ",") [Promote () (Val nullSpan () False $ (NumInt e)), Ext () $ Runtime (RT.FA fa')]
+      in return $ Constr () (mkId ",") [Promote () (Val nullSpan () False (NumInt e)), Ext () $ Runtime (RT.FA fa')]
 
     writeFloatArray :: RValue -> IO RValue
     writeFloatArray (Nec _ (Val _ _ _ (Ext _ (Runtime (RT.FA fa))))) = return $
@@ -1278,7 +1272,7 @@ evalDefs ctxt (Def _ var _ _ (EquationList _ _ _ [Equation _ _ _ rf [] e]) _ : d
     case extend ctxt var val of
       Just ctxt -> evalDefs ctxt defs
       Nothing ->
-        if '@' `elem` (internalName var)
+        if '@' `elem` internalName var
           -- ignore name clashes for derived operations
           -- TODO: this is somewhat a hack- we should be able to make sure we don't
           -- regenerated derived operations, but at least they should all be equivalent...
@@ -1350,6 +1344,6 @@ evalAtEntryPoint entryPoint (AST dataDecls defs _ _ _) = do
 -- step semantics (either reduction scheme)
 isReducible :: Expr ev a -> Bool
 isReducible (Val _ _ _ (Var _ _)) = True
-isReducible (Val _ _ _ _)    = False
-isReducible (Hole _ _ _ _ _) = False
+isReducible Val {}    = False
+isReducible Hole {} = False
 isReducible _              = True

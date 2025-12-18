@@ -3,16 +3,15 @@ import Control.Monad (unless)
 import Data.Algorithm.Diff (getGroupedDiff)
 import Data.Algorithm.DiffOutput (ppDiff)
 import Data.List (sort, isInfixOf)
+import Data.Functor((<&>))
 import Test.Tasty (defaultMain, TestTree, testGroup)
 import Test.Tasty.Golden (goldenVsFile)
 import qualified Test.Tasty.Golden as G
 import Test.Tasty.Golden.Advanced (goldenTest)
-import System.Directory (renameFile)
+import System.Directory (renameFile, doesFileExist)
 import System.Exit (ExitCode)
 import System.FilePath (dropExtension, pathSeparator)
 import qualified System.IO.Strict as Strict (readFile)
---import System.Environment
-import System.Directory (doesFileExist)
 
 import Language.Granule.Interpreter (InterpreterResult(..), InterpreterError(..))
 import qualified Language.Granule.Interpreter as Interpreter
@@ -74,7 +73,7 @@ applyConfig cfgs files = aux cfgs []
 
 
 findByExtension :: Config -> [FilePath] -> FilePath -> IO [FilePath]
-findByExtension config exs path = G.findByExtension exs path >>= (return . sort . applyConfig config)
+findByExtension config exs path = G.findByExtension exs path <&> (sort . applyConfig config)
 
 goldenTestsNegative :: Config -> IO TestTree
 goldenTestsNegative config = do
