@@ -940,26 +940,47 @@ synthExpr _ _ _ (Val s _ rf (StringLiteral c)) = do
 
 -- Clone
 -- Pattern match on an applicable of `uniqueBind fun e`
+--------------------------------------
+--    G1, id |- e : [] r A
+--    G2, x : exists id' . *(A[id'/id])  |- body : B
+--    cloneable(A)
+--    1 <= r
+--- ------------------------------------------------
+----   (G1 + G2), id |- clone e as x in body : B
+---------------------------------------
 synthExpr defs gam pol
    expr@(App s a rf
      (App _ _ _
        (Val _ _ _ (Var _ (internalName -> "uniqueBind")))
        (Val _ _ _ (Abs _ (PVar _ _ _ var) _ body)))
      e) = do
-  debugM "synthExpr[uniqueBind]" (pretty s <> pretty expr)
+  debugM "synthExpr[Clone]" (pretty s <> pretty expr)
   -- Infer the type of e (the boxed argument)
   (ty, ghostVarCtxt, subst0, elabE) <- synthExpr defs gam pol e
-  -- Check that ty is actually a boxed type
+  -- Check that ty is actually a boxed type `[] r A`
   case ty of
     Box r tyA -> do
-      -- existential type for the cloned var ((exists {id : Name} . *(Rename id a))
-      idVar <- mkId <$> freshIdentifierBase "id"
+      -- extract every type var of kind `Name` from `tyA`
+      idVars <- typeVarsOfKind tyA (TyCon $ mkId "Name")
+      debugM "synthExpr[Clone]typeVars" (pretty idVars)
+      -- existential type for the cloned var ((exists {id' : Name} . *(Rename id' a))
+
+      -- make a fresh var for each of idVars
+      newIdVars <- mapM (\x -> freshIdentifierBase (internalName x) >>= (return . mkId)) idVars
+
+      -- apply the renamer for each of the idVars
+      let renamer (old, new) t = TyApp (TyApp (TyCon $ mkId "Rename") (TyVar old)) (TyVar new) `TyApp` t
+      let newAndOldVars = zip idVars newIdVars
+      let renamedTyA    = foldr renamer tyA newAndOldVars
+      -- Construct the cloned input type
       let clonedInputTy =
-            TyExists idVar (TyCon $ mkId "Name")
-              (Borrow (TyCon $ mkId "Star") (TyApp (TyApp (TyCon $ mkId "Rename") (TyVar idVar)) tyA))
+            foldr (\ idVar ty -> TyExists idVar (TyCon $ mkId "Name") ty)
+                (Borrow (TyCon $ mkId "Star") renamedTyA) newIdVars
+
+      -- cloned assumption
       let clonedAssumption = (var, Linear clonedInputTy)
 
-      debugM "synthExpr[uniqueBind]body" (pretty clonedAssumption)
+      debugM "synthExpr[Clone]body" (pretty clonedAssumption)
       -- synthesise the type of the body for the clone
       (tyB, ghostVarCtxt', subst1, elabBody) <- synthExpr defs (clonedAssumption : gam) pol body
 

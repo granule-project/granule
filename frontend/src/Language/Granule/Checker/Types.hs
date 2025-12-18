@@ -245,16 +245,16 @@ equalTypesRelatedCoeffectsInner s rel (Borrow p1 t1) (Borrow p2 t2) _ sp Types =
   u <- combineSubstitutions s unif unif'
   return (eq && eq', u)
 
+-- Handle equality involving renaming
+equalTypesRelatedCoeffectsInner s rel
+   t0@(TyApp (TyApp (TyApp (TyCon (internalName -> "Rename")) (TyVar oldName)) (TyVar newName)) t) t' ind sp mode = do
+    debugM "RenameL" (pretty t0 <> " = " <> pretty t')
+    eqRenameFunction s rel oldName newName t t' sp
 
-equalTypesRelatedCoeffectsInner s rel t0@(TyApp (TyApp (TyCon d) name) t) t' ind sp mode
-  | internalName d == "Rename" = do
-    debugM "RenameL" (pretty t <> " = " <> pretty t')
-    eqRenameFunction s rel name t t' sp
-
-equalTypesRelatedCoeffectsInner s rel t' t0@(TyApp (TyApp (TyCon d) name) t) ind sp mode
-  | internalName d == "Rename" = do
-    debugM "RenameR" (pretty t <> " = " <> pretty t')
-    eqRenameFunction s rel name t t' sp
+equalTypesRelatedCoeffectsInner s rel t' 
+  t0@(TyApp (TyApp (TyApp (TyCon (internalName -> "Rename")) (TyVar oldName)) (TyVar newName)) t) ind sp mode = do
+    debugM "RenameR" (pretty t' <> " = " <> pretty t0)
+    eqRenameFunction s rel oldName newName t t' sp
 
 -- ## GENERAL EQUALITY
 
@@ -557,35 +557,18 @@ eqGradedProtocolFunction sp rel grad (TyVar v) t ind = do
 eqGradedProtocolFunction sp _ grad t1 t2 _ = throw
   TypeError{ errLoc = sp, tyExpected = (TyApp (TyApp (TyCon $ mkId "Graded") grad) t1), tyActual = t2 }
 
--- Compute the behaviour of `Rename id a` on a type `A`
-renameBeta :: (?globals :: Globals)
-  => Type -- name
+-- Compute the behaviour of `Rename oldId newId a`
+-- where the arguments here are `oldId`, `newId` and `a`
+renameBeta ::
+     Id -- oldName
+  -> Id -- newName
   -> Type -- type
   -> Checker Type
-renameBeta name (TyApp (TyApp (TyCon c) t) s)
-  | internalName c == "Ref" = do
-    s' <- renameBeta name s
-    return $ (TyApp (TyApp (TyCon c) name) s')
-
-renameBeta name (TyApp (TyCon c) t)
-  | internalName c == "FloatArray" = do
-    return $ (TyApp (TyCon c) name)
-
-renameBeta name (TyApp (TyApp (TyCon c) t1) t2)
-  | internalName c == "," = do
-  t1' <- renameBeta name t1
-  t2' <- renameBeta name t2
-  return $ (TyApp (TyApp (TyCon c) t1') t2')
-
-renameBeta name (Star g t) = do
-  t' <- renameBeta name t
-  return $ (Star g t')
-
-renameBeta name (Borrow p t) = do
-  t' <- renameBeta name t
-  return $ (Borrow p t')
-
-renameBeta name t = return t
+renameBeta oldName newName t = 
+  typeFoldM (baseTypeFold { tfTyVar = return . TyVar . renamer }) t
+    where
+      renamer :: Id -> Id
+      renamer id = if id == oldName then newName else id
 
 renameBetaInvert :: (?globals :: Globals)
   => Span
@@ -631,30 +614,34 @@ eqRenameFunction :: (?globals :: Globals)
   => Span
   -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
   -- These two arguments are the arguments to `Rename id a`
-  -> Type -- name
+  -> Id -- oldName
+  -> Id -- newName
   -> Type -- type
   -- This is the argument of the type which we are trying to see if it equal to `Rename id a`
   -> Type -- compared against
   -> SpecIndicator
   -> Checker (Bool, Substitution)
-
-eqRenameFunction sp rel name t (TyApp (TyApp (TyCon d) name') t') ind
-  | internalName d == "Rename" = do
-  (_, subst) <- equalTypesRelatedCoeffects sp rel name name' ind Types
-  (eq, subst') <- eqRenameFunction sp rel name t t' ind
-  substFinal <- combineSubstitutions sp subst subst'
-  return (eq, substFinal)
-
-eqRenameFunction sp rel name (TyVar v) t ind = do
-  (t', subst) <- renameBetaInvert sp rel name t ind Types
-  (eq, subst') <- equalTypesRelatedCoeffects sp rel t' (TyVar v) ind Types
-  substFinal <- combineSubstitutions sp subst subst'
-  return (eq, substFinal)
-
-eqRenameFunction sp rel name t t' ind = do
-  t'' <- renameBeta name t
+eqRenameFunction sp rel oldName newName t t' ind = do
+  t'' <- renameBeta oldName newName t
   (eq, u) <- equalTypesRelatedCoeffects sp rel t'' t' ind Types
   return (eq, u)
+
+-- eqRenameFunction sp rel name t (TyApp (TyApp (TyCon (internalName d -> "Rename")) name') t') ind = do
+--   (_, subst).  <- equalTypesRelatedCoeffects sp rel name name' ind Types
+--   (eq, subst') <- eqRenameFunction sp rel name t t' ind
+--   substFinal   <- combineSubstitutions sp subst subst'
+--   return (eq, substFinal)
+
+-- eqRenameFunction sp rel name (TyVar v) t ind = do
+--   (t', subst)  <- renameBetaInvert sp rel name t ind Types
+--   (eq, subst') <- equalTypesRelatedCoeffects sp rel t' (TyVar v) ind Types
+--   substFinal   <- combineSubstitutions sp subst subst'
+--   return (eq, substFinal)
+
+-- eqRenameFunction sp rel name t t' ind = do
+--   t'' <- renameBeta name t
+--   (eq, u) <- equalTypesRelatedCoeffects sp rel t'' t' ind Types
+--  return (eq, u)
 
 -- | Is this protocol dual to the other?
 isDualSession :: (?globals :: Globals)
@@ -825,3 +812,4 @@ isPermission s ty = do
       putChecker
       return $ Right pTy
     Left err -> return $ Left pTy
+

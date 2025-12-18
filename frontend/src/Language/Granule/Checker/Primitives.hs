@@ -86,7 +86,7 @@ typeConstructors =
     , (mkId "ReceivePrefix", (funTy (tyCon "Protocol") (tyCon "Predicate"), [], [0]))
     , (mkId "Sends", (funTy (tyCon "Nat") (funTy (tyCon "Protocol") (tyCon "Predicate")), [], [0]))
     , (mkId "Graded", (funTy (tyCon "Nat") (funTy (tyCon "Protocol") (tyCon "Protocol")), [], [0]))
-    , (mkId "Rename", (funTy (tyCon "Name") (funTy (Type 0) (Type 0)), [], [0]))
+    , (mkId "Rename", (funTy (tyCon "Name") (funTy (tyCon "Name") (funTy (Type 0) (Type 0))), [], [0]))
     -- # Coeffect types
     , (mkId "Nat",      (kcoeffect, [], []))
     , (mkId "Q",        (kcoeffect, [], [])) -- Rationals
