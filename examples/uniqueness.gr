@@ -34,7 +34,7 @@ goodDesire uniqueCake = let !cake = share uniqueCake in (eat cake, have cake)
 
 -- Copying a non-linear value as unique and then borrowing it gives you the
 -- original value
-unitR : forall {a : Type} . !a -> !a
+unitR : forall {a : Type} . !a -> !(exists {id : Name} . a)
 unitR t = clone t as x in share x
 
 -- Borrowing a unique value and copying it to apply a function is the same as
