@@ -1,18 +1,18 @@
 data X = B | C | D
 
-all : Int [{B, C, D}]
+all : Int [{B, C, D}.]
 all = [42]
 
-some : Int [{B, C}]
+some : Int [{B, C}.]
 some = [42]
 
-none : Int [{} : Set X]
+none : Int [{} : SetOp X]
 none = [42]
 
 extract : forall {a : Type, s : Semiring} . a [1 : s] -> a
 extract [x] = x
 
-weak : forall {a : Type} . a [{} : Set X] -> ()
+weak : forall {a : Type} . a [{} : SetOp X] -> ()
 weak [_] = ()
 
 good1 : ()

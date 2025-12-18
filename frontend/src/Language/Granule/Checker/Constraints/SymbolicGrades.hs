@@ -11,10 +11,11 @@ import Language.Granule.Checker.Constraints.SynTree
 import Language.Granule.Syntax.Type
 
 import GHC.Generics (Generic)
+import GHC.Stack (HasCallStack)
 import Data.SBV hiding (kindOf, name, symbolic)
 import qualified Data.SBV.Set as S
 
-solverError :: String -> a
+solverError :: HasCallStack => String -> a
 solverError = error
 
 -- Symbolic grades, for coeffects and indices
