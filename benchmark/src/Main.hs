@@ -26,8 +26,6 @@ import qualified Data.Time as T
 import qualified System.IO.Strict as SIO
 import System.Environment (getArgs)
 
-import Language.Granule.Benchmarks
-
 
 data Measurement = Measurement {
      smtCalls        :: Integer
@@ -163,7 +161,7 @@ processArgs (arg:args)
           let (files, categories, fpm, repeats) = processArgs args'
           in (files, categories, fpm, fromInteger $ read arg')
         _ -> error "-n must be given an integer argument"
-  | otherwise = error $ printUsage
+  | otherwise = error printUsage
 
 printUsage :: String
 printUsage = ""
@@ -208,8 +206,8 @@ main = do
   putStrLn "\\begin{center}"
   putStrLn "\\setlength{\\tabcolsep}{0.3em}"
   -- let seps = replicate (length relevantModes) "p{0.75em}rccc"
-  putStrLn $ "\\begin{tabular}{p{1.25em}cc|p{0.75em}rc|p{0.75em}rcc|p{0.75em}rc} & & & "
-  putStrLn $ "\\multicolumn{3}{c|}{Graded}&\\multicolumn{4}{c|}{Cartesian}&\\multicolumn{3}{c|}{Cartesian (No Retries)} \\\\ \\hline \\multicolumn{2}{c}{{Problem}}& \\multicolumn{1}{c|}{{Ctxt}} & & \\multicolumn{1}{c}{$\\mu{T}$ (ms)} & \\multicolumn{1}{c|}{{\\#/Exs.}} & & \\multicolumn{1}{c}{$\\mu{T}$ (ms)} & \\multicolumn{1}{c}{\\textsc{N}} & \\multicolumn{1}{c|}{$\\mu{T}$ + OracleT (ms)}  & & \\multicolumn{1}{c}{$\\mu{T}$ (ms)} & \\multicolumn{1}{c|}{{\\#/Exs.}}\\\\ \\hline"
+  putStrLn "\\begin{tabular}{p{1.25em}cc|p{0.75em}rc|p{0.75em}rcc|p{0.75em}rc} & & & "
+  putStrLn "\\multicolumn{3}{c|}{Graded}&\\multicolumn{4}{c|}{Cartesian}&\\multicolumn{3}{c|}{Cartesian (No Retries)} \\\\ \\hline \\multicolumn{2}{c}{{Problem}}& \\multicolumn{1}{c|}{{Ctxt}} & & \\multicolumn{1}{c}{$\\mu{T}$ (ms)} & \\multicolumn{1}{c|}{{\\#/Exs.}} & & \\multicolumn{1}{c}{$\\mu{T}$ (ms)} & \\multicolumn{1}{c}{\\textsc{N}} & \\multicolumn{1}{c|}{$\\mu{T}$ + OracleT (ms)}  & & \\multicolumn{1}{c}{$\\mu{T}$ (ms)} & \\multicolumn{1}{c|}{{\\#/Exs.}}\\\\ \\hline"
   -- let colHeadings = map (\(modeTitle, _) -> "\\multicolumn{5}{c|}{"<> modeTitle <> "}") relevantModes
   -- putStrLn $ intercalate "&" colHeadings <> "\\\\ \\hline"
 
@@ -225,7 +223,7 @@ main = do
 
           putStr categoryMessage
           putStrLn " & "
-          putStr texName 
+          putStr texName
           putStr " & "
           let ctxt = fifth5 $ head resultsPerModePerFile
           report1 ctxt contextSize
@@ -238,16 +236,16 @@ main = do
                 if not (timeout aggregate) && leadTime > currentTime then
                   if mode == "--cart-synth 1" then
                     if leadTime > currentTime +  attemptsToSeconds (cartAttempts aggregate) then
-                      return $ (Just (mode, currentTime), cartLead)
+                      return (Just (mode, currentTime), cartLead)
                     else
                       return (Just (m, leadTime), True)
                   else
-                    return $ (Just (mode, currentTime), cartLead)
+                    return (Just (mode, currentTime), cartLead)
                 else
                   return lead
             ) (Nothing, False) resultsPerModePerFile
 
-          resultsFormatted <- forM resultsPerModePerFile $ (\(texName, category, fileName, mode, results@(measurements, aggregate)) -> do
+          resultsFormatted <- forM resultsPerModePerFile (\(texName, category, fileName, mode, results@(measurements, aggregate)) -> do
             return $  sequence (if splitTimeAndSMT then
                 if not $ success aggregate then
                   [
@@ -263,18 +261,18 @@ main = do
                 else
                   [ putStr " & ", report1 results success
                   , putStr " & "
-                  , 
-                    if mode == "--cart-synth 1" then 
-                      if not $ snd leadTime then 
+                  ,
+                    if mode == "--cart-synth 1" then
+                      if not $ snd leadTime then
                         if fromMaybeFst "" (fst leadTime) == mode then reportLead results synthTime else report results synthTime
-                      else 
+                      else
                         reportLead2 results synthTime
-                    else 
+                    else
                       if fromMaybeFst "" (fst leadTime) == mode then reportLead results synthTime else report results synthTime
                   , putStr " & "
-                  , if mode == "--cart-synth 1" then 
+                  , if mode == "--cart-synth 1" then
                       report1 results cartAttempts
-                    else  
+                    else
                       report1 results examplesUsed
 
                   , if mode == "--cart-synth 1" then putStr " & " else putStr ""
@@ -322,10 +320,10 @@ fromMaybeSnd x Nothing  = x
 fromMaybeSnd _ (Just (_, x)) = x
 
 pad :: String -> String
-pad str = str ++ (replicate (if length str > 25 then 0 else 25 - length str) ' ')
+pad str = str ++ replicate (if length str > 25 then 0 else 25 - length str) ' '
 
 lookupMany :: Eq a => [a] -> [(a,b)] -> [b]
-lookupMany xs map = mapMaybe (flip lookup map) xs
+lookupMany xs map = mapMaybe (`lookup` map) xs
 
 measureSynthesis :: Int -> String -> FilePath -> String -> IO ([Measurement], Measurement)
 measureSynthesis repeatTimes file mode logIdent = do
@@ -339,7 +337,7 @@ measureSynthesis repeatTimes file mode logIdent = do
    -- Measurement computation
    measure :: IO Measurement
    measure = do
-     code <- system $ cmd
+     code <- system cmd
      case code of
        ExitFailure _ -> do
          return $ Measurement
@@ -365,7 +363,7 @@ measureSynthesis repeatTimes file mode logIdent = do
         --  putStrLn $ show $ (head $ drop (k - 1) $ lines logData)
         --  putStrLn "BLAH"
 
-         return $ read (head $ drop (k - 1) $ lines logData)
+         return $ read (lines logData !! max 0 (k - 1))
 
 -- Aggregate the results from multiple runs
 aggregate :: [Measurement] -> Measurement

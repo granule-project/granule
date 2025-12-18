@@ -95,9 +95,7 @@ changeFileExtension str = reverse (drop 2 $ reverse str) ++ "hs"
 
 getEmbeddedGrFlags :: String -> Maybe GrConfig
 getEmbeddedGrFlags
-  = foldr (<|>) Nothing
-  . map getEmbeddedGrFlagsLine
-  . take 3 -- only check for flags within the top 3 lines
+  = foldr ((<|>) . getEmbeddedGrFlagsLine) Nothing . take 3 -- only check for flags within the top 3 lines
   . filter (not . all isSpace)
   . lines
   where

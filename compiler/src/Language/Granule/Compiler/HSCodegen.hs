@@ -143,8 +143,8 @@ cgType (GrType.TyInfix t1 t2 t3) = return mkUnit
 cgType (GrType.TySet p l_t) = return mkUnit
 cgType (GrType.TyCase t l_p_tt) = unsupported "cgType: tycase not implemented"
 cgType (GrType.TySig t t2) = unsupported "cgType: tysig not implemented"
-cgType (GrType.TyExists _ _ _) = unsupported "cgType: tyexists not implemented"
-cgType (GrType.TyForall _ _ _) = unsupported "cgType: tyforall not implemented"
+cgType (GrType.TyExists {}) = unsupported "cgType: tyexists not implemented"
+cgType (GrType.TyForall {}) = unsupported "cgType: tyforall not implemented"
 cgType (GrType.TyName _) = unsupported "cgType: tyname not implemented"
 
 isTupleType :: GrType.Type -> Bool

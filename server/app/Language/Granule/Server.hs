@@ -4,7 +4,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE TypeOperators #-}
 
 module Language.Granule.Server where
@@ -17,6 +16,7 @@ import Control.Monad.Reader (ReaderT, ask, runReaderT)
 import Control.Monad.Trans.Class
 import Data.Default (Default(..))
 import Data.Foldable (toList)
+import Data.Functor ((<&>))
 import Data.List (isInfixOf,isPrefixOf)
 import Data.List.NonEmpty (NonEmpty)
 import Data.List.Split
@@ -121,7 +121,7 @@ serverParse input = do
           let path = if fileLocal then i else includePath </> i
           let ?globals = ?globals { globalsSourceFilePath = Just path } in do
             src <- readFile path
-            output <- return $ Parser.parseDefs path src
+            let output = Parser.parseDefs path src
             case output of
               Left s -> return $ Left s
               Right (AST dds' defs' imports' hidden' _, extensions') ->
@@ -133,16 +133,17 @@ noRange :: Range
 noRange = Range (Position 0 0) (Position 100000 0)
 
 getParseErrorRange :: String -> Range
-getParseErrorRange s = if isInfixOf "parse error" s then
+getParseErrorRange s |  "parse error" `isInfixOf` s =
     let _:xs = splitOn ".gr:" s
         line:col:_ = numsFromString (concat xs)
-        (l, c) = ((read line - 1), (read col - 1))
+        (l, c) = (read line - 1, read col - 1)
     in Range (Position l c) (Position l (c+1))
-  else if isInfixOf "lexical error" s then
+                     | "lexical error" `isInfixOf` s =
     let line:col:_ = numsFromString s
-        (l, c) = ((read line - 1), (read col - 1))
+        (l, c) = (read line - 1, read col - 1)
     in Range (Position l c) (Position l (c+1))
-  else noRange
+                     | otherwise = noRange
+  
 
 numsFromString :: String -> [String]
 numsFromString s = words $ map (\x -> if x `elem` ("0123456789" :: String) then x else ' ') s
@@ -150,7 +151,7 @@ numsFromString s = words $ map (\x -> if x `elem` ("0123456789" :: String) then 
 validateGranuleCode :: (?globals :: Globals) => NormalizedUri -> TextDocumentVersion -> T.Text -> LspS ()
 validateGranuleCode doc version content = let ?globals = ?globals {globalsSourceFilePath = Just $ fromUri doc} in do
   -- debugS $ "Validating: " <> T.pack (show doc) <> " ( " <> content <> ")"
-  modifyLsState (\x -> def)
+  modifyLsState (const def)
   flushDiagnosticsBySource 0 (Just "grls")
   pf <- lift $ lift $ serverParseFreshen (T.unpack content)
   case pf of
@@ -213,9 +214,9 @@ objectToSymbol :: (?globals :: Globals) => (a -> Span) -> (a -> Id) -> a -> Symb
 objectToSymbol objSpan objId obj = let loc = objSpan obj in SymbolInformation
   (T.pack $ pretty $ objId obj)
   SymbolKind_Variable
-  (Nothing)
-  (Nothing)
-  (Nothing)
+  Nothing
+  Nothing
+  Nothing
   (Location
       (filePathToUri $ filename loc)
       (Range
@@ -239,7 +240,7 @@ spanToLocation s = Location
 getWordAtPosition :: T.Text -> Position -> Maybe String
 getWordAtPosition t (Position l c) = let ls = lines (T.unpack t) in
   if Prelude.length ls < fromIntegral l then Nothing else let
-    targetLine = ls!!(fromIntegral l) in
+    targetLine = ls !! fromIntegral l in
       if Prelude.length targetLine < fromIntegral c then Nothing else
         Just $ getWordFromString targetLine (fromIntegral c) ""
 
@@ -270,7 +271,7 @@ handlers = mconcat
       case mdoc of
         Just vf@(VirtualFile _ version _rope) -> do
           validateGranuleCode doc (maybeToNull (Just (fromIntegral version))) (virtualFileText vf)
-        _ -> debugS $ "No virtual file found for: " <> (T.pack (show msg))
+        _ -> debugS $ "No virtual file found for: " <> T.pack (show msg)
   , requestHandler SMethod_WorkspaceSymbol $ \req responder -> do
       let query = T.unpack $ req ^. L.params . L.query
       defns <- getDefns
@@ -281,7 +282,7 @@ handlers = mconcat
           let possibleDecl = M.lookup query decls
           case possibleDecl of
             Nothing -> do
-              let constrs = concatMap (\x -> dataDeclDataConstrs x) decls
+              let constrs = concatMap dataDeclDataConstrs decls
                   constrIds = M.fromList $ map (\x -> (pretty $ dataConstrId x, x)) constrs
                   possibleConstr = M.lookup query constrIds
               case possibleConstr of
@@ -300,7 +301,7 @@ handlers = mconcat
               query = getWordAtPosition t pos
           validateGranuleCode doc (maybeToNull (Just (fromIntegral version))) t
           case query of
-            Nothing -> debugS $ "This should be impossible!"
+            Nothing -> debugS "This should be impossible!"
             Just q -> do
               defns <- getDefns
               let possibleDefn = M.lookup q defns
@@ -310,7 +311,7 @@ handlers = mconcat
                   let possibleDecl = M.lookup q decls
                   case possibleDecl of
                     Nothing -> do
-                      let constrs = concatMap (\x -> dataDeclDataConstrs x) decls
+                      let constrs = concatMap dataDeclDataConstrs decls
                           constrIds = M.fromList $ map (\x -> (pretty $ dataConstrId x, x)) constrs
                           possibleConstr = M.lookup q constrIds
                       case possibleConstr of
@@ -318,12 +319,12 @@ handlers = mconcat
                         Just c -> responder $ Right $ InL $ Definition $ InL $ spanToLocation $ dataConstrSpan c
                     Just d -> responder $ Right $ InL $ Definition $ InL $ spanToLocation $ dataDeclSpan d
                 Just d -> responder $ Right $ InL $ Definition $ InL $ spanToLocation $ defSpan d
-        _ -> debugS $ "No virtual file found for: " <> (T.pack (show doc))
+        _ -> debugS $ "No virtual file found for: " <> T.pack (show doc)
   ]
 
 main :: IO Int
 main = do
-  globals <- Interpreter.getGrConfig >>= (return . Interpreter.grGlobals . snd)
+  globals <- Interpreter.getGrConfig <&> (Interpreter.grGlobals . snd)
   state <- newLsStateVar
   runServer $ ServerDefinition
     { onConfigChange = \_ -> pure ()
@@ -331,7 +332,7 @@ main = do
     , doInitialize = const . pure . Right
     , parseConfig = \_ _ -> Left "Not supported"
     , configSection = T.pack "granule"
-    , staticHandlers = let ?globals = globals in (\_ -> handlers)
+    , staticHandlers = let ?globals = globals in const handlers
     , interpretHandler = \env -> Iso (\lsps -> runLspS lsps state env) liftIO
     , options =
       defaultOptions
