@@ -335,8 +335,9 @@ executable grc
   import: granule-default-lang
   import: granule-dependencies
   import: granule-ghc-warnings
-  main-is: Language/Granule/Compiler.hs
+  main-is: Main.hs
   other-modules:
+      Language.Granule.Compiler
       Paths_granule
   autogen-modules:
       Paths_granule
