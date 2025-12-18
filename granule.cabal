@@ -63,6 +63,10 @@ common granule-ghc-warnings
     -fno-warn-unticked-promoted-constructors
     -fno-warn-partial-type-signatures
 
+-- Library Components
+--
+--
+
 library frontend
   import: granule-default-lang
   import: granule-dependencies
@@ -73,6 +77,7 @@ library frontend
       Language.Granule.Checker.Coeffects
       Language.Granule.Checker.Constraints
       Language.Granule.Checker.Constraints.SNatX
+      Language.Granule.Checker.Constraints.SynTree
       Language.Granule.Checker.DataTypes
       Language.Granule.Checker.Flatten
       Language.Granule.Checker.Ghost
@@ -148,30 +153,6 @@ library frontend
     , syz ==0.2.0.0
     , text-replace ==0.1.0.3
 
-test-suite frontend-spec
-  import: granule-default-lang
-  import: granule-dependencies
-  import: granule-ghc-warnings
-  type: exitcode-stdio-1.0
-  main-is: Spec.hs
-  other-modules:
-      Data.Bifunctor.FoldableSpec
-      Language.Granule.Checker.CheckerSpec
-      Language.Granule.Checker.MonadSpec
-      Language.Granule.Checker.SubstitutionsSpec
-      Language.Granule.Checker.TypesSpec
-      Language.Granule.Syntax.ExprSpec
-      Language.Granule.Synthesis.CommonSpec
-      Language.Granule.Synthesis.SplittingSpec
-      Language.Granule.Synthesis.SynthSpec
-  hs-source-dirs:
-      frontend/tests/hspec
-  build-depends:
-      QuickCheck
-    , granule:frontend
-    , hspec
-    , syz
-
 library interpreter
   import: granule-default-lang
   import: granule-dependencies
@@ -195,88 +176,6 @@ library interpreter
     , granule:runtime
     , logict >=0.7.1.0
     , optparse-applicative
-
-executable gr
-  import: granule-default-lang
-  import: granule-dependencies
-  import: granule-ghc-warnings
-  main-is: Language/Granule/Interpreter.hs
-  other-modules:
-      Language.Granule.Doc
-      Language.Granule.Interpreter.Desugar
-      Language.Granule.Interpreter.Eval
-      Paths_granule
-  autogen-modules:
-      Paths_granule
-  hs-source-dirs:
-      interpreter/src
-  build-depends:
-    , concurrent-extra
-    , extra
-    , gitrev
-    , granule:frontend
-    , granule:interpreter
-    , granule:runtime
-    , logict >=0.7.1.0
-    , optparse-applicative
-
-executable grls
-  import: granule-default-lang
-  import: granule-dependencies
-  import: granule-ghc-warnings
-  main-is: Language/Granule/Server.hs
-  hs-source-dirs:
-      server/app
-  build-depends:
-    , data-default
-    , granule:frontend
-    , granule:interpreter
-    , lens
-    , lsp ==2.7.0.1
-    , split
-
-test-suite gr-golden
-  import: granule-default-lang
-  import: granule-dependencies
-  import: granule-ghc-warnings
-  type: exitcode-stdio-1.0
-  main-is: Golden.hs
-  hs-source-dirs:
-      interpreter/tests
-  build-depends:
-      Diff
-    , concurrent-extra
-    , extra
-    , gitrev
-    , granule:frontend
-    , granule:interpreter
-    , granule:runtime
-    , logict >=0.7.1.0
-    , optparse-applicative
-    , strict
-    , tasty
-    , tasty-golden
-
-executable grepl
-  import: granule-default-lang
-  import: granule-dependencies
-  import: granule-ghc-warnings
-  main-is: Language/Granule/Main.hs
-  other-modules:
-      Language.Granule.Queue
-      Language.Granule.ReplError
-      Language.Granule.ReplParser
-      Paths_granule
-  autogen-modules:
-      Paths_granule
-  hs-source-dirs:
-      repl/app
-  build-depends:
-    , filemanip           ==0.3.6.3
-    , granule:frontend
-    , granule:interpreter 
-    , haskeline           ==0.8.2
-    , parsec              ==3.1.16.1
 
 library runtime
   import: granule-default-lang
@@ -317,6 +216,119 @@ library compiler
     , optparse-applicative
     , silently
 
+-- Test-suites
+--
+--
+
+test-suite frontend-spec
+  import: granule-default-lang
+  import: granule-dependencies
+  import: granule-ghc-warnings
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Data.Bifunctor.FoldableSpec
+      Language.Granule.Checker.CheckerSpec
+      Language.Granule.Checker.MonadSpec
+      Language.Granule.Checker.SubstitutionsSpec
+      Language.Granule.Checker.TypesSpec
+      Language.Granule.Syntax.ExprSpec
+      Language.Granule.Synthesis.CommonSpec
+      Language.Granule.Synthesis.SplittingSpec
+      Language.Granule.Synthesis.SynthSpec
+  hs-source-dirs:
+      frontend/tests/hspec
+  build-depends:
+      QuickCheck
+    , granule:frontend
+    , hspec
+    , syz
+
+test-suite gr-golden
+  import: granule-default-lang
+  import: granule-dependencies
+  import: granule-ghc-warnings
+  type: exitcode-stdio-1.0
+  main-is: Golden.hs
+  hs-source-dirs:
+      interpreter/tests
+  build-depends:
+      Diff
+    , concurrent-extra
+    , extra
+    , gitrev
+    , granule:frontend
+    , granule:interpreter
+    , granule:runtime
+    , logict >=0.7.1.0
+    , optparse-applicative
+    , strict
+    , tasty
+    , tasty-golden
+
+-- Executables
+--
+--
+
+executable gr
+  import: granule-default-lang
+  import: granule-dependencies
+  import: granule-ghc-warnings
+  main-is: Language/Granule/Interpreter.hs
+  other-modules:
+      Language.Granule.Doc
+      Language.Granule.Interpreter.Desugar
+      Language.Granule.Interpreter.Eval
+      Paths_granule
+  autogen-modules:
+      Paths_granule
+  hs-source-dirs:
+      interpreter/src
+  build-depends:
+    , concurrent-extra
+    , extra
+    , gitrev
+    , granule:frontend
+    , granule:interpreter
+    , granule:runtime
+    , logict >=0.7.1.0
+    , optparse-applicative
+
+executable grls
+  import: granule-default-lang
+  import: granule-dependencies
+  import: granule-ghc-warnings
+  main-is: Language/Granule/Server.hs
+  hs-source-dirs:
+      server/app
+  build-depends:
+    , data-default
+    , granule:frontend
+    , granule:interpreter
+    , lens
+    , lsp ==2.7.0.1
+    , split
+
+executable grepl
+  import: granule-default-lang
+  import: granule-dependencies
+  import: granule-ghc-warnings
+  main-is: Language/Granule/Main.hs
+  other-modules:
+      Language.Granule.Queue
+      Language.Granule.ReplError
+      Language.Granule.ReplParser
+      Paths_granule
+  autogen-modules:
+      Paths_granule
+  hs-source-dirs:
+      repl/app
+  build-depends:
+    , filemanip           ==0.3.6.3
+    , granule:frontend
+    , granule:interpreter 
+    , haskeline           ==0.8.2
+    , parsec              ==3.1.16.1
 
 executable grc
   import: granule-default-lang
