@@ -25,12 +25,12 @@ newtype Substitutors =
   deriving (Eq, Show)
 
 instance Pretty Substitutors where
-  pretty_new (SubstT t) = pretty_new t
+  wlpretty (SubstT t) = wlpretty t
 
 instance {-# OVERLAPS #-} Pretty (Ctxt Substitutors) where
-  pretty_new = P.cat . (P.punctuate " | ") . (map prettyCoerce)
+  wlpretty = P.cat . (P.punctuate " | ") . (map prettyCoerce)
     where
-      prettyCoerce (v, SubstT t) = pretty_new v <> " ~ " <> pretty_new t
+      prettyCoerce (v, SubstT t) = wlpretty v <> " ~ " <> wlpretty t
 
 instance Term Substitution where
   freeVars [] = []

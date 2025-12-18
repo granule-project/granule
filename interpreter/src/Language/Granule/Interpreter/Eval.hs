@@ -160,7 +160,7 @@ instance Show (Runtime a) where
   show (FreeMonadBind r p k) = "do {... <- " <> show r <> "; ...}"
 
 instance Pretty (Runtime a) where
-  pretty_new = P.pretty . show
+  wlpretty = P.pretty . show
 
 evalBinOp :: Operator -> RValue -> RValue -> RValue
 evalBinOp op v1 v2 = case op of

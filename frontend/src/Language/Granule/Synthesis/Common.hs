@@ -113,7 +113,7 @@ data RuleInfo =
   deriving (Show, Eq)
 
 instance Pretty RuleInfo where
-  pretty_new = P.pretty . show
+  wlpretty = P.pretty . show
 
 -- An SAssumption is an assumption used for synthesis:
 --  * It is either a standard Granule assumption OR
@@ -140,10 +140,10 @@ increaseDepth (x, SVar ty sInfo depth) = (x, SVar ty sInfo (depth+1))
 increaseDepth (x, SDef tyS coeff depth) = (x, SDef tyS coeff (depth+1))
 
 instance Pretty SAssumption where
-  pretty_new (SVar (Linear ty) _ _) = pretty_new ty
-  pretty_new (SVar (Discharged ty g) _ _) = pretty_new ty <> " % " <> pretty_new g
-  pretty_new (SDef tyS _ _) = pretty_new tyS
-  pretty_new x = error "undefined"
+  wlpretty (SVar (Linear ty) _ _) = wlpretty ty
+  wlpretty (SVar (Discharged ty g) _ _) = wlpretty ty <> " % " <> wlpretty g
+  wlpretty (SDef tyS _ _) = wlpretty tyS
+  wlpretty x = error "undefined"
 
 -- Phases of focusing, in brief:
 -- * Right Async: (initial phase) introduction rule abstraction, when abs

@@ -106,12 +106,12 @@ instance Term Assumption where
   freeVars (Ghost c) = freeVars c
 
 instance Pretty Assumption where
-    pretty_new (Linear ty) = pretty_new ty
-    pretty_new (Discharged t c) = ".[" <> pretty_new t <> "]. " <> prettyNestedNew c
-    pretty_new (Ghost c) = "ghost(" <> pretty_new c <> ")"
+    wlpretty (Linear ty) = wlpretty ty
+    wlpretty (Discharged t c) = ".[" <> wlpretty t <> "]. " <> prettyNestedNew c
+    wlpretty (Ghost c) = "ghost(" <> wlpretty c <> ")"
 
 instance {-# OVERLAPS #-} Pretty (Id, Assumption) where
-   pretty_new (a, b) = pretty_new a <> " : " <> pretty_new b
+   wlpretty (a, b) = wlpretty a <> " : " <> wlpretty b
 
 -- Describes where a pattern is fully consuming, i.e. amounts
 -- to linear use and therefore triggers other patterns to be counted

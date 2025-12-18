@@ -43,7 +43,7 @@ data SynthesisData =
   deriving Show
 
 instance Pretty SynthesisData where
-  pretty_new = P.pretty . show
+  wlpretty = P.pretty . show
 
 instance Semigroup SynthesisData where
  (SynthesisData c smt t s p st cons def max atps gp) <>
