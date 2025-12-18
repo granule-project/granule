@@ -17,7 +17,7 @@ import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Data.Functor.Identity (runIdentity)
 import Data.Maybe (fromMaybe)
-import Data.List (isPrefixOf, sortBy, (\\))
+import Data.List (isPrefixOf, sortBy, (\\), nub)
 
 import Language.Granule.Context
 
@@ -1382,7 +1382,9 @@ instance Unifiable t => Unifiable (Maybe t) where
 -- the given kind
 typeVarsOfKind :: (?globals :: Globals) => Type -> Kind -> Checker [Id]
 typeVarsOfKind t k = do
-  typeFoldM algebra t where
+    vars <- typeFoldM algebra t 
+    return (nub vars)
+  where
     algebra = TypeFold
       { tfTy = \_ -> return []
       , tfFunTy = \_ _ x y -> return (x ++ y)
