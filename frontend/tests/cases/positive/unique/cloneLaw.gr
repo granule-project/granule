@@ -1,2 +1,3 @@
-unitR : forall {a : Type, id : Name} . !(*(Ref id a)) -> exists {id1 : Name} . !(Ref id1 a)
-unitR t = clone t as x in share x
+unitL : forall {a b : Type, id : Name} . 
+          *(FloatArray id) -> (exists {id1 : Name} . *(FloatArray id1) -> b) -> b
+unitL t f = clone (share t) as x in f x
