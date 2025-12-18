@@ -33,9 +33,10 @@ goodDesire : *Cake -> (Happy, Cake)
 goodDesire uniqueCake = let !cake = share uniqueCake in (eat cake, have cake)
 
 -- Borrowing a unique value and copying it to apply a function is the same as
--- just applying the function
-unitL : forall {a b : Type} . *a -> (!a -> !b) -> !b
-unitL t f = clone (share t) as x in f (share x)
+-- -- just applying the function
+unitL : forall {a b : Type, id : Name} .
+          *(FloatArray id) -> (exists {id1 : Name} . *(FloatArray id1) -> b) -> b
+unitL t f = clone (share t) as x in f x
 
 -- Nesting copies works as you would expect (and obeys associativity)
 assoc : forall {a b c : Type} . !a -> (*a -> !b) -> (*b -> !c) -> !c
