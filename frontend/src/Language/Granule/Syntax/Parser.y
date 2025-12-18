@@ -19,7 +19,7 @@ import Data.Set (Set, (\\), fromList, insert, empty, singleton)
 import Data.Ratio ((%))
 import qualified Data.Map as M
 import Numeric
-import System.FilePath ((</>), takeBaseName)
+import System.FilePath ((</>), takeBaseName, pathSeparator)
 import System.Exit
 import System.Directory (doesFileExist)
 
@@ -172,8 +172,10 @@ NL :: { () }
   | nl                        { }
 
 Import :: { Import }
-  : import                    { let TokenImport _ ('i':'m':'p':'o':'r':'t':path) = $1
-                                in dropWhile isSpace path <> ".gr"
+  : import                    { let TokenImport _ ('i':'m':'p':'o':'r':'t':path) = $1;
+                                pathTransform '.' = pathSeparator;
+                                pathTransform c = c
+                                in (map pathTransform . dropWhile isSpace) path <> ".gr"
                               }
 
 Def :: { Def () () }

@@ -9,16 +9,22 @@ Running tests
 
 All tests can be run via
 
-    stack test
+```console
+> stack test
+```
 
 Individual parts of the suite can be run by package. For example, the following just runs all the unit tests
 for the frontend:
 
-    stack test granule-frontend
+```console
+> stack test granule-frontend
+```
 
 Or individual unit tests files, e.g., the following runs the unit tests in just `TypeSpec`:
 
-    stack test granule-frontend --ta "--match \"Types\""
+```console
+> stack test granule-frontend --ta "--match \"Types\""
+```
 
 # Integration tests
 
@@ -30,14 +36,32 @@ Negative tests (which should fail), live in `frontend/tests/cases/negative`.
 
 Test subsets are defined by the directory they are in, within `frontend/tests/cases`.
 
-      stack test --ta "-p name"
+```console
+> stack test --ta "-p name"
+```
 
-will run only those tests in directory with `name`` as a directory in the path.
+will run only those tests in directory with `name` as a directory in the path.
 
 Alternatively, you can exlude subsets via a different mechanism, by adding
 those directories to a file `.excludes` in the top-level directory (one
 per line). For example if `.excludes` contains
 
-      indexed
+```
+indexed
+```
 
 then running tests will exclude those in directories called `indexed`.
+
+## Updating golden tests
+
+Golden files which end in `*.gr.output` can be automatically updated by passing the `--accept` option to the testsuite runner.
+
+```console
+> stack test --ta "--accept"
+```
+
+This can also be combined with the option to only run and update a single test:
+
+```console
+> stack test --ta "--accept -p name"
+```

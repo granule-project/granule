@@ -73,6 +73,7 @@ library
       Language.Granule.Checker.Constraints.Compile
       Language.Granule.Checker.Constraints.SFrac
       Language.Granule.Checker.Constraints.SymbolicGrades
+      Language.Granule.Checker.Constraints.SynTree
       Language.Granule.Checker.Effects
       Language.Granule.Checker.Exhaustivity
       Language.Granule.Checker.NameClash

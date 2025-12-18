@@ -24,7 +24,7 @@ module Language.Granule.Runtime
   -- Re-exported from Prelude
   , String, Int, IO, Float, Maybe(..), Show(..), Char, getLine
   , putStr, read, (<$>) , fromIntegral, Monad(..)
-  , ($), error, (>), (++), id, Num(..), (.)
+  , ($), error, (>=), (++), id, Num(..), (.)
   , pack, Text
   ) where
 
@@ -39,7 +39,7 @@ import Criterion.Main ( defaultMain, bench, bgroup, nfAppIO )
 import System.IO.Silently ( silence )
 import Prelude
     ( Int, IO, Double, Maybe(..), Show(..), Char, read, fromEnum, toEnum
-    , (<$>), (<>), fromIntegral, ($), error, (>), (++), id, Num (..), (.) )
+    , (<$>), (<>), fromIntegral, ($), error, (>=), (++), id, Num (..), (.) )
 import Control.Monad
 import GHC.Err (undefined)
 import Data.Function (const)
@@ -183,8 +183,8 @@ writeFloatArray a i v = unsafePerformIO $ writeFloatArraySafe a i v
 
 writeFloatArraySafe :: FloatArray -> Int -> Float -> IO FloatArray
 writeFloatArraySafe a i v =
-  if i > grLength a
-  then error $ "array index out of bounds: " ++ show i ++ " > " ++ show (grLength a)
+  if i >= grLength a
+  then error $ "array index out of bounds: " ++ show i ++ " >= " ++ show (grLength a)
   else case a of
     HaskellArray{} -> error "expected unique array"
     PointerArray len ptr -> do
@@ -197,8 +197,8 @@ writeFloatArrayI a i v = unsafePerformIO $ writeFloatArrayISafe a i v
 
 writeFloatArrayISafe :: FloatArray -> Int -> Float -> IO FloatArray
 writeFloatArrayISafe a i v =
-  if i > grLength a
-  then error $ "array index out of bounds: " ++ show i ++ " > " ++ show (grLength a)
+  if i >= grLength a
+  then error $ "array index out of bounds: " ++ show i ++ " >= " ++ show (grLength a)
   else case a of
     PointerArray{} -> error "expected non-unique array"
     HaskellArray len arr -> do
@@ -231,8 +231,8 @@ readFloatArray a i = unsafePerformIO $ readFloatArraySafe a i
 
 readFloatArraySafe :: FloatArray -> Int -> IO (Float, FloatArray)
 readFloatArraySafe a i =
-  if i > grLength a
-  then error $ "readFloatArray index out of bounds: " ++ show i ++ " > " ++ show (grLength a)
+  if i >= grLength a
+  then error $ "readFloatArray index out of bounds: " ++ show i ++ " >= " ++ show (grLength a)
   else case a of
     HaskellArray{} -> error "expected unique array"
     PointerArray len ptr -> do
@@ -245,8 +245,8 @@ readFloatArrayI a i = unsafePerformIO $ readFloatArrayISafe a i
 
 readFloatArrayISafe :: FloatArray -> Int -> IO (Float, FloatArray)
 readFloatArrayISafe a i =
-  if i > grLength a
-  then error $ "readFloatArrayI index out of bounds: " ++ show i ++ " > " ++ show (grLength a)
+  if i >= grLength a
+  then error $ "readFloatArrayI index out of bounds: " ++ show i ++ " >= " ++ show (grLength a)
   else case a of
     PointerArray{} -> error "expected non-unique array"
     HaskellArray _ arr -> do
