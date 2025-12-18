@@ -1,0 +1,2 @@
+unitR : forall {a : Type, id : Name} . !(*(Ref id a)) -> exists {id1 : Name} . !(Ref id1 a)
+unitR t = clone t as x in share x
