@@ -7,7 +7,7 @@ import Test.Tasty (defaultMain, TestTree, testGroup)
 import Test.Tasty.Golden (goldenVsFile)
 import qualified Test.Tasty.Golden as G
 import Test.Tasty.Golden.Advanced (goldenTest)
-import System.Directory (renameFile, setCurrentDirectory)
+import System.Directory (renameFile)
 import System.Exit (ExitCode)
 import System.FilePath (dropExtension, pathSeparator)
 import qualified System.IO.Strict as Strict (readFile)
@@ -24,8 +24,6 @@ data Config = IncludeAll Config | Include String Config | Exclude String Config 
 
 main :: IO ()
 main = do
-  -- go into project root
-  setCurrentDirectory "../"
   -- Get a list of excluded directories
   -- from .excludes if it exists
   excludesFileQuery <- doesFileExist ".excludes"
