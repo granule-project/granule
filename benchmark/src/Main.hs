@@ -7,7 +7,7 @@ This tool is for quantitatively evaluating the --synthesis feature
 of Granule and constructing a LaTeX table with the results
 -}
 
-module Language.Granule.Main where
+module Main where
 
 import System.Process (system)
 import System.Exit

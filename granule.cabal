@@ -357,7 +357,7 @@ executable grenchmark
   import: granule-default-lang
   import: granule-dependencies
   import: granule-ghc-warnings
-  main-is: Language/Granule/Main.hs
+  main-is: Main.hs
   other-modules:
       Language.Granule.Benchmarks
       Language.Granule.StdError
