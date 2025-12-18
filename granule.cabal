@@ -175,7 +175,7 @@ library interpreter
     , granule:frontend
     , granule:runtime
     , logict >=0.7.1.0
-    , optparse-applicative
+    , optparse-applicative >=0.18.0.0
 
 library runtime
   import: granule-default-lang
@@ -192,7 +192,7 @@ library runtime
     , granule:frontend
     , haskell-src-exts
     , logict >=0.7.1.0
-    , optparse-applicative
+    , optparse-applicative >=0.18.0.0
     , silently
 
 library compiler
@@ -213,7 +213,7 @@ library compiler
     , granule:runtime
     , haskell-src-exts
     , logict >=0.7.1.0
-    , optparse-applicative
+    , optparse-applicative >=0.18.0.0
     , silently
 
 -- Test-suites
@@ -261,7 +261,7 @@ test-suite gr-golden
     , granule:interpreter
     , granule:runtime
     , logict >=0.7.1.0
-    , optparse-applicative
+    , optparse-applicative >=0.18.0.0
     , strict
     , tasty
     , tasty-golden
@@ -293,7 +293,7 @@ executable gr
     , granule:interpreter
     , granule:runtime
     , logict >=0.7.1.0
-    , optparse-applicative
+    , optparse-applicative >=0.18.0.0
 
 executable grls
   import: granule-default-lang
@@ -354,7 +354,7 @@ executable grc
     , granule:runtime
     , haskell-src-exts
     , logict >=0.7.1.0
-    , optparse-applicative
+    , optparse-applicative >=0.18.0.0
     , silently
 
 executable grenchmark
