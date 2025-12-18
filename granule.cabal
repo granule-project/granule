@@ -132,7 +132,6 @@ library frontend
       Language.Granule.Checker.Normalise
       Language.Granule.Checker.Simplifier
       Language.Granule.Syntax.SecondParameter
-      Language.Granule.Synthesis.Deriving
       Language.Granule.Synthesis.Refactor
       Text.Reprinter
   hs-source-dirs:
