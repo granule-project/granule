@@ -4,4 +4,4 @@ Counter example: frontend/tests/cases/negative/flatten/flattenNat.gr:2:1:
 
 Counter-example:
   n = 15 :: Integer
-  m = 3 :: Integer
+  m =  3 :: Integer
