@@ -38,7 +38,8 @@ import System.FilePath (takeFileName)
 import qualified System.Timeout
 import "Glob" System.FilePath.Glob (glob)
 import Options.Applicative
-import Options.Applicative.Help.Pretty (string)
+import qualified Options.Applicative.Help.Pretty as OA
+import qualified Data.Text as Text
 import Control.Monad.State.Strict
 
 import Language.Granule.Context
@@ -60,7 +61,7 @@ import Language.Granule.Synthesis.Monad (Measurement)
 import Language.Granule.Synthesis.LinearHaskell
 import Language.Granule.Utils
 import Language.Granule.Doc
-import Paths_granule_interpreter (version)
+import Paths_granule (version)
 
 main :: IO ()
 main = do
@@ -414,9 +415,9 @@ getGrCommandLineArgs = customExecParser (prefs disambiguate) parseGrConfig
 
 parseGrConfig :: ParserInfo ([FilePath], GrConfig)
 parseGrConfig = info (go <**> helper) $ briefDesc
-    <> (headerDoc . Just . string . unlines)
+    <> (headerDoc . Just . OA.pretty . Text.unlines)
             [ "The Granule Interpreter"
-            , "version: "     <> showVersion version
+            , "version: "     <> Text.pack (showVersion version)
             , "branch: "      <> $(gitBranch)
             , "commit hash: " <> $(gitHash)
             , "commit date: " <> $(gitCommitDate)

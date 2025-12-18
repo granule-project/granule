@@ -23,7 +23,7 @@ import Data.Char (isAlpha)
 import Data.Maybe (catMaybes, mapMaybe)
 import Data.List (isPrefixOf, sort, sortOn, partition)
 import Data.Version (showVersion)
-import Paths_granule_interpreter (version)
+import Paths_granule (version)
 import qualified Data.Map as M
 
 import Control.Monad (when)

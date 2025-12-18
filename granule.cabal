@@ -1,0 +1,375 @@
+cabal-version:  3.4
+name:           granule
+version:        0.9.6.0
+
+synopsis:       The Granule Language
+description:    A research language based on graded modal types
+homepage:       https://github.com/granule-project/granule#readme
+bug-reports:    https://github.com/granule-project/granule/issues
+author:         Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Jack Hughes, Preston Keel, Danielle Marshall, Michael Vollmer
+maintainer:     Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Jack Hughes, Preston Keel, Danielle Marshall, Michael Vollmer
+category:       Compiler
+copyright:      2018-22 authors
+license:        BSD-3-Clause
+build-type:     Simple
+
+tested-with:
+  , GHC == 9.4.8
+
+source-repository head
+  type: git
+  location: https://github.com/granule-project/granule
+
+common granule-default-lang
+  default-language: Haskell2010
+  default-extensions:
+      ImplicitParams
+      ViewPatterns
+      LambdaCase
+      TupleSections
+      NamedFieldPuns
+      OverloadedStrings
+      RecordWildCards
+      ScopedTypeVariables
+      FlexibleContexts
+      ConstraintKinds
+
+common granule-dependencies
+  build-depends:
+      Glob         ==0.10.2
+    , array        ==0.5.4.0
+    , base         ==4.17.2.1
+    , bifunctors   ==5.5.15
+    , clock        ==0.8.4
+    , containers   ==0.6.7
+    , directory    ==1.3.7.1
+    , filepath     ==1.4.2.2
+    , mtl          ==2.2.2
+    , text         ==2.0.2
+    , time         ==1.12.2
+    , transformers ==0.5.6.2
+
+common granule-ghc-warnings
+  ghc-options:
+    -Wall
+    -Werror
+    -Wcompat
+    -Wincomplete-record-updates
+    -Wincomplete-uni-patterns
+    -Wredundant-constraints
+    -Wno-unused-matches
+    -Wno-name-shadowing
+    -Wno-type-defaults
+    -fno-warn-unticked-promoted-constructors
+    -fno-warn-partial-type-signatures
+
+-- Library Components
+--
+--
+
+library frontend
+  import: granule-default-lang
+  import: granule-dependencies
+  import: granule-ghc-warnings
+  exposed-modules:
+      Data.Bifunctor.Foldable
+      Language.Granule.Checker.Checker
+      Language.Granule.Checker.Coeffects
+      Language.Granule.Checker.Constraints
+      Language.Granule.Checker.Constraints.SNatX
+      Language.Granule.Checker.Constraints.SynTree
+      Language.Granule.Checker.DataTypes
+      Language.Granule.Checker.Flatten
+      Language.Granule.Checker.Ghost
+      Language.Granule.Checker.LaTeX
+      Language.Granule.Checker.Monad
+      Language.Granule.Checker.Patterns
+      Language.Granule.Checker.Predicates
+      Language.Granule.Checker.Primitives
+      Language.Granule.Checker.Kinding
+      Language.Granule.Checker.Substitution
+      Language.Granule.Checker.SubstitutionContexts
+      Language.Granule.Checker.TypeAliases
+      Language.Granule.Checker.Types
+      Language.Granule.Checker.Variables
+      Language.Granule.Syntax.Def
+      Language.Granule.Syntax.Expr
+      Language.Granule.Syntax.Helpers
+      Language.Granule.Syntax.FirstParameter
+      Language.Granule.Syntax.Annotated
+      Language.Granule.Syntax.Identifiers
+      Language.Granule.Syntax.Lexer
+      Language.Granule.Syntax.Parser
+      Language.Granule.Syntax.Pattern
+      Language.Granule.Syntax.Pretty
+      Language.Granule.Syntax.Preprocessor
+      Language.Granule.Syntax.Preprocessor.Ascii
+      Language.Granule.Syntax.Preprocessor.Latex
+      Language.Granule.Syntax.Preprocessor.Markdown
+      Language.Granule.Syntax.Span
+      Language.Granule.Syntax.Type
+      Language.Granule.Synthesis.Builders
+      Language.Granule.Synthesis.Contexts
+      Language.Granule.Synthesis.DebugTree
+      Language.Granule.Synthesis.LinearHaskell
+      Language.Granule.Synthesis.Monad
+      Language.Granule.Synthesis.Splitting
+      Language.Granule.Synthesis.Common
+      Language.Granule.Synthesis.SynthLinearBase
+      Language.Granule.Synthesis.Synth
+      Language.Granule.Synthesis.RewriteHoles
+      Language.Granule.Context
+      Language.Granule.Utils
+  other-modules:
+      Language.Granule.Checker.CoeffectsTypeConverter
+      Language.Granule.Checker.Constraints.Compile
+      Language.Granule.Checker.Constraints.SFrac
+      Language.Granule.Checker.Constraints.SymbolicGrades
+      Language.Granule.Checker.Effects
+      Language.Granule.Checker.Exhaustivity
+      Language.Granule.Checker.NameClash
+      Language.Granule.Checker.Normalise
+      Language.Granule.Checker.Simplifier
+      Language.Granule.Syntax.SecondParameter
+      Language.Granule.Synthesis.Deriving
+      Language.Granule.Synthesis.Refactor
+      Text.Reprinter
+  hs-source-dirs:
+      frontend/src
+  build-tool-depends:
+      alex:alex
+    , happy:happy
+  build-depends:
+    , blaze-html
+    , control-monad-omega
+    , data-ordlist
+    , haskell-src-exts
+    , logict >=0.7.1.0
+    , monad-memo
+    , raw-strings-qq
+    , sbv ==9.2
+    , split
+    , syb >=0.6
+    , syz ==0.2.0.0
+    , text-replace ==0.1.0.3
+
+library interpreter
+  import: granule-default-lang
+  import: granule-dependencies
+  import: granule-ghc-warnings
+  exposed-modules:
+      Language.Granule.Interpreter
+      Language.Granule.Interpreter.Eval
+      Language.Granule.Interpreter.Desugar
+  other-modules:
+      Language.Granule.Doc
+      Paths_granule
+  autogen-modules:
+      Paths_granule
+  hs-source-dirs:
+      interpreter/src
+  build-depends:
+    , concurrent-extra
+    , extra
+    , gitrev
+    , granule:frontend
+    , granule:runtime
+    , logict >=0.7.1.0
+    , optparse-applicative >=0.18.0.0
+
+library runtime
+  import: granule-default-lang
+  import: granule-dependencies
+  import: granule-ghc-warnings
+  exposed-modules:
+      Language.Granule.Runtime
+  hs-source-dirs:
+      runtime/src
+  build-depends:
+    , criterion
+    , extra
+    , gitrev
+    , granule:frontend
+    , haskell-src-exts
+    , logict >=0.7.1.0
+    , optparse-applicative >=0.18.0.0
+    , silently
+
+library compiler
+  import: granule-default-lang
+  import: granule-dependencies
+  import: granule-ghc-warnings
+  exposed-modules:
+      Language.Granule.Compiler.Error
+      Language.Granule.Compiler.HSCodegen
+      Language.Granule.Compiler.Util
+  hs-source-dirs:
+      compiler/src
+  build-depends:
+    , criterion
+    , extra
+    , gitrev
+    , granule:frontend
+    , granule:runtime
+    , haskell-src-exts
+    , logict >=0.7.1.0
+    , optparse-applicative >=0.18.0.0
+    , silently
+
+-- Test-suites
+--
+--
+
+test-suite frontend-spec
+  import: granule-default-lang
+  import: granule-dependencies
+  import: granule-ghc-warnings
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Data.Bifunctor.FoldableSpec
+      Language.Granule.Checker.CheckerSpec
+      Language.Granule.Checker.MonadSpec
+      Language.Granule.Checker.SubstitutionsSpec
+      Language.Granule.Checker.KindSpec
+      Language.Granule.Checker.TypesSpec
+      Language.Granule.Syntax.ExprSpec
+      Language.Granule.Synthesis.CommonSpec
+      Language.Granule.Synthesis.SplittingSpec
+      Language.Granule.Synthesis.SynthSpec
+  hs-source-dirs:
+      frontend/tests/hspec
+  build-depends:
+      QuickCheck
+    , granule:frontend
+    , hspec
+    , syz
+
+test-suite gr-golden
+  import: granule-default-lang
+  import: granule-dependencies
+  import: granule-ghc-warnings
+  type: exitcode-stdio-1.0
+  main-is: Golden.hs
+  hs-source-dirs:
+      interpreter/tests
+  build-depends:
+      Diff
+    , concurrent-extra
+    , extra
+    , gitrev
+    , granule:frontend
+    , granule:interpreter
+    , granule:runtime
+    , logict >=0.7.1.0
+    , optparse-applicative >=0.18.0.0
+    , strict
+    , tasty
+    , tasty-golden
+
+-- Executables
+--
+--
+
+executable gr
+  import: granule-default-lang
+  import: granule-dependencies
+  import: granule-ghc-warnings
+  main-is: Main.hs
+  other-modules:
+      Language.Granule.Doc
+      Language.Granule.Interpreter.Desugar
+      Language.Granule.Interpreter.Eval
+      Language.Granule.Interpreter
+      Paths_granule
+  autogen-modules:
+      Paths_granule
+  hs-source-dirs:
+      interpreter/src
+  build-depends:
+    , concurrent-extra
+    , extra
+    , gitrev
+    , granule:frontend
+    , granule:interpreter
+    , granule:runtime
+    , logict >=0.7.1.0
+    , optparse-applicative >=0.18.0.0
+
+executable grls
+  import: granule-default-lang
+  import: granule-dependencies
+  import: granule-ghc-warnings
+  main-is: Main.hs
+  other-modules:
+       Language.Granule.Server
+  hs-source-dirs:
+      server/app
+  build-depends:
+    , data-default
+    , granule:frontend
+    , granule:interpreter
+    , lens
+    , lsp ==2.7.0.1
+    , split
+
+executable grepl
+  import: granule-default-lang
+  import: granule-dependencies
+  import: granule-ghc-warnings
+  main-is: Language/Granule/Main.hs
+  other-modules:
+      Language.Granule.Queue
+      Language.Granule.ReplError
+      Language.Granule.ReplParser
+      Paths_granule
+  autogen-modules:
+      Paths_granule
+  hs-source-dirs:
+      repl/app
+  build-depends:
+    , filemanip           ==0.3.6.3
+    , granule:frontend
+    , granule:interpreter 
+    , haskeline           ==0.8.2
+    , parsec              ==3.1.16.1
+
+executable grc
+  import: granule-default-lang
+  import: granule-dependencies
+  import: granule-ghc-warnings
+  main-is: Main.hs
+  other-modules:
+      Language.Granule.Compiler
+      Paths_granule
+  autogen-modules:
+      Paths_granule
+  hs-source-dirs:
+      compiler/app
+  build-depends:
+    , criterion
+    , extra
+    , gitrev
+    , granule:compiler
+    , granule:frontend
+    , granule:runtime
+    , haskell-src-exts
+    , logict >=0.7.1.0
+    , optparse-applicative >=0.18.0.0
+    , silently
+
+executable grenchmark
+  import: granule-default-lang
+  import: granule-dependencies
+  import: granule-ghc-warnings
+  main-is: Main.hs
+  other-modules:
+      Language.Granule.Benchmarks
+      Language.Granule.StdError
+  hs-source-dirs:
+      benchmark/src
+  build-depends:
+      granule:frontend
+    , granule:interpreter
+    , process
+    , strict
