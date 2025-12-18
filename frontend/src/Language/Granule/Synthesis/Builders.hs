@@ -93,8 +93,8 @@ makeUnboxUntyped name1 expr e =
 --   where s = nullSpanNoFile
 
 makePairUntyped :: Expr () () -> Expr () () -> Expr () ()
-makePairUntyped e1 e2 =
-  App s () False (App s () False (Val s () False (Constr () (mkId ",") [])) e1) e2
+makePairUntyped e1 =
+  App s () False (App s () False (Val s () False (Constr () (mkId ",") [])) e1)
   where s = nullSpanNoFile
 
 -- makePairElim :: Id -> Id -> Id -> TypeScheme -> Type -> Type -> Expr () Type -> Expr () Type
@@ -194,7 +194,7 @@ makeUnitElim name = makeUnitElimP id
 makeUnitElimP :: (Pattern Type -> Pattern Type) -> Expr () Type -> Expr () Type -> TypeScheme -> Expr () Type
 makeUnitElimP patTransf argExpr e (Forall _ _ _ goalTy) =
   Case s goalTy False argExpr
-    [((patTransf (PConstr s (TyCon (Id "()" "()")) False (mkId "()") [] [])), e)]
+    [(patTransf (PConstr s (TyCon (Id "()" "()")) False (mkId "()") [] []), e)]
   where s = nullSpanNoFile
 
 makeUnitElimPUntyped :: (Pattern () -> Pattern ()) -> Expr () () -> Expr () () -> Expr () ()

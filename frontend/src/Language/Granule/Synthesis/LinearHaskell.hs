@@ -400,7 +400,7 @@ listDecl =
 tupDecl :: Int -> GrDef.DataDecl
 tupDecl n =
     let tyVarNames = "abcdefghijkl"
-        tyVars = map GrId.mkId (map (: []) (take n tyVarNames)) in
+        tyVars = map (GrId.mkId . (: [])) (take n tyVarNames) in
     GrDef.DataDecl {
         GrDef.dataDeclSpan = ns,
         GrDef.dataDeclId = GrId.mkId $ "," <> show n,

@@ -59,13 +59,9 @@ derivePush s ty = do
 
   -- Build derived type scheme
   let constraints' =
-        if isPoly
-          then [TyInfix TyOpLesserEq (TyGrade (Just (TyVar kVar)) 1) (TyVar cVar)]
-          else []
+        [TyInfix TyOpLesserEq (TyGrade (Just (TyVar kVar)) 1) (TyVar cVar) | isPoly]
   let constraints =
-        if needsHsup
-          then [TyInfix TyOpHsup (TyVar cVar) (TyVar cVar)]
-          else []
+        [TyInfix TyOpHsup (TyVar cVar) (TyVar cVar) | needsHsup]
   let tyS = Forall s
               ([(kVar, kcoeffect), (cVar, TyVar kVar)] ++ tyVars)
               (constraints <> constraints')
