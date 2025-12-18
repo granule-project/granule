@@ -85,11 +85,11 @@ main = do
 runGrOnFiles :: [FilePath] -> GrConfig -> IO ()
 runGrOnFiles globPatterns config = let ?globals = grGlobals config in do
     pwd <- getCurrentDirectory
-    results <- forM globPatterns $ \pattern -> do
-      paths <- glob pattern
+    results <- forM globPatterns $ \pat -> do
+      paths <- glob pat
       case paths of
         [] -> do
-          let result = Left $ NoMatchingFiles pattern
+          let result = Left $ NoMatchingFiles pat
           printResult result
           return [result]
         _ -> forM paths $ \path -> do
@@ -114,7 +114,7 @@ runGrOnFiles globPatterns config = let ?globals = grGlobals config in do
                 result <- run config src
                 printResult result
                 return result
-    if all isRight (concat results) then exitSuccess else exitFailure
+    if all (all isRight) results then exitSuccess else exitFailure
 
 runGrOnStdIn :: GrConfig -> IO ()
 runGrOnStdIn config@GrConfig{..}
@@ -142,7 +142,7 @@ run
   => GrConfig
   -> String
   -> IO (Either InterpreterError InterpreterResult)
-run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrFlags input) <> ?globals in do
+run config input = let ?globals = maybe mempty grGlobals (getEmbeddedGrFlags input) <> ?globals in do
     if grDocMode config
       -- Generate docs mode
       then do
@@ -175,7 +175,7 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
               let holeErrors = getHoleMessages errs
               if ignoreHoles && length holeErrors == length errs && not (fromMaybe False $ globalsSynthesise ?globals)
                 then do
-                  printSuccess $ "OK " ++ (blue $ "(but with " ++ show (length holeErrors) ++ " holes)")
+                  printSuccess $ "OK " ++ blue ("(but with " ++ show (length holeErrors) ++ " holes)")
                   return $ Right NoEval
                 else
                   case (globalsRewriteHoles ?globals, holeErrors) of
@@ -209,8 +209,8 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
 
   where
     getHoleMessages :: NonEmpty CheckerError -> [CheckerError]
-    getHoleMessages es =
-      NonEmpty.filter (\ e -> case e of HoleMessage{} -> True; _ -> False) es
+    getHoleMessages =
+      NonEmpty.filter (\case HoleMessage{} -> True; _ -> False)
 
     runHoleSplitter :: (?globals :: Globals)
       => String
@@ -245,7 +245,7 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
       res <- synthesiseHoles config ast holesWithEmptyMeasurements isGradedBase
       let (holes', measurements, _) = unzip3 res
       when benchmarkingRawData $ do
-        forM_ measurements (\m -> case m of (Just m') -> putStrLn $ show m' ; _ -> return ())
+        forM_ measurements (\case (Just m') -> print m' ; _ -> return ())
       return holes'
 
 
@@ -257,10 +257,10 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
       rest <- synthesiseHoles config astSrc holes isGradedBase
 
       gradedExpr <- if cartSynth > 0 then getGradedExpr config defId else return Nothing
-      let defs' = map (\(x, (Forall tSp con bind ty)) ->
+      let defs' = map (\(x, Forall tSp con bind ty) ->
               if cartSynth > 0
-                then (x,  (Forall tSp con bind (toCart ty)))
-                else (x, (Forall tSp con bind ty))
+                then (x, Forall tSp con bind (toCart ty))
+                else (x, Forall tSp con bind ty)
                  ) defs
       let (unrestricted, restricted) = case spec of
             Just (Spec _ _ _ comps) ->
@@ -290,7 +290,7 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
         Just (programs@(_:_), measurement) -> do
           when synthHtml $ do
             printSynthOutput $ uncurry synthTreeToHtml (last programs)
-          return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt [([], fst $ last $ programs)], measurement, attemptNo) : rest
+          return $ (HoleMessage sp goal ctxt tyVars hVars synthCtxt [([], fst $ last programs)], measurement, attemptNo) : rest
 
 
     synthesiseHoles config ast (hole:holes) isGradedBase = do
@@ -309,13 +309,13 @@ synEval ast = do
 
 getGradedExpr :: (?globals :: Globals) => GrConfig -> Id -> IO (Maybe (Def () ()))
 getGradedExpr config def = do
-  let file = (fromJust $ globalsSourceFilePath ?globals) <> ".output"
+  let file = fromJust (globalsSourceFilePath ?globals) <> ".output"
   src <- preprocess
           (rewriter config)
           (keepBackup config)
           file
           (literateEnvName config)
-  ((AST _ defs _ _ _), _) <- parseDefsAndDoImports src
+  (AST _ defs _ _ _, _) <- parseDefsAndDoImports src
   return $ find (\(Def _ id _ _ _ _) -> id == def) defs
 
 
@@ -323,9 +323,7 @@ getGradedExpr config def = do
 -- "-- gr --no-eval"
 getEmbeddedGrFlags :: String -> Maybe GrConfig
 getEmbeddedGrFlags
-  = foldr (<|>) Nothing
-  . map getEmbeddedGrFlagsLine
-  . take 3 -- only check for flags within the top 3 lines
+  = foldr ((<|>) . getEmbeddedGrFlagsLine) Nothing . take 3 -- only check for flags within the top 3 lines
   . filter (not . all isSpace)
   . lines
   where

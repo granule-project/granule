@@ -28,8 +28,6 @@ import qualified Data.Map as M
 
 import Control.Monad (when)
 
--- import Debug.Trace
-
 
 -- Doc top-level
 grDoc :: (?globals::Globals) => String -> AST () () -> IO ()
@@ -52,7 +50,7 @@ grDoc input ast = do
 
       writeFile ("docs/modules/" <> modName <> ".html") (unpack moduleFile)
       -- Generate the Primitives file
-      when info $ putStrLn $ "Generating docs index file."
+      when info $ putStrLn "Generating docs index file."
       primFile <- generatePrimitivesPage
       writeFile "docs/modules/Primitives.html" (unpack primFile)
       -- Generate the index file
@@ -78,12 +76,12 @@ generateModulePage' modName title input ast =
    where
     inputLines = lines input
     content = (if Text.strip preamble == "" then "" else section "Meta-data" preamble)
-           <> (section "Contents" ((internalNav headings')
+           <> section "Contents" (internalNav headings'
            <> (if modName == "Primitives" then anchor "Built-in Types" else "")
-           <> Text.concat contentDefs))
+           <> Text.concat contentDefs)
     preamble = parsePreamble inputLines
-          <> if M.keys (hiddenNames ast) == [] then ""
-             else (tag "strong" "Module does not export: ") <> Text.intercalate ", " (map (pack . prettyDoc) $ M.keys (hiddenNames ast))
+          <> if Prelude.null (M.keys (hiddenNames ast)) then ""
+             else tag "strong" "Module does not export: " <> Text.intercalate ", " (map (pack . prettyDoc) $ M.keys (hiddenNames ast))
     (headings, contentDefs) = unzip (map prettyDef topLevelDefs)
     headings' =
       if modName == "Primitives"
@@ -92,7 +90,7 @@ generateModulePage' modName title input ast =
 
 
     -- Combine the data type and function definitions together
-    topLevelDefs = sortOn startLine $ (map Left (dataTypes ast)) <> (map Right (definitions ast))
+    topLevelDefs = sortOn startLine $ map Left (dataTypes ast) <> map Right (definitions ast)
     startLine = fst . startPos . defSpan'
     defSpan' (Left dataDecl) = dataDeclSpan dataDecl
     defSpan' (Right def)     = defSpan def
@@ -100,27 +98,27 @@ generateModulePage' modName title input ast =
     prettyDef (Left d) =
       let (docs, heading) = scrapeDoc inputLines (dataDeclSpan d)
       in  (heading,
-            (maybe "" anchor heading)
+            maybe "" anchor heading
          <> (codeDiv . pack . prettyDoc $ d)
          <> (if strip docs == "" then miniBreak else descDiv docs))
     prettyDef (Right d) =
       let (docs, heading) = scrapeDoc inputLines (defSpan d)
       in  (heading
-          , (maybe "" anchor heading)
-         <> (codeDiv $ breakLine (internalName (defId d)) $ pack $ prettyDoc (defId d) <> " : " <> prettyDoc (defTypeScheme d))
+          , maybe "" anchor heading
+         <> codeDiv (breakLine (internalName (defId d)) $ pack $ prettyDoc (defId d) <> " : " <> prettyDoc (defTypeScheme d))
          <> (if strip docs == "" then miniBreak else descDiv docs))
 
     breakLine id xs =
       if Text.length xs >= 65 && (Text.isInfixOf "forall" xs || Text.isInfixOf "exists" xs) then
         case Text.break (== '.') xs of
           (before, after) ->
-            before <> "\n" <> (Data.Text.replicate (length id + 1) " ") <> after
+            before <> "\n" <> Data.Text.replicate (length id + 1) " " <> after
       else xs
 
     anchor :: Text -> Text
     anchor x = tagWithAttributes "a"
                  ("name = " <> toUrlName x)
-                   (tag "h3" ((tagWithAttributes "a" ("href='#' class='toplink'") "[top]") <> x))
+                   (tag "h3" (tagWithAttributes "a" "href='#' class='toplink'" "[top]" <> x))
 
 
     internalNav [] = ""
@@ -142,7 +140,7 @@ generateIndexPage = do
 -- Generates the text of the primitives module
 generatePrimitivesPage :: (?globals::Globals) => IO Text
 generatePrimitivesPage = do
-    generateModulePage' "Primitives" "Built-in primitives" (Primitives.builtinSrc) (appendPrimitiveTys $ fst . fromRight $ parseDefs "Primitives" Primitives.builtinSrc)
+    generateModulePage' "Primitives" "Built-in primitives" Primitives.builtinSrc (appendPrimitiveTys $ fst . fromRight $ parseDefs "Primitives" Primitives.builtinSrc)
   where
     fromRight (Right x) = x
     fromRight (Left x)  = error x
@@ -174,7 +172,7 @@ generatePrimitivesPage = do
         matches tyConName (id', (ty, _, _)) =
           case (tyConName, resultType ty) of
             (internalName -> "Type", Type 0) -> True
-            (a, b) -> (TyCon a) == b
+            (a, b) -> TyCon a == b
 
 generateFromTemplate :: PageContext -> Text -> Text -> Text -> IO Text
 generateFromTemplate ctxt modName title content = do
@@ -197,7 +195,7 @@ generateNavigatorText ctxt = do
   files <- return $ sort (filter (\file -> takeExtension file == ".html" && takeBaseName file /= "Primitives") files)
   -- Build a list of these links
   let prefix = if ctxt == ModulePage then "" else "modules/"
-  let toLi file = li $ link (pack $ takeBaseName file) (prefix <> (pack $ takeBaseName file) <> ".html")
+  let toLi file = li $ link (pack $ takeBaseName file) (prefix <> pack (takeBaseName file) <> ".html")
   -- Link to index page
   let indexPrefix = if ctxt == ModulePage then "../" else ""
   let topLevelLink = link "<i>Top-level</i><br />" (indexPrefix <> "index.html")
@@ -251,7 +249,7 @@ parsePreamble inputLines =
     presentPrequelLine line =
         if name == "Module" -- drop duplicate module info
           then ""
-          else li $ (tag "b" (pack name)) <> pack info
+          else li $ tag "b" (pack name) <> pack info
       where
        (name, info) = break (== ':') (drop 4 line)
     prequelLines =
@@ -265,20 +263,20 @@ parsePreamble inputLines =
 -- HTML generation helpers
 
 toUrlName :: Text -> Text
-toUrlName = (replace " " "-") . (Text.filter isAlpha) . Text.toLower
+toUrlName = replace " " "-" . Text.filter isAlpha . Text.toLower
 
 section :: Text -> Text -> Text
 section "" contents   = tag "section" contents
 section name contents = tag "section" (tag "h2" name <> contents)
 
 codeDiv :: Text -> Text
-codeDiv = tagWithAttributes "div" ("class='code'") . tag "pre"
+codeDiv = tagWithAttributes "div" "class='code'" . tag "pre"
 
 descDiv :: Text -> Text
-descDiv = tagWithAttributes "div" ("class='desc'")
+descDiv = tagWithAttributes "div" "class='desc'"
 
 navDiv :: Text -> Text
-navDiv = tagWithAttributes "div" ("class='mininav'")
+navDiv = tagWithAttributes "div" "class='mininav'"
 
 span :: Text -> Text -> Text
 span name = tagWithAttributes "span" ("class='" <> name <> "'")
