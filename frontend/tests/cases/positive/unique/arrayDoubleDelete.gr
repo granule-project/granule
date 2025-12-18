@@ -1,11 +1,11 @@
 language CBN
 
-example : *FloatArray
-example =
-   let [x] : ((*FloatArray) [3]) = [newFloatArray 1] in
-   let () = deleteFloatArray x in
-   let () = deleteFloatArray x in
-   writeFloatArray x 0 1.0
-
-main : (Float, *FloatArray)
-main = readFloatArray example 0
+-- Demonstrates CBN mode allows replicating of resource computations because
+-- each is a separate resource
+main : ()
+main =
+   let [x] : ((exists {id : Name} . *(FloatArray id)) [3]) = [newFloatArray 1] in
+   let () = unpack <id, x'> = x in deleteFloatArray x' in
+   let () = unpack <id, x'> = x in deleteFloatArray x' in
+   unpack <id, x'> = x in
+     deleteFloatArray (writeFloatArray x' 0 1.0)
