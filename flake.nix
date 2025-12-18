@@ -38,43 +38,43 @@
             $@
         '';
 
-        #haskellProjects.ghc96 = import ./haskell-flake-ghc96.nix pkgs;
         haskellProjects.default = {
-          #basePackages = config.haskellProjects.ghc96.outputs.finalPackages;
+          ## local configuration
+          # TODO 2023-07-20 raehik: tests access files outside directory
+          settings.granule-interpreter.check = false;
 
-          packages = {
-            # need Jack H's haskell-src-exts fork
-            haskell-src-exts.source = inputs.haskell-src-exts;
-          };
+          # TODO 2023-07-24 raehik:
+          # `/Language.Granule.Synthesis.Synth/Construcor test for
+          # Either/Branch on (Left : a -> Either a b)/` fails.
+          # dorchard unsure if it should be failing or not.
+          # Skip tests while unresolved.
+          settings.granule-frontend.check = false;
 
-          settings = {
-            sbv = {
-              # 2023-04-18 raehik: sbv-9.0 broken; seems tests fail. ignore
-              check = false;
-              broken = false;
-            };
+          ## build/dependency configuration
+          basePackages = pkgs.haskell.packages.ghc94;
 
-            granule-interpreter = {
-              # TODO 2023-07-20 raehik: tests access files outside directory
-              check = false;
-            };
+          # haskell-src-exts: Jack H's fork
+          packages.haskell-src-exts.source = inputs.haskell-src-exts;
 
-            granule-frontend = {
-              # TODO 2023-07-24 raehik:
-              # `/Language.Granule.Synthesis.Synth/Construcor test for
-              # Either/Branch on (Left : a -> Either a b)/` fails. dorchard
-              # unsure if it should be failing or not. Skip tests while
-              # unresolved.
-              check = false;
-            };
-          };
+          # sbv: using old version.
+          # tests bring in tons of deps and fail to compile: skip
+          packages.sbv.source = "9.2";
+          settings.sbv.check = false;
+
+          # text-replace: unmaintained-- ignore bounds, just try building
+          # see: https://github.com/chris-martin/text-replace/pull/3/files
+          settings.text-replace.broken = false;
+          settings.text-replace.jailbreak = true; # TODO trying
 
           devShell = {
             hoogle = false; # haskell-src-exts override breaks it
             tools = hp: {
               ghcid = null; # broken on GHC 9.6? old fsnotify
               hlint = null; # broken on GHC 9.6? old
-              haskell-language-server = null; # TAKES AGES TO BUILD FFS
+              haskell-language-server = null; # takes ages to build
+
+              # don't build Cabal ourselves (because our GHC is old, 9.4)
+              cabal-install = pkgs.cabal-install;
             };
           };
         };

@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.35.2.
+-- This file has been generated from package.yaml by hpack version 0.38.2.
 --
 -- see: https://github.com/sol/hpack
 
@@ -44,7 +44,7 @@ library
     , haskell-src-exts
     , logict >=0.7.1.0
     , mtl >=2.2.1
-    , optparse-applicative
+    , optparse-applicative >=0.18.0.0
     , silently
     , text
     , time
@@ -82,7 +82,7 @@ executable grc
     , haskell-src-exts
     , logict >=0.7.1.0
     , mtl >=2.2.1
-    , optparse-applicative
+    , optparse-applicative >=0.18.0.0
     , silently
     , text
     , time
