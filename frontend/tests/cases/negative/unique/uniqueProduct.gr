@@ -1,6 +1,7 @@
 writeTwoArrays : forall {id id' : Name} . (*(FloatArray id), *(FloatArray id')) -> (*(FloatArray id), *(FloatArray id'))
 writeTwoArrays (arr1, arr2) = (writeFloatArray arr1 0 2.3, writeFloatArray arr2 1 4.5)
 
+-- TODO: failing for the wrong reason?
 haveAndEatTwo : forall {id id' : Name} . (*(FloatArray id), *(FloatArray id')) -> ((*(FloatArray id), *(FloatArray id')), (*(FloatArray id), *(FloatArray id')))
 haveAndEatTwo arrs = (writeTwoArrays arrs, arrs)
 
