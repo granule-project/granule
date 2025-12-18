@@ -7,6 +7,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 {-# options_ghc -fno-warn-incomplete-uni-patterns #-}
 {-# options_ghc -fno-warn-orphans #-}
@@ -27,6 +28,7 @@ import Control.Monad.Except
 import Control.Monad.Identity
 import System.FilePath (takeBaseName)
 import Data.Generics.Zipper
+import qualified Prettyprinter as P
 
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.LaTeX
@@ -104,12 +106,12 @@ instance Term Assumption where
   freeVars (Ghost c) = freeVars c
 
 instance Pretty Assumption where
-    pretty (Linear ty) = pretty ty
-    pretty (Discharged t c) = ".[" <> pretty t <> "]. " <> prettyNested c
-    pretty (Ghost c) = "ghost(" <> pretty c <> ")"
+    wlpretty (Linear ty) = wlpretty ty
+    wlpretty (Discharged t c) = ".[" <> wlpretty t <> "]. " <> prettyNestedNew c
+    wlpretty (Ghost c) = "ghost(" <> wlpretty c <> ")"
 
 instance {-# OVERLAPS #-} Pretty (Id, Assumption) where
-   pretty (a, b) = pretty a <> " : " <> pretty b
+   wlpretty (a, b) = wlpretty a <> " : " <> wlpretty b
 
 -- Describes where a pattern is fully consuming, i.e. amounts
 -- to linear use and therefore triggers other patterns to be counted
@@ -800,7 +802,13 @@ instance UserMsg CheckerError where
       relevantVars = map fst (filter snd holeVars)
 
       formatCases :: [[Pattern ()]] -> [String]
-      formatCases = map unwords . transpose . map padToLongest . transpose . map (map prettyNested)
+      formatCases patterns =
+        let ppPatterns :: [[P.Doc Annotation]]
+            ppPatterns = map (map prettyNestedNew) patterns
+            ppPatterns' :: [[String]]
+            ppPatterns' = map (map pretty) ppPatterns
+        in
+        (map unwords . transpose . map padToLongest . transpose) ppPatterns'
 
       -- Pad all strings in a list so they match the length of the longest.
       padToLongest :: [String] -> [String]

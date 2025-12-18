@@ -1,10 +1,10 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DataKinds #-}
-
 module Language.Granule.Checker.SubstitutionContexts where
 
-import Data.List (intercalate)
+import qualified Prettyprinter as P
 
 import Language.Granule.Context
 import Language.Granule.Syntax.Type
@@ -25,12 +25,12 @@ newtype Substitutors =
   deriving (Eq, Show)
 
 instance Pretty Substitutors where
-  pretty (SubstT t) = pretty t
+  wlpretty (SubstT t) = wlpretty t
 
 instance {-# OVERLAPS #-} Pretty (Ctxt Substitutors) where
-  pretty = (intercalate " | ") . (map prettyCoerce)
+  wlpretty = P.cat . (P.punctuate " | ") . (map prettyCoerce)
     where
-      prettyCoerce (v, SubstT t) = pretty v <> " ~ " <> pretty t
+      prettyCoerce (v, SubstT t) = wlpretty v <> " ~ " <> wlpretty t
 
 instance Term Substitution where
   freeVars [] = []

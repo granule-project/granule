@@ -347,7 +347,7 @@ dumpStateAux m = pDef (M.toList m)
   where
     pDef :: [(String, (Def () (), [String]))] -> [String]
     pDef [] = []
-    pDef ((k,(v@(Def _ _ _ _ _ ty),dl)):xs) =  (pretty k <> " : " <> pretty ty) : pDef xs
+    pDef ((k,(v@(Def _ _ _ _ _ ty),dl)):xs) =  (show k <> " : " <> pretty ty) : pDef xs
 
 extractFreeVars :: Id -> [Id] -> [String]
 extractFreeVars _ []     = []

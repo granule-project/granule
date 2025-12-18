@@ -27,6 +27,7 @@ import Language.Granule.Synthesis.Deriving (makeDerivedName)
 
 import Data.Text (cons, uncons, unpack, snoc, unsnoc)
 import Control.Monad (foldM)
+import qualified Prettyprinter as P
 
 import System.IO.Unsafe (unsafePerformIO)
 --import Control.Exception (catch, throwIO, IOException)
@@ -161,7 +162,7 @@ instance Show (Runtime a) where
   show (FreeMonadBind r p k) = "do {... <- " <> show r <> "; ...}"
 
 instance Pretty (Runtime a) where
-  pretty = show
+  wlpretty = P.pretty . show
 
 evalBinOp :: Operator -> RValue -> RValue -> RValue
 evalBinOp op v1 v2 = case op of
