@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -Wno-orphans -Wno-missing-methods #-}
 {-# LANGUAGE FlexibleInstances #-}
 
 module Language.Granule.StdError where

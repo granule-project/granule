@@ -1,4 +1,5 @@
 {-# options_ghc -fno-warn-unused-imports #-}
+{-# LANGUAGE NoOverloadedStrings #-}
 module Language.Granule.Synthesis.DebugTree where
 
 import Text.Blaze.Html5 as H

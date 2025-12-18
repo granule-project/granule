@@ -17,10 +17,15 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Install required libraries
-      run: >-
-        sudo apt install
-        z3
+    - name: Install Z3
+      run: |
+         wget -q https://github.com/Z3Prover/z3/releases/download/z3-4.15.4/z3-4.15.4-x64-glibc-2.39.zip
+         unzip -q z3-4.15.4-x64-glibc-2.39.zip
+         sudo cp z3-4.15.4-x64-glibc-2.39/bin/z3 /usr/local/bin/
+         sudo cp z3-4.15.4-x64-glibc-2.39/bin/libz3.so /usr/local/lib/
+
+    - name: Print Z3 version
+      run: z3 --version
 
     # Use preinstalled Stack.  Should Stack fail to be installed, use the setup action:
     # - name: Setup Haskell
