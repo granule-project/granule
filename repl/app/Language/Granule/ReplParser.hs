@@ -8,26 +8,31 @@ LANGUAGE
 module Language.Granule.ReplParser where
 
 import Prelude
---import Data.List
---import Data.Char
 import qualified Data.Text as T
 import Text.Parsec
 import qualified Text.Parsec.Token as Token
 import Text.Parsec.Language
---import Data.Functor.Identity
---import System.FilePath
---import Language.Granule.Syntax.Expr
+import Data.Functor.Identity
 
 
-
+lexer :: GenLanguageDef String u Identity
 lexer = haskellStyle {
     Token.reservedOpNames = [":", "let"]
 }
-tokenizer  = Token.makeTokenParser lexer
-reservedOp = Token.reservedOp tokenizer
-ws         = Token.whiteSpace tokenizer
-symbol     = Token.symbol tokenizer
 
+type Parser a = ParsecT String () Identity a
+
+tokenizer :: Token.GenTokenParser String u Identity
+tokenizer = Token.makeTokenParser lexer
+
+reservedOp :: String -> Parser ()
+reservedOp = Token.reservedOp tokenizer
+
+ws :: Parser ()
+ws = Token.whiteSpace tokenizer
+
+symbol :: String -> Parser String
+symbol = Token.symbol tokenizer
 
 data REPLExpr =
       ShowDef String
@@ -43,8 +48,9 @@ data REPLExpr =
     | Debuger [FilePath]
     deriving Show
 
+replTermCmdParser :: String -> String -> (t -> b) -> Parser t -> Parser b
 replTermCmdParser short long c p = do
-    symbol ":"
+    _ <- symbol ":"
     cmd <- many lower
     ws
     t <- p
@@ -53,16 +59,18 @@ replTermCmdParser short long c p = do
     then return $ c t
     else fail $ "Command \":"<>cmd<>"\" is unrecognized."
 
+replIntCmdParser :: String -> String -> b -> Parser b
 replIntCmdParser short long c = do
-    symbol ":"
+    _ <- symbol ":"
     cmd <- many lower
     eof
     if (cmd == long || cmd == short)
     then return c
     else fail $ "Command \":"<>cmd<>"\" is unrecognized."
 
+replTyCmdParser :: String -> String -> (String -> b) -> Parser b
 replTyCmdParser short long c = do
-    symbol ":"
+    _ <- symbol ":"
     cmd <- many lower
     ws
     term <- many1 anyChar
@@ -71,8 +79,9 @@ replTyCmdParser short long c = do
     then return $ c term
     else fail $ "Command \":"<>cmd<>"\" is unrecognized."
 
+replTySchCmdParser :: String -> String -> (String -> b) -> Parser b
 replTySchCmdParser short long c = do
-    symbol ":"
+    _ <- symbol ":"
     cmd <- many (lower <|> char '_')
     ws
     term <- many1 anyChar
@@ -81,8 +90,9 @@ replTySchCmdParser short long c = do
     then return $ c term
     else fail $ "Command \":"<>cmd<>"\" is unrecognized."
 
+replFileCmdParser :: String -> String -> ([FilePath] -> b) -> Parser b
 replFileCmdParser short long c = do
-    symbol ":"
+    _ <- symbol ":"
     cmd <- many lower
     ws
     pathUntrimned <- many1 anyChar
@@ -94,6 +104,7 @@ replFileCmdParser short long c = do
         return $ c fpath
     else fail $ "Command \":"<>cmd<>"\" is unrecognized."
 
+evalParser :: Parser REPLExpr
 evalParser = do
   ev <- many anyChar
   return $ Eval ev
@@ -101,40 +112,48 @@ evalParser = do
 
 -- unfoldTermParser = replTermCmdParser "u" "unfold" Unfold
 
+showHolesParser :: Parser REPLExpr
 showHolesParser = replIntCmdParser "holes" "holes" Holes
 
+dumpStateParser :: Parser REPLExpr
 dumpStateParser = replIntCmdParser "dump" "dump" DumpState
 
+loadFileParser :: Parser REPLExpr
 loadFileParser = replFileCmdParser "l" "load" LoadFile
 
+replDebugger :: Parser REPLExpr
 replDebugger = replFileCmdParser "d" "debug" Debuger
 
+addModuleParser :: Parser REPLExpr
 addModuleParser = replFileCmdParser "m" "module" AddModule
 
+reloadFileParser :: Parser REPLExpr
 reloadFileParser = replIntCmdParser "r" "reload" Reload
 
+checkTypeParser :: Parser REPLExpr
 checkTypeParser = replTyCmdParser "t" "type" CheckType
 
+showAstParser :: Parser REPLExpr
 showAstParser = replTyCmdParser "s" "show" ShowDef
 
+runParserRepl :: Parser REPLExpr
 runParserRepl = replTyCmdParser "p" "parse" RunParser
 
-
+runLexer :: Parser REPLExpr
 runLexer = replTyCmdParser "x" "lexer" RunLexer
 
-
+pathParser :: Parser String
 pathParser = do
-  string "KEY"
-  string " =" <|> string "="
-  string "" <|> string " "
+  _ <- string "KEY"
+  _ <- string " =" <|> string "="
+  _ <- string "" <|> string " "
   path <- manyTill anyChar (string "\n")
   return path
 
+pathParser' :: Parser [String]
 pathParser' = endBy pathParser eof
 
-
--- lineParser =
-
+lineParser :: Parser REPLExpr
 lineParser = try dumpStateParser
           <|> try showHolesParser
           <|> try loadFileParser

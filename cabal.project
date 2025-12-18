@@ -1,8 +1,6 @@
-packages:
-    ./frontend
-    ./interpreter
-    ./repl
-    ./server
-    ./compiler
-    ./runtime
-    ./benchmark
+packages: ./granule.cabal
+
+source-repository-package
+    type: git
+    location: https://github.com/jackohughes/haskell-src-exts
+    tag: 5c2647fa0746bdac046897f5a6b7e4f5ef3afa79

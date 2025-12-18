@@ -26,7 +26,7 @@ import Language.Granule.Syntax.Preprocessor
 import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Utils
-import Paths_granule_compiler (version)
+import Paths_granule (version)
 import Language.Granule.Compiler.HSCodegen
 
 

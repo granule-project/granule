@@ -1,12 +1,6 @@
 resolver: lts-21.25
 packages:
-- frontend/
-- interpreter/
-- repl/
-- server/
-- compiler/
-- runtime/
-- benchmark/
+- .
 
 # Dependency packages to be pulled from upstream that are not in the resolver
 extra-deps:

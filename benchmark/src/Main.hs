@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -Wno-unused-imports -Wno-unused-local-binds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -6,7 +7,7 @@ This tool is for quantitatively evaluating the --synthesis feature
 of Granule and constructing a LaTeX table with the results
 -}
 
-module Language.Granule.Main where
+module Main where
 
 import System.Process (system)
 import System.Exit
@@ -97,6 +98,7 @@ modes = [
     , ("Cartesian (No Retries)", ("Cartesian (No Retries)", "--cart-synth 2"))
       ]
 
+defaultRepeatTrys :: Int
 defaultRepeatTrys = 10
 
 getRecursiveContents :: FilePath -> IO [FilePath]
@@ -302,19 +304,27 @@ main = do
   putStrLn "\\end{table}"
   -- removeFile $ "log-" <> logIdent
 
-
+fst5 :: (a,b,c,d,e) -> a
 fst5 (x, _, _, _, _) = x
+
+fifth5 :: (a,b,c,d,e) -> e
 fifth5 (_, _, _, _, x) = x
+
+snd5 :: (a,b,c,d,e) -> b
 snd5 (_, x, _, _, _) = x
 
+fromMaybeFst :: p -> Maybe (p, b) -> p
 fromMaybeFst x Nothing  = x
 fromMaybeFst _ (Just (x, _)) = x
 
+fromMaybeSnd :: p -> Maybe (a, p) -> p
 fromMaybeSnd x Nothing  = x
 fromMaybeSnd _ (Just (_, x)) = x
 
+pad :: String -> String
 pad str = str ++ (replicate (if length str > 25 then 0 else 25 - length str) ' ')
 
+lookupMany :: Eq a => [a] -> [(a,b)] -> [b]
 lookupMany xs map = mapMaybe (flip lookup map) xs
 
 measureSynthesis :: Int -> String -> FilePath -> String -> IO ([Measurement], Measurement)
