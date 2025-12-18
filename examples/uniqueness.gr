@@ -39,6 +39,6 @@ unitL : forall {a b : Type, id : Name} .
 unitL t f = clone (share t) as x in f x
 
 -- Nesting copies works as you would expect (and obeys associativity)
-assoc : forall {a b c : Type} . !a -> (*a -> !b) -> (*b -> !c) -> !c
+assoc : forall {a b c : Type} . {Cloneable a, Cloneable b} => !a -> (*a -> !b) -> (*b -> !c) -> !c
 assoc t f g = clone t as x in 
                 clone f x as y in g y
