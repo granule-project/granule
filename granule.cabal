@@ -110,6 +110,7 @@ library frontend
       Language.Granule.Syntax.Type
       Language.Granule.Synthesis.Builders
       Language.Granule.Synthesis.Contexts
+      Language.Granule.Synthesis.Deriving
       Language.Granule.Synthesis.DebugTree
       Language.Granule.Synthesis.LinearHaskell
       Language.Granule.Synthesis.Monad
