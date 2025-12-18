@@ -13,7 +13,7 @@ module Language.Granule.Queue where
 data Queue a = Queue [a] [a]
 
 toListQ :: Queue a -> [a]
-toListQ (Queue f r) = f <> (reverse r)
+toListQ (Queue f r) = f <> reverse r
 
 fromList :: [a] -> Queue a
 fromList [] = emptyQ
@@ -21,7 +21,7 @@ fromList ls = queue ls []
 
 -- This instance allows us to use Haskell's built in foldl and foldr.
 instance Foldable Queue where
-    foldMap m = (foldMap m).toListQ
+    foldMap m = foldMap m . toListQ
 
 instance Show a => Show (Queue a) where
     show = show.toListQ
@@ -38,7 +38,7 @@ queue [] r = Queue (reverse r) []
 queue f r = Queue f r
 
 enqueue :: a -> Queue a -> Queue a
-enqueue elem (Queue f r) = (Queue (elem:f) r)
+enqueue elem (Queue f r) = Queue (elem:f) r
 
 snoc :: Queue a -> a -> Queue a
 snoc (Queue f r) x = queue f (x:r)
