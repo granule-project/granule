@@ -124,11 +124,13 @@ setting the code page to UTF-8 (via `chcp.com 65001` https://stackoverflow.com/q
 ### Setting the Path
 
 Granule has a very basic import system. When `gr` encounters a line `import
-A.B.C` anywhere in the file it will attempt to load the file located at
-`$GRANULE_PATH/A/B/C.gr`, where `$GRANULE_PATH` defaults to `StdLib`, i.e. it
-should work when you are running `gr` from within this project. For a more
-stable setup which lets you run `gr` from any directory you can set the path
-with the `--include-path` flag (see below).
+A.B.C` anywhere in the file it will first attempt to load the file located
+at `./A/B/C.gr` relative to the current working directory. If this file does
+not exist, `gr` will then attempt to load `$GRANULE_PATH/A/B/C.gr`, where
+`$GRANULE_PATH` defaults to `StdLib`, i.e. it should work when you are
+running `gr` from within this project. For a more stable setup which lets
+you run `gr` from any directory you can set the path with the
+`--include-path` flag (see below).
 
 ### Configuration
 
