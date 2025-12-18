@@ -102,7 +102,7 @@ This provided by `grc` which takes a .gr file as input and outputs a .hs file of
 If you would also like to install the LLVM compiler (experimental and a
 work in progress) you can get this from its [separate repo](https://github.com/granule-project/granule-compiler-llvm) and install it via:
 
-    stack install :grc
+    stack install :grlc
 
 
 ## Running the Checker + Interpreter
