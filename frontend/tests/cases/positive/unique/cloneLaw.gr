@@ -1,0 +1,3 @@
+unitL : forall {a b : Type, id : Name} .
+          *(FloatArray id) -> (exists {id1 : Name} . *(FloatArray id1) -> b) -> b
+unitL t f = clone (share t) as x in f x

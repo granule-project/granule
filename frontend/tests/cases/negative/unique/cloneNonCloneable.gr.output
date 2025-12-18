@@ -1,3 +1,3 @@
 Type checking failed: 
-Type constraint error: frontend/tests/cases/negative/unique/cloneNonCloneable.gr:1:1:
-Constraint `Cloneable Int` does not hold or is not provided by the type constraint assumptions here.
+Type error: frontend/tests/cases/negative/unique/cloneNonCloneable.gr:4:9:
+Expcted an existential type on the left-hand side of unpack, but got `*Int`

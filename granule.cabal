@@ -231,6 +231,7 @@ test-suite frontend-spec
       Language.Granule.Checker.CheckerSpec
       Language.Granule.Checker.MonadSpec
       Language.Granule.Checker.SubstitutionsSpec
+      Language.Granule.Checker.KindSpec
       Language.Granule.Checker.TypesSpec
       Language.Granule.Syntax.ExprSpec
       Language.Granule.Synthesis.CommonSpec

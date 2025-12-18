@@ -17,7 +17,7 @@ import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Data.Functor.Identity (runIdentity)
 import Data.Maybe (fromMaybe)
-import Data.List (isPrefixOf, sortBy)
+import Data.List (isPrefixOf, sortBy, (\\), nub)
 
 import Language.Granule.Context
 
@@ -1377,3 +1377,42 @@ instance Unifiable t => Unifiable (Maybe t) where
     unify' Nothing _ = return []
     unify' _ Nothing = return []
     unify' (Just x) (Just y) = unify' x y
+
+-- Given a type, extract all the type variables which have
+-- the given kind
+typeVarsOfKind :: (?globals :: Globals) => Type -> Kind -> Checker [Id]
+typeVarsOfKind t k = do
+    vars <- typeFoldM algebra t 
+    return (nub vars)
+  where
+    algebra = TypeFold
+      { tfTy = \_ -> return []
+      , tfFunTy = \_ _ x y -> return (x ++ y)
+      , tfTyCon = \_ -> return []
+      , tfBox = \_ x -> return x
+      , tfDiamond = \_ x -> return x
+      , tfStar = \_ x -> return x
+      , tfBorrow = \_ x -> return x
+      , tfTyVar = \v -> do
+        -- Synth the kind of this type variable
+        synthKind nullSpan (TyVar v) >>= \case
+            -- check for equality with the argument
+          (k', subst , _) | k' == k -> do
+            when (not (null subst)) (debugM "[WARNING]" ("type variable " <> pretty v <> " has kind " <> pretty k <> " but its kind required a substitution which is being ignored during kind variable extraction"))
+            return [v]
+            -- kinds don't match
+          _                    -> return []
+      , tfTyApp = \ x y -> return (x ++ y)
+      , tfTyInt = \_ -> return []
+      , tfTyRational = \_ -> return []
+      , tfTyFraction = \_ -> return []
+      , tfTyGrade = \_ _ -> return []
+      , tfTyInfix = \_ x y -> return (x ++ y)
+      , tfSet = \ _ x -> return (concat x)
+      , tfTyCase = \ x branches ->
+          return (x ++ concatMap snd branches)
+      , tfTySig = \ x y -> (\_-> return x)
+      , tfTyExists = \ v k x -> return (x \\ [v])
+      , tfTyForall = \ v k x -> return (x \\ [v])
+      , tfTyName = \ _ -> return []
+      }
