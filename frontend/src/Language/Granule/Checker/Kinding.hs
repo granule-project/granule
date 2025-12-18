@@ -317,6 +317,14 @@ synthKindWithConfiguration s config (TyApp (TyCon (internalName -> "Set")) t) = 
     -- otherwise kind of the set depends on the kind of the elements
     k      -> return (k, subst, TyApp (TyCon (mkId "Set")) t')
 
+synthKindWithConfiguration s config (TyApp (TyCon (internalName -> "SetOp")) t) = do
+  (k, subst, t') <- synthKindWithConfiguration s config t
+  case k of
+    -- For set over type, default to the kind being Effect
+    Type 0 -> return (keffect, subst, TyApp (TyCon (mkId "SetOp")) t')
+    -- otherwise kind of the set depends on the kind of the elements
+    k      -> return (k, subst, TyApp (TyCon (mkId "SetOp")) t')
+
 -- KChkS_app
 --
 --      t1 => k1 -> k2    t2 <= k1
@@ -1295,13 +1303,7 @@ requiresSolver s ty = do
   case result of
     -- Checking as coeffect or effect caused an error so ignore
     Left _  -> return False
-    Right _ ->
-      -- avoid putting sets into the solver as the solver is weak on this
-      -- TODO: consider something better here
-      case isSet ty of
-       Just _ ->  putChecker >> return False
-       Nothing ->
-        putChecker >> return True
+    Right _ -> putChecker >> return True
 
 instance Unifiable Substitutors where
     unify' (SubstT t) (SubstT t') = unify' t t'
