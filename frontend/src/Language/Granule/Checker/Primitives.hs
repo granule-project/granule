@@ -780,7 +780,7 @@ scale = BUILTIN
 
 data Capability = Console | TimeDate
 
-cap : (c : Capability) -> () [{c}] -> CapabilityType c
+cap : (c : Capability) -> () [{c}.] -> CapabilityType c
 cap = BUILTIN
 
 --------------------------------------------------------------------------------

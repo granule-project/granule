@@ -627,7 +627,7 @@ checkExpr defs gam pol topLevel tau
     Nothing -> throw UnboundVariableError{ errLoc = s, errId = capName }
     Just ty -> do
       -- Type the capability as a box thing
-      (outContext, subst, _) <- checkExpr defs gam pol False (Box (TySet Normal [TyCon capName]) (TyCon $ mkId "()")) carrier
+      (outContext, subst, _) <- checkExpr defs gam pol False (Box (TySet Opposite [TyCon capName]) (TyCon $ mkId "()")) carrier
       (eq, _, subst') <- equalTypes s ty tau
       if eq
         then do
@@ -1331,7 +1331,7 @@ synthExpr defs gam pol
     Nothing -> throw UnboundVariableError{ errLoc = s, errId = capName }
     Just ty -> do
       -- Type the capability as a box thing
-      (outContext, subst, _) <- checkExpr defs gam pol False (Box (TySet Normal [TyCon capName]) (TyCon $ mkId "()")) carrier
+      (outContext, subst, _) <- checkExpr defs gam pol False (Box (TySet Opposite [TyCon capName]) (TyCon $ mkId "()")) carrier
 
       -- elaborate just to a variable application
       let elab = Val s ty rf (Var ty (mkId $ "cap." <> internalName capName))

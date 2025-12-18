@@ -3,6 +3,7 @@
   - Various fixes around failing tests, including bringing examples in line with OOPSLA 2024 paper changes
   - Improved pretty printer support internally
   - New cabal setup
+  - `Set` and `SetOp` were exchanged, to conform to usage in (On Graded Coeffect Types for Information-Flow Control)[https://granule-project.github.io/papers/security-coeffects-mycroftfest.pdf].
 
   # 0.9.6.0
    - Graded uniqueness for borrowing and lifetimes as described in our OOPSLA 2024 paper: https://dl.acm.org/doi/10.1145/3649848. Examples in:
@@ -27,7 +28,7 @@
    - Minor tweaks to the Granule Language Server to improve vscode interaction (no longer complains on the entire file about 'Premature end of file' whilst typing).
 
   # 0.9.4.0
-  - Advanced synthesis algorithm for `language GradeBase` mode.
+  - Advanced synthesis algorithm for `language GradedBase` mode.
   - Better standard library documentation
   - Ability to expose the 'hsup' constraint (see `push`)
   - Some bug fixes (see https://github.com/granule-project/granule/milestone/2?closed=1)
