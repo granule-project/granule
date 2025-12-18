@@ -1,5 +1,5 @@
 module Language.Granule.Synthesis.Deriving
-  (derivePush, derivePull, deriveCopyShape, deriveDrop) where
+  (derivePush, derivePull, deriveCopyShape, deriveDrop, makeDerivedName) where
 
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pattern
@@ -766,7 +766,8 @@ deriveDrop s ty = do
                   (nub constraints)
                   (FunTy Nothing Nothing baseTy returnTy)
       let expr = Val s () True $ Abs () (PVar s () True z) Nothing bodyExpr
-      let name = mkId $ "drop@" ++ pretty ty
+      -- get left-most type constructor of ty
+      let name = mkId $ makeDerivedName "drop" ty
       let def = Def s name True Nothing (EquationList s name True [Equation s name () True [] expr]) tyS
       modify (\st -> st { derivedDefinitions = deleteVar' (mkId "drop", ty) (derivedDefinitions st)
                         -- Restore type variables and predicate stack
@@ -907,3 +908,7 @@ deriveDrop' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
               return (TyCon $ mkId "()", Case s () True arg exprs, False, dropableConstr argTy : concat constraints)
 
 deriveDrop' s topLevel gamma argTy arg = error (show argTy <> "not implemented yet")
+
+--
+makeDerivedName :: (?globals :: Globals) => String -> Type -> String
+makeDerivedName op ty = op ++ "@" ++ pretty (leftmostOfApplication ty)

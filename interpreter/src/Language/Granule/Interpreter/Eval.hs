@@ -23,6 +23,8 @@ import Language.Granule.Context
 import Language.Granule.Utils (nullSpan, Globals, globalsExtensions, entryPoint, Extension(..))
 import Language.Granule.Runtime as RT
 
+import Language.Granule.Synthesis.Deriving (makeDerivedName)
+
 import Data.Text (cons, uncons, unpack, snoc, unsnoc)
 import Control.Monad (foldM)
 
@@ -275,7 +277,7 @@ evalInWHNF ctxt (App s a b e1 e2) = do
 
 -- Deriving applications get resolved to their names
 evalInWHNF ctxt (AppTy _ _ _ (Val s a rf (Var a' n)) t) | internalName n `elem` ["push", "pull", "copyShape", "drop"] =
-  evalInWHNF ctxt (Val s a rf (Var a' (mkId $ pretty n <> "@" <> pretty t)))
+  evalInWHNF ctxt (Val s a rf (Var a' (mkId $ makeDerivedName (pretty n) t)))
 
 -- General type applications
 evalInWHNF ctxt (AppTy s _ _ e t) = do
@@ -387,7 +389,7 @@ evalInCBV ctxt (App s _ _ e1 e2) = do
 
 -- Deriving applications get resolved to their names
 evalInCBV ctxt (AppTy _ _ _ (Val s a rf (Var a' n)) t) | internalName n `elem` ["push", "pull", "copyShape", "drop"] =
-  evalInCBV ctxt (Val s a rf (Var a' (mkId $ pretty n <> "@" <> pretty t)))
+  evalInCBV ctxt (Val s a rf (Var a' (mkId $ makeDerivedName (pretty n) t)))
 
 -- General type applications
 evalInCBV ctxt (AppTy s _ _ e t) = do

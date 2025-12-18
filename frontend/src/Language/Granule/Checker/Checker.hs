@@ -1710,19 +1710,23 @@ synthExpr defs gam pol e@(AppTy s _ rf e1 ty) = do
 
     (Val _ _ _ (Var _ (internalName -> "drop"))) -> do
       st <- get
-      let name = mkId $ "drop@" ++ pretty ty
       case lookup (mkId "drop", ty) (derivedDefinitions st) of
-        Just (tyScheme, _) ->
+        Just (tyScheme, _) -> do
+          let name = mkId $ makeDerivedName "drop" ty
           freshenTySchemeForVar s rf name tyScheme
         Nothing -> do
           -- Get this derived
           (typScheme, mdef) <- deriveDrop s ty
           -- Register the definition that has been derived
-          case mdef of
-            Nothing  -> return ()
-            Just def -> do
-              debugM "derived drop:" (pretty def)
-              modify (\st -> st { derivedDefinitions = ((mkId "drop", ty), (typScheme, def)) : derivedDefinitions st })
+          name <-
+            case mdef of
+              Nothing  ->
+                -- This is a primitive so generate its name
+                return (mkId $ makeDerivedName "drop" ty)
+              Just def -> do
+                debugM "derived drop:" (pretty def)
+                modify (\st -> st { derivedDefinitions = ((mkId "drop", ty), (typScheme, def)) : derivedDefinitions st })
+                return $ defId def
 
           debugM "derived drop tys:" (pretty typScheme)
           -- return this variable expression in place here

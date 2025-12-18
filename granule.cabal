@@ -110,6 +110,7 @@ library frontend
       Language.Granule.Syntax.Type
       Language.Granule.Synthesis.Builders
       Language.Granule.Synthesis.Contexts
+      Language.Granule.Synthesis.Deriving
       Language.Granule.Synthesis.DebugTree
       Language.Granule.Synthesis.LinearHaskell
       Language.Granule.Synthesis.Monad
@@ -131,7 +132,6 @@ library frontend
       Language.Granule.Checker.Normalise
       Language.Granule.Checker.Simplifier
       Language.Granule.Syntax.SecondParameter
-      Language.Granule.Synthesis.Deriving
       Language.Granule.Synthesis.Refactor
       Text.Reprinter
   hs-source-dirs:
