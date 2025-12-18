@@ -92,7 +92,7 @@ checkConstructorTests =
 
     it "Polymorphic test: `a -> Either a b` vs `Either () ()` - success" $ do
       status <- testCheckConstructor $ checkConstructor  leftConstr (TyApp (TyApp eitherCon unitCon) unitCon) []
-      status `shouldBe` [Just (True, (TyApp (TyApp eitherCon unitCon) unitCon))]
+      status `shouldBe` [Just (True, TyApp (TyApp eitherCon unitCon) unitCon)]
 
 
     -- Vec constructor
@@ -115,7 +115,7 @@ partialExpressionZipperTests = do
   describe "Test facilities for building partial functions" $ do
 
     it "Starts with a hole" $ do
-      synthExprP <- testSynthesiser $ getCurrentPartialExpr
+      synthExprP <- testSynthesiser getCurrentPartialExpr
       synthExprP `shouldBe` [Just hole]
 
     it "Navigation test (down)" $ do
@@ -158,28 +158,28 @@ testSynthesiser synthComputation = do
     --   Cons : forall {n : Nat} . a -> Vec n a -> Vec (n+1) a
     let extras =
           [DataDecl {dataDeclSpan = Span {startPos = (1,1), endPos = (1,17), filename = "simple.gr"}
-                    , dataDeclId = (Id "Simple" "Simple")
-                    , dataDeclTyVarCtxt = [((Id "a" "a"),Type 0)]
+                    , dataDeclId = Id "Simple" "Simple"
+                    , dataDeclTyVarCtxt = [(Id "a" "a",Type 0)]
                     , dataDeclKindAnn = Nothing
                     , dataDeclDataConstrs = [DataConstrNonIndexed {dataConstrSpan = Span {startPos = (1,17), endPos = (1,17), filename = "simple.gr"}
-                                            , dataConstrId = (Id "Simple" "Simple")
+                                            , dataConstrId = Id "Simple" "Simple"
                                             , dataConstrParams = [TyVar (Id "a" "a")]}]}
          ,DataDecl {dataDeclSpan = Span {startPos = (2,1), endPos = (2,28), filename = "simple.gr"}
-                    , dataDeclId = (Id "Either" "Either")
-                    , dataDeclTyVarCtxt = [((Id "a" "a"),Type 0),((Id "b" "b"),Type 0)]
+                    , dataDeclId = Id "Either" "Either"
+                    , dataDeclTyVarCtxt = [(Id "a" "a",Type 0),(Id "b" "b",Type 0)]
                     , dataDeclKindAnn = Nothing
                     , dataDeclDataConstrs = [DataConstrNonIndexed {dataConstrSpan = Span {startPos = (2,19), endPos = (2,19), filename = "simple.gr"}
-                                                                  , dataConstrId = (Id "Left" "Left")
+                                                                  , dataConstrId = Id "Left" "Left"
                                                                   , dataConstrParams = [TyVar (Id "a" "a")]}
                                             ,DataConstrNonIndexed {dataConstrSpan = Span {startPos = (2,28), endPos = (2,28), filename = "simple.gr"}
-                                                                  , dataConstrId = (Id "Right" "Right")
+                                                                  , dataConstrId = Id "Right" "Right"
                                                                   , dataConstrParams = [TyVar (Id "b" "b")]}]}
-         ,DataDecl {dataDeclSpan = Span {startPos = (3,1), endPos = (5,29), filename = "simple.gr"}, dataDeclId = (Id "Vec" "Vec"), dataDeclTyVarCtxt = [((Id "n" "n"),TyCon (Id "Nat" "Nat")),((Id "a" "a"),Type 0)], dataDeclKindAnn = Nothing, dataDeclDataConstrs = [DataConstrIndexed {dataConstrSpan = Span {startPos = (4,5), endPos = (0,0), filename = "simple.gr"}, dataConstrId = (Id "NilV" "NilV"), dataConstrTypeScheme = Forall (Span {startPos = (0,0), endPos = (0,0), filename = ""}) [] [] (TyApp (TyApp (TyCon (Id "Vec" "Vec")) (TyGrade Nothing 0)) (TyVar (Id "a" "a")))},DataConstrIndexed {dataConstrSpan = Span {startPos = (5,5), endPos = (5,29), filename = "simple.gr"}, dataConstrId = (Id "ConsV" "ConsV"), dataConstrTypeScheme = Forall (Span {startPos = (5,12), endPos = (5,29), filename = "simple.gr"}) [((Id "n" "n`0"),TyCon (Id "Nat" "Nat"))] [] (FunTy Nothing Nothing (TyVar (Id "a" "a")) (FunTy Nothing Nothing (TyApp (TyApp (TyCon (Id "Vec" "Vec")) (TyVar (Id "n" "n`0"))) (TyVar (Id "a" "a"))) (TyApp (TyApp (TyCon (Id "Vec" "Vec")) (TyInfix TyOpPlus (TyVar (Id "n" "n`0")) (TyGrade Nothing 1))) (TyVar (Id "a" "a")))))}]}
-         ,DataDecl {dataDeclSpan = Span {startPos = (6,1), endPos = (6,21), filename = "simple.gr"}, dataDeclId = (Id "List" "List"), dataDeclTyVarCtxt = [((Id "a" "a"),Type 0)], dataDeclKindAnn = Nothing, dataDeclDataConstrs = [DataConstrNonIndexed {dataConstrSpan = Span {startPos = (6,15), endPos = (6,15), filename = "simple.gr"}, dataConstrId = (Id "Nil" "Nil"), dataConstrParams = []},DataConstrNonIndexed {dataConstrSpan = Span {startPos = (6,21), endPos = (6,21), filename = "simple.gr"}, dataConstrId = (Id "Cons" "Cons"), dataConstrParams = [TyVar (Id "a" "a"),TyApp (TyCon (Id "List" "List")) (TyVar (Id "a" "a"))]}]}]
+         ,DataDecl {dataDeclSpan = Span {startPos = (3,1), endPos = (5,29), filename = "simple.gr"}, dataDeclId = Id "Vec" "Vec", dataDeclTyVarCtxt = [(Id "n" "n",TyCon (Id "Nat" "Nat")),(Id "a" "a",Type 0)], dataDeclKindAnn = Nothing, dataDeclDataConstrs = [DataConstrIndexed {dataConstrSpan = Span {startPos = (4,5), endPos = (0,0), filename = "simple.gr"}, dataConstrId = Id "NilV" "NilV", dataConstrTypeScheme = Forall (Span {startPos = (0,0), endPos = (0,0), filename = ""}) [] [] (TyApp (TyApp (TyCon (Id "Vec" "Vec")) (TyGrade Nothing 0)) (TyVar (Id "a" "a")))},DataConstrIndexed {dataConstrSpan = Span {startPos = (5,5), endPos = (5,29), filename = "simple.gr"}, dataConstrId = Id "ConsV" "ConsV", dataConstrTypeScheme = Forall (Span {startPos = (5,12), endPos = (5,29), filename = "simple.gr"}) [(Id "n" "n`0",TyCon (Id "Nat" "Nat"))] [] (FunTy Nothing Nothing (TyVar (Id "a" "a")) (FunTy Nothing Nothing (TyApp (TyApp (TyCon (Id "Vec" "Vec")) (TyVar (Id "n" "n`0"))) (TyVar (Id "a" "a"))) (TyApp (TyApp (TyCon (Id "Vec" "Vec")) (TyInfix TyOpPlus (TyVar (Id "n" "n`0")) (TyGrade Nothing 1))) (TyVar (Id "a" "a")))))}]}
+         ,DataDecl {dataDeclSpan = Span {startPos = (6,1), endPos = (6,21), filename = "simple.gr"}, dataDeclId = Id "List" "List", dataDeclTyVarCtxt = [(Id "a" "a",Type 0)], dataDeclKindAnn = Nothing, dataDeclDataConstrs = [DataConstrNonIndexed {dataConstrSpan = Span {startPos = (6,15), endPos = (6,15), filename = "simple.gr"}, dataConstrId = Id "Nil" "Nil", dataConstrParams = []},DataConstrNonIndexed {dataConstrSpan = Span {startPos = (6,21), endPos = (6,21), filename = "simple.gr"}, dataConstrId = Id "Cons" "Cons", dataConstrParams = [TyVar (Id "a" "a"),TyApp (TyCon (Id "List" "List")) (TyVar (Id "a" "a"))]}]}]
     -- Load in the primitive data constructors first before running the computation synthComputation
     let synthComputation' =
-             (conv (runAll registerTypeConstructor (extras ++ Primitives.dataTypes)))
-          >> (conv (runAll registerDataConstructors (extras ++ Primitives.dataTypes)))
+             conv (runAll registerTypeConstructor (extras ++ Primitives.dataTypes))
+          >> conv (runAll registerDataConstructors (extras ++ Primitives.dataTypes))
           >> conv (liftIO (putStrLn "ok"))
           >> synthComputation
     (outputs, dat) <- runStateT (runSynthesiser 1 synthComputation' initState) mempty
@@ -188,5 +188,5 @@ testSynthesiser synthComputation = do
     convertError (Right a) = return $ Just a
     convertError (Left err) = do
       -- Print error message if something went badly wrong
-      putStrLn $ show err
-      return $ Nothing
+      print err
+      return Nothing
