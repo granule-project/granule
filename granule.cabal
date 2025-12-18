@@ -1,6 +1,6 @@
 cabal-version:  3.4
 name:           granule
-version:        0.9.6.0
+version:        0.9.7.0
 
 synopsis:       The Granule Language
 description:    A research language based on graded modal types

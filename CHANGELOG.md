@@ -1,3 +1,9 @@
+  # 0.9.7.0
+  - Improving the type checking of `clone`
+  - Various fixes around failing tests, including bringing examples in line with OOPSLA 2024 paper changes
+  - Improved pretty printer support internally
+  - New cabal setup
+
   # 0.9.6.0
    - Graded uniqueness for borrowing and lifetimes as described in our OOPSLA 2024 paper: https://dl.acm.org/doi/10.1145/3649848. Examples in:
       * examples/parallelWithMutation.gr
