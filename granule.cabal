@@ -299,7 +299,9 @@ executable grls
   import: granule-default-lang
   import: granule-dependencies
   import: granule-ghc-warnings
-  main-is: Language/Granule/Server.hs
+  main-is: Main.hs
+  other-modules:
+       Language.Granule.Server
   hs-source-dirs:
       server/app
   build-depends:
