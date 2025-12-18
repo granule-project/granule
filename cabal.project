@@ -1,5 +1,9 @@
 packages: ./granule.cabal
 
+multi-repl: true
+
+jobs: $ncpus
+
 source-repository-package
     type: git
     location: https://github.com/jackohughes/haskell-src-exts

@@ -3,13 +3,22 @@ cradle:
     - path: "./frontend/src"
       component: "granule:lib:frontend"
 
-    - path: "./frontend/tests/hspec"
-      component: "granule:test:frontend-spec"
-
     - path: "./interpreter/src"
       component: "granule:lib:interpreter"
 
-    - path: "./interpreter/src/Language/Granule/Interpreter.hs"
+    - path: "./runtime/src"
+      component: "granule:lib:runtime"
+
+    - path: "./compiler/src"
+      component: "granule:lib:compiler"
+
+    - path: "./frontend/tests/hspec"
+      component: "granule:test:frontend-spec"
+
+    - path: "./interpreter/tests"
+      component: "granule:test:gr-golden"
+
+    - path: "./interpreter/src/Main.hs"
       component: "granule:exe:gr"
 
     - path: "./interpreter/src/Language/Granule/Doc.hs"
@@ -21,11 +30,14 @@ cradle:
     - path: "./interpreter/src/Language/Granule/Interpreter/Eval.hs"
       component: "granule:exe:gr"
 
-    - path: "./server/app/Language/Granule/Server.hs"
+    - path: "./interpreter/src/Language/Granule/Interpreter.hs"
+      component: "granule:exe:gr"
+
+    - path: "./server/app/Main.hs"
       component: "granule:exe:grls"
 
-    - path: "./interpreter/tests"
-      component: "granule:test:gr-golden"
+    - path: "./server/app/Language/Granule/Server.hs"
+      component: "granule:exe:grls"
 
     - path: "./repl/app/Language/Granule/Main.hs"
       component: "granule:exe:grepl"
@@ -39,16 +51,13 @@ cradle:
     - path: "./repl/app/Language/Granule/ReplParser.hs"
       component: "granule:exe:grepl"
 
-    - path: "./runtime/src"
-      component: "granule:lib:runtime"
-
-    - path: "./compiler/src"
-      component: "granule:lib:compiler"
+    - path: "./compiler/app/Main.hs"
+      component: "granule:exe:grc"
 
     - path: "./compiler/app/Language/Granule/Compiler.hs"
       component: "granule:exe:grc"
 
-    - path: "./benchmark/src/Language/Granule/Main.hs"
+    - path: "./benchmark/src/Main.hs"
       component: "granule:exe:grenchmark"
 
     - path: "./benchmark/src/Language/Granule/Benchmarks.hs"
