@@ -1,5 +1,4 @@
-{-# LANGUAGE ImplicitParams #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 -- | Helpers for working with type variables in the type checker
 module Language.Granule.Checker.Variables where
@@ -21,7 +20,7 @@ freshIdentifierBase :: String -> Checker String
 freshIdentifierBase s = do
   checkerState <- get
   let vmap = uniqueVarIdCounterMap checkerState
-  let s' = takeWhile (\c -> c /= '`') s
+  let s' = takeWhile (/= '`') s
   case M.lookup s' vmap of
     Nothing -> do
       let vmap' = M.insert s' 1 vmap
@@ -59,7 +58,7 @@ registerTyVarInContextWith :: (MonadTrans m, Monad (m Checker))
     => Id -> Type -> Quantifier -> m Checker a -> m Checker a
 registerTyVarInContextWith v t q cont = do
   -- save ty var context
-  st <- lift $ get
+  st <- lift get
   let tyvc = tyVarContext st
   -- register variable, type, and quantifier
   lift $ registerTyVarInContext v t q

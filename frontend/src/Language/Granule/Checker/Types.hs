@@ -1,6 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE DataKinds #-}
@@ -11,6 +10,7 @@ module Language.Granule.Checker.Types where
 
 import Control.Monad.State.Strict
 import Data.List (sortBy, sort)
+import Data.Functor ((<&>))
 
 import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Effects
@@ -74,7 +74,7 @@ relGrades s c c' rel = do
   c  <- substitute subst c
   kind <- substitute subst kind
   addConstraint (rel s (inj2 c') (inj1 c) kind)
-  debugM "added solver constraint from box-types equality" (pretty $ (rel s (inj2 c') (inj1 c) kind))
+  debugM "added solver constraint from box-types equality" (pretty (rel s (inj2 c') (inj1 c) kind))
   return subst
 
 {- | Check whether two types are equal, and at the same time
@@ -185,7 +185,7 @@ equalTypesRelatedCoeffectsInner s rel fTy1@(FunTy _ grade t1 t2) fTy2@(FunTy _ g
 
   -- grade relation if in GradedBase
   subst <-
-    if (usingExtension GradedBase) then
+    if usingExtension GradedBase then
       case (grade, grade') of
         (Nothing, Nothing) -> return []
         _                  -> relGrades s (getGradeFromArrow grade) (getGradeFromArrow grade') rel
@@ -200,7 +200,7 @@ equalTypesRelatedCoeffectsInner _ _ (TyCon con1) (TyCon con2) _ _ _
 
     -- Some slightly ad-hoc type synonym work here:
     -- if SecurityLevels is off then Lo = Public and Hi = Private
-    if not (SecurityLevels `elem` globalsExtensions ?globals)
+    if SecurityLevels `notElem` globalsExtensions ?globals
       then if sort [internalName con1, internalName con2] == ["Lo", "Public"]
             || sort [internalName con1, internalName con2] == ["Hi", "Private"]
             then return (True, [])
@@ -251,7 +251,7 @@ equalTypesRelatedCoeffectsInner s rel
     debugM "RenameL" (pretty t0 <> " = " <> pretty t')
     eqRenameFunction s rel oldName newName t t' sp
 
-equalTypesRelatedCoeffectsInner s rel t' 
+equalTypesRelatedCoeffectsInner s rel t'
   t0@(TyApp (TyApp (TyApp (TyCon (internalName -> "Rename")) (TyVar oldName)) (TyVar newName)) t) ind sp mode = do
     debugM "RenameR" (pretty t' <> " = " <> pretty t0)
     eqRenameFunction s rel oldName newName t t' sp
@@ -264,7 +264,7 @@ equalTypesRelatedCoeffectsInner s rel ty1@(TyVar var1) ty2 kind _ _ = do
   useSolver <- requiresSolver s kind
   reportM ("Equality between " <> pretty ty1 <> " and " <> pretty ty2)
   if useSolver then do
-    reportM ("Is a solver variable so no substitution just an equality")
+    reportM "Is a solver variable so no substitution just an equality"
     addConstraint (rel s (TyVar var1) ty2 kind)
     return (True, [])
   else do
@@ -315,7 +315,7 @@ equalTypesRelatedCoeffectsInner s rel a@(TyExists x1 k1 t1) b@(TyExists x2 k2 t2
       (eqT, subst2) <- equalTypesRelatedCoeffectsInner s rel t1 t2' ind sp mode
       substFinal <- combineSubstitutions s subst1 subst2
       -- remove from substFinal any substitutions which contain a use of x1 in their substituted type
-      let substFinal' = filter (\(x, SubstT t) -> not $ x1 `elem` freeVars t) substFinal
+      let substFinal' = filter (\(x, SubstT t) -> x1 `notElem` freeVars t) substFinal
       return (eqK && eqT, substFinal')
 
 -- Equality on rank-N forall types
@@ -348,7 +348,7 @@ equalTypesRelatedCoeffectsInner s rel (TyCase t1 b1) (TyCase t1' b1') k sp mode 
   b1  <- mapM (pairMapM (substitute u1)) b1
   b1' <- mapM (pairMapM (substitute u1)) b1'
   -- Check whether there are the same number of branches
-  let r2 = (length b1) == (length b1')
+  let r2 = length b1 == length b1'
   -- Sort both branches by their patterns
   let bs = zip (sortBranch b1) (sortBranch b1')
   -- For each pair of branches, check whether the patterns are equal and the results are equal
@@ -454,7 +454,7 @@ gradedProtocolBeta :: (?globals :: Globals)
 gradedProtocolBeta grd protocolType@(TyApp (TyApp (TyCon c) t) s)
   | internalName c == "Send" || internalName c == "Recv" = do
     s <- gradedProtocolBeta grd s
-    return $ (TyApp (TyApp (TyCon c) (Box grd t)) s)
+    return (TyApp (TyApp (TyCon c) (Box grd t)) s)
 
 gradedProtocolBeta grd (TyApp (TyApp (TyCon c) p1) p2)
   | internalName c == "Select" || internalName c == "Offer" = do
@@ -555,7 +555,7 @@ eqGradedProtocolFunction sp rel grad (TyVar v) t ind = do
   return (eq, substFinal)
 
 eqGradedProtocolFunction sp _ grad t1 t2 _ = throw
-  TypeError{ errLoc = sp, tyExpected = (TyApp (TyApp (TyCon $ mkId "Graded") grad) t1), tyActual = t2 }
+  TypeError{ errLoc = sp, tyExpected = TyApp (TyApp (TyCon $ mkId "Graded") grad) t1, tyActual = t2 }
 
 -- Compute the behaviour of `Rename oldId newId a`
 -- where the arguments here are `oldId`, `newId` and `a`
@@ -564,8 +564,8 @@ renameBeta ::
   -> Id -- newName
   -> Type -- type
   -> Checker Type
-renameBeta oldName newName t = 
-  typeFoldM (baseTypeFold { tfTyVar = return . TyVar . renamer }) t
+renameBeta oldName newName =
+  typeFoldM (baseTypeFold { tfTyVar = return . TyVar . renamer })
     where
       renamer :: Id -> Id
       renamer id = if id == oldName then newName else id
@@ -734,9 +734,7 @@ refineBinderQuantification ctxt ty = mapM computeQuantifier ctxt
               -- then check if the `id` here is in the term for that argument
               onRight <- aux id t2
               return $ onRight || any (\i ->
-                 if i < length (typeArguments t)
-                  then id `elem` freeVars (typeArguments t !! i)
-                  else False) indices
+                 (i < length (typeArguments t)) && (id `elem` freeVars (typeArguments t !! i))) indices
             Nothing -> throw UnboundVariableError { errLoc = nullSpan , errId = tyConId }
         -- unusual- put possible (e.g., `f t`) give up and go for ForallQ
         _ -> return False
@@ -744,7 +742,7 @@ refineBinderQuantification ctxt ty = mapM computeQuantifier ctxt
     aux id (TySig t k)       = liftM2 (||) (aux id t) (aux id k)
     aux id (TyCase t ts)     = liftM2 (||) (aux id t) (anyM (\(_, t) -> aux id t) ts)
       where
-        anyM f xs = mapM f xs >>= (return . or)
+        anyM f xs = mapM f xs <&> or
     aux id _ = return False
 
 isPermission :: (?globals :: Globals) => Span -> Type -> Checker (Either Kind Type)

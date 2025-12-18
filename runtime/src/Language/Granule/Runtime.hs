@@ -43,6 +43,7 @@ import Prelude
 import Control.Monad
 import GHC.Err (undefined)
 import Data.Function (const)
+import Data.Functor ((<&>))
 import Data.Text
 import Data.Text.IO
 import Data.Time.Clock
@@ -89,10 +90,10 @@ toStdout :: String -> IO ()
 toStdout = putStr
 
 toStderr :: String -> IO ()
-toStderr = let red x = "\ESC[31;1m" <> x <> "\ESC[0m" in (hPutStr stderr) . red
+toStderr = let red x = "\ESC[31;1m" <> x <> "\ESC[0m" in hPutStr stderr . red
 
 timeDate :: () -> IO String
-timeDate () = getCurrentTime >>= (return . pack . show)
+timeDate () = getCurrentTime <&> (pack . show)
 
 --------------------------------------------------------------------------------
 -- Conversions
@@ -145,7 +146,7 @@ data FloatArray =
     -- | Pointer to a block of memory
     grPtr :: Ptr Float }
 
-data PolyRef a =
+newtype PolyRef a =
   HaskellRef {
     haskRef :: MR.IORef a
   }
@@ -214,7 +215,7 @@ swapRefSafe :: PolyRef a -> a -> IO (a, PolyRef a)
 swapRefSafe HaskellRef{haskRef} v = do
   x <- MR.readIORef haskRef
   MR.writeIORef haskRef v
-  return $ (x, HaskellRef haskRef)
+  return (x, HaskellRef haskRef)
 
 {-# NOINLINE readRef #-}
 readRef :: PolyRef a -> (a, PolyRef a)
@@ -223,7 +224,7 @@ readRef = unsafePerformIO . readRefSafe
 readRefSafe :: PolyRef a -> IO (a, PolyRef a)
 readRefSafe HaskellRef{haskRef} = do
   x <- MR.readIORef haskRef
-  return $ (x, HaskellRef haskRef)
+  return (x, HaskellRef haskRef)
 
 {-# NOINLINE readFloatArray #-}
 readFloatArray :: FloatArray -> Int -> (Float, FloatArray)
@@ -359,5 +360,5 @@ type instance CapabilityType 'TimeDateTag = () -> Text
 
 {-# NOINLINE cap #-}
 cap :: Capability cap -> () -> CapabilityType cap
-cap Console ()  = \x -> unsafePerformIO $ toStdout $ x
+cap Console ()  = \x -> unsafePerformIO $ toStdout x
 cap TimeDate () = \() -> unsafePerformIO $ timeDate ()

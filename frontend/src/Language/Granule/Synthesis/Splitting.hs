@@ -1,5 +1,5 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 
 module Language.Granule.Synthesis.Splitting (generateCases) where
 
@@ -237,7 +237,7 @@ getAssumConstr a =
     getTypeConstr (TyRational _) = Nothing
     getTypeConstr (TyFraction _) = Nothing
     getTypeConstr (TyGrade _ _) = Nothing
-    getTypeConstr (TyInfix _ _ _) = Nothing
+    getTypeConstr (TyInfix {}) = Nothing
     getTypeConstr (TySet _ _) = Nothing
     getTypeConstr (TyExists _ _ t) = getTypeConstr t
     getTypeConstr (TyForall _ _ t) = getTypeConstr t
@@ -249,7 +249,7 @@ getAssumConstr a =
        allSame [] = True
        allSame [x] = True
        allSame (x:(y:xs)) =
-         if x == y then allSame xs else False
+         x == y && allSame xs
     getTypeConstr (TyName _) = Nothing
 
 -- Given a function type, expand grades on parameters to be more permissive,

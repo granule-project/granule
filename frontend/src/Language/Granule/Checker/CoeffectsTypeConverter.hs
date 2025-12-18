@@ -3,6 +3,7 @@ module Language.Granule.Checker.CoeffectsTypeConverter(includeOnlyGradeVariables
 
 import Control.Monad.State.Strict
 import Data.Maybe(catMaybes, mapMaybe)
+import Data.Functor((<&>))
 
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
@@ -19,7 +20,7 @@ import Language.Granule.Utils
 -- have a grade type
 includeOnlyGradeVariables :: (?globals :: Globals)
   => Span -> Ctxt (Type, b) -> Checker (Ctxt (Type, b))
-includeOnlyGradeVariables s xs = mapM convert xs >>= (return . catMaybes)
+includeOnlyGradeVariables s xs = mapM convert xs <&> catMaybes
   where
     convert (var, (t, q)) = do
       reqSolver <- requiresSolver s t

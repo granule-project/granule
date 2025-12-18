@@ -11,10 +11,10 @@ import Data.Text.Lazy (pack, unpack)
 import Text.Replace (Replace(..), replaceWithList)
 
 asciiToUnicode :: String -> String
-asciiToUnicode = unpack . (replaceWithList (asciiUnicodeTableReplacements id)) . pack
+asciiToUnicode = unpack . replaceWithList (asciiUnicodeTableReplacements id) . pack
 
 unicodeToAscii :: String -> String
-unicodeToAscii = unpack . (replaceWithList (asciiUnicodeTableReplacements swap)) . pack
+unicodeToAscii = unpack . replaceWithList (asciiUnicodeTableReplacements swap) . pack
   where swap (a, b) = (b, a)
 
 -- NOTE: Update the documentation with 'asciiUnicodeTableMarkdown' if you touch this.
@@ -44,8 +44,8 @@ asciiUnicodeTable =
 asciiUnicodeTableMarkdown :: String
 asciiUnicodeTableMarkdown
     = unlines
-    $ [ ("| ASCII | Unicode |")
-      , ("|:---:|:---:|")
+    $ [ "| ASCII | Unicode |"
+      , "|:---:|:---:|"
       ]
     <> map mkRow asciiUnicodeTable
   where

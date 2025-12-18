@@ -187,7 +187,7 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC tyVarBindsRequ
     Just (tySch@(Forall _ tyVarBinders _ innerType), coercions, indices) -> do
 
       -- Check pattern arity
-      if (arity innerType /= length ps)
+      if arity innerType /= length ps
         then throw $ PatternArityError s dataC (arity innerType) (length ps)
         else return ()
 
@@ -250,8 +250,8 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC tyVarBindsRequ
 
           let before = tyVarBindsRequested
           reportM $ "freshTyVarsCtxt' = " <> pretty freshTyVarsCtxt
-          reportM $ "tyVarBinders = " <> (pretty tyVarBinders)
-          let after = (take (length tyVarBindsRequested) freshTyVarsCtxt')
+          reportM $ "tyVarBinders = " <> pretty tyVarBinders
+          let after = take (length tyVarBindsRequested) freshTyVarsCtxt'
           reportM $ "requested variables were " <> pretty tyVarBindsRequested
           reportM $ "corresponds to " <> pretty after
           -- create a substitution for this variable
@@ -273,7 +273,7 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC tyVarBindsRequ
           -- unifiers:   t.10.0 ~ n`1
           --             t.11.0 ~ a`2
           st <- get
-          reportM $ "Predicate stack" <> (pretty $ predicateStack st)
+          reportM $ "Predicate stack" <> pretty (predicateStack st)
 
           dataConstructorIndexRewritten <- substitute unifiers dataConstructorTypeFresh
 

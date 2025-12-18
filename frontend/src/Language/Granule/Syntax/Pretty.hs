@@ -453,7 +453,7 @@ instance Pretty Pos where
     wlpretty (l, c) = P.pretty (show l) <> ":" <> P.pretty (show c)
 
 instance Pretty Hints where
-  wlpretty (Hints _ _ _ _ _ _)= ""
+  wlpretty (Hints {})= ""
       --  \case
 
       -- HSubtractive      -> " -s"

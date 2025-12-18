@@ -1,13 +1,11 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ImplicitParams #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE TupleSections #-}
 
 {-# options_ghc -fno-warn-incomplete-uni-patterns -Wno-deprecations #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
@@ -68,7 +66,7 @@ check :: (?globals :: Globals)
   => AST () ()
   -> IO (Either (NonEmpty CheckerError) (AST () Type, [Def () ()]))
 check ast@(AST _ _ _ hidden _) = do
-  evalChecker (initState { allHiddenNames = hidden }) $ (do
+  evalChecker (initState { allHiddenNames = hidden }) (do
       ast@(AST dataDecls defs imports hidden name) <- return $ replaceTypeAliases ast
       _    <- checkNameClashes Primitives.typeConstructors Primitives.dataTypes ast Primitives.builtinsParsed
       debugHeadingM "Register type constructors"
@@ -316,7 +314,7 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ binders
   modify (\st -> st { splittingTy = Just splittingTy})
 
   --patternGam <- substitute subst patternGam
-  debugM "context in checkEquation 1" $ (show patternGam)
+  debugM "context in checkEquation 1" (show patternGam)
 
   -- Introduce ambient coeffect
   combinedGam <-

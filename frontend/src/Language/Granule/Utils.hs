@@ -2,14 +2,14 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE PackageImports #-}
-{-# LANGUAGE ViewPatterns #-}
 
 module Language.Granule.Utils where
 
 import Control.Applicative ((<|>))
 import Control.Exception (SomeException, catch, throwIO, try)
-import Control.Monad (when, forM, foldM)
+import Control.Monad (when, forM, foldM, unless)
 import Control.Monad.State.Class
+import Data.Functor ((<&>))
 import Data.List ((\\), nub, sortBy)
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NonEmpty
@@ -84,7 +84,7 @@ usingExtension x = x `elem` globalsExtensions ?globals
 -- | Parse valid extension names
 parseExtensions :: String -> Maybe Extension
 parseExtensions xs =
-  case readsPrec 0 xs of
+  case reads xs of
     ((x, ""):_) -> Just x
     _           -> Nothing
 
@@ -219,7 +219,7 @@ nullSpan = Span (0, 0) (0, 0) sourceFilePath
 
 reportM :: (?globals :: Globals, MonadIO f) => String -> f ()
 reportM message =
-  when (usingExtension Report) (liftIO $ putStrLn $ message)
+  when (usingExtension Report) (liftIO $ putStrLn message)
 
 reportMsep :: (?globals :: Globals, MonadIO f) => f ()
 reportMsep = reportM (replicate 80 '-')
@@ -227,51 +227,46 @@ reportMsep = reportM (replicate 80 '-')
 debugM :: (?globals :: Globals, Applicative f) => String -> String -> f ()
 debugM explanation message =
     when debugging $ traceM $
-      ((unsafePerformIO getTimeString) <> (bold $ cyan $ "Debug: ") <> explanation <> " \n") <> message <> "\n"
+      (unsafePerformIO getTimeString <> bold (cyan "Debug: ") <> explanation <> " \n") <> message <> "\n"
 
 debugHeadingM :: (?globals :: Globals, Applicative f) => String -> f ()
 debugHeadingM explanation =
-    when debugging $ traceM $
-      ((unsafePerformIO getTimeString) <> (bold $ cyan $ "Debug: ") <> explanation <> " \n")
+    when debugging $ traceM
+      (unsafePerformIO getTimeString <> bold (cyan "Debug: ") <> explanation <> " \n")
 
 
 debugM' :: (?globals :: Globals, Applicative f) => String -> String -> f ()
 debugM' explanation message =
     when True $ traceM $
-      ((unsafePerformIO getTimeString) <> (bold $ cyan $ "Debug: ") <> explanation <> " \n") <> message <> "\n"
+      (unsafePerformIO getTimeString <> bold (cyan "Debug: ") <> explanation <> " \n") <> message <> "\n"
 
 -- | Print to terminal when debugging e.g.:
 -- foo x y = x + y `debug` "foo" $ "given " <> show x <> " and " <> show y
 debug :: (?globals :: Globals) => a -> String -> a
 debug x message
-  | debugging = ((unsafePerformIO getTimeString) <> (bold $ magenta $ "Debug: ") <> message <> "\n") `trace` x
+  | debugging = (unsafePerformIO getTimeString <> bold (magenta "Debug: ") <> message <> "\n") `trace` x
   | otherwise = x
 
 printError :: (?globals :: Globals, UserMsg msg) => msg -> IO ()
-printError message = when (not suppressErrors) $
+printError message = unless suppressErrors $
   hPutStrLn stderr $ formatError message <> "\n"
 
 printSuccess :: (?globals :: Globals) => String -> IO ()
-printSuccess message = when (not suppressInfos)
+printSuccess message = unless suppressInfos
   (putStrLn . (if alternativeColors then blue else green) $ message)
 
 printInfo :: (?globals :: Globals) => String -> IO ()
-printInfo message = when (not suppressInfos) (putStrLn message)
-
--- printInfo :: (?globals :: Globals) => String -> IO ()
--- printInfo message =
---     when (not $ suppressInfos ?globals) $ do
---       time <- getTimeString
---       putStr $ time <> message
+printInfo message = unless suppressInfos (putStrLn message)
 
 formatError :: (?globals :: Globals, UserMsg msg) => msg -> String
-formatError msg = formatMessage (bold . (chooseColor . color $ msg)) $ msg
+formatError msg = formatMessage (bold . (chooseColor . color $ msg)) msg
+
 -- | Given a function to format the title of a message, format the message
 -- and its body. e.g. @formatMessage (bold . red)@ for errors.
 formatMessage :: (?globals :: Globals, UserMsg msg)
   => (String -> String) -> msg -> String
 formatMessage titleStyle message
-  = (titleStyle $ title message <> ": ")
+  = titleStyle (title message <> ": ")
     <> sourceFile <> lineCol <> "\n"
     <> msg message
   where
@@ -341,10 +336,10 @@ getTimeString =
 -- Extracted from the else in  main from Main.hs for use as a generic function
 -- where e is some error handler and f is what is done with each file
 processFiles :: [FilePath] -> (FilePath -> IO a) -> (FilePath -> IO a) -> IO [[a]]
-processFiles globPatterns e f = forM globPatterns $ (\p -> do
+processFiles globPatterns e f = forM globPatterns (\p -> do
     filePaths <- glob p
     case filePaths of
-        [] -> (e p) >>= (return.(:[]))
+        [] -> e p <&> (: [])
         _ -> forM filePaths f)
 
 lookupMany :: Eq a => a -> [(a, b)] -> [b]

@@ -129,7 +129,7 @@ data Consumption = Full | NotFull | Empty deriving (Eq, Show)
 initialisePatternConsumptions :: [Equation v a] -> [Consumption]
 initialisePatternConsumptions [] = []
 initialisePatternConsumptions ((Equation _ _ _ _ pats _):_) =
-  map (\_ -> NotFull) pats
+  map (const NotFull) pats
 
 -- Join information about consumption between branches
 joinConsumption :: Consumption -> Consumption -> Consumption
@@ -405,9 +405,9 @@ concludeImplication s localCtxt = do
            let impl@(Impl implCtxt implAntecedent _) =
                 -- TODO: turned off this feature for now by putting True in the guard here
                 if True -- isTrivial freshPrevGuardPred
-                  then (Impl localCtxt p (Conj $ p' : futureFrame checkerState))
-                  else (Impl (localCtxt <> freshPrevGuardCxt)
-                                 (Conj [p, freshPrevGuardPred]) (Conj $ p' : futureFrame checkerState))
+                  then Impl localCtxt p (Conj $ p' : futureFrame checkerState)
+                  else Impl (localCtxt <> freshPrevGuardCxt)
+                                 (Conj [p, freshPrevGuardPred]) (Conj $ p' : futureFrame checkerState)
 
            -- Build the guard theorem to also include all of the 'context' of things
            -- which also need to hold (held in `stack`)
@@ -509,7 +509,7 @@ addConstraintToPreviousFrame c = do
         checkerState <- get
         case predicateStack checkerState of
           (ps : ps' : stack) ->
-            put (checkerState { predicateStack = ps : (appendPred (Con c) ps') : stack, addedConstraints = True })
+            put (checkerState { predicateStack = ps : appendPred (Con c) ps' : stack, addedConstraints = True })
           (ps : stack) ->
             put (checkerState { predicateStack = ps : Conj [Con c] : stack, addedConstraints = True })
           stack ->
@@ -525,7 +525,7 @@ substIntoTyVarContext tyVar k = do
  where
    rewriteCtxt :: Ctxt (Type, Quantifier) -> Ctxt (Type, Quantifier)
    rewriteCtxt [] = []
-   rewriteCtxt ((name, ((TyVar kindVar), q)) : ctxt)
+   rewriteCtxt ((name, (TyVar kindVar, q)) : ctxt)
     | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
    rewriteCtxt (x : ctxt) = x : rewriteCtxt ctxt
 

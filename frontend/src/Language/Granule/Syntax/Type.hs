@@ -5,7 +5,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE StandaloneDeriving #-}
@@ -227,13 +226,13 @@ isGenericCoeffectExpression _ = False
 containsTypeSig :: Type -> Bool
 containsTypeSig =
   runIdentity . typeFoldM (TypeFold
-      { tfTy = \_ -> return $ False
+      { tfTy = \_ -> return False
       , tfFunTy = \_ c x y -> return (x || y)
       , tfTyCon = \_ -> return False
       , tfBox = \x y -> return (x || y)
-      , tfDiamond = \x y -> return $ (x || y)
-      , tfStar = \x y -> return $ (x || y)
-      , tfBorrow = \x y -> return $ (x || y)
+      , tfDiamond = \x y -> return (x || y)
+      , tfStar = \x y -> return (x || y)
+      , tfBorrow = \x y -> return (x || y)
       , tfTyVar = \_ -> return False
       , tfTyApp = \x y -> return (x || y)
       , tfTyInt = \_ -> return False
@@ -372,58 +371,58 @@ typeFoldM :: forall m a . Monad m => TypeFold m a -> Type -> m a
 typeFoldM algebra = go
   where
    go :: Type -> m a
-   go (Type l) = (tfTy algebra) l
+   go (Type l) = tfTy algebra l
    go (FunTy v coeff t1 t2) = do
      t1' <- go t1
      t2' <- go t2
-     coeff' <- maybe (return Nothing) (\coeff -> Just <$> go coeff) coeff
-     (tfFunTy algebra) v coeff' t1' t2'
-   go (TyCon s) = (tfTyCon algebra) s
+     coeff' <- maybe (return Nothing) (fmap Just . go) coeff
+     tfFunTy algebra v coeff' t1' t2'
+   go (TyCon s) = tfTyCon algebra s
    go (Box c t) = do
      c' <- go c
      t' <- go t
-     (tfBox algebra) c' t'
+     tfBox algebra c' t'
    go (Diamond e t) = do
      t' <- go t
      e' <- go e
-     (tfDiamond algebra) e' t'
+     tfDiamond algebra e' t'
    go (Star g t) = do
      t' <- go t
      g' <- go g
-     (tfStar algebra) g' t'
+     tfStar algebra g' t'
    go (Borrow p t) = do
      t' <- go t
      p' <- go p
-     (tfBorrow algebra) p' t'
-   go (TyVar v) = (tfTyVar algebra) v
+     tfBorrow algebra p' t'
+   go (TyVar v) = tfTyVar algebra v
    go (TyApp t1 t2) = do
      t1' <- go t1
      t2' <- go t2
-     (tfTyApp algebra) t1' t2'
-   go (TyInt i) = (tfTyInt algebra) i
-   go (TyRational i) = (tfTyRational algebra) i
-   go (TyFraction i) = (tfTyFraction algebra) i
-   go (TyGrade Nothing i) = (tfTyGrade algebra) Nothing i
+     tfTyApp algebra t1' t2'
+   go (TyInt i) = tfTyInt algebra i
+   go (TyRational i) = tfTyRational algebra i
+   go (TyFraction i) = tfTyFraction algebra i
+   go (TyGrade Nothing i) = tfTyGrade algebra Nothing i
    go (TyGrade (Just t) i) = do
      t' <- go t
-     (tfTyGrade algebra) (Just t') i
+     tfTyGrade algebra (Just t') i
    go (TyInfix op t1 t2) = do
      t1' <- go t1
      t2' <- go t2
-     (tfTyInfix algebra) op t1' t2'
+     tfTyInfix algebra op t1' t2'
    go (TySet p ts) = do
     ts' <- mapM go ts
-    (tfSet algebra) p ts'
+    tfSet algebra p ts'
    go (TySig t k) = do
      t' <- go t
      k' <- go k
      -- This part of the fold is a bit different:
      -- actually pass the original type in here as well
-     (tfTySig algebra) t' t k'
+     tfTySig algebra t' t k'
    go (TyCase t ts) = do
     t' <- go t
     ts' <- mapM (\(a,b) -> extractMonad (go a, go b)) ts
-    (tfTyCase algebra) t' ts'
+    tfTyCase algebra t' ts'
     where
      extractMonad (a,b) = do
       a' <- a
@@ -432,12 +431,12 @@ typeFoldM algebra = go
    go (TyExists var k t) = do
     k' <- go k
     t' <- go t
-    (tfTyExists algebra) var k' t'
+    tfTyExists algebra var k' t'
    go (TyForall var k t) = do
     k' <- go k
     t' <- go t
-    (tfTyForall algebra) var k' t'
-   go (TyName i) = (tfTyName algebra) i
+    tfTyForall algebra var k' t'
+   go (TyName i) = tfTyName algebra i
 
 ----------------------------------------------------------------------
 -- # Types are terms
@@ -458,7 +457,7 @@ instance Term Type where
       , tfTyFraction = \_ -> return (Const [])
       , tfTyGrade     = \_ _ -> return (Const [])
       , tfTyInfix = \_ (Const y) (Const z) -> return $ Const (y <> z)
-      , tfSet     = \_ -> return . Const . concat . map getConst
+      , tfSet     = \_ -> return . Const . concatMap getConst
       , tfTyCase  = \(Const t) cs -> return . Const $ t <> (concat . concat) [[a,b] | (Const a, Const b) <- cs]
       , tfTySig   = \(Const t) _ (Const k) -> return $ Const (t <> k)
       , tfTyExists = \v _ (Const fvs) -> return $ Const [v' | v' <- fvs, v /= v']

@@ -70,7 +70,6 @@ import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NonEmpty
 import Language.Granule.Checker.Checker (checkExpr, Polarity (Positive, Negative), checkDef, check)
 import qualified Language.Granule.Checker.Primitives as Primitives
-import Language.Granule.Synthesis.Monad (SynthesisData(gradedProgram), Measurement (cartAttempts))
 
 ------------------------------
 

@@ -116,7 +116,7 @@ makePairElimPUntyped ptransf elimExpr lId rId e =
   App s () False
   (Val s () False
     (Abs ()
-      (ptransf $ PConstr s () False (mkId ",") [] [(PVar s () False lId), (PVar s () False rId)] )
+      (ptransf $ PConstr s () False (mkId ",") [] [PVar s () False lId, PVar s () False rId] )
         Nothing e)) elimExpr
   where s = nullSpanNoFile
 
@@ -155,7 +155,7 @@ makeCase ty id exprPats goal grade =
 
 
 makeCaseUntyped :: Id -> [(Pattern (), Expr () ())] -> Expr () ()
-makeCaseUntyped id exprPats = Case s () False (Val s () False (Var () id)) exprPats
+makeCaseUntyped id = Case s () False (Val s () False (Var () id))
   where s = nullSpanNoFile
 
 makeBoxCase :: Type -> Type -> Id -> [(Pattern Type, Expr () Type)] -> Type -> Expr () Type
@@ -168,7 +168,7 @@ makeBoxCase ty grade id exprPats goal =
 --   Val nullSpanNoFile (TyCon id) True
 --     (Constr (TyCon id) id [])
 
-makeConstr :: [((Expr () Type), Type)] -> Id -> Type -> Expr () Type
+makeConstr :: [(Expr () Type, Type)] -> Id -> Type -> Expr () Type
 makeConstr terms name goal = buildTerm (reverse terms)
   where s = nullSpanNoFile
         buildTerm [] = Val s goal False (Constr goal name [])
@@ -178,7 +178,7 @@ makeConstr terms name goal = buildTerm (reverse terms)
 
 
 
-makeConstrUntyped :: [(Expr () ())] -> Id -> Expr () ()
+makeConstrUntyped :: [Expr () ()] -> Id -> Expr () ()
 makeConstrUntyped terms name = buildTerm (reverse terms)
   where s = nullSpanNoFile
         buildTerm [] = Val s () False (Constr () name [])
@@ -187,8 +187,8 @@ makeConstrUntyped terms name = buildTerm (reverse terms)
             App s () False e' e
 
 makeUnitElim :: Id -> Expr () Type -> TypeScheme -> Expr () Type
-makeUnitElim name e tyS = makeUnitElimP id
-    (Val s (TyCon (Id "()" "()")) False (Var (TyCon (Id "()" "()")) name)) e tyS
+makeUnitElim name = makeUnitElimP id
+    (Val s (TyCon (Id "()" "()")) False (Var (TyCon (Id "()" "()")) name))
   where s = nullSpanNoFile
 
 makeUnitElimP :: (Pattern Type -> Pattern Type) -> Expr () Type -> Expr () Type -> TypeScheme -> Expr () Type
@@ -200,7 +200,7 @@ makeUnitElimP patTransf argExpr e (Forall _ _ _ goalTy) =
 makeUnitElimPUntyped :: (Pattern () -> Pattern ()) -> Expr () () -> Expr () () -> Expr () ()
 makeUnitElimPUntyped patTransf argExpr e =
   Case s () False argExpr
-    [((patTransf (PConstr s () False (mkId "()") [] [])), e)]
+    [(patTransf (PConstr s () False (mkId "()") [] []), e)]
   where s = nullSpanNoFile
 
 makeUnitIntro :: Expr () Type
@@ -217,12 +217,12 @@ makeUnitIntroUntyped =
 
 
 makeEquality :: Expr () () -> Expr () () -> Expr () ()
-makeEquality left right = Binop nullSpanNoFile () False OpEq left right
+makeEquality = Binop nullSpanNoFile () False OpEq
 
 makeAnd :: Expr () () -> Expr () () -> Expr () ()
 makeAnd left right = App s () False (App s () False grAnd left) (Val s () False (Promote () right)) -- (Hole s () False [] Nothing) -- right)
   where
     s = nullSpanNoFile
-    ty = (Box (TyInfix TyOpInterval (TyGrade (Just (TyApp (TyCon (Id "Ext" "Ext")) (TyCon (Id "Nat" "Nat")))) 0) (TyCon (Id "Infinity" "Infinity"))) (TyCon (Id "Bool" "Bool")))
+    ty = Box (TyInfix TyOpInterval (TyGrade (Just (TyApp (TyCon (Id "Ext" "Ext")) (TyCon (Id "Nat" "Nat")))) 0) (TyCon (Id "Infinity" "Infinity"))) (TyCon (Id "Bool" "Bool"))
     grAnd =
-      Val s () False (Abs () (PVar s () False (Id "x" "x`0")) Nothing (Val s () False (Abs () (PBox s () False (PVar s () False (Id "y" "y`1"))) (Just ty) (Case s () False (Val s () False (Var () (Id "x" "x`0"))) [(PConstr s () False (Id "True" "True") [] [],(Val s () False (Var () (Id "y" "y`1")))),(PConstr s () False (Id "False" "False") [] [],(Val s () False (Constr () (Id "False" "False") [])))]))))
+      Val s () False (Abs () (PVar s () False (Id "x" "x`0")) Nothing (Val s () False (Abs () (PBox s () False (PVar s () False (Id "y" "y`1"))) (Just ty) (Case s () False (Val s () False (Var () (Id "x" "x`0"))) [(PConstr s () False (Id "True" "True") [] [],Val s () False (Var () (Id "y" "y`1"))),(PConstr s () False (Id "False" "False") [] [],Val s () False (Constr () (Id "False" "False") []))]))))
