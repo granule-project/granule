@@ -1,3 +1,3 @@
 Type checking failed: 
-Linearity error: frontend/tests/cases/negative/unique/uniqueProduct.gr:5:22:
+Linearity error: frontend/tests/cases/negative/unique/uniqueProduct.gr:6:22:
 Linear variable `arrs` is used more than once.
