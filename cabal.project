@@ -1,6 +1,6 @@
 packages: ./granule.cabal
 
-multi-repl: true
+allow-newer: optparse-applicative
 
 jobs: $ncpus
 
