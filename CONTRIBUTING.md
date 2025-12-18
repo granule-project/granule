@@ -2,6 +2,7 @@
 
 This document contains information about the developer workflow and how to contribute to the project.
 Contributions are always very welcome, and we try our best to help you add your bugfixes and improvements to granule.
+We want to make granule a welcoming community and a joyful place to collaborate, see our [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) for the guidelines we ask all contributers to adhere to.
 
 ## Contents
 
