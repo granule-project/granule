@@ -1,0 +1,3 @@
+Type checking failed: 
+Operator resolution failed: frontend/tests/cases/negative/simple/opDivInt.gr:2:7:
+Could not resolve operator `/` at type `Int -> Int -> ?`
