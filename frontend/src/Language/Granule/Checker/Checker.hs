@@ -674,6 +674,8 @@ checkExpr defs gam pol topLevel tau
   debugM "checkExpr[Clone]" (pretty s <> " : " <> pretty tau)
   (tau', gam, subst, elab) <- synthExpr defs gam pol expr
   -- Check the return types match
+  debugM "checkExpr[Clone]-types" $
+    "Expected: " <> pretty tau <> ", Synthesised: " <> pretty tau'
   (eqT, _, substTy) <- equalTypes s tau tau'
   unless eqT $ throw TypeError{ errLoc = s, tyExpected = tau, tyActual = tau' }
   substF <- combineSubstitutions s subst substTy
