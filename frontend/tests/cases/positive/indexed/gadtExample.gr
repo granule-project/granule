@@ -7,4 +7,5 @@ foo : VecX Int
 foo = VecX Blank
 
 bar : forall {a : Type} . VecX a -> Int
-bar (VecX Blank) = 42
+bar (VecX Blank) = 42;
+bar Eh = 100
