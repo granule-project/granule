@@ -11,9 +11,9 @@ instance Num (Double, [Double]) where
 stdDeviation :: [Double] -> Double
 stdDeviation xs = sqrt (divisor * (sum . map (\x -> (x - mean)**2) $ xs))
   where
-   divisor = 1 / ((cast n) - 1)
+   divisor = 1 / (cast n - 1)
    n = length xs
-   mean = sum xs / (cast n)
+   mean = sum xs / cast n
 
 cast :: Int -> Double
 cast = fromInteger . toInteger
@@ -22,6 +22,6 @@ cast = fromInteger . toInteger
 stdError :: [Double] -> Double
 stdError []  = 0
 stdError [_] = 0
-stdError xs  = (stdDeviation xs) / sqrt (cast n)
+stdError xs  = stdDeviation xs / sqrt (cast n)
   where
     n = length xs
