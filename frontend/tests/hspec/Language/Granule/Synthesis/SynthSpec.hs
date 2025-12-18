@@ -153,8 +153,8 @@ checkCasePatterns = let ?globals = (mempty :: Globals) {globalsExtensions = [Gra
       case map (fmap snd . fst) results of
         (Just tyVarRId : _) -> do
           let tyVarR = TyVar tyVarRId
-          let expectedApprox1 = Con $ ApproximatedBy ns (TyGrade (Just nat) 1) (TyInfix TyOpTimes (TyVar $ mkId "y") tyVarR) nat
-          let expectedApprox2 = Con $ ApproximatedBy ns (TyInfix TyOpTimes (TyVar $ mkId "y") tyVarR) (TyInfix TyOpTimes tyVarR tyVarR) nat
+          let expectedApprox1 = Con $ ApproximatedBy ns (TyGrade (Just nat) 1) (TyInfix TyOpTimes (TyVar $ mkId "y") (TyGrade Nothing 1)) nat
+          let expectedApprox2 = Con $ ApproximatedBy ns (TyInfix TyOpTimes (TyVar $ mkId "y") (TyGrade Nothing 1)) tyVarR nat
           let lub = Lub ns (TyVar $ mkId "y") (TyVar $ mkId "y") (TyVar $ mkId "ub0") (TyCon $ mkId "Nat") True
           -- ((T ∧ T) -> T ∧ ∃ y : Nat . ((1 : Nat) = y * r0) ∧ (y * r0 = r0 * r0))
           pretty predicate
