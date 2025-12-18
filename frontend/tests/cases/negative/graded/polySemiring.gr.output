@@ -1,0 +1,6 @@
+Type checking failed:
+Counter example: frontend/tests/cases/negative/graded/polySemiring.gr:2:1:
+  When checking `foo`, (1 : s) + (1 : s) is not approximatable by r for type s
+
+Counter-example:
+  r = 3 :: s
