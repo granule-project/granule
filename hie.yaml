@@ -1,5 +1,5 @@
 cradle:
-  stack:
+  cabal:
     - path: "./frontend/src"
       component: "granule:lib:frontend"
 
