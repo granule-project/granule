@@ -274,11 +274,12 @@ executable gr
   import: granule-default-lang
   import: granule-dependencies
   import: granule-ghc-warnings
-  main-is: Language/Granule/Interpreter.hs
+  main-is: Main.hs
   other-modules:
       Language.Granule.Doc
       Language.Granule.Interpreter.Desugar
       Language.Granule.Interpreter.Eval
+      Language.Granule.Interpreter
       Paths_granule
   autogen-modules:
       Paths_granule
