@@ -712,7 +712,9 @@ deriveCopyShape' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) ar
                     let resPair = makePairUntyped shapeExpr resExpr
 
                     -- Match on body expression to
-                    let resAndShapePats = map (\(svar, yvar) -> PConstr s () True (mkId ",") [] [PVar s () True svar, PVar s () True yvar]) (zip consShapeVars consResVars)
+                    let resAndShapePats = zipWith (\ svar yvar
+                          -> PConstr
+                               s () True (mkId ",") [] [PVar s () True svar, PVar s () True yvar]) consShapeVars consResVars
                     let caseExpr =
                           Case s () True bodyExpr [(PConstr s () True dataConsName [] resAndShapePats, resPair)]
 

@@ -8,6 +8,7 @@
 -- | Type checking patterns
 module Language.Granule.Checker.Patterns where
 
+import Control.Monad (when)
 import Control.Monad.Except (throwError)
 import Control.Monad.State.Strict
 import Data.List.NonEmpty (NonEmpty(..))
@@ -187,9 +188,7 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC tyVarBindsRequ
     Just (tySch@(Forall _ tyVarBinders _ innerType), coercions, indices) -> do
 
       -- Check pattern arity
-      if arity innerType /= length ps
-        then throw $ PatternArityError s dataC (arity innerType) (length ps)
-        else return ()
+      when (arity innerType /= length ps) $ throw $ PatternArityError s dataC (arity innerType) (length ps)
 
       case outerBoxTy of
         -- Hsup if you only have more than one premise (and have an enclosing grade)
@@ -255,7 +254,7 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC tyVarBindsRequ
           reportM $ "requested variables were " <> pretty tyVarBindsRequested
           reportM $ "corresponds to " <> pretty after
           -- create a substitution for this variable
-          let bodySubst = map (\(id_b, (id_a, _)) -> (id_b, SubstT $ TyVar id_a)) (zip before after)
+          let bodySubst = zipWith (curry (\(id_b, (id_a, _)) -> (id_b, SubstT $ TyVar id_a))) before after
           reportM $ "substitution due to implicits is " <> pretty bodySubst
           --let explicitBinds = map (\(id, ty) -> (id, (ty, ForallQ))) after
           -- modify (\st -> st { tyVarContext = explicitBinds ++ tyVarContext st })

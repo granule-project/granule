@@ -200,13 +200,8 @@ equalTypesRelatedCoeffectsInner _ _ (TyCon con1) (TyCon con2) _ _ _
 
     -- Some slightly ad-hoc type synonym work here:
     -- if SecurityLevels is off then Lo = Public and Hi = Private
-    if SecurityLevels `notElem` globalsExtensions ?globals
-      then if sort [internalName con1, internalName con2] == ["Lo", "Public"]
-            || sort [internalName con1, internalName con2] == ["Hi", "Private"]
-            then return (True, [])
-            else return (con1 == con2, [])
-    else
-      return (con1 == con2, [])
+    if (SecurityLevels `notElem` globalsExtensions ?globals) && (sort [internalName con1, internalName con2] == ["Lo", "Public"]
+            || sort [internalName con1, internalName con2] == ["Hi", "Private"]) then return (True, []) else return (con1 == con2, [])
 
 equalTypesRelatedCoeffectsInner s rel (Diamond ef1 t1) (Diamond ef2 t2) _ sp Types = do
   debugM "equalTypesRelatedCoeffectsInner (diamond)" $ "grades " <> show ef1 <> " and " <> show ef2
