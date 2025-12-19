@@ -58,6 +58,7 @@
 - ignore: {name: Evaluate}
 - ignore: {name: Use <$>}
 - ignore: {name: Use map with tuple-section}
+- ignore: {name: Avoid NonEmpty.unzip}
 
 # Define some custom infix operators
 # - fixity: infixr 3 ~^#^~

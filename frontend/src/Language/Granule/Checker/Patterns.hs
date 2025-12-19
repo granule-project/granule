@@ -8,7 +8,6 @@
 -- | Type checking patterns
 module Language.Granule.Checker.Patterns where
 
-import Control.Monad (when)
 import Control.Monad.Except (throwError)
 import Control.Monad.State.Strict
 import Data.List.NonEmpty (NonEmpty(..))

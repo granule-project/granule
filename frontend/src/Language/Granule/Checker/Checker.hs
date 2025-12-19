@@ -23,6 +23,7 @@ import Data.List.Split (splitPlaces)
 import qualified Data.List.NonEmpty as NonEmpty (toList)
 import Data.Maybe
 import qualified Data.Text as T
+import Data.Functor ((<&>))
 
 import Language.Granule.Checker.CoeffectsTypeConverter
 import Language.Granule.Checker.Constraints.Compile
@@ -1128,7 +1129,7 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
          p:ps -> illLinearityMismatch s (p:|ps)
 
   let (branchTys, branchCtxtsAndSubsts, elaboratedCases) = unzip3 branchTysAndCtxtsAndSubsts
-  let (branchCtxts, branchSubsts) = Data.Functor.unzip branchCtxtsAndSubsts
+  let (branchCtxts, branchSubsts) = unzip branchCtxtsAndSubsts
   let branchTysAndSpans = zip branchTys (map (getSpan . snd) cases)
 
   -- All branches must be possible
@@ -2227,7 +2228,7 @@ freshVarsIn :: (?globals :: Globals) => Span -> [Id] -> Ctxt Assumption
             -> Checker (Ctxt Assumption, Ctxt Kind)
 freshVarsIn s vars ctxt = do
     newCtxtAndTyVars <- mapM toFreshVar (relevantSubCtxt vars ctxt)
-    let (newCtxt, tyVars) = Data.Functor.unzip newCtxtAndTyVars
+    let (newCtxt, tyVars) = unzip newCtxtAndTyVars
     return (newCtxt, catMaybes tyVars)
   where
     toFreshVar :: (Id, Assumption) -> Checker ((Id, Assumption), Maybe (Id, Kind))
@@ -2440,7 +2441,7 @@ handleHsupPoly localCtxt (Impl ctxt p1 p2) =
   Impl ctxt <$> handleHsupPoly localCtxt p1 <*> handleHsupPoly localCtxt p2
 
 handleHsupPoly localCtxt (Exists v k p) =
-  Exists v k <$> handleHsupPoly ((v, (k, InstanceQ) : localCtxt) p)
+  Exists v k <$> handleHsupPoly ((v, (k, InstanceQ)) : localCtxt) p
 
 -- Don't go inside negation
 handleHsupPoly _ (NegPred p) =

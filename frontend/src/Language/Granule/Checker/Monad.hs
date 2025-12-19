@@ -19,6 +19,7 @@ module Language.Granule.Checker.Monad where
 import Data.Maybe (mapMaybe)
 import Data.Either (partitionEithers)
 import Data.Foldable (toList)
+import Data.Functor (($>))
 import Data.List (intercalate, transpose)
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Map as M

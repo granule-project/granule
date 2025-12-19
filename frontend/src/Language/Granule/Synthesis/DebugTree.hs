@@ -41,12 +41,12 @@ synthTreeToHtml result path =
       H.p $ toHtml "The synthesised program is: "
       H.p ! A.style (stringValue "color: blue;") $ toHtml $ pretty result
       H.p $ toHtml "Below is the synthesis search tree for this result. "
-      H.p ! A.style (stringValue "color: blue; display: inline;") (toHtml "Blue ")
-      H.p ! A.style (stringValue "display: inline;") (toHtml "is used to indicate a synthesised term, ")
-      H.p ! A.style (stringValue "color: green; display: inline;") (toHtml "green ")
-      H.p ! A.style (stringValue "display: inline;") (toHtml "represnts assumptions, and ")
-      H.p ! A.style (stringValue "color: red; display: inline;") (toHtml "red ")
-      H.p ! A.style (stringValue "display: inline;") (toHtml "is used for goal types.")
+      H.p ! A.style (stringValue "color: blue; display: inline;") $ toHtml "Blue "
+      H.p ! A.style (stringValue "display: inline;") $ toHtml "is used to indicate a synthesised term, "
+      H.p ! A.style (stringValue "color: green; display: inline;") $ toHtml "green "
+      H.p ! A.style (stringValue "display: inline;") $ toHtml "represnts assumptions, and "
+      H.p ! A.style (stringValue "color: red; display: inline;") $ toHtml "red "
+      H.p ! A.style (stringValue "display: inline;") $ toHtml "is used for goal types."
       H.p $ toHtml "The tree can be expanded/collapsed by clicking nodes marked with an arrow."
       ul ! A.id (stringValue "outer") $ li $ do
         successfulSynthPathToHtml path
@@ -126,8 +126,8 @@ successfulSynthPathToHtml (AppRule focusPhase (x1, assumption1) goal gamma omega
       ul $ do
         li $ do
           ; H.p ! A.style (stringValue "color: green; display: inline;") $ toHtml (pretty x2 <> " : " <> pretty assumption2)
-          ; H.p ! A.style (stringValue "display: inline;") (toHtml " bound in ")
-          ; H.p ! A.style (stringValue "color: blue; display: inline;") (toHtml $ pretty expr1)
+          ; H.p ! A.style (stringValue "display: inline;") $ toHtml " bound in "
+          ; H.p ! A.style (stringValue "color: blue; display: inline;") $ toHtml $ pretty expr1
         li $ successfulSynthPathToHtml ruleInfo1
 
       -- Arg sub-term
@@ -184,8 +184,8 @@ successfulSynthPathToHtml (UnboxRule focusPhase (x1, assumption1) goal gamma ome
       ul $ do
         li $ do
           ; H.p ! A.style (stringValue "color: green; display: inline;") $ toHtml (pretty x2 <> " : " <> pretty assumption2)
-          ; H.p ! A.style (stringValue "display: inline;") (toHtml " bound in ")
-          ; H.p ! A.style (stringValue "color: blue; display: inline;") (toHtml $ pretty expr)
+          ; H.p ! A.style (stringValue "display: inline;") $ toHtml " bound in "
+          ; H.p ! A.style (stringValue "color: blue; display: inline;") $ toHtml $ pretty expr
 
         li $ successfulSynthPathToHtml ruleInfo
 

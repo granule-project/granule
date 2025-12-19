@@ -28,6 +28,7 @@ import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Utils
+import Data.Maybe (isJust)
 
 
 layoutOptions :: P.LayoutOptions

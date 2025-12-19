@@ -317,7 +317,7 @@ synthesiseLinearBase hints index unrComps rComps defId ctxt constructors goalTy 
       unannotateExpr (LetDiamond s a b ps mt e1 e2) = LetDiamond s () b (unannotatePat ps) mt (unannotateExpr e1) $ unannotateExpr e2
       unannotateExpr (TryCatch s a b e p mt e1 e2)  = TryCatch s () b (unannotateExpr e) (unannotatePat p) mt (unannotateExpr e1)  $ unannotateExpr e2
       unannotateExpr (Val s a b val)                = Val s () b (unannotateVal val)
-      unannotateExpr (Case s a b expr pats)         = Case s () b (unannotateExpr expr) $ map (bimap unannotatePat unannotateExpr e) pats
+      unannotateExpr (Case s a b expr pats)         = Case s () b (unannotateExpr expr) $ map (bimap unannotatePat unannotateExpr) pats
       unannotateExpr (Hole s a b ids hints)         = Hole s () b ids hints
 
 
