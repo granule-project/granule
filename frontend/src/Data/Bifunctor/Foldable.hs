@@ -90,10 +90,10 @@ bicataPM (falgPM, ftop) (galgPM, gtop) =
     fcataPM
     where fcataPM p fp =
             let p' = ftop fp p
-            in (bimapM (fcataPM p') (gcataPM p') $ project fp) >>= falgPM p'
+            in bimapM (fcataPM p') (gcataPM p') (project fp) >>= falgPM p'
           gcataPM p fp =
             let p' = gtop fp p
-            in (bimapM (gcataPM p') (fcataPM p') $ project fp) >>= galgPM p'
+            in bimapM (gcataPM p') (fcataPM p') (project fp) >>= galgPM p'
 
 bipara :: (Birecursive x z, Birecursive z x)
        => ((Base x z) (x, a) (z, b) -> a)
@@ -120,10 +120,10 @@ biparaP (falgP, ftop) (galgP, gtop) =
     fparaP
     where fparaP p fp =
             let p' = ftop fp p
-            in falgP p' $ bimap ((,) <*> (fparaP p')) ((,) <*> (gparaP p')) $ project fp
+            in falgP p' $ bimap ((,) <*> fparaP p') ((,) <*> gparaP p') $ project fp
           gparaP p fp =
             let p' = gtop fp p
-            in galgP p' $ bimap ((,) <*> (gparaP p')) ((,) <*> (fparaP p')) $ project fp
+            in galgP p' $ bimap ((,) <*> gparaP p') ((,) <*> fparaP p') $ project fp
 
 biparaM :: (Birecursive x z, Birecursive z x)
         => (Bitraversable (Base x z), Bitraversable (Base z x))
@@ -134,8 +134,8 @@ biparaM :: (Birecursive x z, Birecursive z x)
         -> m a
 biparaM falgM galgM =
     fparaM
-    where fparaM = falgM <=< (bimapM (applyLeft fparaM) (applyLeft gparaM)) . project
-          gparaM = galgM <=< (bimapM (applyLeft gparaM) (applyLeft fparaM)) . project
+    where fparaM = falgM <=< bimapM (applyLeft fparaM) (applyLeft gparaM) . project
+          gparaM = galgM <=< bimapM (applyLeft gparaM) (applyLeft fparaM) . project
 
 biparaPM :: (Birecursive x z, Birecursive z x)
          => (Bitraversable (Base x z), Bitraversable (Base z x))
@@ -149,7 +149,7 @@ biparaPM (falgPM, ftop) (galgPM, gtop) =
     fcataPM
     where fcataPM p fp =
             let p' = ftop fp p
-            in ((bimapM (applyLeft $ fcataPM p') (applyLeft $ gcataPM p')) $ project fp) >>= falgPM p'
+            in bimapM (applyLeft $ fcataPM p') (applyLeft $ gcataPM p') (project fp) >>= falgPM p'
           gcataPM p fp =
             let p' = gtop fp p
-            in ((bimapM (applyLeft $ gcataPM p') (applyLeft $ fcataPM p')) $ project fp) >>= galgPM p'
+            in bimapM (applyLeft $ gcataPM p') (applyLeft $ fcataPM p') (project fp) >>= galgPM p'

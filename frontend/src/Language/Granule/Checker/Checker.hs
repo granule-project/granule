@@ -465,7 +465,7 @@ checkExpr defs ctxt _ _ t (Hole s _ _ vars hints) = do
               let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
               return (a, ctxtMap tripleToTup sd)) pats
 
-          let holeVars = map (\id -> (id, id `elem` boundVariables)) (map fst ctxt)
+          let holeVars = map ((\id -> (id, id `elem` boundVariables)) . fst) ctxt
           -- Check to see if this hole is something we are interested in
           case globalsHolePosition ?globals of
             -- Synth everything mode
@@ -494,7 +494,7 @@ checkExpr defs ctxt _ _ t (Hole s _ _ vars hints) = do
               -- of interest
               let casesWithHoles = zip (map fst cases) (repeat (Hole s () True [] Nothing))
 
-              let holeVars = map (\id -> (id, id `elem` boundVariables)) (map fst ctxt)
+              let holeVars = map ((\id -> (id, id `elem` boundVariables)) . fst) ctxt
               throw $ HoleMessage s t ctxt (tyVarContext st) holeVars Nothing casesWithHoles
             -- _ -> do
             --   let holeVars = map (\id -> (id, id `elem` boundVariables)) (map fst ctxt)
@@ -733,7 +733,7 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
         else return (not (resourceAllocator e)
         -- or see if we have turned on unsafe promotion
                    || (UnsafePromotion `elem` globalsExtensions ?globals))
-    when (not promotable) (throw $ UnpromotableError{errLoc = s, errTy = ty})
+    unless promotable (throw $ UnpromotableError{errLoc = s, errTy = ty})
 
     -- Checker the expression being promoted
     (gam', subst, elaboratedE) <- checkExpr defs gam pol False tau e
@@ -966,7 +966,7 @@ synthExpr defs gam pol
       -- existential type for the cloned var ((exists {id' : Name} . *(Rename id' a))
 
       -- make a fresh var for each of idVars
-      newIdVars <- mapM (\x -> freshIdentifierBase (internalName x) >>= (return . mkId)) idVars
+      newIdVars <- mapM (\x -> freshIdentifierBase (internalName x) <&> mkId) idVars
 
       -- apply the renamer for each of the idVars
       let renamer (old, new) t = TyApp (TyApp (TyCon $ mkId "Rename") (TyVar old)) (TyVar new) `TyApp` t
@@ -1258,9 +1258,7 @@ synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
 
   --to better match the typing rule both continuation types should be equal
   (b, ty, subst4) <- equalTypes s ty2 ty3
-  b <- case b of
-      True -> return b
-      False -> throw TypeError{ errLoc = s, tyExpected = ty2, tyActual = ty3}
+  b <- (if b then return b else throw TypeError{ errLoc = s, tyExpected = ty2, tyActual = ty3})
 
   optionalSigEquality s mty ty1
 
@@ -1442,7 +1440,7 @@ synthExpr defs gam pol (Val s _ rf (Promote _ e)) = do
         else return (not (resourceAllocator e)
         -- or see if we have turned on unsafe promotion
                    || (UnsafePromotion `elem` globalsExtensions ?globals))
-   when (not promotable) (throw $ UnpromotableError{errLoc = s, errTy = t})
+   unless promotable (throw $ UnpromotableError{errLoc = s, errTy = t})
 
    -- Multiply the grades of all the used variables here
    (gam'', subst') <- ctxtMult s (TyVar var) gam'
@@ -2077,10 +2075,10 @@ intersectCtxtsWithWeaken s a b = do
    let leftRemaining = a `subtractCtxt` intersected
 
    let linearNotUsedInBoth =
-         flip mapMaybe (leftRemaining <> remaining) (\(v, ass) ->
+         mapMaybe (\(v, ass) ->
            case ass of
              Linear t -> Just $ LinearNotUsed v
-             _        -> Nothing)
+             _        -> Nothing) (leftRemaining <> remaining)
 
    case linearNotUsedInBoth of
      -- All linear things used equally
