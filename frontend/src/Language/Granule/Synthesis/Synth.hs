@@ -56,7 +56,7 @@ import Data.Maybe (fromMaybe)
 -- import Control.Arrow (second)
 -- import Control.Monad.Omega
 import System.Clock (TimeSpec)
-
+import Data.Bifunctor (first, bimap)
 -- import Control.Monad.Except
 -- import Control.Monad.Logic
 import Data.Ord
@@ -144,14 +144,10 @@ noneWithMaxReached = do
 markRecursiveType :: Id -> Type -> Bool
 markRecursiveType tyCon dataTy = markRecursiveType' tyCon dataTy False
   where
-    markRecursiveType' tyCon (FunTy _ _ t1 t2) onLeft = do
-      case markRecursiveType' tyCon t1 True of
-        True -> True
-        False -> markRecursiveType' tyCon t2 onLeft
-    markRecursiveType' tyCon (TyApp t1 t2) True = do
-      case markRecursiveType' tyCon t1 True of
-        True -> True
-        False -> markRecursiveType' tyCon t2 True
+    markRecursiveType' tyCon (FunTy _ _ t1 t2) onLeft =
+      markRecursiveType' tyCon t1 True || markRecursiveType' tyCon t2 onLeft
+    markRecursiveType' tyCon (TyApp t1 t2) True =
+      markRecursiveType' tyCon t1 True || markRecursiveType' tyCon t2 True
     markRecursiveType' tyCon (TyCon tyCon') True = tyCon == tyCon'
     markRecursiveType' _ _ _ = False
 
@@ -270,7 +266,7 @@ synthesiseLinearBase hints index unrComps rComps defId ctxt constructors goalTy 
           putStrLn $ "Total synth time (ms) = "  ++ show (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double))
           putStrLn $ "Mean theoremSize   = " ++ show ((if smtCallsCount aggregate == 0 then 0 else fromInteger $ theoremSizeTotal aggregate) / fromInteger (smtCallsCount aggregate))
       -- </benchmarking-output>
-      return (map (\(x, y) -> (unannotateExpr x, y)) results)
+      return (map (first unannotateExpr) results)
   return (fin, Nothing)
 
   where
@@ -321,7 +317,7 @@ synthesiseLinearBase hints index unrComps rComps defId ctxt constructors goalTy 
       unannotateExpr (LetDiamond s a b ps mt e1 e2) = LetDiamond s () b (unannotatePat ps) mt (unannotateExpr e1) $ unannotateExpr e2
       unannotateExpr (TryCatch s a b e p mt e1 e2)  = TryCatch s () b (unannotateExpr e) (unannotatePat p) mt (unannotateExpr e1)  $ unannotateExpr e2
       unannotateExpr (Val s a b val)                = Val s () b (unannotateVal val)
-      unannotateExpr (Case s a b expr pats)         = Case s () b (unannotateExpr expr) $ map (\(p, e) -> (unannotatePat p, unannotateExpr e)) pats
+      unannotateExpr (Case s a b expr pats)         = Case s () b (unannotateExpr expr) $ map (bimap unannotatePat unannotateExpr e) pats
       unannotateExpr (Hole s a b ids hints)         = Hole s () b ids hints
 
 
@@ -491,7 +487,7 @@ toCart (TyApp t1 t2) = TyApp (toCart t1) (toCart t2)
 toCart t@TyGrade{} = anyG
 toCart (TyInfix op t1 t2) = TyInfix op (toCart t1) (toCart t2)
 toCart (TySet pol ts) = TySet pol (map toCart ts)
-toCart (TyCase t ts) = TyCase (toCart t) $ map (\(x,y) -> (toCart x, toCart y)) ts
+toCart (TyCase t ts) = TyCase (toCart t) $ map (bimap toCart toCart) ts
 toCart (TySig t k) = TySig (toCart t) k
 toCart t = t
 

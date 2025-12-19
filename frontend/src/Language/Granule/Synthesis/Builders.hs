@@ -14,6 +14,8 @@ import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Type
 
+import Data.Bifunctor (first)
+
 pattern ProdTy :: Type -> Type -> Type
 pattern ProdTy t1 t2 = TyApp (TyApp (TyCon (Id "," ",")) t1) t2
 
@@ -149,7 +151,7 @@ makeCase ty id exprPats goal grade =
   case grade of
     Nothing     -> Case s goal False (Val s ty False (Var ty id)) exprPats
     Just grade' ->
-      let exprPats' = map (\(pat, expr) -> (PBox s (Box ty grade') False pat, expr) ) exprPats in
+      let exprPats' = map (first (PBox s (Box ty grade') False )) exprPats in
         Case s goal False  (Val s (Box ty grade') False (Promote (Box ty grade') (Val s ty False (Var ty id)))) exprPats'
   where s = nullSpanNoFile
 

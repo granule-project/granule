@@ -637,10 +637,7 @@ downExpr z =
     -- naviation step if that query fails
     nextWithPreMove z next =
       if query isExprFix2 z
-        then
-          case down' z of
-            Nothing -> Nothing
-            Just z' -> next z'
+        then next  =<< down' z
         else next z
 
 -- Generic dynamic typing query on whether a value of type `a` is an `ExprFix2`

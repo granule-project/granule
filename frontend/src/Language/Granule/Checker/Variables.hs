@@ -76,10 +76,10 @@ registerTyVarInContextWith' v t q m =
 tyVarContextToTypeSchemeVars :: [Id] -> Checker [(Id, Kind)]
 tyVarContextToTypeSchemeVars relevantVars = do
   st <- get
-  return $ flip mapMaybe (tyVarContext st)
+  return $ mapMaybe
     (\(id, (kind, quant)) ->
       case quant of
         ForallQ   | id `elem` relevantVars -> Just (id, kind)
         BoundQ    | id `elem` relevantVars -> Just (id, kind)
         InstanceQ -> Nothing
-        _ -> Nothing)
+        _ -> Nothing) (tyVarContext st)
