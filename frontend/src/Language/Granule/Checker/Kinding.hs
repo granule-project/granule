@@ -1021,7 +1021,7 @@ mguCoeffectTypes' s coeffTy1 coeffTy2 = return Nothing
 
 
 cProduct :: Type -> Type -> Type
-cProduct x y = TyApp (TyApp (TyCon (mkId ",,")) x) y
+cProduct x = TyApp (TyApp (TyCon (mkId ",,")) x)
 
 
 -- | Find out whether a coeffect if flattenable, and if so get the operation
@@ -1399,7 +1399,7 @@ typeVarsOfKind t k = do
         synthKind nullSpan (TyVar v) >>= \case
             -- check for equality with the argument
           (k', subst , _) | k' == k -> do
-            when (not (null subst)) (debugM "[WARNING]" ("type variable " <> pretty v <> " has kind " <> pretty k <> " but its kind required a substitution which is being ignored during kind variable extraction"))
+            unless (null subst) (debugM "[WARNING]" ("type variable " <> pretty v <> " has kind " <> pretty k <> " but its kind required a substitution which is being ignored during kind variable extraction"))
             return [v]
             -- kinds don't match
           _                    -> return []

@@ -357,7 +357,7 @@ letBox s pat e1 e2 =
   App s () False (Val s () False (Abs () (PBox s () False pat) Nothing e2)) e1
 
 pair :: Expr v () -> Expr v () -> Expr v ()
-pair e1 e2 = App s () False (App s () False (Val s () False (Constr () (mkId "(,)") [])) e1) e2
+pair e1 = App s () False (App s () False (Val s () False (Constr () (mkId "(,)") [])) e1)
              where s = nullSpanNoFile
 
 typedPair :: Value v Type -> Value v Type -> Value v Type
@@ -368,8 +368,8 @@ typedPair left right =
           rightType = annotation right
 
 pairType :: Type -> Type -> Type
-pairType leftType rightType =
-    TyApp (TyApp (TyCon (Id "," ",")) leftType) rightType
+pairType leftType =
+    TyApp (TyApp (TyCon (Id "," ",")) leftType)
 
 -- let p = e1 in e2
 letExpr :: Span -> Pattern () -> Expr ev () -> Expr ev () -> Expr ev ()

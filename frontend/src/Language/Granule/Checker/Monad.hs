@@ -74,7 +74,7 @@ runAll f xs = do
   st <- get
   (results, st) <- liftIO $ runAllCheckers st (map f xs)
   case partitionEithers results of
-    ([], successes) -> put st *> pure successes
+    ([], successes) -> put st $> successes
     -- everything succeeded, so `put` the state and carry on
     (err:errs, _) -> throwError $ sconcat (err:|errs)
     -- combine all errors and fail
@@ -289,14 +289,10 @@ lookupPatternMatches sp constrName = do
 
 -- Return the data constructors of all types in the environment
 allDataConstructorNames :: Checker (Ctxt [Id])
-allDataConstructorNames = do
-  st <- get
-  return $ ctxtMap (\(_, datas, _) -> datas) (typeConstructors st)
+allDataConstructorNames = ctxtMap (\(_, datas, _) -> datas) . typeConstructors <$> get
 
 allDataConstructorNamesForType :: Type -> Checker [Id]
-allDataConstructorNamesForType ty = do
-    st <- get
-    return $ mapMaybe go (typeConstructors st)
+allDataConstructorNamesForType ty = mapMaybe go . typeConstructors <$> get
   where
     go :: (Id, (Type, a, [Int])) -> Maybe Id
     go (con, (k, _, _)) = if k == ty then Just con else Nothing

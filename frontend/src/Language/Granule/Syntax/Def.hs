@@ -118,8 +118,8 @@ definitionType Def { defTypeScheme = ts } =
     ty where (Forall _ _ _ ty) = ts
 
 
-data Spec v a = 
-  Spec { 
+data Spec v a =
+  Spec {
     specSpan          :: Span,
     specRefactored    :: Bool,
     specExamples      :: [Example v a],
@@ -127,7 +127,7 @@ data Spec v a =
   }
   deriving (Generic)
 
-data Example v a = 
+data Example v a =
   Example {
     input  :: Expr v a,
     output :: Expr v a,
@@ -175,7 +175,7 @@ data DataConstr
 
 -- | Is the data type an indexed data type, or just a plain ADT?
 isIndexedDataType :: DataDecl -> Bool
-isIndexedDataType d = not (null (concatMap snd (typeIndices d)))
+isIndexedDataType d = not (all (null . snd) (typeIndices d))
 
 -- | This returns a list of which parameters are actually indices
 -- | If this is not an indexed type this list will be empty.

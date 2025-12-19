@@ -32,10 +32,11 @@ tyVarContextExistential :: Checker (Ctxt (Type, Quantifier))
 tyVarContextExistential = do
   st <- get
   return $ flip mapMaybe (tyVarContext st) $ \(v, (k, q)) ->
-    case q of
+    Just (v, (k, InstanceQ))
+      -- case q of
       -- This makes splitting work when the LHS is a pattern, but not sure if it
       -- has adverse effects...
       -- TODO: think about more
       -- BoundQ -> Nothing
-      _ -> Just (v, (k, InstanceQ))
+      -- _ -> Just (v, (k, InstanceQ))
       -- _      -> Just (v, (k, q))

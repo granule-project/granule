@@ -20,9 +20,8 @@ unicodeToAscii = unpack . replaceWithList (asciiUnicodeTableReplacements swap) .
 -- NOTE: Update the documentation with 'asciiUnicodeTableMarkdown' if you touch this.
 asciiUnicodeTableReplacements :: ((String, String) -> (String, String)) -> [Replace]
 asciiUnicodeTableReplacements transformer =
-  flip map asciiUnicodeTable
-    (\(to, from) -> let (to', from') = transformer (to, from)
-                    in Replace (fromString to') (fromString from'))
+  map (\(to, from) -> let (to', from') = transformer (to, from)
+                      in Replace (fromString to') (fromString from')) asciiUnicodeTable
 
 
 asciiUnicodeTable :: [(String,String)]
