@@ -55,6 +55,7 @@
 - ignore: {name: Use tuple-section}
 - ignore: {name: Redundant lambda}
 - ignore: {name: Use uncurry}
+- ignore: {name: Evaluate}
 
 # Define some custom infix operators
 # - fixity: infixr 3 ~^#^~
