@@ -337,14 +337,14 @@ boxHelper gamma resourceScheme inDef depth focusPhase grade (Goal goalTySch@(For
   in case resourceScheme of
       Additive{} -> do
         (e, delta, subst, bindings, structurallyDecr) <- synthesiseInner resourceScheme inDef depth focusPhase gamma (Focused []) newGradeOnRule (Goal (Forall ns binders constraints t) $ Just $ NonDecreasing 0)
-        case hasLinear delta of
-          False -> do deltaOut <-
+        if hasLinear delta
+          then do deltaOut <-
                         case newGradeOnRule of
                           Just _ -> return delta
                           Nothing -> ctxtMultByCoeffect g delta
-                      let boxExpr = Val ns t False (Promote t e)
-                      return (boxExpr, deltaOut, subst, bindings, structurallyDecr)
-          True  -> none
+                  let boxExpr = Val ns t False (Promote t e)
+                  return (boxExpr, deltaOut, subst, bindings, structurallyDecr)
+          else none
       Subtractive -> do
         (e, delta, subst, bindings, structurallyDecr) <- synthesiseInner resourceScheme inDef depth focusPhase gamma (Focused []) newGradeOnRule (Goal (Forall ns binders constraints t) $ Just $ NonDecreasing 0)
         deltaOut <- case newGradeOnRule of
@@ -725,17 +725,17 @@ constrElimHelper gamma (Focused left) (Focused (var@(x, assumption):right)) mode
   bindAssumptions depthReached unboxed [] gamma omega = (gamma, omega, unboxed)
 
   bindAssumptions depthReached unboxed (assumption@(id, SVar (Linear t) sInfo depth):assmps) gamma omega =
-    let gammaOrOmega = if depthReached && isDecr sInfo then False else isLAsync t in
+    let gammaOrOmega = (not (depthReached && isDecr sInfo) && isLAsync t) in
     let (gamma', omega') = bindToContext assumption gamma omega gammaOrOmega in
     bindAssumptions depthReached unboxed assmps gamma' omega'
 
   bindAssumptions depthReached unboxed (assumption@(id, SVar (Discharged (Box t grade) grade') sInfo depth):assmps) gamma omega =
-    let gammaOrOmega = if depthReached && isDecr sInfo then False else isLAsync t in
+    let gammaOrOmega = (not (depthReached && isDecr sInfo) && isLAsync t) in
     let (gamma', omega') = bindToContext (id, SVar (Discharged t (TyInfix TyOpTimes grade grade')) sInfo depth) gamma omega gammaOrOmega in
     bindAssumptions depthReached ((id, SVar (Discharged t (TyInfix TyOpTimes grade grade')) sInfo depth):unboxed) assmps gamma' omega'
 
   bindAssumptions depthReached unboxed (assumption@(id, SVar (Discharged t _) sInfo depth):assmps) gamma omega =
-    let gammaOrOmega = if depthReached && isDecr sInfo then False else isLAsync t in
+    let gammaOrOmega = (not (depthReached && isDecr sInfo) && isLAsync t) in
     let (gamma', omega') = bindToContext assumption gamma omega gammaOrOmega in
     bindAssumptions depthReached unboxed assmps gamma' omega'
 
@@ -892,10 +892,9 @@ synthesiseInner resourceScheme inDef depth focusPhase gamma (Focused omega) grad
     (LeftAsync, []) -> do
       focus gamma (isRSync ty)
     (RightSync, []) ->
-      case not $ isRSync ty of
-        True ->
-          synthesiseInner resourceScheme inDef depth RightAsync gamma (Focused []) grade goal
-        _ ->
+      if not (isRSync ty)
+        then synthesiseInner resourceScheme inDef depth RightAsync gamma (Focused []) grade goal
+        else
           varHelper [] (Focused []) (Focused gamma) resourceScheme grade goal
           `try`
           constrIntroHelper gamma resourceScheme inDef depth RightSync grade goal
@@ -905,9 +904,9 @@ synthesiseInner resourceScheme inDef depth focusPhase gamma (Focused omega) grad
       assumptionTy <- getSAssumptionType assumption
       case assumptionTy of
         (tyA', _, _, _, _, _) ->
-          case not (isLSync tyA') && not (isAtomic tyA') of
-            True -> synthesiseInner resourceScheme inDef depth LeftAsync gamma (Focused [var]) grade goal
-            _ -> do
+          if not (isLSync tyA') && not (isAtomic tyA')
+            then synthesiseInner resourceScheme inDef depth LeftAsync gamma (Focused [var]) grade goal
+            else do
               varHelper gamma (Focused []) (Focused omega) resourceScheme grade goal
               `try`
               appHelper gamma (Focused []) (Focused omega) resourceScheme inDef depth LeftSync grade goal
