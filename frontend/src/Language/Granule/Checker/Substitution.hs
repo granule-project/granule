@@ -383,16 +383,16 @@ substituteExpr ctxt (AppTyF sp ty rf fn t) =
 substituteExpr ctxt (BinopF sp ty rf op lhs rhs) =
     do  ty' <- substitute ctxt ty
         return $ Binop sp ty' rf op lhs rhs
-substituteExpr ctxt (LetDiamondF sp ty rf pattern mty value expr) =
+substituteExpr ctxt (LetDiamondF sp ty rf pat mty value expr) =
     do  ty' <- substitute ctxt ty
-        pattern' <- substitute ctxt pattern
+        pat' <- substitute ctxt pat
         mty' <- mapM (substitute ctxt) mty
-        return $ LetDiamond sp ty' rf pattern' mty' value expr
-substituteExpr ctxt (TryCatchF sp ty rf e1 pattern mty e2 e3) =
+        return $ LetDiamond sp ty' rf pat' mty' value expr
+substituteExpr ctxt (TryCatchF sp ty rf e1 pat mty e2 e3) =
     do  ty' <- substitute ctxt ty
-        pattern' <- substitute ctxt pattern
+        pat' <- substitute ctxt pat
         mty' <- mapM (substitute ctxt) mty
-        return $ TryCatch sp ty' rf e1 pattern' mty' e2 e3
+        return $ TryCatch sp ty' rf e1 pat' mty' e2 e3
 substituteExpr ctxt (ValF sp ty rf value) =
     do  ty' <- substitute ctxt ty
         return $ Val sp ty' rf value
