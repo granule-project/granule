@@ -33,8 +33,8 @@ isFreeEffectMember
 isFreeEffectMember _ = Nothing
 
 freeEffectMember :: Type -> Type -> Type -> Type
-freeEffectMember labelType opsType eff  =
-  TyApp (TyApp (TyApp (TyCon $ mkId "Eff") labelType) opsType) eff
+freeEffectMember labelType opsType =
+  TyApp (TyApp (TyApp (TyCon $ mkId "Eff") labelType) opsType)
 
 isFreeEffectMemberGrade :: Type -> Maybe Type
 isFreeEffectMemberGrade
@@ -75,7 +75,7 @@ isEffUnit s effTy eff =
                   -- Is universal set
                   (TySet Opposite elems) -> do
                     constructors <- allDataConstructorNamesForType elemTy
-                    return $ all (\uelem -> (TyCon uelem) `elem` elems) constructors
+                    return $ all (\uelem -> TyCon uelem `elem` elems) constructors
                   _ -> return False
         -- Unknown
         _ -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff, errK = effTy }
@@ -120,7 +120,7 @@ effApproximates s effTy eff1 eff2 =
             -- Free graded monad
             (isFreeEffectType -> Just (labelType, opsType)) ->
               case (isFreeEffectMemberGrade eff1, isFreeEffectMemberGrade eff2) of
-                (Just (TySet Normal efs1), Just (TySet Normal efs2)) -> return $ all (\ef1 -> ef1 `elem` efs2) efs1
+                (Just (TySet Normal efs1), Just (TySet Normal efs2)) -> return $ all (`elem` efs2) efs1
                 -- TODO: make more powerful
                 _                    -> return False
 
@@ -142,10 +142,10 @@ effApproximates s effTy eff1 eff2 =
                     -- Both sets
                     (TySet Normal efs1, TySet Normal efs2) ->
                         -- eff1 is a subset of eff2
-                        return $ all (\ef1 -> ef1 `elem` efs2) efs1
+                        return $ all (`elem` efs2) efs1
                     (TySet Opposite efs1, TySet Opposite efs2) ->
                         -- eff1 is a superset of eff2
-                        return $ all (\ef2 -> ef2 `elem` efs1) efs2
+                        return $ all (`elem` efs1) efs2
                     _ -> return False
             -- Unknown effect resource algebra
             _ -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff1, errK = effTy }
@@ -190,18 +190,16 @@ effectMult sp effTy t1 t2 = do
             (TyApp (TyCon (internalName -> "Handled")) ts1, TyApp (TyCon (internalName -> "Handled")) ts2) -> do
                 let ts1' = handledNormalise sp effTy t1
                 let ts2' = handledNormalise sp effTy t2
-                t <- (effectMult sp effTy ts1' ts2')
-                return t
+                effectMult sp effTy ts1' ts2'
+
             --Handled, set
             (TyApp (TyCon (internalName -> "Handled")) ts1, TySet _ ts2) -> do
                 let ts1' = handledNormalise sp effTy t1
-                t <- (effectMult sp effTy ts1' t2) ;
-                return t
+                effectMult sp effTy ts1' t2
              --set, Handled
             (TySet _ ts1, TyApp (TyCon (internalName -> "Handled")) ts2) -> do
                 let ts2' = handledNormalise sp effTy t2
-                t <- (effectMult sp effTy t1 ts2') ;
-                return t
+                effectMult sp effTy t1 ts2'
             -- Actual sets, take the union
             (TySet p1 ts1, TySet p2 ts2) | p1 == p2 ->
               case p1 of
@@ -217,7 +215,7 @@ effectMult sp effTy t1 t2 = do
 
 effectUpperBound :: Span -> Type -> Type -> Type -> Checker Type
 -- Upper bound is always idempotent
-effectUpperBound s _ t1 t2 | t1 == t2 = return $ t1
+effectUpperBound s _ t1 t2 | t1 == t2 = return t1
 
 effectUpperBound s t@(TyCon (internalName -> "Nat")) t1 t2 = do
     nvar <- freshTyVarInContextWithBinding (mkId "n") t InstanceQ
@@ -295,7 +293,7 @@ effectUpperBound s effTy t1 t2 =
 
 -- "Top" element of the effect
 effectTop :: Type -> Checker (Maybe Type)
-effectTop (TyCon (internalName -> "Nat")) = return $ Nothing
+effectTop (TyCon (internalName -> "Nat")) = return Nothing
 effectTop (TyCon (internalName -> "Com")) = return $ Just $ TyCon $ mkId "Session"
 -- Otherwise
 -- Based on an effect type, provide its top-element, which for set-like effects

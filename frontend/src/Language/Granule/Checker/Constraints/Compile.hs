@@ -62,7 +62,7 @@ compileAtType s op c1 c2 coeffTy = do
     TyOpLesserEqNat -> return $ Con (LtEq s c1 c2)
     TyOpGreaterEqNat -> return $ Con (GtEq s c1 c2)
     TyOpHsup         -> return $ Con (Hsup s c1 c2 coeffTy)
-    TyOpMutable      -> return $ Disj [(Con (Eq s c1 (TyCon (mkId $ "Star")) coeffTy)), (Con (Eq s c1 (TyFraction 1) coeffTy))]
+    TyOpMutable      -> return $ Disj [Con (Eq s c1 (TyCon (mkId "Star")) coeffTy), Con (Eq s c1 (TyFraction 1) coeffTy)]
     TyOpImpl         -> do
       p1 <- compileTypeConstraintToConstraint s c1
       p2 <- compileTypeConstraintToConstraint s c2
@@ -199,9 +199,9 @@ dropable =
       , tfFunTy = \_ c x y -> return y
       , tfTyCon = \id -> return $ notElem id nonDropable
       , tfBox = \x y -> return (x && y)
-      , tfDiamond = \x y -> return $ (x && y)
-      , tfStar = \x y -> return $ (x && y)
-      , tfBorrow = \x y -> return $ (x && y)
+      , tfDiamond = \x y -> return (x && y)
+      , tfStar = \x y -> return (x && y)
+      , tfBorrow = \x y -> return (x && y)
       , tfTyVar = \_ -> return False
       , tfTyApp = \x y -> return x
       , tfTyInt = \_ -> return True

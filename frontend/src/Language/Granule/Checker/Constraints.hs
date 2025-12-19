@@ -700,12 +700,12 @@ trivialUnsatisfiableConstraints
     -- TODO: need to check that all are unsat- but this request a different
     --       representation here.
     positiveConstraints =
-        predFold concat (const []) (\_ _ q -> q) (\x -> [x]) id (\_ _ p -> p)
+        predFold concat (const []) (\_ _ q -> q) (: []) id (\_ _ p -> p)
 
     -- All the (trivially) unsatisfiable constraints
     unsat :: Constraint -> [Constraint]
-    unsat c@(Eq _ c1 c2 _)  = if (normalise c1 `neqC` normalise c2) then [c] else []
-    unsat c@(Neq _ c1 c2 _) = if (normalise c1 `neqC` normalise c2) then [] else [c]
+    unsat c@(Eq _ c1 c2 _)  = [c | normalise c1 `neqC` normalise c2]
+    unsat c@(Neq _ c1 c2 _) = [c | not (normalise c1 `neqC` normalise c2)]
     unsat c@(ApproximatedBy s c1 c2 t) =
         approximatedByC (ApproximatedBy s (normalise c1) (normalise c2) t)
     -- TODO: look at this information

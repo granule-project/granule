@@ -1,4 +1,3 @@
-{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DataKinds #-}
@@ -28,7 +27,7 @@ instance Pretty Substitutors where
   wlpretty (SubstT t) = wlpretty t
 
 instance {-# OVERLAPS #-} Pretty (Ctxt Substitutors) where
-  wlpretty = P.cat . (P.punctuate " | ") . (map prettyCoerce)
+  wlpretty = P.cat . P.punctuate " | " . map prettyCoerce
     where
       prettyCoerce (v, SubstT t) = wlpretty v <> " ~ " <> wlpretty t
 

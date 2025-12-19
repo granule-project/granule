@@ -36,14 +36,14 @@ peekCheckerSpec = do
         state `shouldBe` endStateExpectation
         out   `shouldBe` "x10"
         (_, localState) <- runChecker endStateExpectation local
-        localState `shouldBe` (transformState endStateExpectation)
+        localState `shouldBe` transformState endStateExpectation
 
   where
-    endStateExpectation = let ?globals = mempty in initState { uniqueVarIdCounterMap = M.insert "x" 10 (M.empty) }
+    endStateExpectation = let ?globals = mempty in initState { uniqueVarIdCounterMap = M.insert "x" 10 M.empty }
     localising :: IO (CheckerResult (CheckerResult String, Checker ()), CheckerState)
     localising = let ?globals = mempty in runChecker initState $ do
       state <- get
-      put (state { uniqueVarIdCounterMap = M.insert "x" 10 (M.empty) })
+      put (state { uniqueVarIdCounterMap = M.insert "x" 10 M.empty })
       peekChecker $ do
         state <- get
         put (transformState state)

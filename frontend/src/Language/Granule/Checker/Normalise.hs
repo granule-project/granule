@@ -10,4 +10,4 @@ normaliseType = runIdentity . typeFoldM (baseTypeFold { tfTyCase = reduceCase })
     reduceCase t ps =
       case lookup t ps of
           Just t' -> return t'
-          Nothing -> return $ TyCase t ps 
+          Nothing -> return $ TyCase t ps

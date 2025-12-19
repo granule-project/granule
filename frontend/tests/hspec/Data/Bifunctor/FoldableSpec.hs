@@ -49,14 +49,14 @@ spec :: Test.Spec
 spec = do
   describe "Mutually Recursive Bifunctors" $
     it "cata works for bools" $
-      let expr = (And
+      let expr = And
                     (Or
                         (Val (Lit True))
                         (Val (Lit False)))
                     (Val
                         (Ignore
                             (Not
-                                (Val (Lit True))) False))) :: Expr
+                                (Val (Lit True))) False)) :: Expr
 
       in bicata evalExpr evalVal expr `shouldBe` False
          where evalExpr (AndF l r) = l && r
