@@ -718,7 +718,7 @@ deriveCopyShape' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) ar
 
                     return (consPattern, caseExpr))
 
-              debugM "copyShape retTys:" (show $ exprs)
+              debugM "copyShape retTys:" (show exprs)
               let returnShapeTy = mkShapeReturnTy argTy
               -- Got all the branches to make the following case now
               return ((returnShapeTy, argTy), Case s () True arg exprs, False)

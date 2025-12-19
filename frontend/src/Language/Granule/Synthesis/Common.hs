@@ -578,7 +578,7 @@ navigatePartialExpr nav =
     st { partialSynthExpr =
       case nav (partialSynthExpr st) of
         Just z -> z
-        Nothing -> (partialSynthExpr st) }
+        Nothing -> partialSynthExpr st }
     )
 
 -- Move to the next expression

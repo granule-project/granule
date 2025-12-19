@@ -79,7 +79,7 @@ check ast@(AST _ _ _ hidden _) = do
       -- Add on any definitions computed by the type checker (derived)
       st <- get
       let derivedDefs = map (snd . snd) (derivedDefinitions st)
-      pure $ (AST dataDecls defs' imports hidden name, derivedDefs))
+      pure (AST dataDecls defs' imports hidden name, derivedDefs))
 
 -- Synthing the type of a single expression in the context of an asy
 synthExprInIsolation :: (?globals :: Globals)
@@ -680,7 +680,7 @@ checkExpr defs gam pol topLevel tau
   return (gam, subst, elab)
 
 -- Application checking
-checkExpr defs gam pol topLevel tau (App s a rf e1 e2) | (usingExtension GradedBase) = do
+checkExpr defs gam pol topLevel tau (App s a rf e1 e2) | usingExtension GradedBase = do
   debugM "checkExpr[App]-gradedBase" (pretty s <> " : " <> pretty tau)
 
 -- GRADED BASE
@@ -727,10 +727,10 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
     debugM "checkExpr[Box]" (pretty s <> " : " <> pretty ty)
 
     promotable <-
-      if (CBN `elem` globalsExtensions ?globals)
+      if CBN `elem` globalsExtensions ?globals
         then return True
         -- In CBV mode, check we do not have a resource allocator here
-        else return $ (not (resourceAllocator e)
+        else return (not (resourceAllocator e)
         -- or see if we have turned on unsafe promotion
                    || (UnsafePromotion `elem` globalsExtensions ?globals))
     when (not promotable) (throw $ UnpromotableError{errLoc = s, errTy = ty})
@@ -811,18 +811,18 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
       debugM "checkExpr[Case] patternGam" $ show patternGam
       -- combine ghost variables from pattern using converge/meet
       innerGam <-
-        if (SecurityLevels `elem` globalsExtensions ?globals)
+        if SecurityLevels `elem` globalsExtensions ?globals
         then ghostVariableContextMeet $ patternGam <> gam
         else return $ patternGam <> gam
       (localGam, subst', elaborated_i) <- checkExpr defs innerGam pol False tau' e_i
 
       -- Converge with the outer ghost variable
       patternGam' <-
-        if (SecurityLevels `elem` globalsExtensions ?globals)
+        if SecurityLevels `elem` globalsExtensions ?globals
         then ghostVariableContextMeet $ (mkId ".var.ghost", fromJust $ lookup (mkId ".var.ghost") gam) : patternGam
         else return patternGam
       -- Check that the use of locally bound variables matches their bound type
-      subst'' <- ctxtApprox s (localGam `intersectCtxts` (patternGam)) (patternGam')
+      subst'' <- ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam'
 
       -- Check linear use in anything Linear
       gamSoFar <- ctxtPlus s guardGam localGam
@@ -864,7 +864,7 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
       then do
         -- r * guardGam + branchesGam
         (guardGam', subst) <- ctxtMult s (fst $ fromJust scrutinee) guardGam
-        ctxtPlus s branchesGam guardGam' <.*> (return subst)
+        ctxtPlus s branchesGam guardGam' <.*> return subst
 
       else ctxtPlus s branchesGam guardGam <.*> return []
 
@@ -883,7 +883,7 @@ checkExpr defs gam pol topLevel tau e = do
 
   -- Now to do a type equality on check type `tau` and synth type `tau'`
   (tyEq, _, subst) <-
-        if topLevel && (not (NoTopLevelApprox `elem` globalsExtensions ?globals))
+        if topLevel && (NoTopLevelApprox `notElem` globalsExtensions ?globals)
           -- If we are checking a top-level, then allow overapproximation
           then do
             debugM "** Compare for approximation " $ pretty tau' <> " <: " <> pretty tau
@@ -1001,7 +1001,7 @@ synthExpr defs gam pol
       registerWantedTypeConstraints otherTypeConstraints
 
       substFinal <- combineSubstitutions s subst0 subst1
-      return (tyB, ghostVarCtxt <> (deleteVar var ghostVarCtxt'), substFinal, elab)
+      return (tyB, ghostVarCtxt <> deleteVar var ghostVarCtxt', substFinal, elab)
     _ -> throw TypeError{ errLoc = s, tyExpected = Box (TyVar $ mkId "a") (TyVar $ mkId "b"), tyActual = ty }
 
 -- Secret syntactic weakening
@@ -1098,14 +1098,14 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
 
       -- combine ghost variables from pattern using converge/meet
       innerGam <-
-        if (SecurityLevels `elem` globalsExtensions ?globals)
+        if SecurityLevels `elem` globalsExtensions ?globals
         then ghostVariableContextMeet $ patternGam <> gam
         else return $ patternGam <> gam
       (tyCase, localGam, subst', elaborated_i) <- synthExpr defs innerGam pol ei
 
       -- Converge with the outer ghost variable
       patternGam' <-
-        if (SecurityLevels `elem` globalsExtensions ?globals)
+        if SecurityLevels `elem` globalsExtensions ?globals
         then ghostVariableContextMeet $ (mkId ".var.ghost", fromJust $ lookup (mkId ".var.ghost") gam) : patternGam
         else return patternGam
       -- Check that the use of locally bound variables matches their bound type
@@ -1128,7 +1128,7 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
          p:ps -> illLinearityMismatch s (p:|ps)
 
   let (branchTys, branchCtxtsAndSubsts, elaboratedCases) = unzip3 branchTysAndCtxtsAndSubsts
-  let (branchCtxts, branchSubsts) = unzip branchCtxtsAndSubsts
+  let (branchCtxts, branchSubsts) = Data.Functor.unzip branchCtxtsAndSubsts
   let branchTysAndSpans = zip branchTys (map (getSpan . snd) cases)
 
   -- All branches must be possible
@@ -1165,7 +1165,7 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
       then do
         -- r * guardGam + branchesGam
         (guardGam', subst) <- ctxtMult s (fst $ fromJust scrutinee) guardGam
-        ctxtPlus s branchesGam guardGam' <.*> (return subst)
+        ctxtPlus s branchesGam guardGam' <.*> return subst
 
       else ctxtPlus s branchesGam guardGam <.*> return []
 
@@ -1389,7 +1389,7 @@ synthExpr defs gam pol (App s _ rf e1 e2) | usingExtension GradedBase = do
     FunTy _ grade sig tau -> do
       -- Check whether `e2` can be promoted (implicitly by this rule)
       unpr <-
-        if (CBN `elem` globalsExtensions ?globals)
+        if CBN `elem` globalsExtensions ?globals
         then return False
         else return $ resourceAllocator e2
       when unpr (throw $ UnpromotableError{errLoc = s, errTy = sig })
@@ -1436,10 +1436,10 @@ synthExpr defs gam pol (Val s _ rf (Promote _ e)) = do
    (t, gam', subst, elaboratedE) <- synthExpr defs gam pol e
 
    promotable <-
-      if (CBN `elem` globalsExtensions ?globals)
+      if CBN `elem` globalsExtensions ?globals
         then return True
         -- In CBV mode, check we do not have a resource allocator here
-        else return $ (not (resourceAllocator e)
+        else return (not (resourceAllocator e)
         -- or see if we have turned on unsafe promotion
                    || (UnsafePromotion `elem` globalsExtensions ?globals))
    when (not promotable) (throw $ UnpromotableError{errLoc = s, errTy = t})
@@ -1624,7 +1624,7 @@ synthExpr defs gam pol (Val s _ rf (Abs _ p Nothing e)) = do
         return Nothing
 
   tyVar <- freshTyVarInContext (mkId "t") (Type 0)
-  let sig = (TyVar tyVar)
+  let sig = TyVar tyVar
 
   (bindings, localVars, substP, elaboratedP, _) <- ctxtFromTypedPattern' scrutinee s InCase sig p NotFull
 
@@ -1814,7 +1814,7 @@ synthExpr defs gam pol e@(Unpack s a rf tyVar var e1 e2) = do
       registerTyVarInContext tyVar k ForallQ
       (tyB, gam2, subst2, elabE2)  <- synthExpr defs gam' pol e2
       -- Check that the existential var doesn't escape
-      if not (tyVar `elem` freeVars tyB)
+      if tyVar `notElem` freeVars tyB
         then do
           case checkLinearity bindings gam' of
             [] -> do
@@ -1854,7 +1854,7 @@ solveConstraints predicate s name = do
   coeffectVars <- return (coeffectVars `deleteVars` boundVars predicate)
 
   debugM "tyVarContext" (pretty $ tyVarContext checkerState)
-  debugM "context into the solver" (pretty $ coeffectVars)
+  debugM "context into the solver" (pretty coeffectVars)
   debugM "Solver predicate" $ pretty predicate -- <> "\n" <> show predicate
 
   constructors <- allDataConstructorNames
@@ -1970,7 +1970,7 @@ ctxtApprox s ctxt1 ctxt2 = do
   -- then we have an issue!
   let justIds = map fst intersection
   forM_ ctxt1 $ \(id, ass1) ->
-    if (id `elem` justIds)
+    if id `elem` justIds
       then return ()
       else throw UnboundVariableError{ errLoc = s, errId = id }
 
@@ -2018,7 +2018,7 @@ ctxtEquals s ctxt1 ctxt2 = do
   -- then we have an issue!
   let justIds = map fst intersection
   forM_ ctxt1 $ \(id, ass1) ->
-    if (id `elem` justIds)
+    if id `elem` justIds
       then return ()
       else throw UnboundVariableError{ errLoc = s, errId = id }
 
@@ -2225,11 +2225,11 @@ relateByLUB s (idX, _) (idY, _) (_, _) =
 --  -> ([("x", Discharged (c5 :: Nat, Int),
 --      ("y", Linear Int)]
 --     , [c5 :: Nat])
-freshVarsIn :: (?globals :: Globals) => Span -> [Id] -> (Ctxt Assumption)
+freshVarsIn :: (?globals :: Globals) => Span -> [Id] -> Ctxt Assumption
             -> Checker (Ctxt Assumption, Ctxt Kind)
 freshVarsIn s vars ctxt = do
     newCtxtAndTyVars <- mapM toFreshVar (relevantSubCtxt vars ctxt)
-    let (newCtxt, tyVars) = unzip newCtxtAndTyVars
+    let (newCtxt, tyVars) = Data.Functor.unzip newCtxtAndTyVars
     return (newCtxt, catMaybes tyVars)
   where
     toFreshVar :: (Id, Assumption) -> Checker ((Id, Assumption), Maybe (Id, Kind))
@@ -2439,10 +2439,10 @@ handleHsupPoly localCtxt (Disj ps) =
   Disj <$> mapM (handleHsupPoly localCtxt) ps
 
 handleHsupPoly localCtxt (Impl ctxt p1 p2) =
-  (Impl ctxt) <$> (handleHsupPoly localCtxt p1) <*> (handleHsupPoly localCtxt p2)
+  Impl ctxt <$> handleHsupPoly localCtxt p1 <*> handleHsupPoly localCtxt p2
 
 handleHsupPoly localCtxt (Exists v k p) =
-  (Exists v k) <$> (handleHsupPoly ((v, (k, InstanceQ)) : localCtxt) p)
+  Exists v k <$> handleHsupPoly ((v, (k, InstanceQ) : localCtxt) p)
 
 -- Don't go inside negation
 handleHsupPoly _ (NegPred p) =

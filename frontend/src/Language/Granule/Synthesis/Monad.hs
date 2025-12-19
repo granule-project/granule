@@ -133,7 +133,7 @@ none :: (?globals :: Globals) => Synthesiser a
 none = do
   when interactiveDebugging $ do
     liftIO $ putStrLn "<<< none HERE. Press any key to continue"
-    _ <- liftIO $ getLine
+    _ <- liftIO getLine
     return ()
   Synthesiser (ExceptT mzero)
 

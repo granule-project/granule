@@ -977,7 +977,7 @@ appRule sParams inIntroPhase focusPhase gamma (Focused [var@(x1, assumption)]) g
           (t1, delta1, subst1, struct1, scrutinee, rInfo1) <-
             -- withPartialExprAt (downExpr >=> rightExpr)
             -- (letExpr ns (PVar ns () False x2) (App ns () False (Val ns () False (Var () x1)) hole) hole)
-            gSynthInner sParams { scrutCurrent = (scrutCurrent sParams) + 1} inIntroPhase focusPhase gamma' (Focused omega') goal
+            gSynthInner sParams { scrutCurrent = scrutCurrent sParams + 1} inIntroPhase focusPhase gamma' (Focused omega') goal
           -- traceM $ "sParams: " <> (show sParams)
           -- traceM $ "t1: " <> (pretty t1)
 
