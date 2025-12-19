@@ -72,6 +72,7 @@ library frontend
   import: granule-default-lang
   import: granule-dependencies
   import: granule-ghc-warnings
+  visibility: public
   exposed-modules:
       Data.Bifunctor.Foldable
       Language.Granule.Checker.Checker
@@ -158,6 +159,7 @@ library interpreter
   import: granule-default-lang
   import: granule-dependencies
   import: granule-ghc-warnings
+  visibility: public
   exposed-modules:
       Language.Granule.Interpreter
       Language.Granule.Interpreter.Eval
@@ -182,6 +184,7 @@ library runtime
   import: granule-default-lang
   import: granule-dependencies
   import: granule-ghc-warnings
+  visibility: public
   exposed-modules:
       Language.Granule.Runtime
   hs-source-dirs:
@@ -200,6 +203,7 @@ library compiler
   import: granule-default-lang
   import: granule-dependencies
   import: granule-ghc-warnings
+  visibility: public
   exposed-modules:
       Language.Granule.Compiler.Error
       Language.Granule.Compiler.HSCodegen
