@@ -68,6 +68,10 @@ common granule-ghc-warnings
 --
 --
 
+
+-- Dummy toplevel library component that is needed for external projects that depend on internal sublibraries.
+library
+
 library frontend
   import: granule-default-lang
   import: granule-dependencies
