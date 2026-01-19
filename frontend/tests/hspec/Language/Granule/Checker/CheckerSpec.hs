@@ -40,9 +40,9 @@ spec = let ?globals = mempty in do
 
      it "join ctxts with discharged assumption in one" $ do
        ((c, _), pred) <- runCtxts joinCtxts
-                          [(varA, Discharged (tyVarK) (cNatOrdered 5))]
+                          [(varA, Discharged tyVarK (cNatOrdered 5))]
                           []
-       c `shouldBe` [(varA, Discharged (tyVarK) (TyVar (mkId "a.0")))]
+       c `shouldBe` [(varA, Discharged tyVarK (TyVar (mkId "a.0")))]
        pred `shouldBe`
          [Conj [Con (Lub (Span {startPos = (0,0), endPos = (0,0), filename = ""})
             (TySig (TyInt 5)
@@ -55,32 +55,32 @@ spec = let ?globals = mempty in do
 
     describe "intersectCtxtsWithWeaken" $ do
       it "contexts with matching discharged variables" $ do
-         (c, _) <- (runCtxts intersectCtxtsWithWeaken)
-                 [(varA, Discharged (tyVarK) (cNatOrdered 5))]
-                 [(varA, Discharged (tyVarK) (cNatOrdered 10))]
+         (c, _) <- runCtxts intersectCtxtsWithWeaken
+                 [(varA, Discharged tyVarK (cNatOrdered 5))]
+                 [(varA, Discharged tyVarK (cNatOrdered 10))]
          c `shouldBe`
-                 [(varA, Discharged (tyVarK) (cNatOrdered 5))]
+                 [(varA, Discharged tyVarK (cNatOrdered 5))]
 
       it "contexts with matching discharged variables" $ do
-         (c, _) <- (runCtxts intersectCtxtsWithWeaken)
-                 [(varA, Discharged (tyVarK) (cNatOrdered 10))]
-                 [(varA, Discharged (tyVarK) (cNatOrdered 5))]
+         (c, _) <- runCtxts intersectCtxtsWithWeaken
+                 [(varA, Discharged tyVarK (cNatOrdered 10))]
+                 [(varA, Discharged tyVarK (cNatOrdered 5))]
          c `shouldBe`
-                 [(varA, Discharged (tyVarK) (cNatOrdered 10))]
+                 [(varA, Discharged tyVarK (cNatOrdered 10))]
 
       it "contexts with matching discharged variables" $ do
-         (c, preds) <- (runCtxts intersectCtxtsWithWeaken)
-                 [(varA, Discharged (tyVarK) (cNatOrdered 5))]
+         (c, preds) <- runCtxts intersectCtxtsWithWeaken
+                 [(varA, Discharged tyVarK (cNatOrdered 5))]
                  []
          c `shouldBe`
-                 [(varA, Discharged (tyVarK) (cNatOrdered 5))]
+                 [(varA, Discharged tyVarK (cNatOrdered 5))]
 
       it "contexts with matching discharged variables (symm)" $ do
-         (c, _) <- (runCtxts intersectCtxtsWithWeaken)
+         (c, _) <- runCtxts intersectCtxtsWithWeaken
                  []
-                 [(varA, Discharged (tyVarK) (cNatOrdered 5))]
+                 [(varA, Discharged tyVarK (cNatOrdered 5))]
          c `shouldBe`
-                 [(varA, Discharged (tyVarK) (TyGrade (Just (TyApp (TyCon (Id "Interval" "Interval")) (TyCon (Id "Nat" "Nat")))) 0))]
+                 [(varA, Discharged tyVarK (TyGrade (Just (TyApp (TyCon (Id "Interval" "Interval")) (TyCon (Id "Nat" "Nat")))) 0))]
 
 
     describe "elaborator tests" $

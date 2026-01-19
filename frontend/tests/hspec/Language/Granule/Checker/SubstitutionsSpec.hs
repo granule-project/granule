@@ -28,4 +28,4 @@ spec = do
       let result = case us of
                      Right res -> res
                      Left  err -> error $ show err
-      result `shouldBe` (Just [(mkId "a", SubstT $ TyCon $ mkId "()")])
+      result `shouldBe` Just [(mkId "a", SubstT $ TyCon $ mkId "()")]

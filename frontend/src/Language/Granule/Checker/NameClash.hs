@@ -21,7 +21,7 @@ checkNameClashes typeConstructors builtinDataDecls (AST dataDecls defs _ _ _) bu
     dataDecls' = builtinDataDecls
               <> dataDecls
              <> tcsAsDataDecls
-                       (filter (\x -> not (fst x `elem` Primitives.overlapsAllowed)) typeConstructors)
+                       (filter (\x -> fst x `notElem` Primitives.overlapsAllowed) typeConstructors)
 
     typeConstructorErrs
       = fmap mkTypeConstructorErr

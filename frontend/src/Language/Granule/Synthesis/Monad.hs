@@ -1,6 +1,5 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE FlexibleContexts #-}
 
 module Language.Granule.Synthesis.Monad where
@@ -95,7 +94,7 @@ instance MonadIO Synthesiser where
   liftIO = conv . liftIO
 
 runSynthesiser ::  Int -> Synthesiser a
-  -> (CheckerState -> StateT SynthesisData IO [((Either (NonEmpty CheckerError) a), CheckerState)])
+  -> (CheckerState -> StateT SynthesisData IO [(Either (NonEmpty CheckerError) a, CheckerState)])
 runSynthesiser index m s = do
   observeManyT index (runStateT (runExceptT (unSynthesiser m)) s)
 
@@ -103,7 +102,7 @@ conv :: Checker a -> Synthesiser a
 conv (Checker k) =
   Synthesiser
     (ExceptT
-         (StateT (\s -> lift $ lift $  (runStateT (runExceptT k) (s)))))
+         (StateT (\s -> lift $ lift (runStateT (runExceptT k) s))))
 
 -- version of `peekChecker` from the Checker monad, but lifted
 -- into the Synthesis monad
@@ -114,9 +113,9 @@ peekCheckerInSynthesis m = do
   -- Build inner computation that saves the checker state
   let inner st = do
         (eitherComputation, s) <- comp st
-        return ((do
+        return (do
           a <- eitherComputation
-          return (a, put st)), s)
+          return (a, put st), s)
   -- Rebuild synthesis monad outer
   Synthesiser . ExceptT . StateT $ inner
 
@@ -126,7 +125,7 @@ try m n = do
     state {
       paths = 1 + paths state
       })
-  Synthesiser $ ExceptT ((runExceptT (unSynthesiser m)) `interleave` (runExceptT (unSynthesiser n)))
+  Synthesiser $ ExceptT (runExceptT (unSynthesiser m) `interleave` runExceptT (unSynthesiser n))
 
 -- No synthesis result (fail and backtrack
 -- In --interactive mode it also pauses execution waiting for the user
@@ -134,7 +133,7 @@ none :: (?globals :: Globals) => Synthesiser a
 none = do
   when interactiveDebugging $ do
     liftIO $ putStrLn "<<< none HERE. Press any key to continue"
-    _ <- liftIO $ getLine
+    _ <- liftIO getLine
     return ()
   Synthesiser (ExceptT mzero)
 
@@ -143,12 +142,11 @@ pause :: (?globals :: Globals) => Synthesiser ()
 pause = do
   when interactiveDebugging $ do
     liftIO $ putStrLn "<<< Paused. Type 'p' to continue"
-    inp <- liftIO $ getLine
+    inp <- liftIO getLine
     case inp of
       ('p':_) -> return ()
       ('P':_) -> return ()
       _       -> pause
-  return ()
 
 maybeToSynthesiser :: (?globals :: Globals) => Maybe (Ctxt a) -> Synthesiser (Ctxt a)
 maybeToSynthesiser (Just x) = return x
@@ -158,8 +156,8 @@ boolToSynthesiser :: (?globals :: Globals) => Bool -> a -> Synthesiser a
 boolToSynthesiser True x = return x
 boolToSynthesiser False _ = none
 
-getSynthState ::  Synthesiser (SynthesisData)
-getSynthState = Synthesiser $ lift $ lift $ get
+getSynthState ::  Synthesiser SynthesisData
+getSynthState = Synthesiser $ lift $ lift get
 
 modifyPred :: (PredContext -> PredContext) -> Synthesiser ()
 modifyPred f = Synthesiser $ lift $ modify (\s -> s { predicateContext = f $ predicateContext s })
@@ -172,14 +170,14 @@ modifyPred f = Synthesiser $ lift $ modify (\s -> s { predicateContext = f $ pre
 modifyPath :: String -> Synthesiser ()
 modifyPath r = Synthesiser $ lift $ modify (\s -> s { synthesisPath = r : synthesisPath s })
 
-printSynthesisPath :: [String] -> Int -> String 
+printSynthesisPath :: [String] -> Int -> String
 printSynthesisPath [] _  = ""
 printSynthesisPath (p:path) depth | "BranchStart" `isInfixOf` p = printSynthesisPath path (depth+1)
 printSynthesisPath (p:path) depth | "BranchEnd" `isInfixOf` p =  printSynthesisPath path (depth-1)
-printSynthesisPath (p:path) depth = (tabs depth) <>  p <> "\n" <> printSynthesisPath path depth
+printSynthesisPath (p:path) depth = tabs depth <>  p <> "\n" <> printSynthesisPath path depth
 
 tabs :: Int -> String
-tabs i = (concat $ replicate i ("   "))
+tabs i = concat $ replicate i "   "
 
 
 data Measurement =

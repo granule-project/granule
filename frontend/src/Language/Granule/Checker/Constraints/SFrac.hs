@@ -21,7 +21,7 @@ instance Show SFrac where
     _         -> "<symbolic>"
 
 star :: SFrac
-star = SFrac $ (literal (0))
+star = SFrac (literal 0)
 
 isUniq :: SFrac -> SBool
 isUniq (SFrac f) = f .== 0

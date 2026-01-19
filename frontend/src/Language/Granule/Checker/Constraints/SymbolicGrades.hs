@@ -96,8 +96,8 @@ applyToProducts :: (SGrade -> SGrade -> a)
             -> SGrade -> SGrade -> Either String b
 
 applyToProducts f g _ a@(SProduct a1 b1) b@(SProduct a2 b2)
-  | (match a1 a2) && (match b1 b2) = Right $ g (f a1 a2) (f b1 b2)
-  | (match a1 b2) && (match b1 a2) = Right $ g (f a1 b2) (f b1 a2)
+  | match a1 a2 && match b1 b2 = Right $ g (f a1 a2) (f b1 b2)
+  | match a1 b2 && match b1 a2 = Right $ g (f a1 b2) (f b1 a2)
   | otherwise = Left $ "Solver grades " <> show a <> " and " <> show b <> " are incompatible "
 
 applyToProducts f g h a@(SProduct a1 b1) c

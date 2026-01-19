@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -14,10 +13,10 @@ class SecondParameter a e | a -> e where
   setSecondParameter :: e -> a -> a
 
   default getSecondParameter :: (Generic a, GSecondParameter (Rep a) e) => a -> e
-  getSecondParameter a = getSecondParameter' . from $ a
+  getSecondParameter = getSecondParameter' . from
 
   default setSecondParameter :: (Generic a, GSecondParameter (Rep a) e) => e -> a -> a
-  setSecondParameter e a = to . setSecondParameter' e . from $ a
+  setSecondParameter e = to . setSecondParameter' e . from
 
 class GSecondParameter f e where
   getSecondParameter' :: f a -> e

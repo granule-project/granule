@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -14,10 +13,10 @@ class FirstParameter a e | a -> e where
   setFirstParameter :: e -> a -> a
 
   default getFirstParameter :: (Generic a, GFirstParameter (Rep a) e) => a -> e
-  getFirstParameter a = getFirstParameter' . from $ a
+  getFirstParameter = getFirstParameter' . from
 
   default setFirstParameter :: (Generic a, GFirstParameter (Rep a) e) => e -> a -> a
-  setFirstParameter e a = to . setFirstParameter' e . from $ a
+  setFirstParameter e = to . setFirstParameter' e . from
 
 class GFirstParameter f e where
   getFirstParameter' :: f a -> e
@@ -44,7 +43,7 @@ instance (GFirstParameter a e, GFirstParameter b e) => GFirstParameter (a :+: b)
 
 instance GFirstParameter a e => GFirstParameter (a :*: b) e where
   getFirstParameter' (a :*: _) = getFirstParameter' a
-  setFirstParameter' e (a :*: b) = (setFirstParameter' e a :*: b)
+  setFirstParameter' e (a :*: b) = setFirstParameter' e a :*: b
 
 instance (GFirstParameter U1 String) where
   getFirstParameter' _ = ""

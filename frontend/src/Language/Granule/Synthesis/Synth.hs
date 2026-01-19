@@ -56,7 +56,7 @@ import Data.Maybe (fromMaybe)
 -- import Control.Arrow (second)
 -- import Control.Monad.Omega
 import System.Clock (TimeSpec)
-
+import Data.Bifunctor (first, bimap)
 -- import Control.Monad.Except
 -- import Control.Monad.Logic
 import Data.Ord
@@ -70,7 +70,6 @@ import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NonEmpty
 import Language.Granule.Checker.Checker (checkExpr, Polarity (Positive, Negative), checkDef, check)
 import qualified Language.Granule.Checker.Primitives as Primitives
-import Language.Granule.Synthesis.Monad (SynthesisData(gradedProgram), Measurement (cartAttempts))
 
 ------------------------------
 
@@ -145,14 +144,10 @@ noneWithMaxReached = do
 markRecursiveType :: Id -> Type -> Bool
 markRecursiveType tyCon dataTy = markRecursiveType' tyCon dataTy False
   where
-    markRecursiveType' tyCon (FunTy _ _ t1 t2) onLeft = do
-      case markRecursiveType' tyCon t1 True of
-        True -> True
-        False -> markRecursiveType' tyCon t2 onLeft
-    markRecursiveType' tyCon (TyApp t1 t2) True = do
-      case markRecursiveType' tyCon t1 True of
-        True -> True
-        False -> markRecursiveType' tyCon t2 True
+    markRecursiveType' tyCon (FunTy _ _ t1 t2) onLeft =
+      markRecursiveType' tyCon t1 True || markRecursiveType' tyCon t2 onLeft
+    markRecursiveType' tyCon (TyApp t1 t2) True =
+      markRecursiveType' tyCon t1 True || markRecursiveType' tyCon t2 True
     markRecursiveType' tyCon (TyCon tyCon') True = tyCon == tyCon'
     markRecursiveType' _ _ _ = False
 
@@ -184,10 +179,10 @@ synthesiseLinearBase hints index unrComps rComps defId ctxt constructors goalTy 
             Just hints' -> ( case (hTimeout hints', hNoTimeout hints') of
                                   (_, True) -> -1
                                   (Just lim, _) -> lim * 1000,
-                            index + (fromMaybe 0 $ hIndex hints'),
-                            let mode = if (hPruning hints' || alternateSynthesisMode) then Pruning else NonPruning
+                            index + fromMaybe 0 (hIndex hints'),
+                            let mode = if hPruning hints' || alternateSynthesisMode then Pruning else NonPruning
                             in
-                            if (hSubtractive hints' || subtractiveSynthesisMode) then Subtractive else Additive mode
+                            if hSubtractive hints' || subtractiveSynthesisMode then Subtractive else Additive mode
                           )
             Nothing ->    ( -1,
                             index,
@@ -240,7 +235,7 @@ synthesiseLinearBase hints index unrComps rComps defId ctxt constructors goalTy 
       -- Nothing synthed, so create a blank hole instead
         []    -> do
           debugM "Synthesiser" $ "No programs synthesised for " <> pretty goalTy
-          printInfo $ "No programs synthesised"
+          printInfo "No programs synthesised"
         _ ->
           case last results of
             (t, _) -> do
@@ -271,7 +266,7 @@ synthesiseLinearBase hints index unrComps rComps defId ctxt constructors goalTy 
           putStrLn $ "Total synth time (ms) = "  ++ show (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double))
           putStrLn $ "Mean theoremSize   = " ++ show ((if smtCallsCount aggregate == 0 then 0 else fromInteger $ theoremSizeTotal aggregate) / fromInteger (smtCallsCount aggregate))
       -- </benchmarking-output>
-      return (map (\(x, y) -> (unannotateExpr x, y)) results)
+      return (map (first unannotateExpr) results)
   return (fin, Nothing)
 
   where
@@ -322,7 +317,7 @@ synthesiseLinearBase hints index unrComps rComps defId ctxt constructors goalTy 
       unannotateExpr (LetDiamond s a b ps mt e1 e2) = LetDiamond s () b (unannotatePat ps) mt (unannotateExpr e1) $ unannotateExpr e2
       unannotateExpr (TryCatch s a b e p mt e1 e2)  = TryCatch s () b (unannotateExpr e) (unannotatePat p) mt (unannotateExpr e1)  $ unannotateExpr e2
       unannotateExpr (Val s a b val)                = Val s () b (unannotateVal val)
-      unannotateExpr (Case s a b expr pats)         = Case s () b (unannotateExpr expr) $ map (\(p, e) -> (unannotatePat p, unannotateExpr e)) pats
+      unannotateExpr (Case s a b expr pats)         = Case s () b (unannotateExpr expr) $ map (bimap unannotatePat unannotateExpr) pats
       unannotateExpr (Hole s a b ids hints)         = Hole s () b ids hints
 
 
@@ -436,12 +431,12 @@ synthesiseGradedBase ast gradedProgram hole spec eval hints index unrestricted r
   (res, agg1) <- runStateT (runSynthesiser index synRes cs') synthState
 
   end    <- liftIO $ Clock.getTime Clock.Monotonic
-  let (programs) = map (\(x1, x2, _) -> (x1, x2))
+  let programs = map (\(x1, x2, _) -> (x1, x2))
         $ nubBy (\(expr1, _, _) (expr2, _, _) -> expr1 == expr2) $ rights (map fst res)
   let datas = map (\(x1, x2, x3) -> x3)
         $ nubBy (\(expr1, _, _) (expr2, _, _) -> expr1 == expr2) $ rights (map fst res)
         -- <benchmarking-output>
-  let agg = case datas of (_:_) -> (last datas <> agg1) ; _ -> agg1
+  let agg = case datas of (_:_) -> last datas <> agg1 ; _ -> agg1
 
 
   if benchmarking then
@@ -452,12 +447,12 @@ synthesiseGradedBase ast gradedProgram hole spec eval hints index unrestricted r
                         , proverTime = proveTime agg
                         , solverTime = Language.Granule.Synthesis.Monad.smtTime agg
                         , meanTheoremSize = if smtCallsCount agg == 0 then 0 else fromInteger (theoremSizeTotal agg) / fromInteger (smtCallsCount agg)
-                        , success = if null programs then False else True
+                        , success = not (null programs)
                         , timeout = False
                         , pathsExplored = paths agg
                         , programSize =
                             case programs of
-                              (_:_) -> sizeOfExpr $ fst $ last $ programs
+                              (_:_) -> sizeOfExpr $ fst $ last programs
                               _ -> 0
                         , contextSize = toInteger $ length gamma
                         , examplesUsed =
@@ -488,11 +483,11 @@ toCart (FunTy id coeff t1 t2) = FunTy id (Just anyG) (toCart t1) (toCart t2)
 toCart (Box coeff t) = Box anyG (toCart t)
 toCart (Diamond ef t) = Diamond (toCart ef)  (toCart t)
 toCart (Star g t) = Star (toCart g) (toCart t)
-toCart (TyApp t1 t2) = (TyApp (toCart t1) (toCart t2))
+toCart (TyApp t1 t2) = TyApp (toCart t1) (toCart t2)
 toCart t@TyGrade{} = anyG
 toCart (TyInfix op t1 t2) = TyInfix op (toCart t1) (toCart t2)
 toCart (TySet pol ts) = TySet pol (map toCart ts)
-toCart (TyCase t ts) = TyCase (toCart t) $ map (\(x,y) -> (toCart x, toCart y)) ts
+toCart (TyCase t ts) = TyCase (toCart t) $ map (bimap toCart toCart) ts
 toCart (TySig t k) = TySig (toCart t) k
 toCart t = t
 
@@ -538,7 +533,7 @@ runExamples eval ast@(AST decls defs imports hidden mod) examples defId = do
       --    main = (example_in_1 == example_out_1) (&&') ... (&&') (example_in_n == example_out_n)
         let exampleMainDef = Def nullSpanNoFile (mkId entryPoint) False Nothing
                               (EquationList nullSpanNoFile (mkId entryPoint) False
-                                [(Equation nullSpanNoFile (mkId entryPoint) () False [] exampleMainExprsCombined')]) (Forall nullSpanNoFile [] [] (TyInt 0))
+                                [Equation nullSpanNoFile (mkId entryPoint) () False [] exampleMainExprsCombined']) (Forall nullSpanNoFile [] [] (TyInt 0))
         let astWithExampleMain = AST declsWithBool (defsWithoutMain ++ [exampleMainDef]) imports hidden mod
         let timeout = 100000
         res <- liftIO $ System.Timeout.timeout timeout $ eval astWithExampleMain
@@ -578,7 +573,7 @@ synLoop ast hole spec eval constrs index gamma omega originalGoal goal (sParams:
                   })
 
   synthState <- getSynthState
-  cs <- conv $ get
+  cs <- conv get
   let sParams' = sParams -- { matchMax = 1, introMax = 1 }
 
   (res, agg) <- liftIO $ runStateT (runSynthesiser index (gSynthOuter ast hole spec eval sParams' gamma omega originalGoal goal) cs) synthState
@@ -799,7 +794,7 @@ varRule _ _ (Focused []) _ = none
 varRule gamma (Focused left) (Focused (var@(name, assumption):right)) goal = do
     -- let ruleInfo = VarRuleP var goal gamma (left ++ right) Nothing
     -- conv $ modify (\s -> { searchTree = addRuleToSearchTree ruleInfo })
-    modifyPath ("var on: " <> (pretty name <> " : " <> pretty assumption) <> ", goal: " <> (pretty goal))
+    modifyPath ("var on: " <> (pretty name <> " : " <> pretty assumption) <> ", goal: " <> pretty goal)
     debugM "varRule, goal is" (pretty goal)
     assumptionTy <- getSAssumptionType assumption
     case assumptionTy of
@@ -830,7 +825,7 @@ varRule gamma (Focused left) (Focused (var@(name, assumption):right)) goal = do
 
               (True, Just grade) -> do
                 synSt <- getSynthState
-                if not $ name `elem` currDef synSt then do
+                if name `notElem` currDef synSt then do
                   (kind, _, _) <- conv $ synthKind ns  grade
                   delta <- ctxtMultByCoeffect (TyGrade (Just kind) 0) (gamma ++ left ++ right)
                   let singleUse = (name, SDef tySch (Just $ TyGrade (Just kind) 1) 0)
@@ -842,7 +837,7 @@ varRule gamma (Focused left) (Focused (var@(name, assumption):right)) goal = do
                 else none
               (True, Nothing) -> do
                 synSt <- getSynthState
-                if not $ name `elem` currDef synSt then do
+                if name `notElem` currDef synSt then do
                   delta <- ctxtMultByCoeffect (TyGrade Nothing 0) (gamma ++ left ++ right)
                   let rInfo = VarRule name assumption goal gamma [] (var:delta)
                   -- let ruleInfo' = modifyVarRule ruleInfo (var:delta)
@@ -887,8 +882,8 @@ absRule :: (?globals :: Globals)
         -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id, RuleInfo)
 absRule sParams inIntroPhase focusPhase gamma (Focused omega) goal@(FunTy name gradeM tyA tyB) = do
   debugM "abs, goal is" (pretty goal)
-  modifyPath ("absBranchStart")
-  modifyPath ("absRule: "  <> (pretty goal))
+  modifyPath "absBranchStart"
+  modifyPath ("absRule: "  <> pretty goal)
 
   -- Extract the graded arrow, or use generic 1 if there is no grade
   let grade = getGradeFromArrow gradeM
@@ -899,10 +894,10 @@ absRule sParams inIntroPhase focusPhase gamma (Focused omega) goal@(FunTy name g
   -- predicate on whether we want to focus on the argument type or delay
   let bindToOmega =
       -- argument type must be left async type
-          (isLAsync tyA)
+          isLAsync tyA
           -- && matchMax sParams > 0
       -- if we are a recursive type then check whether we are below max depth
-        && ((isRecursiveType tyA (constructors st)) ==> ((matchCurrent sParams) + (recVarCount omega (constructors st)) ) + 1  <= matchMax sParams)
+        && (isRecursiveType tyA (constructors st) ==> (matchCurrent sParams + recVarCount omega (constructors st) ) + 1  <= matchMax sParams)
 
   let (gamma', omega') = bindToContext (x, SVar (Discharged tyA grade) (Just $ NonDecreasing 0) 0) gamma omega bindToOmega
 
@@ -911,7 +906,7 @@ absRule sParams inIntroPhase focusPhase gamma (Focused omega) goal@(FunTy name g
      -- Recursive call
     --  withPartialExprAt downExpr
       --  (Val ns () False (Abs () (PVar ns () False x) Nothing hole))
-       (gSynthInner sParams inIntroPhase focusPhase gamma' (Focused omega') tyB)
+       gSynthInner sParams inIntroPhase focusPhase gamma' (Focused omega') tyB
 
   cs <- conv get
   (kind, _, _) <- conv $ synthKind nullSpan grade
@@ -978,7 +973,7 @@ appRule sParams inIntroPhase focusPhase gamma (Focused [var@(x1, assumption)]) g
           (t1, delta1, subst1, struct1, scrutinee, rInfo1) <-
             -- withPartialExprAt (downExpr >=> rightExpr)
             -- (letExpr ns (PVar ns () False x2) (App ns () False (Val ns () False (Var () x1)) hole) hole)
-            (gSynthInner sParams { scrutCurrent = (scrutCurrent sParams) + 1} inIntroPhase focusPhase gamma' (Focused omega') goal)
+            gSynthInner sParams { scrutCurrent = scrutCurrent sParams + 1} inIntroPhase focusPhase gamma' (Focused omega') goal
           -- traceM $ "sParams: " <> (show sParams)
           -- traceM $ "t1: " <> (pretty t1)
 
@@ -1057,12 +1052,12 @@ boxRule :: (?globals :: Globals)
         -> Synthesiser (Expr () (), Ctxt SAssumption, Substitution, Bool, Maybe Id, RuleInfo)
 boxRule sParams inIntroPhase focusPhase gamma goal@(Box grade_r goal_inner) = do
   debugM "boxRule, goal is" (pretty goal)
-  modifyPath ("box: "  <> (pretty goal))
+  modifyPath ("box: "  <> pretty goal)
 
   (t, delta, subst, struct, scrutinee, rInfo) <-
     -- withPartialExprAt downExpr
     -- (Val ns () False (Promote () hole))
-    (gSynthInner sParams True RightAsync gamma (Focused []) goal_inner)
+    gSynthInner sParams True RightAsync gamma (Focused []) goal_inner
 
   delta' <- ctxtMultByCoeffect grade_r delta
   let boxExpr = Val ns () False (Promote () t)
@@ -1109,7 +1104,7 @@ unboxRule sParams inIntroPhase focusPhase gamma (Focused right) (Focused (var_x@
     (t, delta, subst, struct, scrutinee, rInfo) <-
         -- withPartialExprAt downExpr
         -- (makeUnboxUntyped y (makeVarUntyped x) hole)
-        (gSynthInner sParams inIntroPhase focusPhase gamma' (Focused omega') goal)
+        gSynthInner sParams inIntroPhase focusPhase gamma' (Focused omega') goal
 
     case lookupAndCutout y delta of
       Just (delta', SVar (Discharged _ grade_s1) _ _) ->
@@ -1275,7 +1270,7 @@ casePatternMatchBranchSynth
   case result of
     (True, _, args, subst, _, predicate) -> do
       -- commit to updating the checker state from `checkConstructor`
-      conv $ commitToCheckerState
+      conv commitToCheckerState
       -- New implication
       modifyPred (newImplication [])
       modifyPred (addPredicateViaConjunction predicate)
@@ -1314,7 +1309,7 @@ casePatternMatchBranchSynth
                    isLAsync argTy'
                 --  -- if we are a recursive type then check whether we are below max depth
                   -- && matchCurrent sParams + 1 < matchMax sParams
-                && (isRecursiveType argTy' (constructors st) ==> (matchCurrent sParams + (recVarCount omega (constructors st))) + 1 < matchMax sParams)
+                && (isRecursiveType argTy' (constructors st) ==> (matchCurrent sParams + recVarCount omega (constructors st)) + 1 < matchMax sParams)
 
 
           -- construct focussing contexts
@@ -1333,7 +1328,7 @@ casePatternMatchBranchSynth
       -- traceM $ "case gamma': " <> (show gamma')
       -- traceM $ "case omega': " <> (show omega')
       (t, delta, subst, _, _, rInfo) <-
-         gSynthInner sParams { matchCurrent = (matchCurrent sParams) + recursive } inIntroPhase focusPhase gamma' (Focused omega') goal
+         gSynthInner sParams { matchCurrent = matchCurrent sParams + recursive } inIntroPhase focusPhase gamma' (Focused omega') goal
 
       (delta', grade_si) <- forallM delta ([], Nothing) (\(delta', mGrade) dVar@(dName, dAssumption) ->
         case dAssumption of
@@ -1349,10 +1344,10 @@ casePatternMatchBranchSynth
                 -- ∃s'_ij . s_ij ⊑ s'_ij · q_ij ⊑ r · q_ij
                 modifyPred $ addConstraintViaConjunction (ApproximatedBy ns (grade_s' `gTimes` grade_q) grade_rq kind)
                 modifyPred $ addConstraintViaConjunction (ApproximatedBy ns grade_s (grade_s' `gTimes` grade_q) kind)
-                modifyPred $ (ExistsHere grade_id_s' kind)
+                modifyPred (ExistsHere grade_id_s' kind)
 
                 -- s' \/ ...
-                grade_si <- computeJoin (Just kind) (fromMaybe grade_s' mGrade) (grade_s')
+                grade_si <- computeJoin (Just kind) (fromMaybe grade_s' mGrade) grade_s'
                 -- now do not include in the result as this is being bound
                 return (delta', Just grade_si)
               -- Not a variable bound in the scope
@@ -1364,7 +1359,7 @@ casePatternMatchBranchSynth
 
       -- Concludes the implication
       -- TODO: maybe run solve here per branch
-      modifyPred $ moveToNewConjunct
+      modifyPred moveToNewConjunct
 
       let branchCtxt = map (\(x, (argTy, _, grade_rq, sInfo)) -> (x, SVar (Discharged argTy grade_rq) sInfo depth)) branchBoundVarsAndGrades
 
@@ -1487,7 +1482,7 @@ computeJoin maybeK g1 g2 = do
   k <- case maybeK of
          Nothing -> conv $ do { (k, _, _) <- synthKind ns g1; return k }
          Just k  -> return k
-  upperBoundGradeVarId <- conv $ freshIdentifierBase $ "ub"
+  upperBoundGradeVarId <- conv $ freshIdentifierBase "ub"
   let upperBoundGradeVar = mkId upperBoundGradeVarId
   modify (\st -> st { tyVarContext = (upperBoundGradeVar, (k, InstanceQ)) : tyVarContext st })
   let upperBoundGrade = TyVar upperBoundGradeVar

@@ -9,7 +9,7 @@
 # Specify additional command line arguments
 #
 # - arguments: [--color, --cpp-simple, -XQuasiQuotes]
-
+- arguments: [-XPatternSynonyms]
 
 # Control which extensions/flags/modules/functions can be used
 #
@@ -54,6 +54,11 @@
 - ignore: {name: Avoid lambda}
 - ignore: {name: Use tuple-section}
 - ignore: {name: Redundant lambda}
+- ignore: {name: Use uncurry}
+- ignore: {name: Evaluate}
+- ignore: {name: Use <$>}
+- ignore: {name: Use map with tuple-section}
+- ignore: {name: Avoid NonEmpty.unzip}
 
 # Define some custom infix operators
 # - fixity: infixr 3 ~^#^~

@@ -29,7 +29,7 @@ spec = let ?globals = mempty in do
         let var = mkId "a"
         modify (\st -> st { tyVarContext = [(var, (Type 0, ForallQ))] })
         -- Extract type vars of kind Type from `a -> a`
-        typeVarsOfKind (FunTy Nothing Nothing (TyVar var) (TyVar var)) (Type 0) 
+        typeVarsOfKind (FunTy Nothing Nothing (TyVar var) (TyVar var)) (Type 0)
       case result of
         Right vars -> sort vars `shouldBe` [mkId "a"]
         Left err -> expectationFailure $ "Checker failed: " ++ show err
@@ -41,7 +41,7 @@ spec = let ?globals = mempty in do
         -- Add type variables with kind Type
         modify (\st -> st { tyVarContext = [ (mkId "a", (Type 0, ForallQ))
                                            , (mkId "b", (Type 0, ForallQ)) ] })
-        typeVarsOfKind (FunTy Nothing Nothing (TyVar (mkId "a")) (TyVar (mkId "b"))) (Type 0) 
+        typeVarsOfKind (FunTy Nothing Nothing (TyVar (mkId "a")) (TyVar (mkId "b"))) (Type 0)
       case result of
         Right vars -> sort vars `shouldBe` sort [mkId "a", mkId "b"]
         Left err -> expectationFailure $ "Checker failed: " ++ show err
@@ -52,7 +52,7 @@ spec = let ?globals = mempty in do
         _ <- runAll registerDataConstructors Primitives.dataTypes
         -- Add type variable with kind Nat (not Type)
         modify (\st -> st { tyVarContext = [(mkId "n", (tyCon "Nat", BoundQ))] })
-        typeVarsOfKind (TyVar (mkId "n")) (tyCon "Q") 
+        typeVarsOfKind (TyVar (mkId "n")) (tyCon "Q")
       case result of
         Right vars -> vars `shouldBe` []
         Left err -> expectationFailure $ "Checker failed: " ++ show err
@@ -65,10 +65,10 @@ spec = let ?globals = mempty in do
                                            , (mkId "b", (Type 0, ForallQ))
                                            , (mkId "c", (Type 0, ForallQ)) ] })
         -- Type: (a -> b) -> c
-        let nestedTy = FunTy Nothing Nothing 
+        let nestedTy = FunTy Nothing Nothing
                          (FunTy Nothing Nothing (tyVar "a") (tyVar "b"))
                          (tyVar "c")
-        typeVarsOfKind nestedTy (Type 0) 
+        typeVarsOfKind nestedTy (Type 0)
       case result of
         Right vars -> sort vars `shouldBe` sort [mkId "a", mkId "b", mkId "c"]
         Left err -> expectationFailure $ "Checker failed: " ++ show err
@@ -80,7 +80,7 @@ spec = let ?globals = mempty in do
         modify (\st -> st { tyVarContext = [(mkId "a", (Type 0, ForallQ))] })
         -- Type: Box r a (simplified - just checking a is found inside Box)
         let boxTy = Box (TyInt 1) (tyVar "a")
-        typeVarsOfKind boxTy (Type 0) 
+        typeVarsOfKind boxTy (Type 0)
       case result of
         Right vars -> vars `shouldBe` [mkId "a"]
         Left err -> expectationFailure $ "Checker failed: " ++ show err
@@ -106,9 +106,9 @@ spec = let ?globals = mempty in do
                                            , (mkId "n", (tyCon "Nat", BoundQ))
                                            , (mkId "b", (Type 0, ForallQ)) ] })
         -- Type that mentions all three: a -> N n -> b
-        let mixedTy = FunTy Nothing Nothing (tyVar "a") 
+        let mixedTy = FunTy Nothing Nothing (tyVar "a")
                         (FunTy Nothing Nothing (TyApp (tyCon "N") (tyVar "n")) (tyVar "b"))
-        typeVarsOfKind mixedTy (Type 0) 
+        typeVarsOfKind mixedTy (Type 0)
       case result of
         Right vars -> sort vars `shouldBe` sort [mkId "a", mkId "b"]
         Left err -> expectationFailure $ "Checker failed: " ++ show err

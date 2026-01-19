@@ -149,7 +149,7 @@ ctxtMerge operator [] ((x, SVar (Discharged t g) sInf depth) : ctxt) = do
 --  * Cannot meet/join an empty context to one with linear assumptions
 ctxtMerge operator [] ((x, SVar (Linear t) sInf depth) : ctxt) = do
   ctxt' <- ctxtMerge operator [] ctxt
-  return $ ((x, SVar (Linear t) sInf depth) : ctxt')
+  return ((x, SVar (Linear t) sInf depth) : ctxt')
 
 ctxtMerge operator [] (var@(x, SDef tySch g depth) : ctxt) = do
   ctxt' <- ctxtMerge operator [] ctxt
@@ -221,7 +221,7 @@ ctxtAdd ((x, SVar (Linear t1) sInf depth):xs) ys =
     Just (SVar (Linear t2) sInf' depth) -> Nothing
     Nothing -> do
       ctxt <- ctxtAdd xs ys
-      return $ (x, (SVar (Linear t1) sInf depth)) : ctxt
+      return $ (x, SVar (Linear t1) sInf depth) : ctxt
     _ -> Nothing
 ctxtAdd (var@(x, SDef tySch Nothing depth):xs) ys = do
   ctxt <- ctxtAdd xs ys

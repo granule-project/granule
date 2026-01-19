@@ -28,6 +28,7 @@ import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Utils
+import Data.Maybe (isJust)
 
 
 layoutOptions :: P.LayoutOptions
@@ -41,7 +42,7 @@ prettyTrace x =
   let doc = wlpretty x in
   let docstream = P.layoutPretty layoutOptions doc in
   renderString docstream
-  
+
 
 prettyDebug :: (?globals :: Globals) => Pretty t => t -> String
 prettyDebug x =
@@ -165,7 +166,7 @@ instance Pretty Type where
     wlpretty (TyVar v)      = wlpretty v
     wlpretty (TyInt n)      = P.pretty (show n)
     wlpretty (TyGrade Nothing n)  = P.pretty (show n)
-    wlpretty (TyGrade (Just t) n)  = P.parens $ P.pretty (show n) <+> ":" <+> wlpretty t 
+    wlpretty (TyGrade (Just t) n)  = P.parens $ P.pretty (show n) <+> ":" <+> wlpretty t
     wlpretty (TyRational n) = P.pretty $ show n
     wlpretty (TyFraction f) = let (n, d) = (numerator f, denominator f) in
       if d == 1 then
@@ -252,7 +253,7 @@ instance Pretty Type where
 
     wlpretty (TyForall var k t) =
       annKeyword "forall" <+> P.braces (wlpretty var <+> ":" <+> wlpretty k) <+> "." <+> wlpretty t
-    
+
     wlpretty (TyName n) = "id" <> P.pretty (show n)
 
 instance Pretty TypeOperator where
@@ -329,7 +330,7 @@ instance Pretty DataDecl where
         prettyAlign dataConstrs = mconcat (P.punctuate "\n  ; " (map (pretty' indent) dataConstrs))
           where indent = maximum (map (length . internalName . dataConstrId) dataConstrs)
         pretty' col (DataConstrIndexed _ name typeScheme) =
-          wlpretty name <> mconcat (map P.pretty (replicate (col - (length $ pretty name)) ' ')) <+> ":" <+> wlpretty typeScheme
+          wlpretty name <> mconcat (replicate (col - length (pretty name)) (P.pretty ' ')) <+> ":" <+> wlpretty typeScheme
         pretty' _   (DataConstrNonIndexed _ name params) = wlpretty name <+> mconcat (P.punctuate " " $ map prettyNestedNew params)
 
 instance Pretty [DataConstr] where
@@ -407,7 +408,7 @@ instance Pretty (Value v a) => Pretty (Expr v a) where
           <+> wlpretty e1 <+> "in" <+> wlpretty e2
 
   wlpretty (TryCatch _ _ _ e1 v t e2 e3) =
-    "try" <+> wlpretty e1 <+> "as [" <> wlpretty v <> "]" <+> (if t /= Nothing then ":" <> wlpretty t else "") <+> "in"
+    "try" <+> wlpretty e1 <+> "as [" <> wlpretty v <> "]" <+> (if isJust t then ":" <> wlpretty t else "") <+> "in"
           <+> wlpretty e2 <+> "catch" <+> wlpretty e3
 
   wlpretty (Val _ _ _ v) = wlpretty v
@@ -453,7 +454,7 @@ instance Pretty Pos where
     wlpretty (l, c) = P.pretty (show l) <> ":" <> P.pretty (show c)
 
 instance Pretty Hints where
-  wlpretty (Hints _ _ _ _ _ _)= ""
+  wlpretty (Hints {})= ""
       --  \case
 
       -- HSubtractive      -> " -s"

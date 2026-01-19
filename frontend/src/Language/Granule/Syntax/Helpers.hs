@@ -7,6 +7,7 @@
 module Language.Granule.Syntax.Helpers where
 
 import Data.List (delete)
+import Data.Functor ((<&>))
 import Control.Monad.Trans.State.Strict
 import Control.Monad.Identity
 
@@ -27,7 +28,7 @@ instance Freshenable m a => Freshenable m [a] where
 
 instance Freshenable m a => Freshenable m (Maybe a) where
   freshen Nothing = return Nothing
-  freshen (Just x) = freshen x >>= return . Just
+  freshen (Just x) = freshen x <&> Just
 
 class Term t where
   -- Compute the free variables in an open term
@@ -82,8 +83,8 @@ freshIdentifierBase cat var = do
     st <- get
     let var' = sourceName var <> "`" <> show (counter st)
     case cat of
-      ValueL -> put st { counter = (counter st) + 1, varMap = (sourceName var, var') : (varMap st) }
-      TypeL  -> put st { counter = (counter st) + 1,  tyMap = (sourceName var, var') :  (tyMap st) }
+      ValueL -> put st { counter = counter st + 1, varMap = (sourceName var, var') : varMap st }
+      TypeL  -> put st { counter = counter st + 1,  tyMap = (sourceName var, var') :  tyMap st }
     return var { internalName = var' }
 
 freshIdentifierBaseInScope :: Monad m => IdSyntacticCategory -> Id -> (Id -> Freshener m b) -> Freshener m b
@@ -91,8 +92,8 @@ freshIdentifierBaseInScope cat var f = do
   st <- get
   let var' = sourceName var <> "`" <> show (counter st)
   case cat of
-    ValueL -> put st { counter = (counter st) + 1, varMap = (sourceName var, var') : (varMap st) }
-    TypeL  -> put st { counter = (counter st) + 1,  tyMap = (sourceName var, var') :  (tyMap st) }
+    ValueL -> put st { counter = counter st + 1, varMap = (sourceName var, var') : varMap st }
+    TypeL  -> put st { counter = counter st + 1,  tyMap = (sourceName var, var') :  tyMap st }
   y <- f (var { internalName = var' })
   -- restore old state after the continuation
   put st

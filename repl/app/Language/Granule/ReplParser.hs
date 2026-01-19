@@ -1,10 +1,5 @@
-{-#
-LANGUAGE
-  NoMonomorphismRestriction,
-  PackageImports,
-  TemplateHaskell,
-  FlexibleContexts
-#-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Language.Granule.ReplParser where
 
 import Prelude
@@ -55,7 +50,7 @@ replTermCmdParser short long c p = do
     ws
     t <- p
     eof
-    if (cmd == long || cmd == short)
+    if cmd == long || cmd == short
     then return $ c t
     else fail $ "Command \":"<>cmd<>"\" is unrecognized."
 
@@ -64,7 +59,7 @@ replIntCmdParser short long c = do
     _ <- symbol ":"
     cmd <- many lower
     eof
-    if (cmd == long || cmd == short)
+    if cmd == long || cmd == short
     then return c
     else fail $ "Command \":"<>cmd<>"\" is unrecognized."
 
@@ -75,7 +70,7 @@ replTyCmdParser short long c = do
     ws
     term <- many1 anyChar
     eof
-    if (cmd == long || cmd == short)
+    if cmd == long || cmd == short
     then return $ c term
     else fail $ "Command \":"<>cmd<>"\" is unrecognized."
 
@@ -86,7 +81,7 @@ replTySchCmdParser short long c = do
     ws
     term <- many1 anyChar
     eof
-    if (cmd == long || cmd == short)
+    if cmd == long || cmd == short
     then return $ c term
     else fail $ "Command \":"<>cmd<>"\" is unrecognized."
 
@@ -97,7 +92,7 @@ replFileCmdParser short long c = do
     ws
     pathUntrimned <- many1 anyChar
     eof
-    if(cmd == long || cmd == short)
+    if cmd == long || cmd == short
     then do
         let tpath = T.words . T.pack $ pathUntrimned
         let fpath = textToFilePath tpath
@@ -147,8 +142,7 @@ pathParser = do
   _ <- string "KEY"
   _ <- string " =" <|> string "="
   _ <- string "" <|> string " "
-  path <- manyTill anyChar (string "\n")
-  return path
+  manyTill anyChar (string "\n")
 
 pathParser' :: Parser [String]
 pathParser' = endBy pathParser eof
@@ -169,7 +163,7 @@ lineParser = try dumpStateParser
           <|> evalParser
 
 parseLine :: String -> Either String REPLExpr
-parseLine s = case (parse lineParser "" s) of
+parseLine s = case parse lineParser "" s of
             Left msg -> Left $ show msg
             Right l -> Right l
 
@@ -184,6 +178,6 @@ textToFilePath (x:xs) = do
 
 parsePath :: String -> Either String [String]
 parsePath s = do
-  case (parse pathParser' "" s) of
+  case parse pathParser' "" s of
     Right l -> Right l
     Left msg -> Left $ show msg

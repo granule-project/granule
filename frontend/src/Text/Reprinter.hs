@@ -180,9 +180,8 @@ getRefactorings reprinting zipper acc = do
       -- A refactoring was applied, add it to the accumulator
       Just r -> return (r : acc)
     -- Step 3: Enter the left sibling of the current focus
-    acc <- go right acc
-    -- Finally return the accumulated refactorings
-    return acc
+    -- and return the accumulated refactorings
+    go right acc
 
   where
     go direction acc =
