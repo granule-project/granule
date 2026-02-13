@@ -337,7 +337,7 @@ boxHelper gamma resourceScheme inDef depth focusPhase grade (Goal goalTySch@(For
   in case resourceScheme of
       Additive{} -> do
         (e, delta, subst, bindings, structurallyDecr) <- synthesiseInner resourceScheme inDef depth focusPhase gamma (Focused []) newGradeOnRule (Goal (Forall ns binders constraints t) $ Just $ NonDecreasing 0)
-        if hasLinear delta
+        if not (hasLinear delta)
           then do deltaOut <-
                         case newGradeOnRule of
                           Just _ -> return delta
