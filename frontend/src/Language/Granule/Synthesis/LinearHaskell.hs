@@ -34,7 +34,7 @@ import Language.Haskell.Exts.Pretty
 
 import Control.Exception (SomeException, displayException, try)
 import Control.Monad
-import Data.Maybe ( catMaybes )
+import Data.Maybe ( catMaybes, mapMaybe )
 import Data.Text (pack)
 import qualified Data.Set as Set
 import Data.List (find, nub, reverse)
@@ -72,7 +72,7 @@ synthesiseLinearHaskell ast hsSrc = do
             return Nothing
         Right (Left errs) -> do
             let holeErrs = getHoleMessages errs
-            if length holeErrs == length errs && length holeErrs > 0 then do
+            if length holeErrs == length errs && not (null holeErrs) then do
                 holes' <- synthLinearHoles holeErrs ast
                 let holeCases = concatMap (\h -> map (\(pats, e) -> (errLoc h, zip (getCtxtIds (holeVars h)) pats, e)) (cases h)) holes'
                 let (GrDef.AST _ defs _ _ _) = holeRefactor holeCases ast
@@ -82,8 +82,8 @@ synthesiseLinearHaskell ast hsSrc = do
     where
 
     getHoleMessages :: NonEmpty CheckerError -> [CheckerError]
-    getHoleMessages es =
-      NonEmpty.filter (\ e -> case e of HoleMessage{} -> True; _ -> False) es
+    getHoleMessages =
+      NonEmpty.filter (\case HoleMessage{} -> True; _ -> False)
 
     relEqs :: [GrDef.Def () ()] -> [(GrDef.Equation () (), SrcSpanInfo)]
     relEqs [] = []
@@ -102,7 +102,7 @@ synthLinearHoles (hole@(HoleMessage sp goal ctxt tyVars holeVars synthCtxt@(Just
         ([], _)    -> do
             return $ HoleMessage sp goal ctxt tyVars holeVars synthCtxt cases : rest
         (res@(_:_), _) -> do
-            return $ HoleMessage sp goal ctxt tyVars holeVars synthCtxt [([], fst $ last $ res)] : rest
+            return $ HoleMessage sp goal ctxt tyVars holeVars synthCtxt [([], fst $ last res)] : rest
 synthLinearHoles (hole:holes) ast = do
     synthLinearHoles holes ast
 
@@ -119,7 +119,7 @@ exportHaskell eqs (Module spM modHead pragmas imports decls) =
 
         replaceDecls [] _ = []
         replaceDecls ((FunBind sp matches):decls) eqs = do
-            (FunBind sp (replaceMatches matches eqs)) : (replaceDecls decls eqs)
+            FunBind sp (replaceMatches matches eqs) : replaceDecls decls eqs
 
         -- Our input was a PatBind when synthesising from a hole of the form
         -- f = _
@@ -132,7 +132,7 @@ exportHaskell eqs (Module spM modHead pragmas imports decls) =
                                 ) relEqs
             FunBind sp matches : replaceDecls decls eqs
 
-        replaceDecls (decl:decls) eqs = decl : (replaceDecls decls eqs)
+        replaceDecls (decl:decls) eqs = decl : replaceDecls decls eqs
 
 
         replaceMatches [] eqs = []
@@ -140,10 +140,10 @@ exportHaskell eqs (Module spM modHead pragmas imports decls) =
             let relEq = find (\(_, eSp) -> mSp == eSp) eqs
             in case relEq of
                 Just (GrDef.Equation _ _ _ _ _ grExpr, _) -> do
-                    let match' = (Match mSp name pats (UnGuardedRhs noSrcSpan $ exprToHaskell grExpr) binds)
-                    match' : (replaceMatches matches eqs)
-                _ -> m : (replaceMatches matches eqs)
-        replaceMatches (m:matches) eqs = m : (replaceMatches matches eqs)
+                    let match' = Match mSp name pats (UnGuardedRhs noSrcSpan $ exprToHaskell grExpr) binds
+                    match' : replaceMatches matches eqs
+                _ -> m : replaceMatches matches eqs
+        replaceMatches (m:matches) eqs = m : replaceMatches matches eqs
 
 exportHaskell _ _ = error "Not a Haskell Module"
 
@@ -197,7 +197,7 @@ toGranule src@(Module sp modHead pragmas imports decls) = do
             case funEq of
                 Just (funId, equationList) ->
                     case lookup funId typeSchemes' of
-                        Just tySch -> (GrDef.Def ns funId False Nothing equationList tySch : defs)
+                        Just tySch -> GrDef.Def ns funId False Nothing equationList tySch : defs
                         Nothing -> defs
                 Nothing -> defs
             ) [] funEqs
@@ -281,7 +281,7 @@ typeToGranule (TyList _ t) =
         Just (t', _, tups) -> Just (GrType.TyApp (GrType.TyCon $ GrId.mkId "#List") t', [UsedList], tups)
         Nothing -> Nothing
 typeToGranule (TyTuple _ _ tys) =
-    case buildType tys $ GrType.TyCon $ GrId.mkId $ "," <> (show $ length tys) of
+    case buildType tys $ GrType.TyCon $ GrId.mkId $ "," <> show (length tys) of
         Just (ty, ul, tups) -> Just (ty, ul, length tys : tups)
         Nothing -> Nothing
     where
@@ -303,19 +303,19 @@ typeToGranule _ = Nothing
 -- Uneasy about the generous use of catMaybes in declToGranule and conToGranule.
 -- Wouldn't it be better to not translate the entire DataDecl (+ any types that)
 -- make use of it, rather than translate it partially?
-declToGranule :: Decl SrcSpanInfo -> Maybe (GrDef.DataDecl)
+declToGranule :: Decl SrcSpanInfo -> Maybe GrDef.DataDecl
 declToGranule (DataDecl sp (DataType _) _ dhead cons _) = do
     (grId, tyVarCtxt) <- dheadToGranule dhead
-    cons' <- sequence $ map conToGranule cons
+    cons' <- mapM conToGranule cons
     return $ GrDef.DataDecl (srcSpanInfoToGranule sp) grId tyVarCtxt Nothing cons'
 declToGranule (GDataDecl sp (DataType _) _ dhead (Just kind) gCons _) = do
     (grId, tyVarCtxt) <- dheadToGranule dhead
     (kind', _, _) <- typeToGranule kind
-    gCons' <- sequence $ map gConToGranule gCons
+    gCons' <- mapM gConToGranule gCons
     return $ GrDef.DataDecl (srcSpanInfoToGranule sp) grId tyVarCtxt Nothing gCons'
 declToGranule (GDataDecl sp (DataType _) _ dhead Nothing gCons _) = do
     (grId, tyVarCtxt) <- dheadToGranule dhead
-    gCons' <- sequence $ map gConToGranule gCons
+    gCons' <- mapM gConToGranule gCons
     return $ GrDef.DataDecl (srcSpanInfoToGranule sp) grId tyVarCtxt Nothing gCons'
 declToGranule _ = Nothing
 
@@ -338,28 +338,28 @@ bindToGranule (KindedVar _ name kind) = do
     Just (nameToGranule name, kind')
 
 
-gConToGranule :: GadtDecl SrcSpanInfo -> Maybe (GrDef.DataConstr)
+gConToGranule :: GadtDecl SrcSpanInfo -> Maybe GrDef.DataConstr
 gConToGranule (GadtDecl sp name Nothing _ _ ty) = do
     (ty', _, _) <- typeToGranule ty
     Just $ GrDef.DataConstrIndexed (srcSpanInfoToGranule sp) (nameToGranule name) (GrType.Forall ns [] [] ty')
 gConToGranule (GadtDecl sp name (Just existentials) _ _ ty) = do
-    binders <- sequence $ map bindToGranule existentials
+    binders <- mapM bindToGranule existentials
     (ty', _, _) <- typeToGranule ty
     return $ GrDef.DataConstrIndexed (srcSpanInfoToGranule sp) (nameToGranule name) (GrType.Forall ns binders [] ty')
 
 
-conToGranule :: QualConDecl SrcSpanInfo -> Maybe (GrDef.DataConstr)
+conToGranule :: QualConDecl SrcSpanInfo -> Maybe GrDef.DataConstr
 conToGranule (QualConDecl sp Nothing _ (ConDecl _ name args)) = do
     -- TODO: Work out how to handle if lists or tuples occur inside a data con parameter
-    tys <- sequence $ map (typeToGranule) args
+    tys <- mapM typeToGranule args
     let tys' = map fst3 tys
     return $ GrDef.DataConstrNonIndexed (srcSpanInfoToGranule sp) (nameToGranule name) tys'
 -- I don't like this case. Why are we trying to introduce an Indexed data con just
 -- because we have a typescheme in the source. What would be the best way to handle
 -- this? Just ignore the source binds?
 conToGranule (QualConDecl sp (Just existentials) _ (ConDecl _ name args)) =
-    let binders  = catMaybes $ map bindToGranule existentials
-        tys      = map (typeToGranule) args
+    let binders  = mapMaybe bindToGranule existentials
+        tys      = map typeToGranule args
         tys'     = map fst3 $ catMaybes tys
         funTy    = makeFunTy tys'
     in case funTy of
@@ -382,7 +382,7 @@ listDecl =
     GrDef.DataDecl {
         GrDef.dataDeclSpan = ns,
         GrDef.dataDeclId = GrId.mkId "#List",
-        GrDef.dataDeclTyVarCtxt = [((GrId.Id "a" "a"), GrType.Type 0)],
+        GrDef.dataDeclTyVarCtxt = [(GrId.Id "a" "a", GrType.Type 0)],
         GrDef.dataDeclKindAnn = Nothing,
         GrDef.dataDeclDataConstrs = [
             GrDef.DataConstrNonIndexed {
@@ -400,16 +400,16 @@ listDecl =
 tupDecl :: Int -> GrDef.DataDecl
 tupDecl n =
     let tyVarNames = "abcdefghijkl"
-        tyVars = map GrId.mkId (map (: []) (take n tyVarNames)) in
+        tyVars = map (GrId.mkId . (: [])) (take n tyVarNames) in
     GrDef.DataDecl {
         GrDef.dataDeclSpan = ns,
-        GrDef.dataDeclId = GrId.mkId $ "," <> (show n),
+        GrDef.dataDeclId = GrId.mkId $ "," <> show n,
         GrDef.dataDeclTyVarCtxt = map (\tyVar -> (tyVar, GrType.Type 0)) tyVars,
         GrDef.dataDeclKindAnn = Just (GrType.Type 0),
         GrDef.dataDeclDataConstrs = [
             GrDef.DataConstrNonIndexed {
                 GrDef.dataConstrSpan = ns,
-                GrDef.dataConstrId = GrId.mkId $ "," <> (show n),
+                GrDef.dataConstrId = GrId.mkId $ "," <> show n,
                 GrDef.dataConstrParams = map (\tyVar -> GrType.TyVar tyVar) tyVars
                 }
             ]}
@@ -473,13 +473,13 @@ funBindToGranule (FunBind _ matches) =
 
             let (grEqs, _) = matchesToGranule matches
                 grId       = nameToGranule name
-                grPats     = catMaybes $ map patternToGranule pats
+                grPats     = mapMaybe patternToGranule pats
                 grExpr     =
                     case rhsToGranule rhs of
                         Just rhs' -> exprToGranule rhs' (srcSpanInfoToGranule sp)
                         Nothing   -> Just $ GrExpr.Hole ns () False [] Nothing
             in case grExpr of
-                Just grExpr' -> ((GrDef.Equation (srcSpanInfoToGranule sp) grId () False grPats grExpr') : grEqs, Just grId)
+                Just grExpr' -> (GrDef.Equation (srcSpanInfoToGranule sp) grId () False grPats grExpr' : grEqs, Just grId)
                 _ -> (grEqs, Just grId)
 
         -- Skip over infix matches for now
@@ -521,10 +521,10 @@ spanToHaskell (Span (sl, sc) (el, ec) fn) = SrcSpanInfo (SrcSpan fn sl sc el ec)
 exprToGranule :: Exp SrcSpanInfo -> Span -> Maybe (GrExpr.Expr () ())
 exprToGranule (Con sp (Special _ (ExprHole _))) loc =
     let hints = GrExpr.Hints False False False (Just loc) Nothing Nothing
-    in Just $ GrExpr.Hole (srcSpanInfoToGranule sp) () False [] (Just $ hints)
+    in Just $ GrExpr.Hole (srcSpanInfoToGranule sp) () False [] (Just hints)
 exprToGranule (Var sp (Special _ (ExprHole _))) loc =
     let hints = GrExpr.Hints False False False (Just loc) Nothing Nothing
-    in Just $ GrExpr.Hole (srcSpanInfoToGranule sp) () False [] (Just $ hints)
+    in Just $ GrExpr.Hole (srcSpanInfoToGranule sp) () False [] (Just hints)
 exprToGranule e _                 = Nothing -- error $ show e
 
 literalToGranule :: Literal SrcSpanInfo -> Maybe (GrExpr.Value () ())
@@ -545,11 +545,11 @@ patternToGranule (PParen _ p) = patternToGranule p
 patternToGranule (PWildCard _) = Just $ GrPat.PWild ns () False
 patternToGranule (PTuple _ _ ps) =
      -- the tuple must be in our defined decls so we can just match on the correct Con
-    let ps'   = catMaybes $ map patternToGranule ps
-        tupId = GrId.mkId $ "," <> (show $ length ps)
+    let ps'   = mapMaybe patternToGranule ps
+        tupId = GrId.mkId $ "," <> show (length ps)
     in Just $ GrPat.PConstr ns () False tupId [] ps'
 patternToGranule (PApp _ (UnQual _ name) ps) =
-    let ps'   = catMaybes $ map patternToGranule ps
+    let ps'   = mapMaybe patternToGranule ps
         conId = nameToGranule name
     in Just $ GrPat.PConstr ns () False conId [] ps'
 patternToGranule _ = Nothing
@@ -617,7 +617,7 @@ exprToHaskell (GrExpr.Case _ _ _ ge cases) =
         alt'    = \p e -> Alt noSrcSpan p (UnGuardedRhs noSrcSpan e) Nothing
         cases' = map (\(p, e) -> let (p', e') = (patternToHaskell p, exprToHaskell e) in alt' p' e') cases
     in Case noSrcSpan ge' cases'
-exprToHaskell (GrExpr.Hole _ _ _ e1 e2) =  (Con noSrcSpan (Special noSrcSpan (ExprHole noSrcSpan)))
+exprToHaskell (GrExpr.Hole _ _ _ e1 e2) = Con noSrcSpan (Special noSrcSpan (ExprHole noSrcSpan))
 exprToHaskell expr = error ("I can't convert this expression to Haskell: " <> show expr)
 
 
@@ -657,5 +657,5 @@ binopToHaskell GrExpr.OpMinus e1 e2     = InfixApp noSrcSpan e1 (QVarOp noSrcSpa
 
 
 idToHaskell :: GrId.Id -> Name SrcSpanInfo
-idToHaskell (GrId.Id _ i) = (Ident noSrcSpan i)
+idToHaskell (GrId.Id _ i) = Ident noSrcSpan i
 

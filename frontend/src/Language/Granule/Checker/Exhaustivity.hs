@@ -1,6 +1,3 @@
-{-# LANGUAGE ImplicitParams #-}
-{-# LANGUAGE ViewPatterns #-}
-
 module Language.Granule.Checker.Exhaustivity (isIrrefutable) where
 
 isIrrefutable :: Applicative f => a -> b -> c -> f Bool

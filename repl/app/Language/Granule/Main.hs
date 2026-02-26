@@ -1,8 +1,6 @@
-{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE ImplicitParams #-}
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE PackageImports #-}
@@ -45,6 +43,7 @@ import Language.Granule.ReplError
 import Language.Granule.ReplParser
 
 import Data.Version (showVersion)
+import Data.Functor((<&>))
 import Paths_granule (version)
 
 -- Types used in the REPL
@@ -84,7 +83,7 @@ main = do
   putStrLn $ "\ESC[34;1mWelcome to Granule interactive mode (grepl). Version " <> showVersion version <> "\ESC[0m"
 
   -- Get the .granule config
-  globals <- Interpreter.getGrConfig >>= (return . Interpreter.grGlobals . snd)
+  globals <- Interpreter.getGrConfig <&> (Interpreter.grGlobals . snd)
 
   -- Run the REPL loop
   runInputT defaultSettings (let ?globals = globals in loop initialState)
@@ -98,7 +97,7 @@ main = do
         Just input
           | input == ":ext" -> do
             if null (globalsExtensions ?globals)
-              then liftIO $ putStrLn $ "Extensions loaded: (none)"
+              then liftIO $ putStrLn "Extensions loaded: (none)"
               else liftIO $ putStrLn $ "Extensions loaded: " ++ intercalate ", " (map show $ globalsExtensions ?globals)
             loop st
 
@@ -231,7 +230,7 @@ handleCMD s =
 
       ty <- synthTypeFromInputExpr defs expr
       let exprString' = if elem ' ' exprString && head exprString /= '(' && last exprString /= ')' then "(" <> exprString <> ")" else exprString
-      liftIO $ putStrLn $ "  \ESC[1m" <> exprString' <> "\ESC[0m : " <> (either (pretty . fst) pretty ty)
+      liftIO $ putStrLn $ "  \ESC[1m" <> exprString' <> "\ESC[0m : " <> either (pretty . fst) pretty ty
 
     handleLine (Eval exprString) = do
       expr <- parseExpression exprString
@@ -307,7 +306,7 @@ readToQueue path = let ?globals = ?globals{ globalsSourceFilePath = Just path } 
                   forM_ def $ \idef -> loadInQueue idef
                   modify (\st -> st { currentADTs = dd <> currentADTs st })
                   liftIO $ printInfo $ green $ path <> ", checked."
-                  modify (\st -> st { furtherExtensions = extensions, derivedDefs = (derivedDefs st) <> derivedDefinitions })
+                  modify (\st -> st { furtherExtensions = extensions, derivedDefs = derivedDefs st <> derivedDefinitions })
 
                 Left errs -> do
                   st <- get
@@ -317,8 +316,8 @@ readToQueue path = let ?globals = ?globals{ globalsSourceFilePath = Just path } 
                       let (AST dd def _ _ _) = ast
                       forM_ def $ \idef -> loadInQueue idef
                       modify (\st -> st { currentADTs = dd <> currentADTs st })
-                      liftIO $ printInfo $ (green $ path <> ", checked ")
-                                        <> (blue $ "(but with " ++ show (length holeErrors) ++ " holes).")
+                      liftIO $ printInfo $ green (path <> ", checked ")
+                                        <> blue ("(but with " ++ show (length holeErrors) ++ " holes).")
                     else
                       let errs' = NonEmpty.fromList $ relevantMessages (ignoreHolesMode st) errs
                       in Ex.throwError (TypeCheckerError errs' (files st))
@@ -327,12 +326,12 @@ readToQueue path = let ?globals = ?globals{ globalsSourceFilePath = Just path } 
        Ex.throwError (ParseError e (files st))
 
 getHoleMessages :: NonEmpty.NonEmpty Checker.CheckerError -> [Checker.CheckerError]
-getHoleMessages es =
-  NonEmpty.filter (\ e -> case e of Checker.HoleMessage{} -> True; _ -> False) es
+getHoleMessages =
+  NonEmpty.filter (\case Checker.HoleMessage{} -> True; _ -> False)
 
 relevantMessages :: Bool -> NonEmpty.NonEmpty Checker.CheckerError -> [Checker.CheckerError]
-relevantMessages ignoreHoles es =
-  NonEmpty.filter (\ e -> case e of Checker.HoleMessage{} -> not ignoreHoles; _ -> True) es
+relevantMessages ignoreHoles =
+  NonEmpty.filter (\case Checker.HoleMessage{} -> not ignoreHoles; _ -> True)
 
 -- Adds a definition into the context (unless it is already there)
 loadInQueue :: (?globals::Globals) => Def () () -> REPLStateIO  ()

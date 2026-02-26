@@ -106,7 +106,7 @@ boundVarsAndAnnotations =
           box _ _ _ pat     = pat
           int _ _ _ _       = []
           flt _ _ _ _       = []
-          cstr _ _ _ _ _ pats = concat pats
+          cstr _ _ _ _ _    = concat
 
 ppair :: Span
       -> a

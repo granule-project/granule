@@ -1,10 +1,7 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
 
 -- Provides the core functionality for substitutions
@@ -20,6 +17,7 @@ import Control.Monad.State.Strict
 import Data.Bifunctor.Foldable (bicataM)
 import Data.List (elemIndex, sortBy)
 import Data.Maybe (mapMaybe)
+import Data.Functor ((<&>))
 
 import Language.Granule.Context
 
@@ -85,7 +83,7 @@ instance {-# OVERLAPPABLE #-} Substitutable t => Substitutable (Ctxt t) where
 
 instance Substitutable t => Substitutable (Maybe t) where
   substitute s Nothing = return Nothing
-  substitute s (Just t) = substitute s t >>= return . Just
+  substitute s (Just t) = substitute s t <&> Just
 
 
 
@@ -196,7 +194,7 @@ freshPolymorphicInstance quantifier isDataConstructor tyS@(Forall s kinds constr
     instantiateVariable :: [Id] -> (Id, Kind) ->  Checker (Id, Either (Kind, Id) (Kind, Id))
     instantiateVariable boundTypes (var, k)  =
       if isDataConstructor && (var `notElem` freeVars (resultType ty))
-                           && (var `notElem` freeVars (ixSubstitution))
+                           && (var `notElem` freeVars ixSubstitution)
          then do
            -- Signals an existential
            var' <- freshTyVarInContextWithBinding var k ForallQ
@@ -205,7 +203,7 @@ freshPolymorphicInstance quantifier isDataConstructor tyS@(Forall s kinds constr
 
          else do
 
-           if elem var boundTypes
+           if var `elem` boundTypes
              then do
                var' <- freshTyVarInContextWithBinding var k BoundQ
                return (var, Left (k, var'))
@@ -254,10 +252,10 @@ instance Substitutable Pred where
              idks' <- mapM (\(id, k) -> substitute ctxt k >>= (\k -> return (id, k))) idks
              return $ Impl idks' p1 p2)
         -- Apply substitution also to the constraint
-        (\c -> substitute ctxt c >>= (return . Con))
+        (fmap Con . substitute ctxt)
         (return . NegPred)
         -- Apply substitution also to the kinding
-        (\id k p -> (substitute ctxt k) >>= (\k -> return $ Exists id k p))
+        (\id k p -> substitute ctxt k >>= (\k -> return $ Exists id k p))
 
 -- Only applies subsitutions into the kinding signatures
 substituteInSignatures :: (?globals :: Globals)
@@ -271,16 +269,16 @@ substituteInSignatures subst =
              idks' <- mapM (\(id, k) -> substitute subst k >>= (\k -> return (id, k))) idks
              return $ Impl idks' p1 p2)
         -- Apply substitution also to the constraint
-        (\c -> substituteConstraintHelper substituteIntoTypeSigs subst c >>= (return . Con))
+        (fmap Con . substituteConstraintHelper substituteIntoTypeSigs subst)
         (return . NegPred)
         -- Apply substitution also to the kinding
-        (\id k p -> (substitute subst k) >>= (\k -> return $ Exists id k p))
+        (\id k p -> substitute subst k >>= (\k -> return $ Exists id k p))
   where
     substituteIntoTypeSigs subst =
        typeFoldM (baseTypeFold {
-        tfTyGrade = (\k i -> do
+        tfTyGrade = \k i -> do
               k' <- substitute subst k
-              mTyGrade k' i)
+              mTyGrade k' i
       , tfTySig = \t _ k -> do
          substitute subst k >>= (\k' -> mTySig t k' k')  })
 
@@ -385,16 +383,16 @@ substituteExpr ctxt (AppTyF sp ty rf fn t) =
 substituteExpr ctxt (BinopF sp ty rf op lhs rhs) =
     do  ty' <- substitute ctxt ty
         return $ Binop sp ty' rf op lhs rhs
-substituteExpr ctxt (LetDiamondF sp ty rf pattern mty value expr) =
+substituteExpr ctxt (LetDiamondF sp ty rf pat mty value expr) =
     do  ty' <- substitute ctxt ty
-        pattern' <- substitute ctxt pattern
+        pat' <- substitute ctxt pat
         mty' <- mapM (substitute ctxt) mty
-        return $ LetDiamond sp ty' rf pattern' mty' value expr
-substituteExpr ctxt (TryCatchF sp ty rf e1 pattern mty e2 e3) =
+        return $ LetDiamond sp ty' rf pat' mty' value expr
+substituteExpr ctxt (TryCatchF sp ty rf e1 pat mty e2 e3) =
     do  ty' <- substitute ctxt ty
-        pattern' <- substitute ctxt pattern
+        pat' <- substitute ctxt pat
         mty' <- mapM (substitute ctxt) mty
-        return $ TryCatch sp ty' rf e1 pattern' mty' e2 e3
+        return $ TryCatch sp ty' rf e1 pat' mty' e2 e3
 substituteExpr ctxt (ValF sp ty rf value) =
     do  ty' <- substitute ctxt ty
         return $ Val sp ty' rf value

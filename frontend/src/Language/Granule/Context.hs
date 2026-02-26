@@ -1,7 +1,6 @@
 -- Provide general contexts used in the both the
 -- checker and the interpreter
 
-{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 
 module Language.Granule.Context where
@@ -80,7 +79,7 @@ relevantSubCtxt vars = filter relevant
   where relevant (var, _) = var `elem` vars
 
 lookupAndCutout :: Id -> Ctxt t -> Maybe (Ctxt t, t)
-lookupAndCutout v = (fmap (\(a, (_, b)) -> (a, b))) . lookupAndCutoutBy id v
+lookupAndCutout v = fmap (\(a, (_, b)) -> (a, b)) . lookupAndCutoutBy id v
 
 lookupAndCutoutBy :: Eq a => (Id -> a) -> Id -> Ctxt t -> Maybe (Ctxt t, (Id, t))
 lookupAndCutoutBy _ _ [] = Nothing

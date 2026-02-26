@@ -33,7 +33,7 @@ spec =
 
 
 mkPairTy :: [(Id, Kind)] -> Id -> [Type] -> Type
-mkPairTy tyVars tName params = foldr (FunTy Nothing Nothing) (returnTy (TyCon tName) tyVars) params
+mkPairTy tyVars tName = foldr (FunTy Nothing Nothing) (returnTy (TyCon tName) tyVars)
   where
     returnTy t [] = t
     returnTy t (v:vs) = returnTy (TyApp t ((TyVar . fst) v)) vs
@@ -70,7 +70,7 @@ checkCasePatterns = let ?globals = (mempty :: Globals) {globalsExtensions = [Gra
             [Just (Case ns () False (Val ns () False (Var () (Id "x" "x")))
               [(PConstr ns () False (Id "," ",") []
                 [ PVar ns () False (Id "y" "y"),
-                  PVar ns () False (Id "z" "z") ] ,(Val ns () False (Var () (Id "y" "y"))))])]
+                  PVar ns () False (Id "z" "z") ] ,Val ns () False (Var () (Id "y" "y")))])]
 
   describe "Simple constructor test for Bool" $ do
 
@@ -110,13 +110,13 @@ checkCasePatterns = let ?globals = (mempty :: Globals) {globalsExtensions = [Gra
 
   describe "Construcor test for Either" $ do
     it "Branch on (Left : a -> Either a b)" $ do
-      let right = Forall ns  [((Id "a.3" "a.3"),Type 0)
-                            ,((Id "b.3" "b.3"),Type 0)
-                            ,((Id "t.10" "t.10"),Type 0)
-                            ,((Id "t.11" "t.11"),Type 0)] []
+      let right = Forall ns  [(Id "a.3" "a.3",Type 0)
+                            ,(Id "b.3" "b.3",Type 0)
+                            ,(Id "t.10" "t.10",Type 0)
+                            ,(Id "t.11" "t.11",Type 0)] []
                             (FunTy Nothing Nothing (TyVar (Id "b.3" "b.3")) (TyApp (TyApp (TyCon (Id "Either" "Either")) (TyVar (Id "t.11" "t.11"))) (TyVar (Id "t.10" "t.10"))))
       let nat = TyCon $ mkId "Nat"
-      let coerce = [((Id "t.10" "t.10"),SubstT (TyVar (Id "b.3" "b.3"))),((Id "t.11" "t.11"),SubstT (TyVar (Id "a.3" "a.3")))]
+      let coerce = [(Id "t.10" "t.10",SubstT (TyVar (Id "b.3" "b.3"))),(Id "t.11" "t.11",SubstT (TyVar (Id "a.3" "a.3")))]
       (results, synthData) <- let ?globals = (mempty :: Globals) {globalsExtensions = [GradedBase]} in do
           testSynthesiser $ do
               tyVarA <- conv $ freshTyVarInContextWithBinding (mkId "a") (Type 0) ForallQ
@@ -173,31 +173,31 @@ testSynthesiser synthComputation = do
     -- data Either a b = Left a | Right b
     let extras =
           [DataDecl {dataDeclSpan = ns
-                  , dataDeclId = (Id "Bool" "Bool")
+                  , dataDeclId = Id "Bool" "Bool"
                   , dataDeclTyVarCtxt = []
                   , dataDeclKindAnn = Nothing
                   , dataDeclDataConstrs =
                     [DataConstrNonIndexed {dataConstrSpan = ns
-                                          , dataConstrId = (Id "True" "True")
+                                          , dataConstrId = Id "True" "True"
                                           , dataConstrParams = []}
                     ,DataConstrNonIndexed {dataConstrSpan = ns
-                                        , dataConstrId = (Id "False" "False")
+                                        , dataConstrId = Id "False" "False"
                                         , dataConstrParams = []}] }
             ,DataDecl {dataDeclSpan = ns
-                    , dataDeclId = (Id "Either" "Either")
-                    , dataDeclTyVarCtxt = [((Id "a" "a"),Type 0),((Id "b" "b"),Type 0)]
+                    , dataDeclId = Id "Either" "Either"
+                    , dataDeclTyVarCtxt = [(Id "a" "a",Type 0),(Id "b" "b",Type 0)]
                     , dataDeclKindAnn = Nothing
                     , dataDeclDataConstrs = [DataConstrNonIndexed {dataConstrSpan = ns
-                                                                  , dataConstrId = (Id "Left" "Left")
+                                                                  , dataConstrId = Id "Left" "Left"
                                                                   , dataConstrParams = [TyVar (Id "a" "a")]}
                                             ,DataConstrNonIndexed {dataConstrSpan = ns
-                                                                  , dataConstrId = (Id "Right" "Right")
+                                                                  , dataConstrId = Id "Right" "Right"
                                                                   , dataConstrParams = [TyVar (Id "b" "b")]}]}]
     -- Load in the primitive data constructors first before running the computation synthComputation
     let synthComputation' =
             --  (conv (runAll checkTyCon (extras ++ Primitives.dataTypes)))
-            (conv (runAll registerTypeConstructor (extras ++ Primitives.dataTypes)))
-          >> (conv (runAll registerDataConstructors (extras ++ Primitives.dataTypes)))
+            conv (runAll registerTypeConstructor (extras ++ Primitives.dataTypes))
+          >> conv (runAll registerDataConstructors (extras ++ Primitives.dataTypes))
           >> synthComputation
     (outputs, dat) <- runStateT (runSynthesiser 1 synthComputation' initState) mempty
     succeedingOutput <- mapM (\(x, y) -> convertError x >>= (\x' -> return (x', y))) outputs
@@ -206,5 +206,5 @@ testSynthesiser synthComputation = do
     convertError (Right a) = return a
     convertError (Left err) = do
       -- Print error message if something went badly wrong
-      putStrLn $ show err
-      return $ Nothing
+      print err
+      return Nothing

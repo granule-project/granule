@@ -42,7 +42,7 @@ ctxtMult _ _ [] = return ([], [])
 
 ctxtMult s c ((name, Linear t) : ctxt) = do
     (ctxt', subst) <- ctxtMult s c ctxt
-    return $ ((name, Discharged t c) : ctxt', subst)
+    return ((name, Discharged t c) : ctxt', subst)
 
 ctxtMult s c ((name, Discharged t c') : ctxt) = do
     (ctxt', subst') <- ctxtMult s c ctxt
@@ -71,7 +71,7 @@ multAll _ _ _ [] = return ([], [])
 
 multAll s vars c ((name, Linear t) : ctxt) | name `elem` vars = do
     (ctxt', subst) <- multAll s vars c ctxt
-    return $ ((name, Discharged t c) : ctxt', subst)
+    return ((name, Discharged t c) : ctxt', subst)
 
 multAll s vars c ((name, Discharged t c') : ctxt) | name `elem` vars = do
     (ctxt', subst') <- multAll s vars c ctxt

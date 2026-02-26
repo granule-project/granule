@@ -190,13 +190,13 @@ coeffectResourceAlgebraOps =
 tyOps :: TypeOperator -> (Kind, Kind, Kind)
 tyOps = \case
     TyOpLesserNat -> (kNat, kNat, kpredicate)
-    TyOpLesserEqNat -> (kNat, kNat, (TyCon (mkId "Predicate")))
-    TyOpLesserEq -> (tyVar "k", tyVar "k", (TyCon (mkId "Predicate")))
-    TyOpGreaterNat -> (kNat, kNat, (TyCon (mkId "Predicate")))
-    TyOpGreaterEq -> (tyVar "k", tyVar "k", (TyCon (mkId "Predicate")))
-    TyOpGreaterEqNat -> (kNat, kNat, (TyCon (mkId "Predicate")))
-    TyOpEq -> (kNat, kNat, (TyCon (mkId "Predicate")))
-    TyOpNotEq -> (kNat, kNat, (TyCon (mkId "Predicate")))
+    TyOpLesserEqNat -> (kNat, kNat, TyCon (mkId "Predicate"))
+    TyOpLesserEq -> (tyVar "k", tyVar "k", TyCon (mkId "Predicate"))
+    TyOpGreaterNat -> (kNat, kNat, TyCon (mkId "Predicate"))
+    TyOpGreaterEq -> (tyVar "k", tyVar "k", TyCon (mkId "Predicate"))
+    TyOpGreaterEqNat -> (kNat, kNat, TyCon (mkId "Predicate"))
+    TyOpEq -> (kNat, kNat, TyCon (mkId "Predicate"))
+    TyOpNotEq -> (kNat, kNat, TyCon (mkId "Predicate"))
     TyOpPlus -> (kNat, kNat, kNat)
     TyOpTimes -> (kNat, kNat, kNat)
     TyOpMinus -> (kNat, kNat, kNat)
@@ -215,7 +215,7 @@ dataTypes =
     [ DataDecl
       { dataDeclSpan = nullSpanBuiltin
       , dataDeclId   = mkId ","
-      , dataDeclTyVarCtxt = [((mkId "a"), Type 0),((mkId "b"), Type 0)]
+      , dataDeclTyVarCtxt = [(mkId "a", Type 0),(mkId "b", Type 0)]
       , dataDeclKindAnn = Just (Type 0)
       , dataDeclDataConstrs = [
         DataConstrNonIndexed
@@ -226,7 +226,7 @@ dataTypes =
     ] ++ [ DataDecl
       { dataDeclSpan = nullSpanBuiltin
       , dataDeclId   = mkId "&"
-      , dataDeclTyVarCtxt = [((mkId "a"), Type 0),((mkId "b"), Type 0)]
+      , dataDeclTyVarCtxt = [(mkId "a", Type 0),(mkId "b", Type 0)]
       , dataDeclKindAnn = Just (Type 0)
       , dataDeclDataConstrs = [
         DataConstrNonIndexed

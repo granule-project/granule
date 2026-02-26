@@ -24,7 +24,7 @@ spec :: Spec
 spec = do
   describe "context handling" $ do
     it "Replacing replaces only one occurence" $
-      (replace [(mkId "x", 1), (mkId "y", 2), (mkId "x", 3)] (mkId "x") 0)
+      replace [(mkId "x", 1), (mkId "y", 2), (mkId "x", 3)] (mkId "x") 0
         `shouldBe` [(mkId "x", 0), (mkId "y", 2), (mkId "x", 3)]
 
     it "Check type index recognition behaviour" $ do

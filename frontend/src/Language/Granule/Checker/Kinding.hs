@@ -1,6 +1,5 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
@@ -59,7 +58,7 @@ kindCheckDef (Def s id rf spec eqs (Forall s' quantifiedVariables constraints ty
                           -- detect implicit kind variables and create unfification binding
                           TyVar v | "_k" `isPrefixOf` internalName v
                             -> do
-                              var <- freshTyVarInContext (mkId $ (internalName v) <> "_sort") (Type 2)
+                              var <- freshTyVarInContext (mkId $ internalName v <> "_sort") (Type 2)
                               return $ Just (v, (TyVar var, InstanceQ))
                           _ -> return Nothing) quantifiedVariables
 
@@ -88,8 +87,8 @@ kindCheckDef (Def s id rf spec eqs (Forall s' quantifiedVariables constraints ty
 -- Replace any constructor IDs with their top-element
 -- (i.e., IO gets replaces with the set of all effects as an alias)
 replaceSynonyms :: Type -> Checker Type
-replaceSynonyms ty =
-    typeFoldM (baseTypeFold { tfTyCon = conCase }) ty
+replaceSynonyms =
+    typeFoldM (baseTypeFold { tfTyCon = conCase })
   where
     conCase conId = do
       let tyConId = TyCon conId
@@ -119,24 +118,24 @@ checkKind s (FunTy name mCoeff t1 t2) k = do
 -- KChk_SetKind
 checkKind s (TyApp (TyCon (internalName -> "Set")) t) (TyCon (internalName -> "Coeffect")) = do
   -- Sets as coeffects can be themselves over a coeffect type or some other type
-  (subst, t') <- (checkKind s t kcoeffect) <|> (checkKind s t ktype)
+  (subst, t') <- checkKind s t kcoeffect <|> checkKind s t ktype
   return (subst, TyApp (TyCon $ mkId "Set") t')
 
 checkKind s (TyApp (TyCon (internalName -> "Set")) t) (TyCon (internalName -> "Effect")) = do
   -- Sets as effects can be themselves over an effect type or some other type
-  (subst, t') <- (checkKind s t keffect) <|> (checkKind s t ktype)
+  (subst, t') <- checkKind s t keffect <|> checkKind s t ktype
   return (subst, TyApp (TyCon $ mkId "Set") t')
 
 
 checkKind s (TyApp (TyCon (internalName -> "SetOp")) t) (TyCon (internalName -> "Coeffect")) = do
   -- Sets as coeffects can be themselves over a coeffect type or some other type
-  (subst, t') <- (checkKind s t kcoeffect) <|> (checkKind s t ktype)
+  (subst, t') <- checkKind s t kcoeffect <|> checkKind s t ktype
   return (subst, TyApp (TyCon $ mkId "SetOp") t')
 
 
 checkKind s (TyApp (TyCon (internalName -> "SetOp")) t) (TyCon (internalName -> "Effect")) = do
   -- Sets as effects can be themselves over an effect type or some other type
-  (subst, t') <- (checkKind s t keffect) <|> (checkKind s t ktype)
+  (subst, t') <- checkKind s t keffect <|> checkKind s t ktype
   return (subst, TyApp (TyCon $ mkId "SetOp") t')
 
 -- KChk_app
@@ -190,7 +189,7 @@ checkKind s t@(TyGrade mk n) k = do
           substFinal <- combineSubstitutions s subst subst'
           return (substFinal, TyGrade (Just k) n)
         1 -> do -- Can be a monoid or semiring element
-          (subst', _) <- (checkKind s k kcoeffect) <|> (checkKind s k keffect)
+          (subst', _) <- checkKind s k kcoeffect <|> checkKind s k keffect
           substFinal <- combineSubstitutions s subst subst'
           return (substFinal, TyGrade (Just k) n)
         _ -> do -- Can only be a semiring element formed by repeated 1 + ...
@@ -260,7 +259,7 @@ data ResolutionConfig =
 
 defaultResolutionBehaviour :: Type -> ResolutionConfig
 defaultResolutionBehaviour t =
-  if (not (containsTypeSig t))
+  if not (containsTypeSig t)
     -- no type signatures here so try to guess grades as Nat (often a bad choice!)
     then GradeToNat
     -- if there is a type signature then try to treat untyped grades as coeffect by default
@@ -432,10 +431,10 @@ synthKindWithConfiguration s _ t@(TyCon (internalName -> "Pure")) = do
 
 synthKindWithConfiguration s _ t@(TyCon (internalName -> "Handled")) = do
   var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") keffect
-  return $ ((FunTy Nothing Nothing (TyVar var) (TyVar var)), [], t)
+  return (FunTy Nothing Nothing (TyVar var) (TyVar var), [], t)
 
 synthKindWithConfiguration s _ t@(TyCon (internalName -> "Infinity")) = do
-  var <- freshTyVarInContext (mkId $ "s") kcoeffect
+  var <- freshTyVarInContext (mkId "s") kcoeffect
   return (TyApp (TyCon $ mkId "Ext") (TyVar var), [], t)
 
 -- KChkS_con
@@ -469,7 +468,7 @@ synthKindWithConfiguration s _ (TySig t k) = do
   (subst, t') <- checkKind s t k
   return (k, subst, TySig t' k)
 
-synthKindWithConfiguration s config (TyCase t branches) | length branches > 0 = do
+synthKindWithConfiguration s config (TyCase t branches) | not (null branches) = do
   -- Synthesise the kind of the guard (which must be the kind of the branches)
   (k, subst, t') <- synthKindWithConfiguration s config t
   -- Check the patterns are kinded by the guard kind, and synth the kinds
@@ -929,12 +928,12 @@ mguCoeffectTypes' s t (isExt -> Just t') = do
 
 -- `Nat` can unify with `Q` to `Q`
 mguCoeffectTypes' s (TyCon (internalName -> "Q")) (TyCon (internalName -> "Nat")) =
-    return $ Just $ (TyCon $ mkId "Q", [], (id, inj))
+    return $ Just (TyCon $ mkId "Q", [], (id, inj))
   where inj =  runIdentity . typeFoldM baseTypeFold
                 { tfTyInt = \x -> return $ TyRational (fromInteger . toInteger $ x) }
 
 mguCoeffectTypes' s (TyCon (internalName -> "Nat")) (TyCon (internalName -> "Q")) =
-    return $ Just $ (TyCon $ mkId "Q", [], (inj, id))
+    return $ Just (TyCon $ mkId "Q", [], (inj, id))
   where inj = runIdentity . typeFoldM baseTypeFold
                 { tfTyInt = \x -> return $ TyRational (fromInteger . toInteger $ x) }
 
@@ -954,8 +953,8 @@ mguCoeffectTypes' s coeffTy1@(isProduct -> Just (t1, t2)) coeffTy2@(isProduct ->
       case upper2 of
         Just (upperTy2, subst2, (inj12, inj22)) -> do
           substF <- combineSubstitutions s subst1 subst2
-          return $ Just ((TyApp (TyApp (tyCon ",,") upperTy1) upperTy2), substF,
-                      ((inj11 . inj12), (inj21 . inj22)))
+          return $ Just (TyApp (TyApp (tyCon ",,") upperTy1) upperTy2, substF,
+                      (inj11 . inj12, inj21 . inj22))
         Nothing -> return Nothing
     Nothing -> return Nothing
 
@@ -1022,7 +1021,7 @@ mguCoeffectTypes' s coeffTy1 coeffTy2 = return Nothing
 
 
 cProduct :: Type -> Type -> Type
-cProduct x y = TyApp (TyApp (TyCon (mkId ",,")) x) y
+cProduct x = TyApp (TyApp (TyCon (mkId ",,")) x)
 
 
 -- | Find out whether a coeffect if flattenable, and if so get the operation
@@ -1122,7 +1121,7 @@ unification s var1 typ2 rel = do
                           -- need to have constraints registered
                           useSolver <- requiresSolver s kind
                           if useSolver then do
-                            (addConstraint (rel s (TyVar var1) (TyVar var2) kind))
+                            addConstraint (rel s (TyVar var1) (TyVar var2) kind)
                             return subst
                           else do
                             -- Local substitution of var2 for the universal var1
@@ -1246,8 +1245,8 @@ combineSubstitutions sp u1 u2 = do
               Nothing -> return [(v, s)]
               _       -> return []
       let uss = concat uss1 <> concat uss2
-      res <- reduceByTransitivity sp uss
-      return res
+      reduceByTransitivity sp uss
+
 
 
 -- checkValid :: [Id] -> Substitution -> Checker (Maybe (Type, Type))
@@ -1264,7 +1263,7 @@ combineSubstitutions sp u1 u2 = do
 -- checkValid _ []  = return $ Nothing
 
 reduceByTransitivity :: Span -> Substitution -> Checker Substitution
-reduceByTransitivity sp ctxt = reduceByTransitivity' [] ctxt
+reduceByTransitivity sp = reduceByTransitivity' []
  where
    reduceByTransitivity' :: Substitution -> Substitution -> Checker Substitution
    reduceByTransitivity' subst [] = return subst
@@ -1384,7 +1383,7 @@ instance Unifiable t => Unifiable (Maybe t) where
 -- the given kind
 typeVarsOfKind :: (?globals :: Globals) => Type -> Kind -> Checker [Id]
 typeVarsOfKind t k = do
-    vars <- typeFoldM algebra t 
+    vars <- typeFoldM algebra t
     return (nub vars)
   where
     algebra = TypeFold
@@ -1400,7 +1399,7 @@ typeVarsOfKind t k = do
         synthKind nullSpan (TyVar v) >>= \case
             -- check for equality with the argument
           (k', subst , _) | k' == k -> do
-            when (not (null subst)) (debugM "[WARNING]" ("type variable " <> pretty v <> " has kind " <> pretty k <> " but its kind required a substitution which is being ignored during kind variable extraction"))
+            unless (null subst) (debugM "[WARNING]" ("type variable " <> pretty v <> " has kind " <> pretty k <> " but its kind required a substitution which is being ignored during kind variable extraction"))
             return [v]
             -- kinds don't match
           _                    -> return []
@@ -1413,7 +1412,7 @@ typeVarsOfKind t k = do
       , tfSet = \ _ x -> return (concat x)
       , tfTyCase = \ x branches ->
           return (x ++ concatMap snd branches)
-      , tfTySig = \ x y -> (\_-> return x)
+      , tfTySig = \ x y _ -> return x
       , tfTyExists = \ v k x -> return (x \\ [v])
       , tfTyForall = \ v k x -> return (x \\ [v])
       , tfTyName = \ _ -> return []

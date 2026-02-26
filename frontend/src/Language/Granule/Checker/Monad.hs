@@ -19,6 +19,7 @@ module Language.Granule.Checker.Monad where
 import Data.Maybe (mapMaybe)
 import Data.Either (partitionEithers)
 import Data.Foldable (toList)
+import Data.Functor (($>))
 import Data.List (intercalate, transpose)
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Map as M
@@ -74,7 +75,7 @@ runAll f xs = do
   st <- get
   (results, st) <- liftIO $ runAllCheckers st (map f xs)
   case partitionEithers results of
-    ([], successes) -> put st *> pure successes
+    ([], successes) -> put st $> successes
     -- everything succeeded, so `put` the state and carry on
     (err:errs, _) -> throwError $ sconcat (err:|errs)
     -- combine all errors and fail
@@ -129,7 +130,7 @@ data Consumption = Full | NotFull | Empty deriving (Eq, Show)
 initialisePatternConsumptions :: [Equation v a] -> [Consumption]
 initialisePatternConsumptions [] = []
 initialisePatternConsumptions ((Equation _ _ _ _ pats _):_) =
-  map (\_ -> NotFull) pats
+  map (const NotFull) pats
 
 -- Join information about consumption between branches
 joinConsumption :: Consumption -> Consumption -> Consumption
@@ -289,14 +290,10 @@ lookupPatternMatches sp constrName = do
 
 -- Return the data constructors of all types in the environment
 allDataConstructorNames :: Checker (Ctxt [Id])
-allDataConstructorNames = do
-  st <- get
-  return $ ctxtMap (\(_, datas, _) -> datas) (typeConstructors st)
+allDataConstructorNames = ctxtMap (\(_, datas, _) -> datas) . typeConstructors <$> get
 
 allDataConstructorNamesForType :: Type -> Checker [Id]
-allDataConstructorNamesForType ty = do
-    st <- get
-    return $ mapMaybe go (typeConstructors st)
+allDataConstructorNamesForType ty = mapMaybe go . typeConstructors <$> get
   where
     go :: (Id, (Type, a, [Int])) -> Maybe Id
     go (con, (k, _, _)) = if k == ty then Just con else Nothing
@@ -405,9 +402,9 @@ concludeImplication s localCtxt = do
            let impl@(Impl implCtxt implAntecedent _) =
                 -- TODO: turned off this feature for now by putting True in the guard here
                 if True -- isTrivial freshPrevGuardPred
-                  then (Impl localCtxt p (Conj $ p' : futureFrame checkerState))
-                  else (Impl (localCtxt <> freshPrevGuardCxt)
-                                 (Conj [p, freshPrevGuardPred]) (Conj $ p' : futureFrame checkerState))
+                  then Impl localCtxt p (Conj $ p' : futureFrame checkerState)
+                  else Impl (localCtxt <> freshPrevGuardCxt)
+                                 (Conj [p, freshPrevGuardPred]) (Conj $ p' : futureFrame checkerState)
 
            -- Build the guard theorem to also include all of the 'context' of things
            -- which also need to hold (held in `stack`)
@@ -509,7 +506,7 @@ addConstraintToPreviousFrame c = do
         checkerState <- get
         case predicateStack checkerState of
           (ps : ps' : stack) ->
-            put (checkerState { predicateStack = ps : (appendPred (Con c) ps') : stack, addedConstraints = True })
+            put (checkerState { predicateStack = ps : appendPred (Con c) ps' : stack, addedConstraints = True })
           (ps : stack) ->
             put (checkerState { predicateStack = ps : Conj [Con c] : stack, addedConstraints = True })
           stack ->
@@ -525,7 +522,7 @@ substIntoTyVarContext tyVar k = do
  where
    rewriteCtxt :: Ctxt (Type, Quantifier) -> Ctxt (Type, Quantifier)
    rewriteCtxt [] = []
-   rewriteCtxt ((name, ((TyVar kindVar), q)) : ctxt)
+   rewriteCtxt ((name, (TyVar kindVar, q)) : ctxt)
     | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
    rewriteCtxt (x : ctxt) = x : rewriteCtxt ctxt
 

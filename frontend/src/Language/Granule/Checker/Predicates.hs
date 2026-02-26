@@ -5,7 +5,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE InstanceSigs #-}
 
 -- | This module provides the representation of theorems (predicates)
 -- | inside the type checker.
@@ -70,7 +69,7 @@ data Constraint =
   deriving (Show, Eq, Generic)
 
 isEq :: Constraint -> Bool
-isEq (Eq _ _ _ _) = True
+isEq (Eq {}) = True
 isEq _ = False
 
 instance FirstParameter Constraint Span
@@ -136,7 +135,7 @@ prettyNegPred :: (?globals :: Globals) => Id -> Pred -> String
 prettyNegPred defId (Con c) =
     "  When checking `" <> pretty defId <> "`, " <> message
   where
-    message = toLower (head msg) : (tail msg)
+    message = toLower (head msg) : tail msg
     msg = pretty (Neg c)
 -- Long-winded message
 prettyNegPred defId p =
@@ -372,7 +371,7 @@ instance Pretty [Pred] where
 
 instance Pretty Pred where
   wlpretty =
-    (predFold
+    predFold
      (\x -> if null x then "T" else P.cat (P.punctuate " ∧ " x))
      (P.cat . P.punctuate " ∨ ")
      (\ctxt p q ->
@@ -380,12 +379,12 @@ instance Pretty Pred where
       <> "((" <> p <> ") -> " <> q <> ")")
       wlpretty
       (\p -> "¬(" <> p <> ")")
-      (\x t p -> "∃ " <> wlpretty x <> " : " <> wlpretty t <> " . " <> p))
+      (\x t p -> "∃ " <> wlpretty x <> " : " <> wlpretty t <> " . " <> p)
     . preFilterImplCtxts
     where
       preFilterImplCtxts =
         predFold Conj Disj
-          (\ctxt p q -> Impl (filter (\(id, k) -> ((id `elem` freeVars p) || (id `elem` freeVars q))) ctxt) p q)
+          (\ctxt p q -> Impl (filter (\(id, k) -> id `elem` freeVars p || (id `elem` freeVars q)) ctxt) p q)
           Con NegPred Exists
 
       pretty' xs = P.cat $ P.punctuate ", " (map prettyBinding xs)
@@ -522,7 +521,7 @@ fromPredicateContext path = fromPredicateZipper path (Conj [])
     fromPredicateZipper (ImplConsequent ctxt pa path) p = fromPredicateZipper path (Impl ctxt pa p)
 
 newImplication :: Ctxt Kind -> PredContext -> PredContext
-newImplication ctxt path = ImplAntecedent ctxt path
+newImplication = ImplAntecedent
 
 moveToConsequent :: PredContext -> Either String PredContext
 moveToConsequent path = rollup path (Conj [])

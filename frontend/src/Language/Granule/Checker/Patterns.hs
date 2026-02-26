@@ -187,9 +187,7 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC tyVarBindsRequ
     Just (tySch@(Forall _ tyVarBinders _ innerType), coercions, indices) -> do
 
       -- Check pattern arity
-      if (arity innerType /= length ps)
-        then throw $ PatternArityError s dataC (arity innerType) (length ps)
-        else return ()
+      when (arity innerType /= length ps) $ throw $ PatternArityError s dataC (arity innerType) (length ps)
 
       case outerBoxTy of
         -- Hsup if you only have more than one premise (and have an enclosing grade)
@@ -250,12 +248,12 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC tyVarBindsRequ
 
           let before = tyVarBindsRequested
           reportM $ "freshTyVarsCtxt' = " <> pretty freshTyVarsCtxt
-          reportM $ "tyVarBinders = " <> (pretty tyVarBinders)
-          let after = (take (length tyVarBindsRequested) freshTyVarsCtxt')
+          reportM $ "tyVarBinders = " <> pretty tyVarBinders
+          let after = take (length tyVarBindsRequested) freshTyVarsCtxt'
           reportM $ "requested variables were " <> pretty tyVarBindsRequested
           reportM $ "corresponds to " <> pretty after
           -- create a substitution for this variable
-          let bodySubst = map (\(id_b, (id_a, _)) -> (id_b, SubstT $ TyVar id_a)) (zip before after)
+          let bodySubst = zipWith (curry (\(id_b, (id_a, _)) -> (id_b, SubstT $ TyVar id_a))) before after
           reportM $ "substitution due to implicits is " <> pretty bodySubst
           --let explicitBinds = map (\(id, ty) -> (id, (ty, ForallQ))) after
           -- modify (\st -> st { tyVarContext = explicitBinds ++ tyVarContext st })
@@ -273,7 +271,7 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC tyVarBindsRequ
           -- unifiers:   t.10.0 ~ n`1
           --             t.11.0 ~ a`2
           st <- get
-          reportM $ "Predicate stack" <> (pretty $ predicateStack st)
+          reportM $ "Predicate stack" <> pretty (predicateStack st)
 
           dataConstructorIndexRewritten <- substitute unifiers dataConstructorTypeFresh
 
