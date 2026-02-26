@@ -253,6 +253,8 @@ test-suite frontend-spec
     , granule:frontend
     , hspec
     , syz
+  build-tool-depends:
+      hspec-discover:hspec-discover
 
 test-suite gr-golden
   import: granule-default-lang
