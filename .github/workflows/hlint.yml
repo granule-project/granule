@@ -1,0 +1,20 @@
+name: HLint
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  hlint:
+    name: HLint
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    steps:
+    - uses: actions/checkout@v4
+    - name: Lint Haskell files with hlint
+      uses: haskell-actions/hlint-scan@v1
+      with:
+        hints: .hlint.yml
