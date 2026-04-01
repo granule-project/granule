@@ -166,7 +166,7 @@ getGrConfig = do
             Right Nothing -> do
               printInfo . red . unlines $
                 [ "Couldn't parse granule configuration file at " <> configFile
-                , "Run `gr --help` to see a list of accepted flags."
+                , "Run `grc --help` to see a list of accepted flags."
                 ]
               pure mempty
             Right (Just config) -> pure config
