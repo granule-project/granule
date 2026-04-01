@@ -278,7 +278,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
 
         globalsIncludePath <-
           optional $ strOption
-            $ long "include-inPath"
+            $ long "include-path"
             <> help ("Path to the standard library. Defaults to "
                     <> show includePath)
             <> metavar "PATH"
