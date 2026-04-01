@@ -9,12 +9,12 @@ import Control.Exception (SomeException, displayException, try)
 import Control.Monad ((<=<), forM_, when)
 import Development.GitRev
 import Data.Char (isSpace)
-import Data.List (isPrefixOf, stripPrefix)
+import Data.List (stripPrefix)
 import Data.Maybe (fromMaybe)
 import Data.Version (showVersion)
 
 import System.Directory (getAppUserDataDirectory, getCurrentDirectory)
-import System.FilePath (takeFileName)
+import System.FilePath ((</>), splitFileName)
 import "Glob" System.FilePath.Glob (glob)
 import Options.Applicative
 import qualified Options.Applicative.Help.Pretty as OA
@@ -42,20 +42,23 @@ compileGrOnFiles globPatterns config = let ?globals = grGlobals config in do
   pwd <- getCurrentDirectory
   forM_ globPatterns $ \pat -> do
     paths <- glob pat
+    debugM "Glob paths: " $ show paths
     case paths of
       [] -> error "No matching files"
-      _ -> forM_ paths $ \path -> do
-        let fileName = if pwd `isPrefixOf` path then takeFileName path else path
+      _ -> forM_ paths $ \inPath -> do
+        let (cwd, fileName) = splitFileName inPath
         let ?globals = ?globals{ globalsSourceFilePath = Just fileName } in do
           printInfo $ "Checking " <> fileName <> "..."
           src <- preprocess
             (rewriter config)
             (keepBackup config)
-            path
+            inPath
             (literateEnvName config)
           hsCode <- compile config src
-          debugM "Code: " hsCode
-          let outPath = changeFileExtension path
+          debugM "Code: " hsCode          
+          let destPath = fromMaybe cwd $ grWriteDest config
+          debugM "destPath: " destPath
+          let outPath = changeFileExtension $ destPath </> fileName
           printSuccess $ "Writing " ++ outPath
           writeFile outPath hsCode
 
@@ -115,6 +118,7 @@ data GrConfig = GrConfig
   , grLiterateEnvName :: Maybe String
   , grShowVersion     :: Bool
   , grGlobals         :: Globals
+  , grWriteDest       :: Maybe FilePath
   }
 
 rewriter :: GrConfig -> Maybe Rewriter
@@ -133,15 +137,17 @@ instance Semigroup GrConfig where
     , grLiterateEnvName = grLiterateEnvName c1 <|> grLiterateEnvName c2
     , grGlobals         = grGlobals         c1 <>  grGlobals         c2
     , grShowVersion     = grShowVersion     c1 ||  grShowVersion     c2
+    , grWriteDest       = grWriteDest       c1 <|> grWriteDest       c2
     }
 
 instance Monoid GrConfig where
   mempty = GrConfig
-    { grRewriter    = Nothing
+    { grRewriter        = Nothing
     , grKeepBackup      = Nothing
     , grLiterateEnvName = Nothing
     , grGlobals         = mempty
     , grShowVersion     = False
+    , grWriteDest       = Nothing
     }
 
 getGrConfig :: IO ([FilePath], GrConfig)
@@ -166,7 +172,7 @@ getGrConfig = do
             Right Nothing -> do
               printInfo . red . unlines $
                 [ "Couldn't parse granule configuration file at " <> configFile
-                , "Run `gr --help` to see a list of accepted flags."
+                , "Run `grc --help` to see a list of accepted flags."
                 ]
               pure mempty
             Right (Just config) -> pure config
@@ -358,6 +364,12 @@ parseGrConfig = info (go <**> helper) $ briefDesc
           flag Nothing (Just True)
            $ long "raw-data"
            <> help "Show raw data of benchmarking data for synthesis."
+        
+        grWriteDest <-
+          optional $ strOption
+            $ long "dest"
+            <> help "Path to the location to write generated Haskell files."
+            <> metavar "PATH"
 
         pure
           ( globPatterns
@@ -395,6 +407,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsExtensions = []
               , globalsDocMode = Nothing
               }
+            , grWriteDest
             }
           )
       where
