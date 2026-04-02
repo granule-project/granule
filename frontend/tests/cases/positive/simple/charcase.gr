@@ -1,0 +1,13 @@
+import Bool 
+-- Small example of case expressions in Granule
+constId : Int → Int
+constId x = case 'a' of 'a' → x
+
+constId2 : Int → Int
+constId2 x =
+    case '\n' of
+      '\n' → x;
+      '\t' → x
+
+main : Int
+main = constId 10 + constId2 20

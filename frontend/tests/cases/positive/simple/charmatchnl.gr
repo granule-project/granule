@@ -1,0 +1,14 @@
+import Bool
+
+matcher : Char [] -> Bool
+matcher ['a'] = True;
+matcher ['\n'] = True;
+matcher ['∈'] = True;
+matcher [c] = False
+
+main : Bool
+main = (matcher ['a']) `and'` 
+    (matcher ['\n']) `and'`
+    (matcher ['∈']) `and'`
+    (not (matcher ['2'])) `and'`
+    (not (matcher ['\t']))

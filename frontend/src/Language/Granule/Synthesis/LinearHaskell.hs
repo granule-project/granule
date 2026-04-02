@@ -569,6 +569,7 @@ patternToHaskell (GrPat.PWild{})        = PWildCard noSrcSpan
 patternToHaskell (GrPat.PBox _ _ _ pt)  = patternToHaskell pt
 patternToHaskell (GrPat.PInt _ _ _ n)   = PLit noSrcSpan (Signless noSrcSpan) $ Int noSrcSpan (fromIntegral n) (show n)
 patternToHaskell (GrPat.PFloat _ _ _ n) = PLit noSrcSpan (Signless noSrcSpan) $ Frac noSrcSpan (toRational n) (show n)
+patternToHaskell (GrPat.PChar _ _ _ ch)  = PLit noSrcSpan (Signless noSrcSpan) $ Char noSrcSpan ch (show ch)
 patternToHaskell (GrPat.PConstr _ _ _ id@(GrId.Id _ i) _ l_pt)
   | ',' `elem` i = PTuple noSrcSpan Boxed $ map patternToHaskell (reverse l_pt)
   | otherwise = PApp noSrcSpan (UnQual noSrcSpan $ idToHaskell id) $ map patternToHaskell (reverse l_pt)

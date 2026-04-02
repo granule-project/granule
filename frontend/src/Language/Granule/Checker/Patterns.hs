@@ -162,6 +162,13 @@ ctxtFromTypedPattern' outerCoeff s pos ty@(TyCon c) (PFloat s' _ rf n) _
     let elabP = PFloat s' ty rf n
     return ([], [], [], elabP, Full)
 
+ctxtFromTypedPattern' outerCoeff s pos ty@(TyCon c) (PChar s' _ rf ch) _
+  | internalName c == "Char" = do
+    definiteUnification s pos outerCoeff ty
+
+    let elabP = PChar s' ty rf ch
+    return ([], [], [], elabP, Full)
+
 -- Pattern match on a modal box
 ctxtFromTypedPattern' outerCoeffAndTy s pos t@(Box coeff ty) (PBox sp _ rf p) _ = do
     (innerCoeffTy, subst0, _) <- synthKind s coeff
@@ -474,6 +481,7 @@ duplicateBinderCheck s ps = case duplicateBinders of
       (\_ _ _ id -> [sourceName id])
       (\_ _ _ -> [])
       (\_ _ _ bs -> bs)
+      (\_ _ _ _ -> [])
       (\_ _ _ _ -> [])
       (\_ _ _ _ -> [])
       (\_ _ _ _ _ bss -> concat bss)
