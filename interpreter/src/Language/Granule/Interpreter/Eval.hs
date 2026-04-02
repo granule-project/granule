@@ -682,10 +682,10 @@ pmatchCBV ctxt ((PFloat _ _ _ n, e):ps) (Val _ _ _ (NumFloat m)) =
     then return $ Just e
     else pmatchCBV ctxt ps e
 
-pmatchCBV ctxt ((PChar _ _ _ ch, e):ps) (Val _ _ _ (CharLiteral ch')) =
+pmatchCBV ctxt ((PChar _ _ _ ch, e):ps) v@(Val _ _ _ (CharLiteral ch')) =
   if ch == ch'
     then return $ Just e
-    else pmatchCBV ctxt ps e
+    else pmatchCBV ctxt ps v
 
 pmatchCBV ctxt (_:ps) v = pmatchCBV ctxt ps v
 
