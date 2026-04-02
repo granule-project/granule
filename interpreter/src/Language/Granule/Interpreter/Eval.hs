@@ -660,15 +660,15 @@ pmatchCBV ctxt ((PBox _ _ _ p, e):ps) v@(Val _ _ _ (Promote _ v')) = do
     Just e -> return $ Just e
     Nothing -> pmatchCBV ctxt ps v
 
-pmatchCBV ctxt ((PInt _ _ _ n, e):ps) (Val _ _ _ (NumInt m)) =
+pmatchCBV ctxt ((PInt _ _ _ n, e):ps) v@(Val _ _ _ (NumInt m)) =
   if n == m
     then return $ Just e
-    else pmatchCBV ctxt ps e
+    else pmatchCBV ctxt ps v
 
-pmatchCBV ctxt ((PFloat _ _ _ n, e):ps) (Val _ _ _ (NumFloat m)) =
+pmatchCBV ctxt ((PFloat _ _ _ n, e):ps) v@(Val _ _ _ (NumFloat m)) =
   if n == m
     then return $ Just e
-    else pmatchCBV ctxt ps e
+    else pmatchCBV ctxt ps v
 
 pmatchCBV ctxt (_:ps) v = pmatchCBV ctxt ps v
 
