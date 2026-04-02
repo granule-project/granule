@@ -623,6 +623,18 @@ pmatchCBN ctxt psAll@((PFloat _ _ _ n, eb):ps) eg =
         else
           pmatchCBN ctxt ps eg
 
+pmatchCBN ctxt psAll@((PChar _ _ _ ch, eb):ps) eg =
+  case eg of
+    -- Match
+    (Val _ _ _ (CharLiteral ch')) | ch == ch' -> return $ Just eb
+    _ ->
+        if isReducible eg
+        then do
+          eg' <- evalInWHNF ctxt eg
+          pmatchCBN ctxt psAll eg'
+        else
+          pmatchCBN ctxt ps eg
+
 -- CBV version of pattern matching
 pmatchCBV ::
   (?globals :: Globals)
@@ -669,6 +681,11 @@ pmatchCBV ctxt ((PFloat _ _ _ n, e):ps) (Val _ _ _ (NumFloat m)) =
   if n == m
     then return $ Just e
     else pmatchCBV ctxt ps e
+
+pmatchCBV ctxt ((PChar _ _ _ ch, e):ps) v@(Val _ _ _ (CharLiteral ch')) =
+  if ch == ch'
+    then return $ Just e
+    else pmatchCBV ctxt ps v
 
 pmatchCBV ctxt (_:ps) v = pmatchCBV ctxt ps v
 

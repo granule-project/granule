@@ -341,6 +341,7 @@ synthesiseLinearBase hints index unrComps rComps defId ctxt constructors goalTy 
       unannotatePat (PBox s a rf p)          = PBox s () rf $ unannotatePat p
       unannotatePat (PInt s a rf int)        = PInt s () rf int
       unannotatePat (PFloat s a rf doub)     = PFloat s () rf doub
+      unannotatePat (PChar s a rf ch)        = PChar s () rf ch
       unannotatePat (PConstr s a rf nm names pats) = PConstr s () rf nm names $ map unannotatePat pats
 
 

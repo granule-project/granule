@@ -346,6 +346,7 @@ instance Pretty (Pattern a) where
     wlpretty (PBox _ _ _ p)     = P.brackets $ prettyNestedNew p
     wlpretty (PInt _ _ _ n)     = P.pretty (show n)
     wlpretty (PFloat _ _ _ n)   = P.pretty (show n)
+    wlpretty (PChar _ _ _ n)    = P.pretty (show n)
     wlpretty (PConstr _ _ _ name _ args) | internalName name == "," = P.parens $ mconcat $ P.punctuate ", " (map prettyNestedNew args)
     wlpretty (PConstr _ _ _ name tyVarBindsRequested args) =
       P.sep (wlpretty name : (map tyvarbinds tyVarBindsRequested ++ map prettyNestedNew args))

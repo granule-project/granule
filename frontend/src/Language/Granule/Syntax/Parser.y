@@ -310,6 +310,9 @@ PAtom :: { Pattern () }
   | FLOAT
        {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ let TokenFloat _ x = $1 in PFloat sp () False $ read x }
 
+  | CHAR
+       {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ let TokenCharLiteral _ x = $1 in PChar sp () False x }
+
   | CONSTR
        {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ let TokenConstr _ x = $1 in PConstr sp () False (mkId x) [] [] }
 

@@ -26,6 +26,7 @@ data Pattern a
   | PWild Span a Bool                  -- ^ Wildcard (underscore) pattern
   | PBox Span a Bool (Pattern a)       -- ^ Box patterns
   | PInt Span a Bool Int               -- ^ Numeric patterns
+  | PChar Span a Bool Char
   | PFloat Span a Bool Double          -- ^ Float pattern
   | PConstr Span a Bool Id [Id] [Pattern a] -- ^ Constructor pattern
   deriving (Eq, Show, Generic, Functor, Typeable, Data)
@@ -50,10 +51,11 @@ patternFold
   -> (Span -> ann -> Bool -> b -> b)
   -> (Span -> ann -> Bool -> Int -> b)
   -> (Span -> ann -> Bool -> Double -> b)
+  -> (Span -> ann -> Bool -> Char -> b)
   -> (Span -> ann -> Bool -> Id -> [Id] -> [b] -> b)
   -> Pattern ann
   -> b
-patternFold v w b i f c = go
+patternFold v w b i f ch c = go
   where
     go = \case
       PVar sp ann rf nm -> v sp ann rf nm
@@ -61,6 +63,7 @@ patternFold v w b i f c = go
       PBox sp ann rf pat -> b sp ann rf (go pat)
       PInt sp ann rf int -> i sp ann rf int
       PFloat sp ann rf doub -> f sp ann rf doub
+      PChar sp ann rf char -> ch sp ann rf char
       PConstr sp ann rf nm tyVarBindsRequested pats -> c sp ann rf nm tyVarBindsRequested (go <$> pats)
 
 patternFoldM
@@ -70,10 +73,11 @@ patternFoldM
   -> (Span -> ann -> Bool -> b -> m b)
   -> (Span -> ann -> Bool -> Int -> m b)
   -> (Span -> ann -> Bool -> Double -> m b)
+  -> (Span -> ann -> Bool -> Char -> m b)
   -> (Span -> ann -> Bool -> Id -> [Id] -> [b] -> m b)
   -> Pattern ann
   -> m b
-patternFoldM v w b i f c = go
+patternFoldM v w b i f ch c = go
   where
     go = \case
       PVar sp ann rf nm -> v sp ann rf nm
@@ -84,6 +88,7 @@ patternFoldM v w b i f c = go
             b sp ann rf pat'
       PInt sp ann rf int -> i sp ann rf int
       PFloat sp ann rf doub -> f sp ann rf doub
+      PChar sp ann rf char -> ch sp ann rf char
       PConstr sp ann rf nm tyVarBindsRequested pats ->
         do
             pats' <- mapM go pats
@@ -96,16 +101,18 @@ boundVars PWild {}       = []
 boundVars (PBox _ _ _ p)     = boundVars p
 boundVars PInt {}        = []
 boundVars PFloat {}      = []
+boundVars PChar {}       = []
 boundVars (PConstr _ _ _ _ _ ps) = concatMap boundVars ps
 
 boundVarsAndAnnotations :: Pattern a -> [(a, Id)]
 boundVarsAndAnnotations =
-    patternFold var wild box int flt cstr
+    patternFold var wild box int flt char cstr
     where var _ ty _ ident  = [(ty, ident)]
           wild _ _ _        = []
           box _ _ _ pat     = pat
           int _ _ _ _       = []
           flt _ _ _ _       = []
+          char _ _ _ _      = []
           cstr _ _ _ _ _    = concat
 
 ppair :: Span
@@ -138,6 +145,7 @@ instance Freshenable m (Pattern a) where
   freshen p@PWild {} = return p
   freshen p@PInt {} = return p
   freshen p@PFloat {} = return p
+  freshen p@PChar {} = return p
 
 patRefactored :: Pattern a -> Bool
 patRefactored (PVar _ _ rf _) = rf
@@ -145,6 +153,7 @@ patRefactored (PWild _ _ rf) = rf
 patRefactored (PBox _ _ rf _) = rf
 patRefactored (PInt _ _ rf _) = rf
 patRefactored (PFloat _ _ rf _) = rf
+patRefactored (PChar _ _ rf _) = rf
 patRefactored (PConstr _ _ rf _ _ _) = rf
 
 instance Rp.Refactorable (Pattern a) where

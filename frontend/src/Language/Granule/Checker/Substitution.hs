@@ -433,6 +433,9 @@ instance Substitutable a => Substitutable (Pattern a) where
       (\sp ann rf doub -> do
           ann' <- substitute ctxt ann
           return $ PFloat sp ann' rf doub)
+      (\sp ann rf char -> do
+          ann' <- substitute ctxt ann
+          return $ PChar sp ann' rf char)
       (\sp ann rf nm tyVarBindsRequested pats -> do
           ann' <- substitute ctxt ann
           return $ PConstr sp ann' rf nm tyVarBindsRequested pats)
