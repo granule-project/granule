@@ -277,6 +277,7 @@ test-suite gr-golden
     , strict
     , tasty
     , tasty-golden
+    , tasty-expected-failure
 
 -- Executables
 --
