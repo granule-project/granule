@@ -1,0 +1,8 @@
+frontend/tests/cases/positive/indexed/infer-kinds.gr #299
+frontend/tests/cases/positive/security/level_pos3.gr #314
+frontend/tests/cases/rewrite/split-in-box.gr #313
+frontend/tests/cases/synthesis/graded-base/list/drop.gr #281
+frontend/tests/cases/synthesis/graded-base/misc/either.gr #281
+examples/effects_nondet.gr #312
+examples/effects_state.gr #312
+frontend/tests/cases/positive/effect-handlers/effects_state.gr #312
