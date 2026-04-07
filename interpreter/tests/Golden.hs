@@ -3,7 +3,7 @@ import Control.Monad (unless)
 import Data.Algorithm.Diff (getGroupedDiff)
 import Data.Algorithm.DiffOutput (ppDiff)
 import Data.List (sort, isInfixOf)
-import qualified Data.Map.Strict as Map
+import qualified Data.Map as M
 import Data.Maybe (mapMaybe)
 import Data.Functor((<&>))
 import Test.Tasty (defaultMain, TestTree, testGroup)
@@ -44,7 +44,7 @@ main = do
     then do
         issuesData <- readFile ".known-issues"
         return $ parseKnownIssues issuesData
-    else return Map.empty
+    else return M.empty
 
   case configE of
     Left error -> do
@@ -68,18 +68,18 @@ main = do
           throwIO e
         )
   where
-    parseKnownIssues :: String -> Map.Map FilePath String
+    parseKnownIssues :: String -> M.Map FilePath String
     parseKnownIssues content =
-      Map.fromList (mapMaybe parseLine (lines content))
+      M.fromList (mapMaybe parseLine (lines content))
       where
         parseLine line = case words line of
           [path, issue] -> Just (path, issue)
           _ -> Nothing
 
-    wrapKnownIssues :: Map.Map FilePath String -> TestTree -> TestTree
+    wrapKnownIssues :: M.Map FilePath String -> TestTree -> TestTree
     wrapKnownIssues issues tree = case tree of
       SingleTest name test ->
-        case Map.lookup name issues of
+        case M.lookup name issues of
           Just issue -> expectFailBecause issue tree
           Nothing -> tree
       TestGroup name trees ->
