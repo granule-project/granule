@@ -3,11 +3,15 @@ import Control.Monad (unless)
 import Data.Algorithm.Diff (getGroupedDiff)
 import Data.Algorithm.DiffOutput (ppDiff)
 import Data.List (sort, isInfixOf)
+import qualified Data.Map as M
+import Data.Maybe (mapMaybe)
 import Data.Functor((<&>))
 import Test.Tasty (defaultMain, TestTree, testGroup)
+import Test.Tasty.ExpectedFailure (expectFailBecause)
 import Test.Tasty.Golden (goldenVsFile)
 import qualified Test.Tasty.Golden as G
 import Test.Tasty.Golden.Advanced (goldenTest)
+import Test.Tasty.Runners (TestTree(..))
 import System.Directory (renameFile, doesFileExist)
 import System.Exit (ExitCode)
 import System.FilePath (dropExtension, pathSeparator)
@@ -33,6 +37,15 @@ main = do
         putStrLn $ "\nExcluding directories: " ++ show (lines excludesData) ++ "\n"
         return $ Right $ IncludeAll (foldr Exclude Nil (lines excludesData))
     else return $ Right (IncludeAll Nil)
+
+  knownIssuesQuery <- doesFileExist ".known-issues"
+  knownIssues <-
+    if knownIssuesQuery
+    then do
+        issuesData <- readFile ".known-issues"
+        return $ parseKnownIssues issuesData
+    else return M.empty
+
   case configE of
     Left error -> do
       putStrLn $ "Error in test arguments: " <> error
@@ -42,8 +55,9 @@ main = do
       rewrite   <- goldenTestsRewrite   config
       synthesis <- goldenTestsSynthesis config
 
+      let tests = testGroup "Golden tests" [negative, positive, rewrite, synthesis]
       catch
-        (defaultMain $ testGroup "Golden tests" [negative, positive, rewrite, synthesis])
+        (defaultMain $ wrapKnownIssues knownIssues tests)
         (\(e :: ExitCode) -> do
           -- Move all of the backup files back to their original place.
           backupFiles <- findByExtension config [".bak"]  "frontend/tests/cases/rewrite"
@@ -53,6 +67,24 @@ main = do
           mapM_ (\backup -> renameFile backup (dropExtension backup)) backupFiles
           throwIO e
         )
+  where
+    parseKnownIssues :: String -> M.Map FilePath String
+    parseKnownIssues content =
+      M.fromList (mapMaybe parseLine (lines content))
+      where
+        parseLine line = case words line of
+          [path, issue] -> Just (path, issue)
+          _ -> Nothing
+
+    wrapKnownIssues :: M.Map FilePath String -> TestTree -> TestTree
+    wrapKnownIssues issues tree = case tree of
+      SingleTest name test ->
+        case M.lookup name issues of
+          Just issue -> expectFailBecause issue tree
+          Nothing -> tree
+      TestGroup name trees ->
+        TestGroup name (map (wrapKnownIssues issues) trees)
+      _ -> tree -- we don't use the other constructors
 
 -- Applies a configuration to list of filepaths
 applyConfig :: Config -> [FilePath] -> [FilePath]
