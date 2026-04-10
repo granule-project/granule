@@ -1,0 +1,11 @@
+import List
+import Nat
+
+dropElems : forall {a : Type, n: Nat} . N n -> (List a) [0..1] -> List a
+dropElems Z [xs] = xs;
+dropElems (S n) [Empty] = dropElems n [Empty];
+dropElems (S n) [Next _ xs] = dropElems n [xs]
+
+main : List Int
+main = dropElems (S (S Z)) (pull @List (Next [1] (Next [2] (Next [3] (Next [4] (Next [5] Empty))))))
+
