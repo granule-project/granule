@@ -1,0 +1,19 @@
+import Nat
+
+-- rather nonsense constructor to exercise pull
+data Pullable t where
+    Not : Pullable t;
+    JustOne : t -> Pullable t -> Pullable t;
+    Evens : t -> t -> Pullable t -> Pullable t
+
+dropSome : forall {a : Type, n : Nat} . N n -> (Pullable a) [0..1] -> Pullable a
+dropSome Z [p] = p;
+dropSome (S n) [Not] = dropSome n [Not];
+dropSome (S n) [JustOne _ rest] = dropSome n [rest];
+dropSome (S n) [Evens _ x rest] = dropSome n [JustOne x rest]
+
+toBePulled : Pullable (Int [0..1])
+toBePulled = Evens [0] [1] (Evens [2] [3] (Evens [4] [5] (JustOne [6] Not)))
+
+main : Pullable Int
+main = dropSome (S (S (S Z))) (pull @Pullable toBePulled)
