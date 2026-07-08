@@ -1,6 +1,4 @@
 {
-{-# LANGUAGE ImplicitParams #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 

@@ -1,6 +1,5 @@
 {-# OPTIONS_GHC -Wno-unused-imports #-}
 
-{-# LANGUAGE ScopedTypeVariables #-}
 
 module Language.Granule.Synthesis.LinearHaskell where
 

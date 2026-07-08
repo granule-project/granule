@@ -1,9 +1,7 @@
 -- Provides all the type information for built-ins
 
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE ImplicitParams #-}
 
 -- | Primitive data types and type constructors
 module Language.Granule.Checker.Primitives where

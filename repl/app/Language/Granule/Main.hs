@@ -1,8 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ApplicativeDo #-}
-{-# LANGUAGE ImplicitParams #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE PackageImports #-}
 
 module Main where

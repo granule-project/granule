@@ -1,11 +1,6 @@
 -- Granule interpreter
-{-# LANGUAGE ImplicitParams #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE LambdaCase #-}
-
 
 {-# options_ghc -Wno-incomplete-uni-patterns #-}
 

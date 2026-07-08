@@ -1,5 +1,3 @@
-{-# LANGUAGE ImplicitParams #-}
-
 module Language.Granule.Checker.TypesSpec where
 
 import Language.Granule.Syntax.Identifiers

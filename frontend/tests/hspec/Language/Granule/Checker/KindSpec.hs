@@ -1,5 +1,3 @@
-{-# LANGUAGE ImplicitParams #-}
-
 module Language.Granule.Checker.KindSpec where
 
 import Test.Hspec

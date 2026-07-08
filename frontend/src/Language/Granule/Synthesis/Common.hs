@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
 module Language.Granule.Synthesis.Common where
 
 import Language.Granule.Context

@@ -1,6 +1,5 @@
 {-# OPTIONS_GHC -Wno-unused-imports -Wno-unused-local-binds #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 
 {-
 This tool is for quantitatively evaluating the --synthesis feature

@@ -2,7 +2,6 @@
 
 {-# LANGUAGE DeriveAnyClass  #-}
 {-# LANGUAGE DeriveGeneric   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 
 -- | Represents fractions with star in the solver
 module Language.Granule.Checker.Constraints.SFrac where

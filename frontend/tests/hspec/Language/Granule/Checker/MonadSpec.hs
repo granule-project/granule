@@ -1,5 +1,4 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE ImplicitParams #-}
 
 module Language.Granule.Checker.MonadSpec where
 

@@ -1,5 +1,3 @@
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE DataKinds #-}
 
 module Language.Granule.Checker.CheckerSpec where

@@ -1,6 +1,3 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE ImplicitParams #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE PackageImports #-}
 
 module Language.Granule.Utils where

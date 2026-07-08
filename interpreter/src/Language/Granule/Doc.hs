@@ -1,4 +1,3 @@
-{-# LANGUAGE ViewPatterns #-}
 module Language.Granule.Doc where
 
 -- grdoc - Documentation generator

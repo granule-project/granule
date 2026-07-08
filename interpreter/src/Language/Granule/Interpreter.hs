@@ -9,12 +9,8 @@
        \_/__/
 -}
 {-# LANGUAGE ApplicativeDo #-}
-{-# LANGUAGE ImplicitParams #-}
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Language.Granule.Interpreter where

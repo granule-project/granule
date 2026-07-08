@@ -1,5 +1,4 @@
 {- Deals with coeffect resource algebras -}
-{-# LANGUAGE ImplicitParams #-}
 
 module Language.Granule.Checker.Coeffects where
 

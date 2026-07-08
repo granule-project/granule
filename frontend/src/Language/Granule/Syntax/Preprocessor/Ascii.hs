@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 module Language.Granule.Syntax.Preprocessor.Ascii
   ( asciiToUnicode
   , unicodeToAscii
