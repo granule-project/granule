@@ -1,6 +1,6 @@
 -- | Implementations of builtin Granule functions in Haskell
 
-{-# LANGUAGE NamedFieldPuns, Strict, NoImplicitPrelude, TypeFamilies,
+{-# LANGUAGE Strict, NoImplicitPrelude, TypeFamilies,
              DataKinds, GADTs #-}
 {-# OPTIONS_GHC -fno-full-laziness -fno-warn-unused-binds #-}
 module Language.Granule.Runtime

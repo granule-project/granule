@@ -3,7 +3,6 @@
 {-# OPTIONS_GHC -Wno-unused-imports #-}
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
 {-# OPTIONS_GHC -Wno-typed-holes #-}
-{-# LANGUAGE NamedFieldPuns #-}
 module Language.Granule.Compiler.HSCodegen where
 
 import Control.Monad

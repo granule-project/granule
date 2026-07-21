@@ -2,7 +2,6 @@
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE NamedFieldPuns #-}
 module Language.Granule.Compiler where
 
 import Control.Exception (SomeException, displayException, try)

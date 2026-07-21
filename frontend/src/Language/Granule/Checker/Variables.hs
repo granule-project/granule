@@ -1,5 +1,3 @@
-{-# LANGUAGE FlexibleContexts #-}
-
 -- | Helpers for working with type variables in the type checker
 module Language.Granule.Checker.Variables where
 

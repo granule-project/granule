@@ -1,4 +1,3 @@
-{-# LANGUAGE ImplicitParams #-}
 
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}

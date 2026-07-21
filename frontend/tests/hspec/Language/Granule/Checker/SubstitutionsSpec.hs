@@ -1,5 +1,3 @@
-{-# LANGUAGE ImplicitParams #-}
-
 module Language.Granule.Checker.SubstitutionsSpec where
 
 import Language.Granule.Syntax.Type

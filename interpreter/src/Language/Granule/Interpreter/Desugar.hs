@@ -1,7 +1,4 @@
 -- Provides the desugaring step of the language
-
-{-# LANGUAGE ViewPatterns #-}
-
 module Language.Granule.Interpreter.Desugar where
 
 import Language.Granule.Syntax.Def

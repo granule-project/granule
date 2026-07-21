@@ -1,6 +1,4 @@
 {- Deals with effect algebras -}
-{-# LANGUAGE ImplicitParams #-}
-{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 

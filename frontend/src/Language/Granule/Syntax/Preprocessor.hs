@@ -1,5 +1,3 @@
-{-# LANGUAGE ScopedTypeVariables #-}
-
 module Language.Granule.Syntax.Preprocessor where
 
 import Data.List (intercalate)

@@ -2,7 +2,6 @@
 
 {-# LANGUAGE DeriveAnyClass  #-}
 {-# LANGUAGE DeriveGeneric   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 
 -- | Represents the extended natural numbers in the solver
 module Language.Granule.Checker.Constraints.SNatX where

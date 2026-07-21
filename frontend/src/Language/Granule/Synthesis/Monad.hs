@@ -1,6 +1,4 @@
-{-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE FlexibleContexts #-}
 
 module Language.Granule.Synthesis.Monad where
 
