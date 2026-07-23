@@ -1,0 +1,39 @@
+import List
+
+listSnoc : forall {a: Type} . List a -> a -> List a
+listSnoc list elem = append_list list (singleton_list elem)
+
+readLinesFromHandle : (Handle R) -> String -> (List String) -> (List String) <{Open,Read,IOExcept,Close}>
+readLinesFromHandle handle line lines = let
+    (handle', eof) <- isEOF handle
+    in
+        if eof
+        then let
+            () <- closeHandle handle';
+            [_] : String [(0: Ext Nat)..Inf] <- pure (moveString line)
+        in pure lines
+        else let
+            (handle'', c) <- readChar handle' in let
+            [c'] : Char [(0 : Ext Nat)..∞] <- pure (moveChar c)
+        in if (charToInt c') == 10
+        then readLinesFromHandle handle'' "" (listSnoc lines line)
+        else readLinesFromHandle handle'' (stringSnoc line c') lines
+
+gradeLine : forall {n:Nat} . String -> String [n]
+gradeLine s = moveString s
+
+gradeLineList : forall {n:Nat} . List String -> List (String [n])
+gradeLineList Empty = Empty;
+gradeLineList (Next x xs) = Next (gradeLine x) (gradeLineList xs)
+
+readInputLines : forall {n: Nat} . String -> ((List String) [n]) <{Open,Read,IOExcept,Close}>
+readInputLines filename = let
+        handle <- openHandle ReadMode filename;
+        ungradedInputLines <- readLinesFromHandle handle "" Empty in let
+        gradedLines = gradeLineList ungradedInputLines
+    in
+        pure (pull@List gradedLines)
+
+main : forall {n : Nat} . ((List String) [n]) <{Open,Read,IOExcept,Close}>
+main = readInputLines "LICENSE"
+

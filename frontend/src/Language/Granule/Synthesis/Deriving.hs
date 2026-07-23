@@ -249,6 +249,39 @@ mkConstructorApplication s name consType  exprs ty =
   Val s () True (Constr () name [])
   -- error $ "In making constructor for " ++ pretty name ++ " with exprs args " ++ pretty exprs ++ " at type " ++ pretty ty
 
+mkConstrApp2 :: (?globals :: Globals) => Span -> Id -> Type -> [(Type, Expr () ())] -> Type -> Checker (Expr () ())
+mkConstrApp2 s name consType args t = mkConstructorApplication2 s name consType base_constr args t
+  where base_constr = Val s () True (Constr () name [])
+
+-- Apply a list of arguments to a ty constructor, based on all of their types
+mkConstructorApplication2 :: (?globals :: Globals) => Span -> Id -> Type -> Expr () () -> [(Type, Expr () ())] -> Type -> Checker (Expr () ())
+mkConstructorApplication2 s name consType acc [] ty =
+  return acc
+
+mkConstructorApplication2 s name consType acc ((Box k t, expr):exprs) (FunTy _ _ t1 t2) = do
+  acc' <- case t1 of
+    Box k' t' -> do
+      debugM "mkConstructorApplication2" $ "boxed " <> pretty t <> " is compatible with " <> pretty t1
+      return $ App s () True acc expr
+    _ -> do
+      -- we're passing a boxed argument into an unboxed constructor parameter
+      -- so we unbox it and pass the result in through a let-bind
+      debugM "mkConstructorApplication2" $ "unboxing " <> pretty t <> " to pass in to " <> pretty t1
+      v <- freshIdentifierBase "y" <&> mkId
+      let result = letBox s (PVar s () True v) expr $ App s () True acc $ Val s () True $ Var () v
+      debugM "mkConstructorApplication2" $ "returning unboxed result " <> pretty result
+      return result
+  mkConstructorApplication2 s name consType acc' exprs t2
+
+mkConstructorApplication2 s name consType acc ((ty, expr):exprs) (FunTy _ _ t1 t2) = do
+  debugM "mkConstructorApplication2" $ "non-boxed " <> pretty ty <> " is compatible with " <> pretty t1
+  let acc' = App s () True acc expr
+  mkConstructorApplication2 s name consType acc' exprs t2
+
+mkConstructorApplication2 s name consType acc exprs ty =
+  -- no applicable arguments
+  return acc
+
 
 derivePull :: (?globals :: Globals) => Span -> Type -> Checker (TypeScheme, Def () ())
 derivePull s ty = do
@@ -419,24 +452,26 @@ derivePull' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
                     consParamsVars <- forM consParamsTypes (\_ -> freshIdentifierBase "y" <&> mkId)
                     debugM "consParamsVars: " (pretty consParamsVars)
 
+                    let makeArgPattern ty var = case ty of
+                          Box k ty -> PBox s () True (PVar s () True var)
+                          FunTy _ (Just k) _ _ -> PBox s () True (PVar s () True var)
+                          _ -> PVar s () True var
+
                     -- Build the pattern for this case
                     let consPattern =
-                          PConstr s () True dataConsName [] (zipWith (\ty var -> PBox s () True (PVar s () True var)) consParamsTypes consParamsVars)
+                          PConstr s () True dataConsName [] (zipWith (\ty var -> makeArgPattern ty var) consParamsTypes consParamsVars)
                     debugM "derive-pull" ("consPattern " <> pretty consPattern )
                     -- Push on all the parameters of a the constructor
                     retTysAndExprs <- zipWithM (\ty var -> do
                       debugM "derive-pull" ("Deriving argument of case for " <> pretty dataConsName <> " at type " <> pretty ty)
                       derivePull' s False gamma ty (makeVarUntyped var))
                                       consParamsTypes consParamsVars
-                    let (_retTys, exprs, coeffs) = unzip3 retTysAndExprs
+                    let (retTys, exprs, coeffs) = unzip3 retTysAndExprs
                     let coeffs' = coeffectMeet coeffs
-                    debugM "retTys: " (show _retTys)
-                    let bodyExpr = mkConstructorApplication s dataConsName dataConsType (reverse exprs) dataConsType
-                    let bodyExpr' = (\bExpr -> case coeffs' of
-                                             Just c -> makeBoxUntyped bExpr
-                                             Nothing -> bExpr)
-                                           bodyExpr
-                    return (_retTys, consPattern, bodyExpr', coeffs'))
+                    debugM "retTys: " (show retTys)
+                    bodyExpr <- mkConstrApp2 s dataConsName dataConsType (zip retTys exprs) dataConsType
+                    let bodyExpr' = makeBoxUntyped bodyExpr
+                    return (retTys, consPattern, bodyExpr', coeffs'))
 
               -- Got all the branches to make the following case now
 
@@ -450,6 +485,8 @@ derivePull' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
               let patExprs = zip pats exprs
               debugM "res: " (pretty (Case s () True arg patExprs))
               case coeffs of
+                -- TODO is it really just supposed to return the first coeffect?
+                -- or should it take the meet of all the coeffects?
                 c:cs -> return (ty, Case s () True arg patExprs, c)
                 _ -> return (ty, Case s () True arg patExprs, Nothing)
 

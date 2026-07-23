@@ -1,0 +1,9 @@
+import Vec
+
+dropElems'
+  : forall {a : Type, m n : Nat}
+  . N m -> Vec n (a [0..1]) -> Vec (n - m) a
+dropElems' n vs = dropElems n (pull @(Vec n) vs)
+
+main : Vec 3 Int
+main = dropElems' (S (S Z)) (Cons [1] (Cons [2] (Cons [3] (Cons [4] (Cons [5] Nil)))))
