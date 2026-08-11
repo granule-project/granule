@@ -361,7 +361,7 @@ newCaseFrame =
 -- | This happens when we finish a case expression
 popCaseFrame :: Checker ()
 popCaseFrame =
-  modify (\st -> st { guardPredicates = tail (guardPredicates st) })
+  modify (\st -> st { guardPredicates = drop 1 (guardPredicates st) })
 
 -- | Takes the top two conjunction frames and turns them into an
 -- implication

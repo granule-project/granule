@@ -1,11 +1,12 @@
-resolver: lts-21.25
+resolver: nightly-2026-08-11
 packages:
 - .
 
 # Dependency packages to be pulled from upstream that are not in the resolver
 extra-deps:
 - text-replace-0.1.0.3
-- sbv-9.2
+- git: https://github.com/BinderDavid/sbv
+  commit: a7c645d47de07c7c9ecfa6f13fec43884ee7d16c
 - syz-0.2.0.0
 - lsp-types-2.3.0.1
 - lsp-2.7.0.1

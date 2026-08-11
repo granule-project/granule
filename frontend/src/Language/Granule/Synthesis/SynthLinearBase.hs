@@ -23,6 +23,7 @@ import Language.Granule.Synthesis.Contexts
 import Language.Granule.Synthesis.Common
 import Language.Granule.Utils
 
+import Control.Monad
 import Control.Monad.State.Strict
 import qualified System.Clock as Clock
 import Data.List (sortBy)

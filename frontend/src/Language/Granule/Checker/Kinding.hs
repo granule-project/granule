@@ -493,7 +493,7 @@ synthKindWithConfiguration s config (TyCase t branches) | not (null branches) = 
           Nothing ->
             throw KindMismatch { errLoc = s, tyActualK = Just branchTy, kExpected = kJoined, kActual = k })
       (snd $ head branchesAndKinds, substIntermediate)
-      (tail branchesAndKinds)
+      (drop 1 branchesAndKinds)
   --
   return (kind, substFinal, TyCase t' branches')
 

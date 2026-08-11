@@ -171,7 +171,7 @@ data DataConstr
     { dataConstrSpan :: Span, dataConstrId :: Id, dataConstrTypeScheme :: TypeScheme } -- ^ GADTs
   | DataConstrNonIndexed
     { dataConstrSpan :: Span, dataConstrId :: Id, dataConstrParams :: [Type] } -- ^ ADTs
-  deriving (Eq, Show, Generic, Typeable, Data)
+  deriving (Eq, Show, Generic, Data)
 
 -- | Is the data type an indexed data type, or just a plain ADT?
 isIndexedDataType :: DataDecl -> Bool

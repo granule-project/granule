@@ -29,7 +29,7 @@ data Pattern a
   | PChar Span a Bool Char
   | PFloat Span a Bool Double          -- ^ Float pattern
   | PConstr Span a Bool Id [Id] [Pattern a] -- ^ Constructor pattern
-  deriving (Eq, Show, Generic, Functor, Typeable, Data)
+  deriving (Eq, Show, Generic, Functor, Data)
 
 instance Term (Pattern a) where
   freeVars _ = []

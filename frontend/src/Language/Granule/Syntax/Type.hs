@@ -41,7 +41,7 @@ type Kind     = Type
 
 -- Represents polairty information for lattices
 data Polarity = Normal | Opposite
- deriving (Eq, Show, Ord, Data, Typeable)
+ deriving (Eq, Show, Ord, Data)
 
 -- | Type syntax (includes effect, coeffect, and predicate terms)
 data Type where
@@ -73,7 +73,6 @@ deriving instance Show Type
 deriving instance Eq Type
 deriving instance Ord Type
 deriving instance Data Type
-deriving instance Typeable Type
 
 -- Constructors and operators are just strings
 data TypeOperator
