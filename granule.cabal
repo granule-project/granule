@@ -37,18 +37,18 @@ common granule-default-lang
 common granule-dependencies
   build-depends:
       Glob          ==0.10.2
-    , array         ==0.5.4.0
-    , base          ==4.17.2.1
-    , bifunctors    ==5.5.15
+    , array         ==0.5.8.0
+    , base          ==4.21.2.0
+    , bifunctors    ==5.6.3
     , clock         ==0.8.4
-    , containers    ==0.6.7
-    , directory     ==1.3.7.1
-    , filepath      ==1.4.2.2
-    , mtl           ==2.2.2
-    , prettyprinter ==1.7.1
-    , text          ==2.0.2
-    , time          ==1.12.2
-    , transformers  ==0.5.6.2
+    , containers    ==0.7
+    , directory     ==1.3.10.1
+    , filepath      ==1.5.5.0
+    , mtl           ==2.3.2
+    , prettyprinter ==1.7.2
+    , text          ==2.1.4
+    , time          ==1.14
+    , transformers  ==0.6.3.0
 
 common granule-ghc-warnings
   ghc-options:
@@ -58,6 +58,7 @@ common granule-ghc-warnings
     -Wincomplete-record-updates
     -Wincomplete-uni-patterns
     -Wredundant-constraints
+    -Wno-x-partial
     -Wno-unused-matches
     -Wno-name-shadowing
     -Wno-type-defaults
@@ -343,8 +344,8 @@ executable grepl
     , filemanip           ==0.3.6.3
     , granule:frontend
     , granule:interpreter 
-    , haskeline           ==0.8.2
-    , parsec              ==3.1.16.1
+    , haskeline           ==0.8.4.1
+    , parsec              ==3.1.18.0
 
 executable grc
   import: granule-default-lang

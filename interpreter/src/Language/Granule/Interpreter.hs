@@ -248,8 +248,7 @@ run config input = let ?globals = maybe mempty grGlobals (getEmbeddedGrFlags inp
     synthesiseHoles :: (?globals :: Globals) => GrConfig -> AST () () -> [(CheckerError, Maybe Measurement, Int)] -> Bool -> IO [(CheckerError, Maybe Measurement, Int)]
     synthesiseHoles config _ [] _ = return []
     synthesiseHoles config astSrc ((hole@(HoleMessage sp goal ctxt tyVars hVars synthCtxt@(Just (cs, defs, (Just defId, spec), index, hints, constructors)) hcases), aggregate, attemptNo):holes) isGradedBase = do
-      -- TODO: this magic number shouldn't here I don't think...
-      let timeout = if interactiveDebugging then maxBound :: Int else 10000000
+      let timeout = if interactiveDebugging then maxBound :: Int else (1000 * fromInteger solverTimeoutMillis)
       rest <- synthesiseHoles config astSrc holes isGradedBase
 
       gradedExpr <- if cartSynth > 0 then getGradedExpr config defId else return Nothing

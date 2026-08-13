@@ -44,7 +44,7 @@ import Control.Monad
 import GHC.Err (undefined)
 import Data.Function (const)
 import Data.Functor ((<&>))
-import Data.Text
+import Data.Text hiding (show)
 import Data.Text.IO
 import Data.Time.Clock
 import qualified Data.IORef as MR

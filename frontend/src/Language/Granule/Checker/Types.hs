@@ -5,6 +5,7 @@
 -- | Type equality (and inequalities when grades are involved)
 module Language.Granule.Checker.Types where
 
+import Control.Monad
 import Control.Monad.State.Strict
 import Data.List (sortBy, sort)
 import Data.Functor ((<&>))

@@ -134,7 +134,9 @@ prettyNegPred :: (?globals :: Globals) => Id -> Pred -> String
 prettyNegPred defId (Con c) =
     "  When checking `" <> pretty defId <> "`, " <> message
   where
-    message = toLower (head msg) : tail msg
+    makeLower [] = []
+    makeLower (head:tail) = toLower head : tail
+    message = makeLower msg
     msg = pretty (Neg c)
 -- Long-winded message
 prettyNegPred defId p =
